@@ -9,8 +9,15 @@ interface DbmsSelectorProps {
 
 export default function DbmsSelector({ selectedDbms, onChange, disabledDbms }: DbmsSelectorProps) {
   return (
-    <div className="panel-card compact">
-      <p className="panel-meta">실행 환경 (DBMS)</p>
+    <section className="panel-card compact">
+      <div className="panel-heading-row responsive">
+        <div>
+          <p className="panel-meta">실행 환경</p>
+          <h2 className="panel-title">DBMS 선택</h2>
+        </div>
+        <p className="hint-text">현재는 PostgreSQL만 선택할 수 있고 Oracle은 비활성 상태입니다.</p>
+      </div>
+
       <div className="section-gate">
         {mockDbmsOptions.map((dbms) => {
           const isDisabled = dbms.disabled || disabledDbms.includes(dbms.id);
@@ -28,6 +35,6 @@ export default function DbmsSelector({ selectedDbms, onChange, disabledDbms }: D
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

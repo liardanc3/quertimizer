@@ -7,7 +7,22 @@ interface ProblemInfoPanelProps {
 export default function ProblemInfoPanel({ problem }: ProblemInfoPanelProps) {
   return (
     <section className="panel-card">
-      <h2 className="panel-title">문제 설명</h2>
+      <div className="panel-heading-row responsive">
+        <div>
+          <p className="panel-meta">Problem Brief</p>
+          <h2 className="panel-title">문제 설명</h2>
+        </div>
+        <span className="difficulty-chip">{problem.difficulty}</span>
+      </div>
+
+      <div className="tag-row">
+        {problem.tags.map((tag) => (
+          <span key={tag} className="tag-item">
+            #{tag}
+          </span>
+        ))}
+      </div>
+
       <p className="content-text">{problem.description}</p>
 
       <h3 className="panel-meta">스키마</h3>

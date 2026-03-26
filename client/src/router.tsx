@@ -1,6 +1,10 @@
 import { useSyncExternalStore } from 'react';
+import CommunityPage from './pages/CommunityPage';
 import HomePage from './pages/HomePage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
+import PublicHomePage from './pages/PublicHomePage';
+import RankingPage from './pages/RankingPage';
+import { useMockSession } from './lib/session';
 
 interface ProblemRoute {
   type: 'problem';
@@ -11,7 +15,19 @@ interface HomeRoute {
   type: 'home';
 }
 
-type AppRoute = HomeRoute | ProblemRoute;
+interface ProblemsRoute {
+  type: 'problems';
+}
+
+interface RankingRoute {
+  type: 'ranking';
+}
+
+interface CommunityRoute {
+  type: 'community';
+}
+
+type AppRoute = HomeRoute | ProblemsRoute | RankingRoute | CommunityRoute | ProblemRoute;
 
 function subscribe(callback: () => void) {
   window.addEventListener('popstate', callback);
@@ -27,6 +43,18 @@ function parseRoute(pathname: string): AppRoute {
     return { type: 'home' };
   }
 
+  if (pathname === '/problems') {
+    return { type: 'problems' };
+  }
+
+  if (pathname === '/ranking') {
+    return { type: 'ranking' };
+  }
+
+  if (pathname === '/community') {
+    return { type: 'community' };
+  }
+
   const problemMatch = pathname.match(/^\/problems\/([a-zA-Z0-9-]+)$/);
   if (problemMatch) {
     return { type: 'problem', problemId: problemMatch[1] };
@@ -38,10 +66,23 @@ function parseRoute(pathname: string): AppRoute {
 export default function AppRouter() {
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const route = parseRoute(pathname);
+  const { isAuthenticated } = useMockSession();
 
   if (route.type === 'problem') {
-    return <ProblemSolvePage problemId={route.problemId} />;
+    return <ProblemSolvePage key={route.problemId} problemId={route.problemId} />;
   }
 
-  return <HomePage />;
+  if (route.type === 'ranking') {
+    return <RankingPage />;
+  }
+
+  if (route.type === 'community') {
+    return <CommunityPage />;
+  }
+
+  if (route.type === 'problems') {
+    return <HomePage />;
+  }
+
+  return isAuthenticated ? <HomePage /> : <PublicHomePage />;
 }

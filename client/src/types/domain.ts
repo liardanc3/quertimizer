@@ -55,3 +55,12 @@ export interface Profile {
   tier: string;
   solvedCount: number;
 }
+
+export interface RankingEntry {
+  rank: number;
+  name: string;
+  tier: string;
+  score: number;
+  solvedCount: number;
+  avgExecutionTimeMs: number;
+}

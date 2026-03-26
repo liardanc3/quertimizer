@@ -14,6 +14,7 @@ export default function ProblemCardSpoilerFree({ problem, onSelect }: ProblemCar
       </div>
       <h3 className="problem-title">{problem.title}</h3>
       <p className="problem-preview">{problem.preview}</p>
+      <span className="problem-link-label">힌트 없이 바로 풀기</span>
     </button>
   );
 }

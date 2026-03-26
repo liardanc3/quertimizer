@@ -11,22 +11,33 @@ interface SqlEditorPanelProps {
 export default function SqlEditorPanel({ sql, setSql, initialSql, onRun, onSubmit }: SqlEditorPanelProps) {
   return (
     <section className="panel-card">
-      <div className="panel-heading-row">
-        <h2 className="panel-title">SQL Editor</h2>
+      <div className="panel-heading-row responsive">
+        <div>
+          <p className="panel-meta">SQL Workspace</p>
+          <h2 className="panel-title">쿼리 편집기</h2>
+        </div>
         <div className="editor-actions">
           <button type="button" className="btn ghost" onClick={() => setSql(initialSql)}>
             초기화
           </button>
-          <button type="button" className="btn primary-soft" onClick={onRun}>
+          <button type="button" className="btn secondary" onClick={onRun}>
             실행
           </button>
-          <button type="button" className="btn success-soft" onClick={onSubmit}>
+          <button type="button" className="btn primary" onClick={onSubmit}>
             제출
           </button>
         </div>
       </div>
-      <textarea className="sql-editor" value={sql} onChange={(event) => setSql(event.target.value)} spellCheck={false} />
-      <p className="hint-text">TODO: API 연동 시 서버 실행 결과와 실제 제출 상태를 표시합니다.</p>
+
+      <div className="editor-surface">
+        <div className="editor-surface-header">
+          <span className="editor-file-name">main.sql</span>
+          <span className="subtle-chip inverted">Mock Runner</span>
+        </div>
+        <textarea className="sql-editor" value={sql} onChange={(event) => setSql(event.target.value)} spellCheck={false} />
+      </div>
+
+      <p className="hint-text">TODO: API 연동 시 실제 실행 결과, 제출 상태, 히스토리 로그를 연결합니다.</p>
     </section>
   );
 }
