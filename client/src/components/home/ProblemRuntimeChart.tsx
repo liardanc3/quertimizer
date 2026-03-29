@@ -1004,10 +1004,10 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect }: Problem
                 return (
                   <div key={filter.key} className="runtime-subfilter-row">
                     <span className="runtime-subfilter-label">{filter.label}</span>
-                    <div className="runtime-subfilter-options">
+                    <div className="runtime-subfilter-options is-bucket">
                       <button
                         type="button"
-                        className={`runtime-subfilter-button ${isAllSelected ? 'is-selected' : ''}`}
+                        className={`runtime-subfilter-button runtime-subfilter-all-button ${isAllSelected ? 'is-selected' : ''}`}
                         aria-pressed={isAllSelected}
                         onClick={(event) => {
                           event.preventDefault();
@@ -1021,59 +1021,61 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect }: Problem
                         전체
                       </button>
 
-                      {filter.options.map((option) => {
-                        const tooltipId = `${filter.key}-${option}`;
+                      <div className="runtime-subfilter-chip-grid">
+                        {filter.options.map((option) => {
+                          const tooltipId = `${filter.key}-${option}`;
 
-                        return (
-                          <span
-                            key={option}
-                            className={`runtime-subfilter-option ${visibleSelectedValues.includes(option) ? 'is-selected' : ''}`}
-                          >
-                            <button
-                              type="button"
-                              className="runtime-subfilter-button runtime-subfilter-button-plain"
-                              aria-pressed={visibleSelectedValues.includes(option)}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setSelectedBucketFilters((current) => {
-                                  const currentVisibleValues = getVisibleSelectedValues(current[filter.key], filter.options);
-                                  const baseValues = areAllOptionsSelected(currentVisibleValues, filter.options)
-                                    ? [...filter.options]
-                                    : currentVisibleValues;
-                                  const nextValues = baseValues.includes(option)
-                                    ? baseValues.filter((value) => value !== option)
-                                    : [...baseValues, option];
+                          return (
+                            <span
+                              key={option}
+                              className={`runtime-subfilter-option ${visibleSelectedValues.includes(option) ? 'is-selected' : ''}`}
+                            >
+                              <button
+                                type="button"
+                                className="runtime-subfilter-button runtime-subfilter-button-plain"
+                                aria-pressed={visibleSelectedValues.includes(option)}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setSelectedBucketFilters((current) => {
+                                    const currentVisibleValues = getVisibleSelectedValues(current[filter.key], filter.options);
+                                    const baseValues = areAllOptionsSelected(currentVisibleValues, filter.options)
+                                      ? [...filter.options]
+                                      : currentVisibleValues;
+                                    const nextValues = baseValues.includes(option)
+                                      ? baseValues.filter((value) => value !== option)
+                                      : [...baseValues, option];
 
-                                  return {
-                                    ...current,
-                                    [filter.key]: normalizeSelectedValues(nextValues, filter.options),
-                                  };
-                                });
-                              }}
-                            >
-                              {formatBucketDisplayLabel(option)}
-                            </button>
-                            <button
-                              type="button"
-                              className={`runtime-subfilter-info-button ${floatingTooltip?.id === tooltipId ? 'is-open' : ''}`}
-                              aria-label={`${formatBucketDisplayLabel(option)} 설명 보기`}
-                              aria-expanded={floatingTooltip?.id === tooltipId}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                toggleFloatingTooltip(
-                                  tooltipId,
-                                  event.currentTarget,
-                                  getBucketTooltipText(activeDbmsKey, filter.key, option)
-                                );
-                              }}
-                            >
-                              ?
-                            </button>
-                          </span>
-                        );
-                      })}
+                                    return {
+                                      ...current,
+                                      [filter.key]: normalizeSelectedValues(nextValues, filter.options),
+                                    };
+                                  });
+                                }}
+                              >
+                                {formatBucketDisplayLabel(option)}
+                              </button>
+                              <button
+                                type="button"
+                                className={`runtime-subfilter-info-button ${floatingTooltip?.id === tooltipId ? 'is-open' : ''}`}
+                                aria-label={`${formatBucketDisplayLabel(option)} 설명 보기`}
+                                aria-expanded={floatingTooltip?.id === tooltipId}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  toggleFloatingTooltip(
+                                    tooltipId,
+                                    event.currentTarget,
+                                    getBucketTooltipText(activeDbmsKey, filter.key, option)
+                                  );
+                                }}
+                              >
+                                ?
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 );

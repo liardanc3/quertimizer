@@ -4,23 +4,37 @@ import type { DbmsType } from '../../types/domain';
 interface DbmsSelectorProps {
   selectedDbms: DbmsType;
   onChange: (dbms: DbmsType) => void;
+  supportedDbms: DbmsType[];
   disabledDbms: DbmsType[];
 }
 
-export default function DbmsSelector({ selectedDbms, onChange, disabledDbms }: DbmsSelectorProps) {
+export default function DbmsSelector({
+  selectedDbms,
+  onChange,
+  supportedDbms,
+  disabledDbms,
+}: DbmsSelectorProps) {
+  const visibleDbms = mockDbmsOptions.filter((dbms) => supportedDbms.includes(dbms.id));
+  const availableCount = visibleDbms.filter((dbms) => !dbms.disabled && !disabledDbms.includes(dbms.id)).length;
+  const disabledCount = visibleDbms.length - availableCount;
+
   return (
-    <section className="panel-card compact">
+    <section className="panel-card compact solve-dbms-card">
       <div className="panel-heading-row responsive">
         <div>
-          <p className="panel-meta">실행 환경</p>
+          <p className="panel-meta">Runtime Environment</p>
           <h2 className="panel-title">DBMS 선택</h2>
         </div>
-        <p className="hint-text">현재는 PostgreSQL만 선택할 수 있고 Oracle은 비활성 상태입니다.</p>
+        <div className="solve-dbms-summary">
+          <span className="subtle-chip">{availableCount}개 사용 가능</span>
+          <span className="subtle-chip">{disabledCount}개 준비 중</span>
+        </div>
       </div>
 
       <div className="section-gate">
-        {mockDbmsOptions.map((dbms) => {
+        {visibleDbms.map((dbms) => {
           const isDisabled = dbms.disabled || disabledDbms.includes(dbms.id);
+
           return (
             <button
               key={dbms.id}
@@ -30,11 +44,16 @@ export default function DbmsSelector({ selectedDbms, onChange, disabledDbms }: D
               className={`mini-toggle ${selectedDbms === dbms.id ? 'is-selected' : ''}`}
             >
               {dbms.label}
-              {isDisabled && <span className="tab-meta">준비중</span>}
+              {isDisabled ? <span className="tab-meta">준비 중</span> : null}
             </button>
           );
         })}
       </div>
+
+      <p className="hint-text">
+        문제별 허용 DBMS와 실행 통계가 함께 바뀌도록 구성했습니다. 지금은 PostgreSQL 중심 흐름이며 Oracle은 이후 확장
+        지점으로 남겨두었습니다.
+      </p>
     </section>
   );
 }
