@@ -9,6 +9,14 @@ interface NavigateOptions {
   replace?: boolean;
 }
 
+export function getProfilePath(handle?: string) {
+  if (!handle) {
+    return PROFILE_PATH;
+  }
+
+  return `${PROFILE_PATH}/${encodeURIComponent(handle)}`;
+}
+
 export function navigate(path: string, options: NavigateOptions = {}) {
   const method = options.replace ? 'replaceState' : 'pushState';
 

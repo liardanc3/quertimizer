@@ -4,7 +4,6 @@ import ProblemRuntimeChart from './ProblemRuntimeChart';
 
 interface ProblemCardProps {
   problem: ProblemSummary;
-  showTags: boolean;
   showStats: boolean;
   onSearchSelect: (value: string) => void;
   onSelect: (id: string) => void;
@@ -15,16 +14,13 @@ function stopCardEvent(event: MouseEvent<HTMLElement>) {
   event.stopPropagation();
 }
 
-export default function ProblemCard({ problem, showTags, showStats, onSearchSelect, onSelect }: ProblemCardProps) {
-  const [isTagExpanded, setIsTagExpanded] = useState(true);
+export default function ProblemCard({ problem, showStats, onSearchSelect, onSelect }: ProblemCardProps) {
   const [isStatsExpanded, setIsStatsExpanded] = useState(true);
-  const visibleTags = problem.tags.slice(0, 5);
   const isSolved = Boolean(problem.solvedAt);
   const myTimeMs =
     problem.runtimeDistributions?.postgresql?.myTimeMs ??
     problem.runtimeDistributions?.oracle?.myTimeMs ??
     problem.runtimeDistribution?.myTimeMs;
-  const visibleTagsEnabled = showTags && isTagExpanded && visibleTags.length > 0;
   const visibleStatsEnabled = showStats && isStatsExpanded;
 
   return (
@@ -75,17 +71,6 @@ export default function ProblemCard({ problem, showTags, showStats, onSearchSele
             <div className="problem-card-actions" role="group" aria-label={`문제 ${problem.number} 표시 옵션`}>
               <button
                 type="button"
-                className={`mini-toggle problem-card-action ${isTagExpanded ? 'is-selected' : ''}`}
-                aria-pressed={isTagExpanded}
-                onClick={(event) => {
-                  stopCardEvent(event);
-                  setIsTagExpanded((value) => !value);
-                }}
-              >
-                태그
-              </button>
-              <button
-                type="button"
                 className={`mini-toggle problem-card-action ${isStatsExpanded ? 'is-selected' : ''}`}
                 aria-pressed={isStatsExpanded}
                 onClick={(event) => {
@@ -107,16 +92,6 @@ export default function ProblemCard({ problem, showTags, showStats, onSearchSele
       <div className={`problem-card-stats ${visibleStatsEnabled ? '' : 'is-hidden'}`.trim()} aria-hidden={!visibleStatsEnabled}>
         <ProblemRuntimeChart problem={problem} onSearchSelect={onSearchSelect} />
       </div>
-
-      {visibleTagsEnabled ? (
-        <div className="tag-row problem-card-tags">
-          {visibleTags.map((tag) => (
-            <span key={tag} className="tag-item">
-              #{tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
     </article>
   );
 }

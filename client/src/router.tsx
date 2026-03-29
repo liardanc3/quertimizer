@@ -30,6 +30,7 @@ interface CommunityRoute {
 
 interface ProfileRoute {
   type: 'profile';
+  handle?: string;
 }
 
 type AppRoute = HomeRoute | ProblemsRoute | RankingRoute | CommunityRoute | ProfileRoute | ProblemRoute;
@@ -64,6 +65,11 @@ function parseRoute(pathname: string): AppRoute {
     return { type: 'profile' };
   }
 
+  const profileMatch = pathname.match(/^\/profile\/([\w-]+)$/);
+  if (profileMatch) {
+    return { type: 'profile', handle: decodeURIComponent(profileMatch[1]) };
+  }
+
   const problemMatch = pathname.match(/^\/problems\/([a-zA-Z0-9-]+)$/);
   if (problemMatch) {
     return { type: 'problem', problemId: problemMatch[1] };
@@ -90,7 +96,7 @@ export default function AppRouter() {
   }
 
   if (route.type === 'profile') {
-    return <ProfilePage />;
+    return <ProfilePage key={route.handle ?? 'me'} handle={route.handle} />;
   }
 
   if (route.type === 'problems') {

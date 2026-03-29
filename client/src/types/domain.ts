@@ -53,6 +53,7 @@ export interface MockResult {
   status: JudgeStatus;
   message: string;
   executionTimeMs: number;
+  scanRows: number;
   cost: number;
   indexUsed: boolean;
   fullScan: boolean;
@@ -146,17 +147,80 @@ export interface DbmsOption {
   disabled?: boolean;
 }
 
+export interface ProfileSolvedRecord {
+  id: string;
+  problemId: string;
+  problemNumber: number;
+  problemTitle: string;
+  executionTimeMs: number;
+  scanRows: number;
+  solvedAt: string;
+}
+
+export interface ProfileLinks {
+  blog?: string;
+  github?: string;
+  email?: string;
+}
+
+export type SqlEditorPreset = 'focused' | 'balanced' | 'analysis';
+export type SqlVisibility = 'public' | 'followers' | 'private';
+
+export interface ProfileSettings {
+  defaultDbms: DbmsType;
+  sqlEditorPreset: SqlEditorPreset;
+  sqlVisibility: SqlVisibility;
+}
+
 export interface Profile {
+  handle: string;
   name: string;
   tier: string;
+  avatarUrl?: string;
+  bio: string;
+  links: ProfileLinks;
+  solvedProblems: ProfileSolvedRecord[];
+  settings: ProfileSettings;
   solvedCount: number;
 }
 
 export interface RankingEntry {
-  rank: number;
+  handle: string;
   name: string;
   tier: string;
-  score: number;
   solvedCount: number;
-  avgExecutionTimeMs: number;
+  avgExecutionPercentile: number;
+  avgScanRowsPercentile: number;
+  monthlyRankDelta: Record<RankingMetricKey, number>;
+}
+
+export type RankingLeaderboardByDbms = Record<DbmsType, RankingEntry[]>;
+export type RankingMetricKey = 'solvedCount' | 'avgExecutionPercentile' | 'avgScanRowsPercentile';
+
+export type CommunityPostCategory = 'tip' | 'question' | 'discussion' | 'notice';
+export type CommunityTagKind = 'problem' | 'tech' | 'topic';
+
+export interface CommunityTagDefinition {
+  id: string;
+  label: string;
+  kind: CommunityTagKind;
+  aliases: string[];
+  usageCount: number;
+  description: string;
+}
+
+export interface CommunityPostSummary {
+  id: string;
+  title: string;
+  authorHandle: string;
+  excerpt: string;
+  content: string;
+  tags: string[];
+  category: CommunityPostCategory;
+  createdAt: string;
+  views: number;
+  likes: number;
+  comments: number;
+  isPinned?: boolean;
+  isResolved?: boolean;
 }

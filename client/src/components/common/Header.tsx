@@ -2,9 +2,9 @@ import { useSyncExternalStore } from 'react';
 import {
   COMMUNITY_PATH,
   LANDING_SIGNUP_PATH,
-  PROFILE_PATH,
-  RANKING_PATH,
   PROBLEMS_PATH,
+  RANKING_PATH,
+  getProfilePath,
   navigate,
 } from '../../lib/navigation';
 import { useMockSession } from '../../lib/session';
@@ -88,7 +88,7 @@ export default function Header() {
         <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>
           {isAuthenticated ? (
             <>
-              <button type="button" className="header-link-button profile-link-button" onClick={() => navigate(PROFILE_PATH)}>
+              <button type="button" className="header-link-button profile-link-button" onClick={() => navigate(getProfilePath())}>
                 프로필
               </button>
               <button

@@ -46,7 +46,6 @@ function matchesSolvedState(problem: ProblemSummary, showSolved: boolean, showUn
 
 export default function HomePage() {
   const [domain, setDomain] = useState<DomainType>('rdbms');
-  const [showTags, setShowTags] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [showSolved, setShowSolved] = useState(true);
   const [showUnsolved, setShowUnsolved] = useState(true);
@@ -127,7 +126,6 @@ export default function HomePage() {
         <section className="panel-card problem-board">
           <div className="problem-board-header">
             <div className="problem-board-controls">
-              <ProblemModeSwitch label="태그 표시" checked={showTags} onChange={setShowTags} />
               <ProblemModeSwitch label="통계 표시" checked={showStats} onChange={setShowStats} />
               <ProblemStatusFilter
                 showSolved={showSolved}
@@ -171,7 +169,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <ProblemList problems={pagedProblems} showTags={showTags} showStats={showStats} onSearchSelect={applySearch} />
+          <ProblemList problems={pagedProblems} showStats={showStats} onSearchSelect={applySearch} />
 
           {filteredProblems.length > 0 ? (
             <div className="problem-pagination" role="navigation" aria-label="문제 페이지">

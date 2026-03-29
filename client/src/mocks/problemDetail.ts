@@ -484,7 +484,7 @@ function buildProblemDetail(problem: ProblemTemplate): ProblemDetail {
     outputExample: problem.outputExample,
     starterSql: problem.starterSql,
     dbmsOptions: ['postgresql', 'oracle'],
-    disabledDbms: ['oracle'],
+    disabledDbms: [],
     mockResult: problem.mockResult,
   };
 }
