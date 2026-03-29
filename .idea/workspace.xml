@@ -1,20 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="329ac4d6-bb0a-4ed3-a29a-80f4b01abf9a" name="Changes" comment="" />
+    <list default="true" id="329ac4d6-bb0a-4ed3-a29a-80f4b01abf9a" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/client/src/components/home/DomainTabs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/home/DomainTabs.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/home/ProblemCardSpoilerFree.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/home/ProblemCardTagged.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/home/ProblemList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/home/ProblemList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/home/ProblemModeSwitch.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/home/ProblemModeSwitch.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/index.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/mocks/problemDetail.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/mocks/problemDetail.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/mocks/problems.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/mocks/problems.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/HomePage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/HomePage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/types/domain.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/types/domain.ts" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 1
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "liardanc3"
+  }
 }]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/liardanc3/speedql.git",
+    "accountId": "d1531cbe-5250-45ff-a89e-7a60023a0720"
+  }
+}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 1
+}</component>
   <component name="ProjectId" id="3BUP1llXy47ZPOhmWethhALeesv" />
+  <component name="ProjectViewState">
+    <option name="showLibraryContents" value="true" />
+  </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true"
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "git-widget-placeholder": "main",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
   <component name="SharedIndexes">
@@ -33,6 +67,7 @@
       <option name="presentableId" value="Default" />
       <updated>1774540469598</updated>
       <workItem from="1774540470020" duration="6000" />
+      <workItem from="1774619604606" duration="18000" />
     </task>
     <servers />
   </component>

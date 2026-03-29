@@ -1,23 +1,35 @@
-import { mockProblems } from '../../mocks/problems';
 import { navigate } from '../../lib/navigation';
-import type { ProblemViewMode } from '../../types/domain';
-import ProblemCardSpoilerFree from './ProblemCardSpoilerFree';
-import ProblemCardTagged from './ProblemCardTagged';
+import type { ProblemSummary } from '../../types/domain';
+import ProblemCard from './ProblemCard';
 
 interface ProblemListProps {
-  mode: ProblemViewMode;
+  problems: ProblemSummary[];
+  showTags: boolean;
+  showStats: boolean;
+  onSearchSelect: (value: string) => void;
 }
 
-export default function ProblemList({ mode }: ProblemListProps) {
+export default function ProblemList({ problems, showTags, showStats, onSearchSelect }: ProblemListProps) {
+  if (problems.length === 0) {
+    return (
+      <section className="problem-list is-empty">
+        <div className="problem-empty-state">선택한 조건에 맞는 문제가 없습니다.</div>
+      </section>
+    );
+  }
+
   return (
     <section className="problem-list">
-      {mockProblems.map((problem) =>
-        mode === 'tagged' ? (
-          <ProblemCardTagged key={problem.id} problem={problem} onSelect={(id) => navigate(`/problems/${id}`)} />
-        ) : (
-          <ProblemCardSpoilerFree key={problem.id} problem={problem} onSelect={(id) => navigate(`/problems/${id}`)} />
-        )
-      )}
+      {problems.map((problem) => (
+        <ProblemCard
+          key={problem.id}
+          problem={problem}
+          showTags={showTags}
+          showStats={showStats}
+          onSearchSelect={onSearchSelect}
+          onSelect={(id) => navigate(`/problems/${id}`)}
+        />
+      ))}
     </section>
   );
 }

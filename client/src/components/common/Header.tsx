@@ -1,6 +1,12 @@
 import { useSyncExternalStore } from 'react';
-import { COMMUNITY_PATH, LANDING_SIGNUP_PATH, RANKING_PATH, PROBLEMS_PATH, navigate } from '../../lib/navigation';
-import { mockProfile } from '../../mocks/profile';
+import {
+  COMMUNITY_PATH,
+  LANDING_SIGNUP_PATH,
+  PROFILE_PATH,
+  RANKING_PATH,
+  PROBLEMS_PATH,
+  navigate,
+} from '../../lib/navigation';
 import { useMockSession } from '../../lib/session';
 
 function subscribe(callback: () => void) {
@@ -37,9 +43,9 @@ export default function Header() {
     ? 'ranking'
     : pathname.startsWith(COMMUNITY_PATH)
       ? 'community'
-    : pathname.startsWith(PROBLEMS_PATH)
-      ? 'problems'
-      : null;
+      : pathname.startsWith(PROBLEMS_PATH)
+        ? 'problems'
+        : null;
 
   return (
     <header className="header">
@@ -49,7 +55,7 @@ export default function Header() {
             type="button"
             className="brand-button"
             onClick={() => navigate(isAuthenticated ? PROBLEMS_PATH : '/')}
-            aria-label="speedql 홈"
+            aria-label="speedql 홈으로 이동"
           >
             <img className="brand-logo" src="/favicon.svg" alt="speedql" />
           </button>
@@ -82,18 +88,12 @@ export default function Header() {
         <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>
           {isAuthenticated ? (
             <>
-              <div className="profile-chip">
-                <span className="profile-avatar">{mockProfile.name.slice(0, 1)}</span>
-                <span className="profile-meta">
-                  <strong>{mockProfile.name}</strong>
-                  <span>
-                    {mockProfile.tier} · {mockProfile.solvedCount}문제 해결
-                  </span>
-                </span>
-              </div>
+              <button type="button" className="header-link-button profile-link-button" onClick={() => navigate(PROFILE_PATH)}>
+                프로필
+              </button>
               <button
                 type="button"
-                className="btn text"
+                className="header-link-button"
                 onClick={() => {
                   logout();
                   navigate('/', { replace: true });

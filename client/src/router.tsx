@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import CommunityPage from './pages/CommunityPage';
 import HomePage from './pages/HomePage';
+import ProfilePage from './pages/ProfilePage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
 import PublicHomePage from './pages/PublicHomePage';
 import RankingPage from './pages/RankingPage';
@@ -27,7 +28,11 @@ interface CommunityRoute {
   type: 'community';
 }
 
-type AppRoute = HomeRoute | ProblemsRoute | RankingRoute | CommunityRoute | ProblemRoute;
+interface ProfileRoute {
+  type: 'profile';
+}
+
+type AppRoute = HomeRoute | ProblemsRoute | RankingRoute | CommunityRoute | ProfileRoute | ProblemRoute;
 
 function subscribe(callback: () => void) {
   window.addEventListener('popstate', callback);
@@ -55,6 +60,10 @@ function parseRoute(pathname: string): AppRoute {
     return { type: 'community' };
   }
 
+  if (pathname === '/profile') {
+    return { type: 'profile' };
+  }
+
   const problemMatch = pathname.match(/^\/problems\/([a-zA-Z0-9-]+)$/);
   if (problemMatch) {
     return { type: 'problem', problemId: problemMatch[1] };
@@ -78,6 +87,10 @@ export default function AppRouter() {
 
   if (route.type === 'community') {
     return <CommunityPage />;
+  }
+
+  if (route.type === 'profile') {
+    return <ProfilePage />;
   }
 
   if (route.type === 'problems') {
