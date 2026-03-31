@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
-const AUTH_STORAGE_KEY = 'speedql.mock-authenticated';
-const AUTH_CHANGE_EVENT = 'speedql:auth-change';
+const AUTH_STORAGE_KEY = 'quertimizer.mock-authenticated';
+const AUTH_CHANGE_EVENT = 'quertimizer:auth-change';
 
 function emitAuthChange() {
   if (typeof window === 'undefined') {
@@ -60,3 +60,4 @@ export function useMockSession() {
     logout: logoutMock,
   };
 }
+

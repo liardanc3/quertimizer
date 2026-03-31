@@ -220,7 +220,7 @@ export default function HomePage() {
               <p className="panel-meta">준비 중인 영역</p>
               <h2 className="panel-title">NoSQL 트랙</h2>
             </div>
-            <span className="section-badge is-disabled">Coming Soon</span>
+            <span className="section-badge is-disabled">준비 중</span>
           </div>
           <p className="content-text">
             문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개할 예정입니다.

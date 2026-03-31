@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getProfilePath, navigate } from '../lib/navigation';
+import { PROFILE_ACTIVITY_PATH, getProfilePath, navigate } from '../lib/navigation';
 import { getMockProfileByHandle, mockCurrentHandle, mockProfiles } from '../mocks/profile';
 import type {
   DbmsType,
@@ -235,7 +235,7 @@ function ProfileAvatar({
     <img
       className={className}
       src={normalizedSrc}
-      alt={`${profile.handle} profile`}
+      alt={`${profile.handle} 프로필`}
       onError={() => setHasImageError(true)}
     />
   );
@@ -245,9 +245,9 @@ function NotFoundState() {
   return (
     <div className="page-stack">
       <section className="panel-card">
-        <p className="panel-meta">Profile</p>
+        <p className="panel-meta">프로필</p>
         <h1 className="page-title">프로필을 찾을 수 없습니다.</h1>
-        <p className="muted-text">등록된 handle을 다시 확인하거나 아래 공개 프로필로 이동해 주세요.</p>
+        <p className="muted-text">등록된 핸들을 다시 확인하거나 아래 공개 프로필로 이동해 주세요.</p>
       </section>
 
       <section className="panel-card compact">
@@ -413,7 +413,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
 
           <div className="profile-hero-copy">
             <div className="profile-hero-meta-row">
-              <p className="panel-meta">Profile</p>
+              <p className="panel-meta">프로필</p>
               <span className="subtle-chip">{isOwnProfile ? '내 프로필' : '공개 프로필'}</span>
             </div>
 
@@ -443,6 +443,9 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
 
           {isOwnProfile ? (
             <div className="profile-hero-actions">
+              <button type="button" className="btn ghost" onClick={() => navigate(PROFILE_ACTIVITY_PATH)}>
+                내 활동
+              </button>
               <button type="button" className="btn secondary" onClick={openEditPanel}>
                 {isEditOpen ? '편집 닫기' : '프로필 편집'}
               </button>
@@ -471,7 +474,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
             <p className="profile-summary-value">{averageExecutionTime.toFixed(1)} ms</p>
           </article>
           <article className="profile-summary-card">
-            <p className="stat-label">평균 Scan Rows</p>
+            <p className="stat-label">평균 스캔 행 수</p>
             <p className="profile-summary-value">{numberFormatter.format(averageScanRows)}</p>
           </article>
           <article className="profile-summary-card">
@@ -485,7 +488,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
         <section className="panel-card">
           <div className="panel-heading-row responsive">
             <div>
-              <p className="panel-meta">Edit Profile</p>
+              <p className="panel-meta">프로필 편집</p>
               <h2 className="panel-title">프로필 편집</h2>
             </div>
             <span className="subtle-chip">사진 · 소개글 · 외부 링크</span>
@@ -586,7 +589,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
         <section className="panel-card">
           <div className="panel-heading-row responsive">
             <div>
-              <p className="panel-meta">Settings</p>
+              <p className="panel-meta">설정</p>
               <h2 className="panel-title">개인 설정</h2>
             </div>
             <span className="subtle-chip">RDBMS · 에디터 · 공개 범위 · 비밀번호</span>
@@ -756,10 +759,10 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
       <section className="panel-card">
         <div className="panel-heading-row responsive">
           <div>
-            <p className="panel-meta">Solved Problems</p>
+            <p className="panel-meta">해결한 문제</p>
             <h2 className="panel-title">해결한 문제 번호</h2>
           </div>
-          <span className="subtle-chip">{profile.solvedCount} solved</span>
+          <span className="subtle-chip">문제 {profile.solvedCount}개</span>
         </div>
 
         <div className="profile-problem-chip-list">
@@ -779,7 +782,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
       <section className="panel-card">
         <div className="panel-heading-row responsive profile-records-toolbar">
           <div>
-            <p className="panel-meta">Performance Log</p>
+            <p className="panel-meta">해결 기록</p>
             <h2 className="panel-title">해결 기록</h2>
           </div>
 
@@ -821,7 +824,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                     <SortButton
                       active={sortKey === 'scanRows'}
                       direction={sortDirection}
-                      label="Scan Rows"
+                      label="스캔 행 수"
                       onClick={() => toggleSort('scanRows')}
                     />
                   </th>

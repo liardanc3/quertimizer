@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/speedql.iml" filepath="$PROJECT_DIR$/.idea/speedql.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/quertimizer.iml" filepath="$PROJECT_DIR$/.idea/quertimizer.iml" />
     </modules>
   </component>
 </project>

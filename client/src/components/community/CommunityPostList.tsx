@@ -3,14 +3,35 @@ import CommunityPostCard from './CommunityPostCard';
 
 interface CommunityPostListProps {
   posts: CommunityPostSummary[];
+  searchQuery: string;
+  activeTag: string;
+  onOpenPost: (postId: string) => void;
+  onSelectTag: (tag: string) => void;
+  onResetFilters: () => void;
 }
 
-export default function CommunityPostList({ posts }: CommunityPostListProps) {
+export default function CommunityPostList({
+  posts,
+  searchQuery,
+  activeTag,
+  onOpenPost,
+  onSelectTag,
+  onResetFilters,
+}: CommunityPostListProps) {
   if (posts.length === 0) {
     return (
       <section className="community-board-table is-empty">
-        <div className="problem-empty-state community-empty-state">
-          선택한 조건에 맞는 게시글이 없습니다. 다른 검색어로 다시 찾아보세요.
+        <div className="community-empty-state">
+          <div className="community-empty-state-icon" aria-hidden="true">
+            ⌕
+          </div>
+          <div className="community-empty-state-copy">
+            <strong>조건에 맞는 게시글이 아직 없습니다.</strong>
+            <p>검색어를 바꾸거나 필터를 해제해서 다시 찾아보세요.</p>
+          </div>
+          <button type="button" className="btn secondary" onClick={onResetFilters}>
+            검색 초기화
+          </button>
         </div>
       </section>
     );
@@ -27,7 +48,14 @@ export default function CommunityPostList({ posts }: CommunityPostListProps) {
       </div>
 
       {posts.map((post) => (
-        <CommunityPostCard key={post.id} post={post} />
+        <CommunityPostCard
+          key={post.id}
+          post={post}
+          searchQuery={searchQuery}
+          activeTag={activeTag}
+          onOpenPost={onOpenPost}
+          onSelectTag={onSelectTag}
+        />
       ))}
     </section>
   );

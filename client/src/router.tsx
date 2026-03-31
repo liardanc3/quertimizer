@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from 'react';
+import CommunityDetailPage from './pages/CommunityDetailPage';
 import CommunityPage from './pages/CommunityPage';
+import CommunityWritePage from './pages/CommunityWritePage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
+import ProfileActivityPage from './pages/ProfileActivityPage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
 import PublicHomePage from './pages/PublicHomePage';
 import RankingPage from './pages/RankingPage';
@@ -28,12 +31,40 @@ interface CommunityRoute {
   type: 'community';
 }
 
+interface CommunityDetailRoute {
+  type: 'communityDetail';
+  postId: string;
+}
+
+interface CommunityWriteRoute {
+  type: 'communityWrite';
+}
+
+interface CommunityEditRoute {
+  type: 'communityEdit';
+  postId: string;
+}
+
 interface ProfileRoute {
   type: 'profile';
   handle?: string;
 }
 
-type AppRoute = HomeRoute | ProblemsRoute | RankingRoute | CommunityRoute | ProfileRoute | ProblemRoute;
+interface ProfileActivityRoute {
+  type: 'profileActivity';
+}
+
+type AppRoute =
+  | HomeRoute
+  | ProblemsRoute
+  | RankingRoute
+  | CommunityRoute
+  | CommunityWriteRoute
+  | CommunityEditRoute
+  | CommunityDetailRoute
+  | ProfileActivityRoute
+  | ProfileRoute
+  | ProblemRoute;
 
 function subscribe(callback: () => void) {
   window.addEventListener('popstate', callback);
@@ -45,32 +76,52 @@ function getSnapshot() {
 }
 
 function parseRoute(pathname: string): AppRoute {
-  if (pathname === '/') {
+  const normalizedPathname = pathname !== '/' ? pathname.replace(/\/+$/, '') : pathname;
+
+  if (normalizedPathname === '/') {
     return { type: 'home' };
   }
 
-  if (pathname === '/problems') {
+  if (normalizedPathname === '/problems') {
     return { type: 'problems' };
   }
 
-  if (pathname === '/ranking') {
+  if (normalizedPathname === '/ranking') {
     return { type: 'ranking' };
   }
 
-  if (pathname === '/community') {
+  if (normalizedPathname === '/community') {
     return { type: 'community' };
   }
 
-  if (pathname === '/profile') {
+  if (normalizedPathname === '/community/write') {
+    return { type: 'communityWrite' };
+  }
+
+  const communityEditMatch = normalizedPathname.match(/^\/community\/([a-zA-Z0-9-]+)\/edit$/);
+  if (communityEditMatch) {
+    return { type: 'communityEdit', postId: decodeURIComponent(communityEditMatch[1]) };
+  }
+
+  const communityPostMatch = normalizedPathname.match(/^\/community\/(?!write$)([a-zA-Z0-9-]+)$/);
+  if (communityPostMatch) {
+    return { type: 'communityDetail', postId: decodeURIComponent(communityPostMatch[1]) };
+  }
+
+  if (normalizedPathname === '/profile/activity') {
+    return { type: 'profileActivity' };
+  }
+
+  if (normalizedPathname === '/profile') {
     return { type: 'profile' };
   }
 
-  const profileMatch = pathname.match(/^\/profile\/([\w-]+)$/);
+  const profileMatch = normalizedPathname.match(/^\/profile\/([\w-]+)$/);
   if (profileMatch) {
     return { type: 'profile', handle: decodeURIComponent(profileMatch[1]) };
   }
 
-  const problemMatch = pathname.match(/^\/problems\/([a-zA-Z0-9-]+)$/);
+  const problemMatch = normalizedPathname.match(/^\/problems\/([a-zA-Z0-9-]+)$/);
   if (problemMatch) {
     return { type: 'problem', problemId: problemMatch[1] };
   }
@@ -93,6 +144,22 @@ export default function AppRouter() {
 
   if (route.type === 'community') {
     return <CommunityPage />;
+  }
+
+  if (route.type === 'communityWrite') {
+    return <CommunityWritePage />;
+  }
+
+  if (route.type === 'communityEdit') {
+    return <CommunityWritePage key={`edit-${route.postId}`} postId={route.postId} />;
+  }
+
+  if (route.type === 'communityDetail') {
+    return <CommunityDetailPage key={route.postId} postId={route.postId} />;
+  }
+
+  if (route.type === 'profileActivity') {
+    return <ProfileActivityPage />;
   }
 
   if (route.type === 'profile') {

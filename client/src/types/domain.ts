@@ -215,12 +215,23 @@ export interface CommunityPostSummary {
   authorHandle: string;
   excerpt: string;
   content: string;
+  contentHtml?: string;
   tags: string[];
   category: CommunityPostCategory;
   createdAt: string;
+  updatedAt?: string;
   views: number;
   likes: number;
   comments: number;
   isPinned?: boolean;
   isResolved?: boolean;
+}
+
+export interface CommunityComment {
+  id: string;
+  authorHandle: string;
+  content: string;
+  createdAt: string;
+  likes: number;
+  replies: CommunityComment[];
 }

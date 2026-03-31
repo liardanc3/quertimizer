@@ -1,0 +1,155 @@
+import { useState, useSyncExternalStore } from 'react';
+import { getCommunityActivityData, getCommunityStoreSnapshot, subscribeCommunityStore } from '../lib/communityStore';
+import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
+import { mockCurrentHandle } from '../mocks/profile';
+
+type ActivityTab = 'posts' | 'comments' | 'likes';
+
+const numberFormatter = new Intl.NumberFormat('ko-KR');
+
+function formatBoardDate(value: string) {
+  const date = new Date(value);
+  const year = String(date.getFullYear()).slice(-2);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+export default function ProfileActivityPage() {
+  useSyncExternalStore(subscribeCommunityStore, getCommunityStoreSnapshot, () => '');
+
+  const [activeTab, setActiveTab] = useState<ActivityTab>('posts');
+  const activity = getCommunityActivityData(mockCurrentHandle);
+  const tabs: Array<{ id: ActivityTab; label: string; count: number }> = [
+    { id: 'posts', label: '내 글', count: activity.posts.length },
+    { id: 'comments', label: '내 댓글', count: activity.comments.length },
+    { id: 'likes', label: '좋아요한 글', count: activity.likedPosts.length },
+  ];
+
+  return (
+    <div className="page-stack">
+      <section className="panel-card community-activity-hero">
+        <div className="community-detail-topbar">
+          <button type="button" className="btn ghost community-back-button" onClick={() => navigate(getProfilePath())}>
+            뒤로가기
+          </button>
+          <span className="subtle-chip">내 활동</span>
+        </div>
+
+        <div className="community-activity-header">
+          <p className="panel-meta">활동 기록</p>
+          <h1 className="page-title">내 활동</h1>
+          <p className="muted-text">작성 글, 댓글, 좋아요한 글을 한 번에 모아보는 화면입니다.</p>
+        </div>
+
+        <div className="community-activity-summary">
+          {tabs.map((tab) => (
+            <article key={tab.id} className="community-activity-summary-card">
+              <p className="stat-label">{tab.label}</p>
+              <strong className="community-activity-summary-value">{numberFormatter.format(tab.count)}</strong>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel-card community-activity-panel">
+        <div className="community-activity-tabs">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`tab-button ${activeTab === tab.id ? 'is-selected' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+              <span className="tab-meta">{numberFormatter.format(tab.count)}</span>
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'posts' ? (
+          activity.posts.length > 0 ? (
+            <div className="community-activity-list">
+              {activity.posts.map((post) => (
+                <button
+                  key={post.id}
+                  type="button"
+                  className="community-activity-item"
+                  onClick={() => navigate(getCommunityPostPath(post.id))}
+                >
+                  <div className="community-activity-item-head">
+                    <strong>{post.title}</strong>
+                    <span>{formatBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                  </div>
+                  <p>{post.excerpt}</p>
+                  <div className="community-activity-item-meta">
+                    <span>좋아요 {numberFormatter.format(post.likes)}</span>
+                    <span>댓글 {numberFormatter.format(post.comments)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="community-activity-empty">아직 작성한 글이 없습니다.</div>
+          )
+        ) : null}
+
+        {activeTab === 'comments' ? (
+          activity.comments.length > 0 ? (
+            <div className="community-activity-list">
+              {activity.comments.map((comment) => (
+                <button
+                  key={comment.id}
+                  type="button"
+                  className="community-activity-item"
+                  onClick={() => navigate(getCommunityPostPath(comment.postId))}
+                >
+                  <div className="community-activity-item-head">
+                    <strong>{comment.postTitle}</strong>
+                    <span>{formatBoardDate(comment.createdAt)}</span>
+                  </div>
+                  <p>{comment.content}</p>
+                  <div className="community-activity-item-meta">
+                    <span>{comment.depth > 0 ? '대댓글' : '댓글'}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="community-activity-empty">아직 남긴 댓글이 없습니다.</div>
+          )
+        ) : null}
+
+        {activeTab === 'likes' ? (
+          activity.likedPosts.length > 0 ? (
+            <div className="community-activity-list">
+              {activity.likedPosts.map((post) => (
+                <button
+                  key={post.id}
+                  type="button"
+                  className="community-activity-item"
+                  onClick={() => navigate(getCommunityPostPath(post.id))}
+                >
+                  <div className="community-activity-item-head">
+                    <strong>{post.title}</strong>
+                    <span>{formatBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                  </div>
+                  <p>{post.excerpt}</p>
+                  <div className="community-activity-item-meta">
+                    <span>@{post.authorHandle}</span>
+                    <span>좋아요 {numberFormatter.format(post.likes)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="community-activity-empty">좋아요한 글이 아직 없습니다.</div>
+          )
+        ) : null}
+      </section>
+    </div>
+  );
+}

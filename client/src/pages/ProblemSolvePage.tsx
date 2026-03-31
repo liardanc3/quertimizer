@@ -58,7 +58,7 @@ const editorThemes: Record<
   { label: string; background: string; foreground: string; header: string; border: string; font: string }
 > = {
   slate: {
-    label: 'Slate',
+    label: '슬레이트',
     background: '#0f172a',
     foreground: '#e2e8f0',
     header: '#162338',
@@ -66,7 +66,7 @@ const editorThemes: Record<
     font: '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace',
   },
   paper: {
-    label: 'Paper',
+    label: '페이퍼',
     background: '#f8fafc',
     foreground: '#0f172a',
     header: '#e2e8f0',
@@ -74,7 +74,7 @@ const editorThemes: Record<
     font: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace',
   },
   forest: {
-    label: 'Forest',
+    label: '포레스트',
     background: '#0f1f1b',
     foreground: '#dcfce7',
     header: '#16332b',
@@ -383,7 +383,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     <section className="panel-card solve-pane solve-pane-left">
       <div className="solve-pane-header">
         <div>
-          <p className="panel-meta">Table / Example</p>
+          <p className="panel-meta">테이블 / 예시</p>
           <h2 className="panel-title">테이블/예시</h2>
         </div>
         {renderPanelActions('left')}
@@ -442,7 +442,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     <section className="panel-card solve-pane solve-pane-editor" style={editorThemeStyle}>
       <div className="solve-pane-header">
         <div>
-          <p className="panel-meta">SQL Workspace</p>
+          <p className="panel-meta">SQL 작업 공간</p>
           <h2 className="panel-title">에디터</h2>
         </div>
         {renderPanelActions(
@@ -507,7 +507,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     <section className="panel-card solve-pane solve-pane-right">
       <div className="solve-pane-header">
         <div>
-          <p className="panel-meta">Execution Result</p>
+          <p className="panel-meta">실행 결과</p>
           <h2 className="panel-title">실행 결과</h2>
         </div>
         {renderPanelActions('right')}
@@ -525,7 +525,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               <strong className="solve-result-value">{formatMs(result.executionTimeMs)}</strong>
             </div>
             <div className="solve-result-line">
-              <span className="solve-result-label">Scan Rows</span>
+              <span className="solve-result-label">스캔 행 수</span>
               <strong className="solve-result-value">{formatCount(result.scanRows)}</strong>
             </div>
           </div>
@@ -546,7 +546,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 <strong>{resultTimePercent ? `상위 ${resultTimePercent}%` : '비교 데이터 없음'}</strong>
               </div>
               <div className="solve-performance-item">
-                <span>현재 Scan Rows 구간</span>
+                <span>현재 스캔 행 수 구간</span>
                 <strong>{resultScanRowsPercent ? `상위 ${resultScanRowsPercent}%` : '비교 데이터 없음'}</strong>
               </div>
             </div>
@@ -665,7 +665,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         <section className="panel-card solve-floating-editor" style={editorThemeStyle}>
           <div className="solve-pane-header">
             <div>
-              <p className="panel-meta">Detached Editor</p>
+              <p className="panel-meta">분리 에디터</p>
               <h2 className="panel-title">에디터 PIP</h2>
             </div>
             <div className="solve-pane-actions">

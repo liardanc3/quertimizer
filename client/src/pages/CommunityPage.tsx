@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import CommunityPostList from '../components/community/CommunityPostList';
-import { mockCommunityPosts, mockCommunityTagLibrary } from '../mocks/community';
+import {
+  getCommunityPosts,
+  getCommunityStoreSnapshot,
+  subscribeCommunityStore,
+} from '../lib/communityStore';
+import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
+import { mockCommunityTagLibrary } from '../mocks/community';
 import type { CommunityPostSummary } from '../types/domain';
 
 type CommunitySortKey = 'relevance' | 'latest' | 'oldest' | 'views' | 'likes' | 'comments';
@@ -23,6 +29,60 @@ const sortOptions: Array<{ id: CommunitySortKey; label: string }> = [
   { id: 'comments', label: '댓글순' },
 ];
 
+function isSortKey(value: string | null): value is CommunitySortKey {
+  return sortOptions.some((option) => option.id === value);
+}
+
+function readCommunityListState() {
+  const params = new URLSearchParams(window.location.search);
+  const search = params.get('search') ?? '';
+  const sort = params.get('sort');
+  const page = Number.parseInt(params.get('page') ?? '1', 10);
+  const tag = params.get('tag') ?? '';
+
+  return {
+    search,
+    tag,
+    sortKey: isSortKey(sort) ? sort : 'latest',
+    page: Number.isNaN(page) || page < 1 ? 1 : page,
+  };
+}
+
+function buildCommunityListPath({
+  search,
+  tag,
+  sortKey,
+  page,
+}: {
+  search: string;
+  tag: string;
+  sortKey: CommunitySortKey;
+  page: number;
+}) {
+  const params = new URLSearchParams();
+  const normalizedSearch = search.trim();
+  const normalizedTag = tag.trim();
+
+  if (normalizedSearch) {
+    params.set('search', normalizedSearch);
+  }
+
+  if (normalizedTag) {
+    params.set('tag', normalizedTag);
+  }
+
+  if (sortKey !== 'latest') {
+    params.set('sort', sortKey);
+  }
+
+  if (page > 1) {
+    params.set('page', String(page));
+  }
+
+  const query = params.toString();
+  return query ? `${COMMUNITY_PATH}?${query}` : COMMUNITY_PATH;
+}
+
 function normalizeKeyword(value: string) {
   return value
     .toLowerCase()
@@ -36,6 +96,15 @@ function tokenize(value: string) {
     .split(/\s+/)
     .map((token) => normalizeKeyword(token))
     .filter(Boolean);
+}
+
+function resolveTagLabel(value: string) {
+  const normalizedValue = normalizeKeyword(value);
+  const matchedTag = mockCommunityTagLibrary.find((tag) =>
+    [tag.label, ...tag.aliases].some((candidate) => normalizeKeyword(candidate) === normalizedValue)
+  );
+
+  return matchedTag?.label ?? value.trim();
 }
 
 function scoreMatch(
@@ -142,7 +211,7 @@ function compareRankedPosts(sortKey: CommunitySortKey, hasSearchQuery: boolean, 
   }
 
   if (sortKey === 'oldest') {
-    return oldestGap || relevanceGap || viewsGap || likesGap || left.post.title.localeCompare(right.post.title, 'ko-KR');
+    return oldestGap || relevanceGap || viewsGap || likesGap || commentsGap || left.post.title.localeCompare(right.post.title, 'ko-KR');
   }
 
   if (sortKey === 'views') {
@@ -160,21 +229,47 @@ function compareRankedPosts(sortKey: CommunitySortKey, hasSearchQuery: boolean, 
   return latestGap || relevanceGap || viewsGap || likesGap || commentsGap || left.post.title.localeCompare(right.post.title, 'ko-KR');
 }
 
+function matchesActiveTag(post: CommunityPostSummary, activeTag: string) {
+  if (!activeTag.trim()) {
+    return true;
+  }
+
+  const normalizedActiveTag = normalizeKeyword(activeTag);
+  return getTagCandidates(post.tags).some((candidate) => normalizeKeyword(candidate) === normalizedActiveTag);
+}
+
 function formatNumber(value: number) {
   return numberFormatter.format(value);
 }
 
 export default function CommunityPage() {
-  const [draftSearchValue, setDraftSearchValue] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortKey, setSortKey] = useState<CommunitySortKey>('latest');
-  const [requestedPage, setRequestedPage] = useState(1);
+  useSyncExternalStore(subscribeCommunityStore, getCommunityStoreSnapshot, () => '');
+
+  const initialState = readCommunityListState();
+  const [draftSearchValue, setDraftSearchValue] = useState(initialState.search);
+  const [searchQuery, setSearchQuery] = useState(initialState.search);
+  const [activeTag, setActiveTag] = useState(initialState.tag);
+  const [sortKey, setSortKey] = useState<CommunitySortKey>(initialState.sortKey);
+  const [requestedPage, setRequestedPage] = useState(initialState.page);
+
+  useEffect(() => {
+    const savedScrollY = window.history.state?.scrollY;
+
+    if (typeof savedScrollY === 'number') {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: savedScrollY, behavior: 'auto' });
+      });
+    }
+  }, []);
 
   const normalizedSearchQuery = normalizeKeyword(searchQuery);
   const searchTokens = tokenize(searchQuery);
   const hasSearchQuery = normalizedSearchQuery.length > 0 || searchTokens.length > 0;
+  const canonicalTag = activeTag ? resolveTagLabel(activeTag) : '';
+  const posts = getCommunityPosts();
 
-  const filteredPosts = mockCommunityPosts
+  const filteredPosts = posts
+    .filter((post) => matchesActiveTag(post, canonicalTag))
     .map((post) => ({
       post,
       relevanceScore: getPostSearchScore(post, normalizedSearchQuery, searchTokens),
@@ -186,18 +281,67 @@ export default function CommunityPage() {
   const currentPage = Math.min(requestedPage, totalPages);
   const pageGroupStart = Math.floor((currentPage - 1) / PAGE_NUMBER_GROUP_SIZE) * PAGE_NUMBER_GROUP_SIZE + 1;
   const pageGroupEnd = Math.min(totalPages, pageGroupStart + PAGE_NUMBER_GROUP_SIZE - 1);
-  const pagedPosts = filteredPosts
-    .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-    .map(({ post }) => post);
+  const pagedPosts = filteredPosts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map(({ post }) => post);
 
-  const applySearch = (value: string) => {
+  useEffect(() => {
+    if (requestedPage !== currentPage) {
+      setRequestedPage(currentPage);
+      window.history.replaceState(
+        { ...(window.history.state ?? {}), scrollY: 0 },
+        '',
+        buildCommunityListPath({ search: searchQuery, tag: canonicalTag, sortKey, page: currentPage })
+      );
+    }
+  }, [canonicalTag, currentPage, requestedPage, searchQuery, sortKey]);
+
+  function replaceListHistory(nextSearch: string, nextTag: string, nextSortKey: CommunitySortKey, nextPage: number, scrollY = 0) {
+    window.history.replaceState(
+      { ...(window.history.state ?? {}), scrollY },
+      '',
+      buildCommunityListPath({ search: nextSearch, tag: nextTag, sortKey: nextSortKey, page: nextPage })
+    );
+  }
+
+  function moveList(nextSearch: string, nextTag: string, nextSortKey: CommunitySortKey, nextPage: number) {
+    const trimmedSearch = nextSearch.trim();
+    const normalizedTag = nextTag.trim();
+
+    setSearchQuery(trimmedSearch);
+    setActiveTag(normalizedTag);
+    setSortKey(nextSortKey);
+    setRequestedPage(nextPage);
+    replaceListHistory(trimmedSearch, normalizedTag, nextSortKey, nextPage, 0);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function applySearch(value: string) {
     const trimmedValue = value.trim();
+    const nextSortKey = trimmedValue ? 'relevance' : sortKey === 'relevance' ? 'latest' : sortKey;
 
     setDraftSearchValue(value);
-    setSearchQuery(trimmedValue);
-    setRequestedPage(1);
-    setSortKey(trimmedValue ? 'relevance' : sortKey === 'relevance' ? 'latest' : sortKey);
-  };
+    moveList(trimmedValue, canonicalTag, nextSortKey, 1);
+  }
+
+  function handleOpenPost(postId: string) {
+    const fromPath = buildCommunityListPath({ search: searchQuery, tag: canonicalTag, sortKey, page: currentPage });
+
+    window.history.replaceState({ ...(window.history.state ?? {}), scrollY: window.scrollY }, '', fromPath);
+    navigate(getCommunityPostPath(postId), {
+      state: {
+        from: fromPath,
+      },
+    });
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function handleSelectTag(tag: string) {
+    moveList(searchQuery, tag, sortKey === 'relevance' && !searchQuery.trim() ? 'latest' : sortKey, 1);
+  }
+
+  function handleResetFilters() {
+    setDraftSearchValue('');
+    moveList('', '', 'latest', 1);
+  }
 
   return (
     <div className="page-stack community-page">
@@ -227,44 +371,76 @@ export default function CommunityPage() {
             검색
           </button>
         </form>
+
+        {canonicalTag ? (
+          <div className="community-active-filter-row">
+            <button type="button" className="community-active-tag-chip" onClick={() => moveList(searchQuery, '', sortKey, 1)}>
+              <span>#{canonicalTag}</span>
+              <span aria-hidden="true">x</span>
+            </button>
+            <span className="community-active-filter-caption">태그별 목록을 보고 있습니다.</span>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel-card compact community-list-panel">
         <div className="community-list-toolbar">
-          <span className="community-result-count">총 {formatNumber(filteredPosts.length)}개</span>
+          <div className="community-list-meta">
+            <span className="community-result-count">총 {formatNumber(filteredPosts.length)}개</span>
 
-          <div className="community-sort-box">
-            <label className="community-sort-label" htmlFor="community-sort-select">
-              정렬
-            </label>
-            <div className="community-sort-select-wrap">
-              <select
-                id="community-sort-select"
-                className="community-sort-select"
-                value={sortKey}
-                onChange={(event) => {
-                  setSortKey(event.target.value as CommunitySortKey);
-                  setRequestedPage(1);
-                }}
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+            <div className="community-sort-box">
+              <label className="community-sort-label" htmlFor="community-sort-select">
+                정렬
+              </label>
+              <div className="community-sort-select-wrap">
+                <select
+                  id="community-sort-select"
+                  className="community-sort-select"
+                  value={sortKey}
+                  onChange={(event) => {
+                    moveList(searchQuery, canonicalTag, event.target.value as CommunitySortKey, 1);
+                  }}
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            className="btn primary community-write-button"
+            onClick={() =>
+              navigate(COMMUNITY_WRITE_PATH, {
+                state: {
+                  from: buildCommunityListPath({ search: searchQuery, tag: canonicalTag, sortKey, page: currentPage }),
+                },
+              })
+            }
+          >
+            글쓰기
+          </button>
         </div>
 
-        <CommunityPostList posts={pagedPosts} />
+        <CommunityPostList
+          posts={pagedPosts}
+          searchQuery={searchQuery}
+          activeTag={canonicalTag}
+          onOpenPost={handleOpenPost}
+          onSelectTag={handleSelectTag}
+          onResetFilters={handleResetFilters}
+        />
 
         {filteredPosts.length > 0 ? (
           <div className="problem-pagination community-pagination" role="navigation" aria-label="커뮤니티 페이지">
             <button
               type="button"
               className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
+              onClick={() => moveList(searchQuery, canonicalTag, sortKey, Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
             >
               이전
@@ -277,7 +453,7 @@ export default function CommunityPage() {
                   type="button"
                   className={`mini-toggle problem-page-button ${page === currentPage ? 'is-selected' : ''}`}
                   aria-current={page === currentPage ? 'page' : undefined}
-                  onClick={() => setRequestedPage(page)}
+                  onClick={() => moveList(searchQuery, canonicalTag, sortKey, page)}
                 >
                   {page}
                 </button>
@@ -287,7 +463,7 @@ export default function CommunityPage() {
             <button
               type="button"
               className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.min(totalPages, page + 1))}
+              onClick={() => moveList(searchQuery, canonicalTag, sortKey, Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
             >
               다음

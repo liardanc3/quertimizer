@@ -144,7 +144,7 @@ function roundToOne(value: number) {
 
 function createGeneratedRanking(dbms: DbmsType, count: number): RankingEntry[] {
   const dbmsPrefix = dbms === 'postgresql' ? 'pg' : 'ora';
-  const displayPrefix = dbms === 'postgresql' ? 'PG User' : 'Oracle User';
+  const displayPrefix = dbms === 'postgresql' ? 'PG 사용자' : 'Oracle 사용자';
   const solvedBase = dbms === 'postgresql' ? 94 : 99;
   const executionBase = dbms === 'postgresql' ? 23.1 : 22.4;
   const scanBase = dbms === 'postgresql' ? 24.4 : 23.6;

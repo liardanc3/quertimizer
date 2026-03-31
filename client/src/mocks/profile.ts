@@ -37,11 +37,11 @@ export const mockProfiles: Profile[] = [
     name: '김튜너',
     tier: 'Silver 2',
     avatarUrl: '/favicon.svg',
-    bio: 'PostgreSQL 실행계획을 읽는 맛으로 푸는 SQL 러너입니다. 짧은 실행 시간과 적은 Scan Rows를 같이 챙기는 풀이를 기록하고 있습니다.',
+    bio: 'PostgreSQL 실행계획을 읽는 맛으로 푸는 SQL 러너입니다. 짧은 실행 시간과 적은 스캔 행 수를 같이 챙기는 풀이를 기록하고 있습니다.',
     links: {
-      blog: 'https://blog.speedql.dev/kim-tuner',
+      blog: 'https://blog.quertimizer.dev/kim-tuner',
       github: 'https://github.com/kim-tuner',
-      email: 'kim.tuner@speedql.dev',
+      email: 'kim.tuner@quertimizer.dev',
     },
     settings: {
       defaultDbms: 'postgresql',
@@ -91,9 +91,9 @@ export const mockProfiles: Profile[] = [
     handle: 'lee-index',
     name: '이인덱스',
     tier: 'Platinum 4',
-    bio: '인덱스 설계와 커버링 전략을 메모하는 중입니다. 최근에는 Scan Rows를 절반 이하로 줄이는 연습을 하고 있어요.',
+    bio: '인덱스 설계와 커버링 전략을 메모하는 중입니다. 최근에는 스캔 행 수를 절반 이하로 줄이는 연습을 하고 있어요.',
     links: {
-      email: 'lee.index@speedql.dev',
+      email: 'lee.index@quertimizer.dev',
     },
     settings: {
       defaultDbms: 'postgresql',
@@ -117,3 +117,4 @@ export function getMockProfileByHandle(handle?: string) {
   const targetHandle = handle ?? mockCurrentHandle;
   return mockProfiles.find((profile) => profile.handle === targetHandle);
 }
+

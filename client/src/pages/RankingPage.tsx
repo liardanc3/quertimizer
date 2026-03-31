@@ -30,7 +30,7 @@ const sortOptions: Array<{
   },
   {
     id: 'avgScanRowsPercentile',
-    label: '평균 Scan Rows 백분위',
+    label: '평균 스캔 행 수 백분위',
     description: '낮을수록 더 적은 행을 읽은 상위권 풀이입니다.',
   },
 ];
@@ -218,7 +218,7 @@ export default function RankingPage() {
               <span role="columnheader">사용자</span>
               <span role="columnheader">해결한 문제</span>
               <span role="columnheader">평균 실행시간 백분위</span>
-              <span role="columnheader">평균 Scan Rows 백분위</span>
+              <span role="columnheader">평균 스캔 행 수 백분위</span>
             </div>
 
             {pagedEntries.map((entry) => {
@@ -250,7 +250,7 @@ export default function RankingPage() {
                     <strong>{formatPercent(entry.avgExecutionPercentile)}</strong>
                   </div>
 
-                  <div className="ranking-cell" data-label="평균 Scan Rows 백분위">
+                  <div className="ranking-cell" data-label="평균 스캔 행 수 백분위">
                     <strong>{formatPercent(entry.avgScanRowsPercentile)}</strong>
                   </div>
                 </article>

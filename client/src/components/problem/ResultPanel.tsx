@@ -69,7 +69,7 @@ export default function ResultPanel({
       tone: result.indexUsed ? 'is-success' : 'is-warning',
     },
     {
-      label: 'Full Scan',
+      label: '전체 스캔',
       value: result.fullScan ? '발생' : '없음',
       tone: result.fullScan ? 'is-warning' : 'is-success',
     },
@@ -84,11 +84,11 @@ export default function ResultPanel({
     <section className="panel-card result-panel">
       <div className="panel-heading-row responsive">
         <div>
-          <p className="panel-meta">Judge Result</p>
+          <p className="panel-meta">채점 결과</p>
           <h2 className="panel-title">채점 결과</h2>
         </div>
         <span className={`status-pill ${result.status === 'success' ? 'ok' : 'fail'}`}>
-          {result.status === 'success' ? 'SUCCESS' : 'FAIL'}
+          {result.status === 'success' ? '정답' : '실패'}
         </span>
       </div>
 
@@ -132,7 +132,7 @@ export default function ResultPanel({
       <div className="table-like result-table-wrap">
         <div className="panel-heading-row responsive">
           <p className="panel-meta">결과 미리보기</p>
-          <span className="subtle-chip">{result.rows.length} rows</span>
+          <span className="subtle-chip">{result.rows.length}행</span>
         </div>
         <div className="result-table-scroll">
           <table className="result-table">

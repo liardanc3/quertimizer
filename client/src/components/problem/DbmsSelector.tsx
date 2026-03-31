@@ -22,7 +22,7 @@ export default function DbmsSelector({
     <section className="panel-card compact solve-dbms-card">
       <div className="panel-heading-row responsive">
         <div>
-          <p className="panel-meta">Runtime Environment</p>
+          <p className="panel-meta">실행 환경</p>
           <h2 className="panel-title">DBMS 선택</h2>
         </div>
         <div className="solve-dbms-summary">

@@ -41,12 +41,12 @@ export default function ProblemInfoPanel({ problem }: ProblemInfoPanelProps) {
     <section className="panel-card">
       <div className="panel-heading-row responsive">
         <div>
-          <p className="panel-meta">Problem Brief</p>
+          <p className="panel-meta">문제 요약</p>
           <h2 className="panel-title">문제 설명</h2>
         </div>
         <div className="solve-panel-badge-row">
           <span className="difficulty-chip">{problem.difficulty}</span>
-          <span className="subtle-chip">{problem.tags.length} tags</span>
+          <span className="subtle-chip">태그 {problem.tags.length}개</span>
         </div>
       </div>
 

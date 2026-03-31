@@ -37,7 +37,7 @@ export default function SqlEditorPanel({
     },
     {
       label: '쿼리 길이',
-      value: `${lineCount} lines / ${characterCount} chars`,
+      value: `${lineCount}줄 / ${characterCount}자`,
     },
     {
       label: '실행 환경',
@@ -53,7 +53,7 @@ export default function SqlEditorPanel({
     <section className="panel-card">
       <div className="panel-heading-row responsive">
         <div>
-          <p className="panel-meta">SQL Workspace</p>
+          <p className="panel-meta">SQL 작업 공간</p>
           <h2 className="panel-title">제출 에디터</h2>
         </div>
         <div className="editor-actions">
@@ -84,14 +84,14 @@ export default function SqlEditorPanel({
             <span className="editor-file-name">main.sql</span>
             <span className="subtle-chip inverted">{getDbmsLabel(selectedDbms)}</span>
           </div>
-          <span className="subtle-chip inverted">Mock Judge</span>
+          <span className="subtle-chip inverted">모의 채점</span>
         </div>
         <textarea
           className="sql-editor"
           value={sql}
           onChange={(event) => setSql(event.target.value)}
           spellCheck={false}
-          aria-label="SQL editor"
+          aria-label="SQL 에디터"
         />
       </div>
 

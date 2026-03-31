@@ -1,13 +1,14 @@
-package com.speedql;
+package com.quertimizer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class SpeedqlApplication {
+public class QuertimizerApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(SpeedqlApplication.class, args);
+		SpringApplication.run(QuertimizerApplication.class, args);
 	}
 
 }
+
