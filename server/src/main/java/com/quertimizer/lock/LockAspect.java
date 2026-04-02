@@ -30,12 +30,14 @@ public class LockAspect {
 
     @Around("@annotation(com.quertimizer.lock.Lock)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
+        // 애노테이션 정보와 메서드 인자로 실제 lock key 계산
         Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
         Lock lockAnnotation = method.getAnnotation(Lock.class);
         String resolvedKey = resolveKey(method, joinPoint.getArgs(), lockAnnotation.key());
         String lockKey = buildLockKey(lockAnnotation.prefix(), resolvedKey);
         boolean locked = acquireLock(lockKey, lockAnnotation.timeout());
 
+        // 동일 자원에 대한 동시 요청이면 바로 예외 반환
         if (!locked) {
             throw new BusinessException("잠시 후 다시 시도해 주세요.", HttpStatus.LOCKED);
         }
@@ -48,6 +50,7 @@ public class LockAspect {
     }
 
     private boolean acquireLock(String key, long timeout) {
+        // timeout 정책에 따라 대기/즉시시도/시간제한시도 분기
         if (timeout < 0) {
             lockManager.lock(key);
             return true;
@@ -73,10 +76,12 @@ public class LockAspect {
             return "";
         }
 
+        // #이 없으면 고정 문자열 key로 사용
         if (!expression.contains("#")) {
             return expression;
         }
 
+        // SpEL 표현식이면 메서드 인자를 바인딩해 key 계산
         MethodBasedEvaluationContext context =
                 new MethodBasedEvaluationContext(null, method, args, parameterNameDiscoverer);
 

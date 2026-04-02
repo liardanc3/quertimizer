@@ -5,10 +5,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.security.core.token.Sha512DigestUtils;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user")
@@ -26,15 +26,22 @@ public class User {
     @Column(nullable = false, unique = true, length = 255)
     private String email;
 
-    // 서버단에서 SHA512 한번 더 해서 저장
+    @Column(name = "signup_at", nullable = false)
+    private LocalDateTime signupAt;
+
     public static User create(String userId, String doubleHashedPassword, String email) {
-        return new User(userId, doubleHashedPassword, email);
+        return new User(userId, doubleHashedPassword, email, LocalDateTime.now());
     }
 
-    private User(String userId, String password, String email) {
+    public void changePassword(String password) {
+        this.password = password;
+    }
+
+    private User(String userId, String password, String email, LocalDateTime signupAt) {
         this.userId = userId;
         this.password = password;
         this.email = email;
+        this.signupAt = signupAt;
     }
 
 }

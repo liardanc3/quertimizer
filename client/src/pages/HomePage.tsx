@@ -46,6 +46,7 @@ function matchesSolvedState(problem: ProblemSummary, showSolved: boolean, showUn
 
 export default function HomePage() {
   const [domain, setDomain] = useState<DomainType>('rdbms');
+  const [showTags, setShowTags] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [showSolved, setShowSolved] = useState(true);
   const [showUnsolved, setShowUnsolved] = useState(true);
@@ -126,6 +127,7 @@ export default function HomePage() {
         <section className="panel-card problem-board">
           <div className="problem-board-header">
             <div className="problem-board-controls">
+              <ProblemModeSwitch label="태그 표시" checked={showTags} onChange={setShowTags} />
               <ProblemModeSwitch label="통계 표시" checked={showStats} onChange={setShowStats} />
               <ProblemStatusFilter
                 showSolved={showSolved}
@@ -169,7 +171,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <ProblemList problems={pagedProblems} showStats={showStats} onSearchSelect={applySearch} />
+          <ProblemList problems={pagedProblems} showTags={showTags} showStats={showStats} onSearchSelect={applySearch} />
 
           {filteredProblems.length > 0 ? (
             <div className="problem-pagination" role="navigation" aria-label="문제 페이지">
@@ -220,7 +222,7 @@ export default function HomePage() {
               <p className="panel-meta">준비 중인 영역</p>
               <h2 className="panel-title">NoSQL 트랙</h2>
             </div>
-            <span className="section-badge is-disabled">준비 중</span>
+            <span className="section-badge is-disabled">Coming Soon</span>
           </div>
           <p className="content-text">
             문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개할 예정입니다.

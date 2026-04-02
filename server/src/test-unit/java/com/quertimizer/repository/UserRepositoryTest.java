@@ -7,18 +7,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DataJpaTest(properties = {
-        "spring.autoconfigure.exclude=",
-        "spring.datasource.url=jdbc:h2:mem:user-repository-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;NON_KEYWORDS=USER",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@ActiveProfiles("test")
+@DataJpaTest
+@Transactional
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class UserRepositoryTest {
 
@@ -33,10 +32,11 @@ class UserRepositoryTest {
         @DisplayName("true")
         void returnTrue() {
             // given
-            userRepository.save(User.create("tester", "hashed-password", "tester@example.com"));
+            String userId = uniqueUserId();
+            userRepository.save(User.create(userId, "hashed-password", uniqueEmail()));
 
             // when
-            boolean result = userRepository.existsByUserId("tester");
+            boolean result = userRepository.existsByUserId(userId);
 
             // then
             assertTrue(result);
@@ -46,10 +46,10 @@ class UserRepositoryTest {
         @DisplayName("false")
         void returnFalse() {
             // given
-            // 아무것도 저장되어있지 않음
+            String userId = uniqueUserId();
 
             // when
-            boolean result = userRepository.existsByUserId("tester");
+            boolean result = userRepository.existsByUserId(userId);
 
             // then
             assertFalse(result);
@@ -64,10 +64,11 @@ class UserRepositoryTest {
         @DisplayName("true")
         void returnTrue() {
             // given
-            userRepository.save(User.create("tester", "hashed-password", "tester@example.com"));
+            String email = uniqueEmail();
+            userRepository.save(User.create(uniqueUserId(), "hashed-password", email));
 
             // when
-            boolean result = userRepository.existsByEmail("tester@example.com");
+            boolean result = userRepository.existsByEmail(email);
 
             // then
             assertTrue(result);
@@ -77,13 +78,21 @@ class UserRepositoryTest {
         @DisplayName("false")
         void returnFalse() {
             // given
-            // 아무것도 저장되어있지 않음
+            String email = uniqueEmail();
 
             // when
-            boolean result = userRepository.existsByEmail("tester@example.com");
+            boolean result = userRepository.existsByEmail(email);
 
             // then
             assertFalse(result);
         }
+    }
+
+    private String uniqueUserId() {
+        return "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
+    private String uniqueEmail() {
+        return UUID.randomUUID() + "@example.com";
     }
 }

@@ -95,8 +95,8 @@ const DBMS_OPTIONS: { key: DbmsType; label: string }[] = [
 ];
 
 const FILTER_MODE_OPTIONS: { key: FilterMatchMode; label: string }[] = [
-  { key: 'and', label: '모두 일치' },
-  { key: 'or', label: '하나라도 일치' },
+  { key: 'and', label: 'AND' },
+  { key: 'or', label: 'OR' },
 ];
 
 const HINT_FILTER_OPTIONS: readonly HintFilterValue[] = ['USED', 'UNUSED'];
@@ -104,67 +104,67 @@ const HINT_FILTER_DISPLAY_ORDER: readonly HintFilterValue[] = ['UNUSED', 'USED']
 const ALL_HINT_FILTERS: HintFilterValue[] = [...HINT_FILTER_OPTIONS];
 
 const PLAN_SECTION_OPTIONS: { key: PlanSectionKey; label: string }[] = [
-  { key: 'scanBucket', label: '스캔' },
-  { key: 'joinBucket', label: '조인' },
-  { key: 'filterBucket', label: '필터' },
-  { key: 'sortBucket', label: '정렬' },
-  { key: 'aggregateBucket', label: '집계' },
-  { key: 'hint', label: '힌트' },
+  { key: 'scanBucket', label: 'Scan' },
+  { key: 'joinBucket', label: 'Join' },
+  { key: 'filterBucket', label: 'Filter' },
+  { key: 'sortBucket', label: 'Sort' },
+  { key: 'aggregateBucket', label: 'Aggregate' },
+  { key: 'hint', label: 'Hint' },
 ];
 
 const METRIC_OPTIONS: { key: MetricMode; label: string }[] = [
   { key: 'time', label: '실행시간(ms)' },
-  { key: 'scanRows', label: '스캔 행 수' },
+  { key: 'scanRows', label: 'Scan Rows' },
 ];
 
 const BUCKET_FILTERS_BY_DBMS: Record<DbmsType, BucketFilterDefinition[]> = {
   postgresql: [
     {
       key: 'scanBucket',
-      label: '스캔',
+      label: 'Scan',
       options: ['FULL_SCAN', 'INDEX_SCAN', 'BITMAP_SCAN', 'TID_SCAN', 'DERIVED_SCAN', 'OTHERS'],
     },
     {
       key: 'joinBucket',
-      label: '조인',
+      label: 'Join',
       options: ['NONE', 'NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'OTHERS'],
     },
     {
       key: 'filterBucket',
-      label: '필터',
+      label: 'Filter',
       options: ['NONE', 'ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'],
     },
-    { key: 'sortBucket', label: '정렬', options: ['NONE', 'PLAIN_SORT', 'INCREMENTAL_SORT', 'OTHERS'] },
+    { key: 'sortBucket', label: 'Sort', options: ['NONE', 'PLAIN_SORT', 'INCREMENTAL_SORT', 'OTHERS'] },
     {
       key: 'aggregateBucket',
-      label: '집계',
+      label: 'Aggregate',
       options: ['NONE', 'PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'],
     },
   ],
   oracle: [
     {
       key: 'scanBucket',
-      label: '스캔',
+      label: 'Scan',
       options: ['FULL_SCAN', 'ROWID_ACCESS', 'INDEX_SCAN', 'BITMAP_SCAN', 'DERIVED_SCAN', 'REMOTE_SCAN', 'OTHERS'],
     },
     {
       key: 'joinBucket',
-      label: '조인',
+      label: 'Join',
       options: ['NONE', 'NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'],
     },
     {
       key: 'filterBucket',
-      label: '필터',
+      label: 'Filter',
       options: ['NONE', 'ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'],
     },
     {
       key: 'sortBucket',
-      label: '정렬',
+      label: 'Sort',
       options: ['NONE', 'ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'],
     },
     {
       key: 'aggregateBucket',
-      label: '집계',
+      label: 'Aggregate',
       options: ['NONE', 'PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'WINDOW_AGG', 'OTHERS'],
     },
   ],
@@ -221,7 +221,7 @@ function formatMetricAxisLabel(value: number, metricMode: MetricMode) {
 }
 
 function formatMetricValue(value: number, metricMode: MetricMode) {
-  return metricMode === 'time' ? `${Math.round(value * 10) / 10}ms` : `${formatCount(value)}행`;
+  return metricMode === 'time' ? `${Math.round(value * 10) / 10}ms` : `${formatCount(value)} rows`;
 }
 
 function getQuantile(sortedValues: number[], quantile: number) {
@@ -240,42 +240,6 @@ function getQuantile(sortedValues: number[], quantile: number) {
 }
 
 function formatBucketDisplayLabel(value: BucketFilterValue) {
-  const labelMap: Partial<Record<BucketFilterValue, string>> = {
-    NONE: '없음',
-    FULL_SCAN: '전체 스캔',
-    INDEX_SCAN: '인덱스 스캔',
-    BITMAP_SCAN: '비트맵 스캔',
-    TID_SCAN: 'TID 스캔',
-    DERIVED_SCAN: '파생 스캔',
-    OTHERS: '기타',
-    ROWID_ACCESS: 'ROWID 접근',
-    REMOTE_SCAN: '원격 스캔',
-    NESTED_LOOP: '중첩 루프',
-    MERGE_JOIN: '머지 조인',
-    HASH_JOIN: '해시 조인',
-    CARTESIAN_JOIN: '카테시안 조인',
-    ACCESS_FILTER: '접근 필터',
-    POST_FILTER: '사후 필터',
-    JOIN_FILTER: '조인 필터',
-    PLAIN_SORT: '일반 정렬',
-    INCREMENTAL_SORT: '점진 정렬',
-    ORDER_SORT: '정렬(ORDER BY)',
-    GROUP_SORT: '그룹 정렬',
-    UNIQUE_SORT: '유니크 정렬',
-    WINDOW_SORT: '윈도 정렬',
-    PLAIN_AGG: '일반 집계',
-    GROUP_AGG: '그룹 집계',
-    HASH_AGG: '해시 집계',
-    MIXED_AGG: '혼합 집계',
-    WINDOW_AGG: '윈도 집계',
-    UNIQUE_AGG: '유니크 집계',
-    SET_AGG: '집합 집계',
-  };
-
-  if (labelMap[value]) {
-    return labelMap[value];
-  }
-
   if (value === 'NONE') {
     return '없음';
   }
@@ -481,7 +445,7 @@ function formatBucketRange(startValue: number, bucketSize: number, metricMode: M
   const startLabel = formatMetricAxisLabel(startValue, metricMode);
   const endLabel = formatMetricAxisLabel(endValue, metricMode);
 
-  return metricMode === 'time' ? `${startLabel}-${endLabel}ms` : `${startLabel}-${endLabel}행`;
+  return metricMode === 'time' ? `${startLabel}-${endLabel}ms` : `${startLabel}-${endLabel} rows`;
 }
 
 function getMetricValue(sample: RuntimeSample, metricMode: MetricMode) {
@@ -562,7 +526,7 @@ function buildMarkers(samples: RuntimeSample[], metricMode: MetricMode): Runtime
   const markers: RuntimeMarker[] = [
     {
       key: 'fastest',
-      label: '1위',
+      label: '1st',
       value: getMetricValue(sortedSamples[0], metricMode),
       tone: 'fastest',
       nickname: sortedSamples[0].nickname,
@@ -666,7 +630,7 @@ function getGroupedSelectionItems(args: {
     filterMatchMode,
     selectedPlanSections,
   } = args;
-  const modeLabel = filterMatchMode === 'and' ? '모두 일치' : '하나라도 일치';
+  const modeLabel = filterMatchMode.toUpperCase();
 
   const bucketItems = availableBucketFilters.flatMap((filter) => {
     if (!selectedPlanSections.includes(filter.key)) {
@@ -701,7 +665,7 @@ function getGroupedSelectionItems(args: {
       : [
           {
             id: 'hint',
-            label: `힌트 사용 비율 (${modeLabel})`,
+            label: `Hint 사용 비율 (${modeLabel})`,
             detail:
               areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS)
                 ? '전체'
@@ -1119,7 +1083,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect }: Problem
 
             {selectedPlanSections.includes('hint') ? (
               <div className="runtime-subfilter-row">
-                <span className="runtime-subfilter-label">힌트</span>
+                <span className="runtime-subfilter-label">Hint</span>
                 <div className="runtime-subfilter-options">
                   {[
                     { key: 'ALL', label: '전체' },
@@ -1296,7 +1260,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect }: Problem
           </div>
 
           <div className="runtime-summary-card">
-            <p className="runtime-summary-title">스캔 행 수</p>
+            <p className="runtime-summary-title">Scan Rows</p>
             <div className="runtime-summary-grid is-triple">
               {[
                 { label: '최소', value: scanRowsSummary ? formatCount(scanRowsSummary.min) : '-' },

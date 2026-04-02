@@ -1,7 +1,21 @@
 spring:
   application:
     name: quertimizer
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: liardanc3@gmail.com
+    password: vudmztnzmsfikewh
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+        mime:
+          charset: UTF-8
+
+app:
+  mail:
+    from: liardanc3@gmail.com

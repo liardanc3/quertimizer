@@ -4,11 +4,12 @@ import ProblemCard from './ProblemCard';
 
 interface ProblemListProps {
   problems: ProblemSummary[];
+  showTags: boolean;
   showStats: boolean;
   onSearchSelect: (value: string) => void;
 }
 
-export default function ProblemList({ problems, showStats, onSearchSelect }: ProblemListProps) {
+export default function ProblemList({ problems, showTags, showStats, onSearchSelect }: ProblemListProps) {
   if (problems.length === 0) {
     return (
       <section className="problem-list is-empty">
@@ -23,6 +24,7 @@ export default function ProblemList({ problems, showStats, onSearchSelect }: Pro
         <ProblemCard
           key={problem.id}
           problem={problem}
+          showTags={showTags}
           showStats={showStats}
           onSearchSelect={onSearchSelect}
           onSelect={(id) => navigate(`/problems/${id}`)}

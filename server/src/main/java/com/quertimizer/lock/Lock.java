@@ -13,5 +13,6 @@ public @interface Lock {
 
     String key() default "";
 
+    // -1은 대기, 0은 즉시 시도, 양수는 timeout(ms)
     long timeout() default -1L;
 }

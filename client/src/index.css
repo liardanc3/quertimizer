@@ -787,6 +787,46 @@ button {
   flex: 1 1 0;
 }
 
+.auth-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+}
+
+.auth-link-button {
+  min-height: auto;
+  padding: 0.2rem 0.1rem;
+  color: #57739e;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.auth-link-button:hover {
+  color: #0f5db3;
+}
+
+.login-remember-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.login-remember-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.login-remember-label {
+  color: #57739e;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .btn.secondary.is-current {
   border-color: rgba(25, 118, 210, 0.28);
   background: rgba(25, 118, 210, 0.1);
@@ -799,6 +839,10 @@ button {
   min-height: 100%;
   align-content: center;
   gap: 0.6rem;
+}
+
+.account-recovery-overlay {
+  width: min(1240px, 100%);
 }
 
 .signup-close-row {
@@ -884,6 +928,10 @@ button {
   max-width: 24rem;
 }
 
+.account-recovery-guide-copy {
+  max-width: none;
+}
+
 .signup-card .text-field {
   min-height: 2.58rem;
   padding: 0.56rem 0.86rem;
@@ -904,11 +952,114 @@ button {
   color: #c2410c;
 }
 
+.signup-field-hint.is-success {
+  color: #16a34a;
+}
+
+.signup-feedback-box {
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid rgba(194, 65, 12, 0.18);
+  border-radius: 0.82rem;
+  background: rgba(255, 247, 237, 0.92);
+}
+
+.signup-feedback-message {
+  margin: 0;
+  color: #c2410c;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.recovery-result-box,
+.recovery-success-box {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+}
+
+.recovery-result-box {
+  border: 1px solid rgba(25, 118, 210, 0.18);
+  background: rgba(239, 246, 255, 0.92);
+}
+
+.recovery-success-box {
+  border: 1px solid rgba(22, 163, 74, 0.18);
+  background: rgba(240, 253, 244, 0.92);
+}
+
+.recovery-result-title {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.recovery-result-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+}
+
+.recovery-result-value,
+.recovery-success-message {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.recovery-result-value {
+  color: #0f172a;
+  font-size: 1.02rem;
+  letter-spacing: -0.015em;
+}
+
+.recovery-result-arrow-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.98);
+  color: #2563eb;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.recovery-result-arrow-button:hover {
+  transform: translateX(1px);
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.14);
+}
+
+.recovery-result-arrow-button:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.2);
+  outline-offset: 2px;
+}
+
+.recovery-success-message {
+  color: #15803d;
+  font-size: 0.84rem;
+}
+
 .signup-guide-message {
   margin: 0;
   color: #334155;
   font-size: 1rem;
   line-height: 1.82;
+}
+
+.account-recovery-guide-message {
+  white-space: nowrap;
 }
 
 .signup-guide-message.is-compact {
@@ -926,6 +1077,74 @@ button {
 
 .fixed-action {
   min-height: 3rem;
+}
+
+.status-popup-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(8px);
+}
+
+.status-popup {
+  width: min(360px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  padding: 1.5rem 1.35rem 1.2rem;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 1.4rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 22px 52px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.status-popup-visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 999px;
+}
+
+.status-popup-visual-level-1 {
+  color: #16a34a;
+  background: rgba(240, 253, 244, 0.96);
+}
+
+.status-popup-visual-level-2 {
+  color: #ca8a04;
+  background: rgba(254, 249, 195, 0.96);
+}
+
+.status-popup-visual-level-3 {
+  color: #dc2626;
+  background: rgba(254, 242, 242, 0.96);
+}
+
+.status-popup-icon {
+  width: 3.4rem;
+  height: 3.4rem;
+}
+
+.status-popup-message {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.status-popup-button {
+  width: 100%;
 }
 
 .verification-check {
@@ -3925,6 +4144,10 @@ button {
   .signup-guide-message.is-compact {
     white-space: normal;
     font-size: 0.82rem;
+  }
+
+  .account-recovery-guide-message {
+    white-space: normal;
   }
 
   .inline-field-row {

@@ -7,6 +7,7 @@ import {
   getProfilePath,
   navigate,
 } from '../../lib/navigation';
+import { logout as requestLogout } from '../../lib/authApi';
 import { useMockSession } from '../../lib/session';
 import { mockNotifications } from '../../mocks/notifications';
 
@@ -120,6 +121,16 @@ export default function Header() {
 
     setIsNotificationOpen(false);
     navigate(href);
+  }
+
+  async function handleLogout() {
+    try {
+      await requestLogout();
+    } catch {
+    }
+
+    logout();
+    navigate('/', { replace: true });
   }
 
   return (
@@ -240,8 +251,7 @@ export default function Header() {
                 type="button"
                 className="header-link-button"
                 onClick={() => {
-                  logout();
-                  navigate('/', { replace: true });
+                  void handleLogout();
                 }}
               >
                 로그아웃
