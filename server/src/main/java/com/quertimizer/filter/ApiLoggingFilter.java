@@ -1,6 +1,6 @@
 package com.quertimizer.filter;
 
-import com.quertimizer.logging.LogFormatter;
+import com.quertimizer.log.LogFormatter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

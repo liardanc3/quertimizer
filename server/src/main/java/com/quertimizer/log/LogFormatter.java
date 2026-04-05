@@ -1,4 +1,4 @@
-package com.quertimizer.logging;
+package com.quertimizer.log;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,6 +22,7 @@ public class LogFormatter {
     private static final int RESPONSE_FIELD_MAX_LENGTH = 100;
     private static final String REQUEST_TRUNCATED_SUFFIX = "...";
     private static final String RESPONSE_TRUNCATED_SUFFIX = "...truncated";
+    private static final String ARRAY_OMITTED_MESSAGE = "... %d more truncated";
     private static final List<String> SENSITIVE_KEYS = List.of(
             "password",
             "token",
@@ -68,11 +69,11 @@ public class LogFormatter {
             return List.of();
         }
 
-        // JSON 형식이면 민감정보 마스킹과 길이 제한을 적용해 보기 좋게 정리
+        // JSON 민감정보 마스킹, 길이 제한 적용
         String formattedBody = tryFormatJson(body, maxFieldLength, truncatedSuffix);
         if (formattedBody == null) {
 
-            // JSON이 아니면 일반 텍스트 기준으로 길이만 제한
+            // 일반 텍스트 길이 제한 적용
             formattedBody = truncateText(null, body, maxFieldLength, truncatedSuffix);
         }
 
@@ -87,9 +88,7 @@ public class LogFormatter {
         return prefix(actor) + label + " : " + message;
     }
 
-    private String tryFormatJson(String body,
-                                 int maxFieldLength,
-                                 String truncatedSuffix) {
+    private String tryFormatJson(String body, int maxFieldLength, String truncatedSuffix) {
         try {
             JsonNode jsonNode = objectMapper.readTree(body);
             JsonNode sanitizedJsonNode = sanitizeJsonNode(jsonNode, null, maxFieldLength, truncatedSuffix);
@@ -99,13 +98,10 @@ public class LogFormatter {
         }
     }
 
-    private JsonNode sanitizeJsonNode(JsonNode jsonNode,
-                                      String fieldName,
-                                      int maxFieldLength,
-                                      String truncatedSuffix) {
+    private JsonNode sanitizeJsonNode(JsonNode jsonNode, String fieldName, int maxFieldLength, String truncatedSuffix) {
         if (jsonNode.isObject()) {
 
-            // 객체는 필드별로 재귀적으로 마스킹/길이 제한 적용
+            // 객체 필드별 마스킹, 길이 제한 적용
             ObjectNode objectNode = objectMapper.createObjectNode();
             jsonNode.fields().forEachRemaining(entry ->
                     objectNode.set(
@@ -118,31 +114,33 @@ public class LogFormatter {
 
         if (jsonNode.isArray()) {
 
-            // 배열은 각 원소에 동일한 규칙 적용
+            // 리스트는 첫 1개만 출력, 나머지 생략
             ArrayNode arrayNode = objectMapper.createArrayNode();
-            for (JsonNode element : jsonNode) {
-                arrayNode.add(sanitizeJsonNode(element, fieldName, maxFieldLength, truncatedSuffix));
+            if (jsonNode.isEmpty()) {
+                return arrayNode;
             }
+
+            arrayNode.add(sanitizeJsonNode(jsonNode.get(0), fieldName, maxFieldLength, truncatedSuffix));
+            if (jsonNode.size() > 1) {
+                arrayNode.add(TextNode.valueOf(ARRAY_OMITTED_MESSAGE.formatted(jsonNode.size() - 1)));
+            }
+
             return arrayNode;
         }
 
         if (jsonNode.isTextual()) {
-
             return TextNode.valueOf(truncateText(fieldName, jsonNode.textValue(), maxFieldLength, truncatedSuffix));
         }
 
         return jsonNode;
     }
 
-    private String truncateText(String fieldName,
-                                String value,
-                                int maxFieldLength,
-                                String truncatedSuffix) {
+    private String truncateText(String fieldName, String value, int maxFieldLength, String truncatedSuffix) {
         if (value == null) {
             return null;
         }
 
-        // 민감한 필드는 원본 값 대신 마스킹 처리
+        // 민감 필드 값 마스킹
         if (fieldName != null && isSensitiveKey(fieldName)) {
             return "***";
         }
@@ -177,7 +175,7 @@ public class LogFormatter {
 
         String normalizedActor = actor.split("%", 2)[0];
 
-        // localhost loopback 주소 표기를 하나로 통일
+        // localhost loopback 주소 통일
         if ("::1".equals(normalizedActor) || "0:0:0:0:0:0:0:1".equals(normalizedActor)) {
             normalizedActor = "127.0.0.1";
         }

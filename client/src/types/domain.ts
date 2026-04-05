@@ -71,6 +71,13 @@ export interface RuntimeLeaderboardEntry {
   submittedAt: string;
 }
 
+export interface ProblemSubmittedHistory {
+  dbms: DbmsType;
+  userId: string;
+  executionPlanElement: number;
+  executionTimeMs: number;
+}
+
 export interface RuntimeSample {
   nickname: string;
   timeMs: number;
@@ -120,12 +127,15 @@ export interface ProblemSummary {
   id: string;
   domain: DomainType;
   number: number;
+  problemNumber?: string;
   title: string;
   preview: string;
   tags: string[];
   difficulty: Difficulty;
   solvedCount: number;
   solvedAt?: string;
+  isSolved?: boolean | null;
+  submittedHistories?: ProblemSubmittedHistory[];
   runtimeDistribution?: RuntimeDistribution;
   runtimeDistributions?: RuntimeDistributionByDbms;
 }

@@ -32,7 +32,7 @@ interface FeedbackState {
   message: string;
 }
 
-type SortKey = 'problemNumber' | 'executionTimeMs' | 'scanRows' | 'solvedAt';
+type SortKey = 'problemNumber' | 'executionTimeMs' | 'solvedAt';
 type SortDirection = 'asc' | 'desc';
 type ProfileLinkKind = keyof ProfileLinks;
 
@@ -123,14 +123,6 @@ function getAverageExecutionTime(records: ProfileSolvedRecord[]) {
   return records.reduce((sum, record) => sum + record.executionTimeMs, 0) / records.length;
 }
 
-function getAverageScanRows(records: ProfileSolvedRecord[]) {
-  if (records.length === 0) {
-    return 0;
-  }
-
-  return Math.round(records.reduce((sum, record) => sum + record.scanRows, 0) / records.length);
-}
-
 function getLatestSolvedAt(records: ProfileSolvedRecord[]) {
   if (records.length === 0) {
     return undefined;
@@ -168,10 +160,6 @@ function sortRecords(records: ProfileSolvedRecord[], sortKey: SortKey, sortDirec
 
     if (sortKey === 'executionTimeMs') {
       compareValue = left.executionTimeMs - right.executionTimeMs;
-    }
-
-    if (sortKey === 'scanRows') {
-      compareValue = left.scanRows - right.scanRows;
     }
 
     if (sortKey === 'solvedAt') {
@@ -307,7 +295,6 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
   const filteredRecords = profile.solvedProblems.filter((record) => matchesRecordSearch(record, searchQuery));
   const sortedRecords = sortRecords(filteredRecords, sortKey, sortDirection);
   const averageExecutionTime = getAverageExecutionTime(profile.solvedProblems);
-  const averageScanRows = getAverageScanRows(profile.solvedProblems);
   const latestSolvedAt = getLatestSolvedAt(profile.solvedProblems);
 
   function toggleSort(nextKey: SortKey) {
@@ -472,10 +459,6 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
           <article className="profile-summary-card">
             <p className="stat-label">평균 실행 시간</p>
             <p className="profile-summary-value">{averageExecutionTime.toFixed(1)} ms</p>
-          </article>
-          <article className="profile-summary-card">
-            <p className="stat-label">평균 스캔 행 수</p>
-            <p className="profile-summary-value">{numberFormatter.format(averageScanRows)}</p>
           </article>
           <article className="profile-summary-card">
             <p className="stat-label">최근 해결 날짜</p>
@@ -822,14 +805,6 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                   </th>
                   <th>
                     <SortButton
-                      active={sortKey === 'scanRows'}
-                      direction={sortDirection}
-                      label="스캔 행 수"
-                      onClick={() => toggleSort('scanRows')}
-                    />
-                  </th>
-                  <th>
-                    <SortButton
                       active={sortKey === 'solvedAt'}
                       direction={sortDirection}
                       label="해결 날짜"
@@ -852,7 +827,6 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                       </button>
                     </td>
                     <td>{record.executionTimeMs.toFixed(1)} ms</td>
-                    <td>{numberFormatter.format(record.scanRows)}</td>
                     <td>{dateFormatter.format(new Date(record.solvedAt))}</td>
                   </tr>
                 ))}

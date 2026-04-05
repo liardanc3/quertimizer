@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { PROBLEMS_PATH, navigate } from '../lib/navigation';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import ProblemDetailContent from '../components/problem/ProblemDetailContent';
+import { fetchProblemDetail, type ProblemDetailData } from '../lib/problemApi';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import type { DbmsType, MockResult, ProblemDetail, RuntimeDistribution } from '../types/domain';
 
@@ -7,18 +9,19 @@ interface ProblemSolvePageProps {
   problemId: string;
 }
 
-type PanelKey = 'left' | 'center' | 'right';
-type EditorThemeKey = 'slate' | 'paper' | 'forest';
-type EditorThemeStyle = CSSProperties &
-  Record<'--solve-editor-bg' | '--solve-editor-fg' | '--solve-editor-header' | '--solve-editor-border' | '--solve-editor-font', string>;
+type PanelKey = 'editor' | 'submit';
 
 interface PanelVisibilityState {
-  left: boolean;
-  center: boolean;
-  right: boolean;
+  editor: boolean;
+  submit: boolean;
 }
 
-interface DragState {
+interface PanelDetachState {
+  editor: boolean;
+  submit: boolean;
+}
+
+interface WorkspaceDragState {
   leftKey: PanelKey;
   rightKey: PanelKey;
   startX: number;
@@ -26,61 +29,62 @@ interface DragState {
   startRightWeight: number;
 }
 
-interface SchemaEntry {
-  name: string;
-  columns: string[];
+interface FloatingPanelLayout {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
-type InfoViewMode = 'table' | 'inputExample' | 'outputExample';
+interface FloatingPanelLayoutState {
+  editor: FloatingPanelLayout;
+  submit: FloatingPanelLayout;
+}
 
-const countFormatter = new Intl.NumberFormat('ko-KR');
-const actionTimeFormatter = new Intl.DateTimeFormat('ko-KR', {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+interface FloatingMoveState {
+  panelKey: PanelKey;
+  startX: number;
+  startY: number;
+  startLeft: number;
+  startTop: number;
+}
+
+interface FloatingResizeState {
+  panelKey: PanelKey;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+}
+
+interface ExternalWindowState {
+  editor: boolean;
+  submit: boolean;
+}
+
+interface PanelExternalWindowProps {
+  panelKey: PanelKey;
+  title: string;
+  layout: FloatingPanelLayout;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+const panelOrder: PanelKey[] = ['editor', 'submit'];
 
 const panelLabels: Record<PanelKey, string> = {
-  left: '테이블',
-  center: '에디터',
-  right: '실행 결과',
+  editor: 'SQL Editor',
+  submit: '제출 결과',
 };
 
 const panelMinWidths: Record<PanelKey, number> = {
-  left: 300,
-  center: 400,
-  right: 320,
+  editor: 420,
+  submit: 340,
 };
 
-const editorThemes: Record<
-  EditorThemeKey,
-  { label: string; background: string; foreground: string; header: string; border: string; font: string }
-> = {
-  slate: {
-    label: '슬레이트',
-    background: '#0f172a',
-    foreground: '#e2e8f0',
-    header: '#162338',
-    border: 'rgba(148, 163, 184, 0.24)',
-    font: '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace',
-  },
-  paper: {
-    label: '페이퍼',
-    background: '#f8fafc',
-    foreground: '#0f172a',
-    header: '#e2e8f0',
-    border: 'rgba(148, 163, 184, 0.34)',
-    font: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace',
-  },
-  forest: {
-    label: '포레스트',
-    background: '#0f1f1b',
-    foreground: '#dcfce7',
-    header: '#16332b',
-    border: 'rgba(52, 211, 153, 0.22)',
-    font: '"Cascadia Code", ui-monospace, SFMono-Regular, Consolas, monospace',
-  },
+const panelMinHeights: Record<PanelKey, number> = {
+  editor: 320,
+  submit: 260,
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -99,10 +103,6 @@ function getRuntimeDistribution(problem: ProblemDetail, selectedDbms: DbmsType):
   return problem.runtimeDistributions?.[selectedDbms] ?? problem.runtimeDistribution;
 }
 
-function formatActionTime(date: Date) {
-  return actionTimeFormatter.format(date);
-}
-
 function formatMs(value?: number) {
   if (value === undefined) {
     return '-';
@@ -111,34 +111,31 @@ function formatMs(value?: number) {
   return `${Math.round(value * 10) / 10}ms`;
 }
 
-function formatCount(value?: number) {
-  if (value === undefined) {
-    return '-';
-  }
+function toProblemSequence(problemId: string) {
+  const [, problemSequence] = problemId.split('-');
+  const parsedNumber = Number.parseInt(problemSequence ?? '', 10);
 
-  return countFormatter.format(Math.round(value));
+  return Number.isNaN(parsedNumber) ? 0 : parsedNumber;
 }
 
-function parseSchemaEntries(schemaInfo: string): SchemaEntry[] {
-  return schemaInfo
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/^([^(]+)\((.+)\)$/);
+function createFallbackProblemDetail(problemId: string): ProblemDetail {
+  const matchedProblem = mockProblemDetailById[problemId];
+  if (matchedProblem) {
+    return {
+      ...matchedProblem,
+      problemNumber: matchedProblem.problemNumber ?? problemId,
+    };
+  }
 
-      if (!match) {
-        return { name: line, columns: [] };
-      }
-
-      return {
-        name: match[1].trim(),
-        columns: match[2]
-          .split(',')
-          .map((column) => column.trim())
-          .filter(Boolean),
-      };
-    });
+  return {
+    ...mockProblemDetails[0],
+    id: problemId,
+    number: toProblemSequence(problemId),
+    problemNumber: problemId,
+    title: '',
+    preview: '',
+    description: '',
+  };
 }
 
 function getTopPercent(values: number[], currentValue: number) {
@@ -150,67 +147,263 @@ function getTopPercent(values: number[], currentValue: number) {
   return Math.max(1, Math.round(((betterCount + 1) / (values.length + 1)) * 100));
 }
 
-function buildEditorThemeStyle(themeKey: EditorThemeKey): CSSProperties {
-  const theme = editorThemes[themeKey];
-
+function createInitialFloatingLayouts(): FloatingPanelLayoutState {
   return {
-    '--solve-editor-bg': theme.background,
-    '--solve-editor-fg': theme.foreground,
-    '--solve-editor-header': theme.header,
-    '--solve-editor-border': theme.border,
-    '--solve-editor-font': theme.font,
-  } as EditorThemeStyle;
+    editor: {
+      left: 24,
+      top: 118,
+      width: 760,
+      height: 620,
+    },
+    submit: {
+      left: 812,
+      top: 118,
+      width: 400,
+      height: 330,
+    },
+  };
+}
+
+function formatCellValue(value: string | number | boolean | null | undefined) {
+  if (value == null) {
+    return '';
+  }
+
+  return String(value);
+}
+
+function createResultColumnLabels(result: MockResult) {
+  const columnCount = result.rows.reduce((maxCount, row) => Math.max(maxCount, row.columns.length), 0);
+  return Array.from({ length: columnCount }, (_, index) => `컬럼 ${index + 1}`);
+}
+
+function renderResultTable(result: MockResult | null, emptyMessage: string) {
+  if (result == null || result.rows.length === 0) {
+    return <div className="solve-result-empty solve-result-empty-table">{emptyMessage}</div>;
+  }
+
+  const columnLabels = createResultColumnLabels(result);
+
+  return (
+    <div className="result-table-scroll">
+      <table className="result-table solve-pane-result-table">
+        <thead>
+          <tr>
+            {columnLabels.map((columnLabel) => (
+              <th key={columnLabel} scope="col">
+                {columnLabel}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {result.rows.map((row, rowIndex) => (
+            <tr key={`result-row-${rowIndex}`}>
+              {columnLabels.map((columnLabel, columnIndex) => (
+                <td key={`result-row-${rowIndex}-${columnLabel}`}>{formatCellValue(row.columns[columnIndex])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function copyDocumentStyles(targetDocument: Document) {
+  targetDocument.head.innerHTML = '';
+
+  document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
+    targetDocument.head.appendChild(styleNode.cloneNode(true));
+  });
+}
+
+function ExternalWindowIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3 3.5h5v1H4V12h7.5V8h1v4A1.5 1.5 0 0 1 11 13.5H4A1.5 1.5 0 0 1 2.5 12V5A1.5 1.5 0 0 1 4 3.5Zm5.5-1h5v5h-1V4.2L8.6 7.6l-.7-.7 3.4-3.4H8.5v-1Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function PipIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M2.5 3A1.5 1.5 0 0 1 4.0 1.5h8A1.5 1.5 0 0 1 13.5 3v6A1.5 1.5 0 0 1 12 10.5H8.5v2H12v1H4v-1h3.5v-2H4A1.5 1.5 0 0 1 2.5 9V3Zm1 0V9a.5.5 0 0 0 .5.5h8A.5.5 0 0 0 12.5 9V3a.5.5 0 0 0-.5-.5H4a.5.5 0 0 0-.5.5Zm5.5 1.5h2.5V7H9V4.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M4.2 4.2a.75.75 0 0 1 1.06 0L8 6.94l2.74-2.74a.75.75 0 1 1 1.06 1.06L9.06 8l2.74 2.74a.75.75 0 1 1-1.06 1.06L8 9.06 5.26 11.8a.75.75 0 0 1-1.06-1.06L6.94 8 4.2 5.26a.75.75 0 0 1 0-1.06Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function PanelExternalWindow({ panelKey, title, layout, onClose, children }: PanelExternalWindowProps) {
+  const externalWindowRef = useRef<Window | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const openedWindow = window.open(
+      '',
+      `quertimizer-${panelKey}`,
+      `popup=yes,width=${Math.round(layout.width)},height=${Math.round(layout.height)},left=${Math.round(layout.left)},top=${Math.round(layout.top)}`,
+    );
+
+    if (!openedWindow) {
+      onCloseRef.current();
+      return;
+    }
+
+    externalWindowRef.current = openedWindow;
+    copyDocumentStyles(openedWindow.document);
+    openedWindow.document.title = title;
+    openedWindow.document.body.innerHTML = '';
+    openedWindow.document.body.className = document.body.className;
+    openedWindow.document.body.style.margin = '0';
+    openedWindow.document.body.style.background = '#eef3f9';
+    openedWindow.document.body.style.overflow = 'hidden';
+
+    const container = openedWindow.document.createElement('div');
+    container.className = 'solve-external-window-root';
+    openedWindow.document.body.appendChild(container);
+    containerRef.current = container;
+    setIsReady(true);
+
+    const handleBeforeUnload = () => {
+      onCloseRef.current();
+    };
+
+    openedWindow.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      openedWindow.removeEventListener('beforeunload', handleBeforeUnload);
+
+      if (!openedWindow.closed) {
+        openedWindow.close();
+      }
+    };
+  }, [layout.height, layout.left, layout.top, layout.width, panelKey, title]);
+
+  useEffect(() => {
+    if (!externalWindowRef.current || externalWindowRef.current.closed) {
+      return;
+    }
+
+    externalWindowRef.current.moveTo(Math.round(layout.left), Math.round(layout.top));
+    externalWindowRef.current.resizeTo(Math.round(layout.width), Math.round(layout.height));
+  }, [layout.height, layout.left, layout.top, layout.width]);
+
+  if (!isReady || !containerRef.current) {
+    return null;
+  }
+
+  return createPortal(children, containerRef.current);
 }
 
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
-  const problem = mockProblemDetailById[problemId] ?? mockProblemDetails[0];
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const fallbackProblem = createFallbackProblemDetail(problemId);
+  const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
+  const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<MockResult | null>(null);
+  const [isExecutionSheetOpen, setIsExecutionSheetOpen] = useState(false);
+  const [submitResult, setSubmitResult] = useState<MockResult | null>(null);
+  const [panelVisibility, setPanelVisibility] = useState<PanelVisibilityState>({
+    editor: true,
+    submit: true,
+  });
+  const [detachedPanels, setDetachedPanels] = useState<PanelDetachState>({
+    editor: false,
+    submit: false,
+  });
+  const [externalWindowPanels, setExternalWindowPanels] = useState<ExternalWindowState>({
+    editor: false,
+    submit: false,
+  });
+  const [panelWeights, setPanelWeights] = useState<Record<PanelKey, number>>({
+    editor: 65,
+    submit: 35,
+  });
+  const [workspaceDragState, setWorkspaceDragState] = useState<WorkspaceDragState | null>(null);
+  const [floatingLayouts, setFloatingLayouts] = useState<FloatingPanelLayoutState>(() => createInitialFloatingLayouts());
+  const [floatingMoveState, setFloatingMoveState] = useState<FloatingMoveState | null>(null);
+  const [floatingResizeState, setFloatingResizeState] = useState<FloatingResizeState | null>(null);
+  const problem = fallbackProblem;
   const availableDbms = getAvailableDbms(problem);
-  const schemaEntries = parseSchemaEntries(problem.schemaInfo);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0] ?? problem.dbmsOptions[0] ?? 'postgresql');
   const [sql, setSql] = useState(problem.starterSql);
-  const [result, setResult] = useState<MockResult | null>(null);
-  const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
-  const [lastActionAt, setLastActionAt] = useState<string | null>(null);
-  const [infoViewMode, setInfoViewMode] = useState<InfoViewMode>('table');
-  const [activeTableName, setActiveTableName] = useState<string>(() => schemaEntries[0]?.name ?? '');
-  const [editorTheme, setEditorTheme] = useState<EditorThemeKey>('slate');
-  const [panelVisibility, setPanelVisibility] = useState<PanelVisibilityState>({
-    left: true,
-    center: true,
-    right: false,
-  });
-  const [editorDetached, setEditorDetached] = useState(false);
-  const [panelWeights, setPanelWeights] = useState<Record<PanelKey, number>>({
-    left: 25,
-    center: 47,
-    right: 28,
-  });
-  const [dragState, setDragState] = useState<DragState | null>(null);
-  const workspaceRef = useRef<HTMLDivElement | null>(null);
 
   const runtimeDistribution = getRuntimeDistribution(problem, selectedDbms);
-  const editorThemeStyle = buildEditorThemeStyle(editorTheme);
-  const resolvedActiveTableName = schemaEntries.some((entry) => entry.name === activeTableName)
-    ? activeTableName
-    : schemaEntries[0]?.name ?? '';
-  const resultTimePercent =
-    result && runtimeDistribution ? getTopPercent(runtimeDistribution.samples.map((sample) => sample.timeMs), result.executionTimeMs) : null;
-  const resultScanRowsPercent =
-    result && runtimeDistribution ? getTopPercent(runtimeDistribution.samples.map((sample) => sample.rowsScanned), result.scanRows) : null;
+  const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
+  const displayProblemTitle =
+    problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중...'));
+  const submitTimePercent =
+    submitResult && runtimeDistribution ? getTopPercent(runtimeDistribution.samples.map((sample) => sample.timeMs), submitResult.executionTimeMs) : null;
 
-  const mainPanelVisibility = {
-    left: panelVisibility.left,
-    center: panelVisibility.center && !editorDetached,
-    right: panelVisibility.right,
-  };
-
-  const visibleMainPanels = (['left', 'center', 'right'] as PanelKey[]).filter((panelKey) => mainPanelVisibility[panelKey]);
-  const visibleAnywhereCount =
-    (panelVisibility.left ? 1 : 0) + (panelVisibility.center ? 1 : 0) + (panelVisibility.right ? 1 : 0);
-  const hiddenPanelChips = (['left', 'center', 'right'] as PanelKey[]).filter((panelKey) => !panelVisibility[panelKey]);
+  const visibleWorkspacePanels = panelOrder.filter(
+    (panelKey) => panelVisibility[panelKey] && !detachedPanels[panelKey] && !externalWindowPanels[panelKey],
+  );
+  const visibleFloatingPanels = panelOrder.filter(
+    (panelKey) => panelVisibility[panelKey] && detachedPanels[panelKey] && !externalWindowPanels[panelKey],
+  );
+  const visibleExternalWindows = panelOrder.filter((panelKey) => panelVisibility[panelKey] && externalWindowPanels[panelKey]);
 
   useEffect(() => {
-    if (!dragState) {
+    let cancelled = false;
+
+    setProblemDetail(null);
+    setProblemLoadError(null);
+
+    void fetchProblemDetail(problemId)
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+
+        setProblemDetail(detail);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setProblemLoadError(error instanceof Error ? error.message : '문제 상세 조회에 실패했다.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [problemId]);
+
+  useEffect(() => {
+    setSql(fallbackProblem.starterSql);
+    setExecutionResult(null);
+    setIsExecutionSheetOpen(false);
+    setSubmitResult(null);
+    setSelectedDbms(availableDbms[0] ?? problem.dbmsOptions[0] ?? 'postgresql');
+  }, [availableDbms, fallbackProblem.starterSql, problem.dbmsOptions, problemId]);
+
+  useEffect(() => {
+    if (!workspaceDragState) {
       return;
     }
 
@@ -220,32 +413,25 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       const rect = workspaceRef.current.getBoundingClientRect();
-      const deltaPercent = ((event.clientX - dragState.startX) / rect.width) * 100;
-      const pairTotal = dragState.startLeftWeight + dragState.startRightWeight;
-      const leftMinPercent = (panelMinWidths[dragState.leftKey] / rect.width) * 100;
-      const rightMinPercent = (panelMinWidths[dragState.rightKey] / rect.width) * 100;
-
-      let minLeft = leftMinPercent;
-      let maxLeft = pairTotal - rightMinPercent;
-
-      if (maxLeft < minLeft) {
-        const midpoint = pairTotal / 2;
-        minLeft = Math.min(minLeft, midpoint);
-        maxLeft = Math.max(maxLeft, midpoint);
-      }
-
-      const nextLeftWeight = clamp(dragState.startLeftWeight + deltaPercent, minLeft, maxLeft);
-      const nextRightWeight = pairTotal - nextLeftWeight;
+      const deltaPercent = ((event.clientX - workspaceDragState.startX) / rect.width) * 100;
+      const pairTotal = workspaceDragState.startLeftWeight + workspaceDragState.startRightWeight;
+      const leftMinPercent = (panelMinWidths[workspaceDragState.leftKey] / rect.width) * 100;
+      const rightMinPercent = (panelMinWidths[workspaceDragState.rightKey] / rect.width) * 100;
+      const nextLeftWeight = clamp(
+        workspaceDragState.startLeftWeight + deltaPercent,
+        leftMinPercent,
+        pairTotal - rightMinPercent,
+      );
 
       setPanelWeights((current) => ({
         ...current,
-        [dragState.leftKey]: nextLeftWeight,
-        [dragState.rightKey]: nextRightWeight,
+        [workspaceDragState.leftKey]: nextLeftWeight,
+        [workspaceDragState.rightKey]: pairTotal - nextLeftWeight,
       }));
     };
 
     const handleUp = () => {
-      setDragState(null);
+      setWorkspaceDragState(null);
     };
 
     window.addEventListener('mousemove', handleMove);
@@ -255,223 +441,281 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [dragState]);
+  }, [workspaceDragState]);
 
-  const showResultPanel = () => {
-    setPanelVisibility((current) => ({
-      ...current,
-      right: true,
-    }));
-  };
+  useEffect(() => {
+    if (!floatingMoveState) {
+      return;
+    }
 
-  const handleExecute = (actionLabel: '실행' | '제출') => {
-    setLastActionLabel(actionLabel);
-    setLastActionAt(formatActionTime(new Date()));
-    setResult(problem.mockResult);
-    showResultPanel();
-  };
+    const handleMove = (event: MouseEvent) => {
+      const layout = floatingLayouts[floatingMoveState.panelKey];
+      const viewportPadding = 12;
+      const nextLeft = clamp(
+        floatingMoveState.startLeft + (event.clientX - floatingMoveState.startX),
+        viewportPadding,
+        window.innerWidth - layout.width - viewportPadding,
+      );
+      const nextTop = clamp(
+        floatingMoveState.startTop + (event.clientY - floatingMoveState.startY),
+        viewportPadding,
+        window.innerHeight - layout.height - viewportPadding,
+      );
 
-  const handleRun = () => {
-    handleExecute('실행');
+      setFloatingLayouts((current) => ({
+        ...current,
+        [floatingMoveState.panelKey]: {
+          ...current[floatingMoveState.panelKey],
+          left: nextLeft,
+          top: nextTop,
+        },
+      }));
+    };
+
+    const handleUp = () => {
+      setFloatingMoveState(null);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [floatingLayouts, floatingMoveState]);
+
+  useEffect(() => {
+    if (!floatingResizeState) {
+      return;
+    }
+
+    const handleMove = (event: MouseEvent) => {
+      const currentLayout = floatingLayouts[floatingResizeState.panelKey];
+      const viewportPadding = 12;
+      const nextWidth = clamp(
+        floatingResizeState.startWidth + (event.clientX - floatingResizeState.startX),
+        panelMinWidths[floatingResizeState.panelKey],
+        window.innerWidth - currentLayout.left - viewportPadding,
+      );
+      const nextHeight = clamp(
+        floatingResizeState.startHeight + (event.clientY - floatingResizeState.startY),
+        panelMinHeights[floatingResizeState.panelKey],
+        window.innerHeight - currentLayout.top - viewportPadding,
+      );
+
+      setFloatingLayouts((current) => ({
+        ...current,
+        [floatingResizeState.panelKey]: {
+          ...current[floatingResizeState.panelKey],
+          width: nextWidth,
+          height: nextHeight,
+        },
+      }));
+    };
+
+    const handleUp = () => {
+      setFloatingResizeState(null);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [floatingLayouts, floatingResizeState]);
+
+  const handleExecute = () => {
+    setExecutionResult(problem.mockResult);
+    setIsExecutionSheetOpen(true);
   };
 
   const handleSubmit = () => {
-    handleExecute('제출');
+    setSubmitResult(problem.mockResult);
+    setPanelVisibility((current) => ({
+      ...current,
+      submit: true,
+    }));
   };
 
   const togglePanelVisibility = (panelKey: PanelKey) => {
-    setPanelVisibility((current) => {
-      if (current[panelKey] && visibleAnywhereCount <= 1) {
-        return current;
-      }
+    const nextVisible = !panelVisibility[panelKey];
 
-      if (panelKey === 'center' && current.center) {
-        setEditorDetached(false);
-      }
-
-      return {
+    if (!nextVisible && detachedPanels[panelKey]) {
+      setDetachedPanels((current) => ({
         ...current,
-        [panelKey]: !current[panelKey],
-      };
-    });
-  };
-
-  const restorePanel = (panelKey: PanelKey) => {
-    setPanelVisibility((current) => ({
-      ...current,
-      [panelKey]: true,
-    }));
-
-    if (panelKey === 'center') {
-      setEditorDetached(false);
-    }
-  };
-
-  const toggleEditorDetach = () => {
-    if (!panelVisibility.center) {
-      setPanelVisibility((current) => ({
-        ...current,
-        center: true,
+        [panelKey]: false,
       }));
     }
 
-    setEditorDetached((current) => !current);
-  };
-
-  const renderTableContent = () => {
-    const activeTable = schemaEntries.find((entry) => entry.name === resolvedActiveTableName) ?? schemaEntries[0];
-
-    if (!activeTable) {
-      return <div className="solve-result-empty">표시할 테이블 정보가 없습니다.</div>;
+    if (!nextVisible && externalWindowPanels[panelKey]) {
+      setExternalWindowPanels((current) => ({
+        ...current,
+        [panelKey]: false,
+      }));
     }
 
-    return (
-      <div className="result-table-scroll solve-schema-table-wrap">
-        <table className="result-table solve-schema-table">
-          <thead>
-            <tr>
-              <th scope="col">순서</th>
-              <th scope="col">컬럼명</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeTable.columns.length > 0 ? (
-              activeTable.columns.map((column, index) => (
-                <tr key={`${activeTable.name}-${column}`}>
-                  <td>{index + 1}</td>
-                  <td>{column}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={2}>등록된 컬럼 정보가 없습니다.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
+    setPanelVisibility((current) => ({
+      ...current,
+      [panelKey]: nextVisible,
+    }));
   };
 
-  const renderInfoContent = () => {
-    if (infoViewMode === 'inputExample') {
-      return <pre className="code-block solve-side-code">{problem.inputExample}</pre>;
+  const togglePanelDetach = (panelKey: PanelKey) => {
+    if (!panelVisibility[panelKey]) {
+      setPanelVisibility((current) => ({
+        ...current,
+        [panelKey]: true,
+      }));
     }
 
-    if (infoViewMode === 'outputExample') {
-      return <pre className="code-block solve-side-code">{problem.outputExample}</pre>;
+    if (externalWindowPanels[panelKey]) {
+      setExternalWindowPanels((current) => ({
+        ...current,
+        [panelKey]: false,
+      }));
     }
 
-    return renderTableContent();
+    setDetachedPanels((current) => ({
+      ...current,
+      [panelKey]: !current[panelKey],
+    }));
   };
 
-  const renderPanelActions = (panelKey: PanelKey, extraAction?: ReactNode) => (
+  const togglePanelExternalWindow = (panelKey: PanelKey) => {
+    if (!panelVisibility[panelKey]) {
+      setPanelVisibility((current) => ({
+        ...current,
+        [panelKey]: true,
+      }));
+    }
+
+    if (detachedPanels[panelKey]) {
+      setDetachedPanels((current) => ({
+        ...current,
+        [panelKey]: false,
+      }));
+    }
+
+    setExternalWindowPanels((current) => ({
+      ...current,
+      [panelKey]: !current[panelKey],
+    }));
+  };
+
+  const startFloatingMove = (panelKey: PanelKey, event: ReactMouseEvent<HTMLElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+    if (target.closest('button')) {
+      return;
+    }
+
+    event.preventDefault();
+    setFloatingMoveState({
+      panelKey,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: floatingLayouts[panelKey].left,
+      startTop: floatingLayouts[panelKey].top,
+    });
+  };
+
+  const startFloatingResize = (panelKey: PanelKey, event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setFloatingResizeState({
+      panelKey,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: floatingLayouts[panelKey].width,
+      startHeight: floatingLayouts[panelKey].height,
+    });
+  };
+
+  const renderPanelActions = (panelKey: PanelKey) => (
     <div className="solve-pane-actions">
-      {extraAction}
+      <button
+        type="button"
+        className={`mini-toggle solve-pane-action solve-pane-action-icon ${externalWindowPanels[panelKey] ? 'is-selected' : ''}`}
+        aria-label={externalWindowPanels[panelKey] ? `${panelLabels[panelKey]} 새 창 닫기` : `${panelLabels[panelKey]} 새 창으로 열기`}
+        onClick={() => togglePanelExternalWindow(panelKey)}
+      >
+        <ExternalWindowIcon />
+      </button>
+      <button
+        type="button"
+        className={`mini-toggle solve-pane-action solve-pane-action-icon ${detachedPanels[panelKey] ? 'is-selected' : ''}`}
+        aria-label={detachedPanels[panelKey] ? `${panelLabels[panelKey]} 다시 붙이기` : `${panelLabels[panelKey]} PIP 열기`}
+        onClick={() => togglePanelDetach(panelKey)}
+      >
+        <PipIcon />
+      </button>
       <button
         type="button"
         className="mini-toggle solve-pane-action solve-pane-action-icon"
         aria-label={`${panelLabels[panelKey]} 닫기`}
         onClick={() => togglePanelVisibility(panelKey)}
       >
-        <span aria-hidden="true">×</span>
+        <CloseIcon />
       </button>
     </div>
   );
 
-  const leftPanel = (
-    <section className="panel-card solve-pane solve-pane-left">
-      <div className="solve-pane-header">
-        <div>
-          <p className="panel-meta">테이블 / 예시</p>
-          <h2 className="panel-title">테이블/예시</h2>
-        </div>
-        {renderPanelActions('left')}
-      </div>
-
-      <div className="segmented solve-side-mode-switch" role="group" aria-label="테이블과 예시 보기">
-        <button
-          type="button"
-          className={`segmented-btn ${infoViewMode === 'table' ? 'is-selected' : ''}`}
-          aria-pressed={infoViewMode === 'table'}
-          onClick={() => setInfoViewMode('table')}
-        >
-          테이블
-        </button>
-        <button
-          type="button"
-          className={`segmented-btn ${infoViewMode === 'inputExample' ? 'is-selected' : ''}`}
-          aria-pressed={infoViewMode === 'inputExample'}
-          onClick={() => setInfoViewMode('inputExample')}
-        >
-          입력 예시
-        </button>
-        <button
-          type="button"
-          className={`segmented-btn ${infoViewMode === 'outputExample' ? 'is-selected' : ''}`}
-          aria-pressed={infoViewMode === 'outputExample'}
-          onClick={() => setInfoViewMode('outputExample')}
-        >
-          출력 예시
-        </button>
-      </div>
-
-      <div className={`solve-side-layout ${infoViewMode === 'table' ? '' : 'is-example'}`.trim()}>
-        {infoViewMode === 'table' ? (
-          <div className="solve-side-tabs" role="tablist" aria-label="테이블 탭">
-            {schemaEntries.map((entry) => (
-              <button
-                key={entry.name}
-                type="button"
-                className={`solve-bookmark-button ${resolvedActiveTableName === entry.name ? 'is-selected' : ''}`}
-                aria-pressed={resolvedActiveTableName === entry.name}
-                onClick={() => setActiveTableName(entry.name)}
-              >
-                {entry.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="solve-side-panel">{renderInfoContent()}</div>
-      </div>
-    </section>
+  const renderPanelHeader = (panelKey: PanelKey, isFloating: boolean) => (
+    <div
+      className={`solve-pane-header ${isFloating ? 'is-draggable' : ''}`}
+      onMouseDown={isFloating ? (event) => startFloatingMove(panelKey, event) : undefined}
+    >
+      <h2 className="panel-title solve-pane-title">{panelLabels[panelKey]}</h2>
+      {renderPanelActions(panelKey)}
+    </div>
   );
 
-  const editorPanel = (
-    <section className="panel-card solve-pane solve-pane-editor" style={editorThemeStyle}>
-      <div className="solve-pane-header">
-        <div>
-          <p className="panel-meta">SQL 작업 공간</p>
-          <h2 className="panel-title">에디터</h2>
-        </div>
-        {renderPanelActions(
-          'center',
+  const renderExecutionSheet = () => {
+    if (!executionResult || !isExecutionSheetOpen) {
+      return null;
+    }
+
+    return (
+      <section className="solve-editor-result-sheet is-open">
+        <div className="solve-editor-result-sheet-header">
+          <strong className="solve-editor-result-sheet-title">실행 결과</strong>
           <button
             type="button"
-            className={`mini-toggle solve-pane-action solve-pane-action-icon ${editorDetached ? 'is-selected' : ''}`}
-            aria-label={editorDetached ? '에디터 다시 붙이기' : '에디터 분리'}
-            onClick={toggleEditorDetach}
+            className="mini-toggle solve-editor-result-sheet-close"
+            aria-label="실행 결과 닫기"
+            onClick={() => setIsExecutionSheetOpen(false)}
           >
-            <span aria-hidden="true">{editorDetached ? '↙' : '↗'}</span>
-          </button>,
-        )}
-      </div>
-
-      <div className="solve-editor-toolbar">
-        <div className="solve-theme-picker" role="group" aria-label="에디터 테마 선택">
-          {Object.entries(editorThemes).map(([themeKey, theme]) => (
-            <button
-              key={themeKey}
-              type="button"
-              className={`mini-toggle solve-theme-button ${editorTheme === themeKey ? 'is-selected' : ''}`}
-              onClick={() => setEditorTheme(themeKey as EditorThemeKey)}
-            >
-              {theme.label}
-            </button>
-          ))}
+            <CloseIcon />
+          </button>
         </div>
-      </div>
+
+        <div className="solve-pane-result-stack">
+          <div className="solve-result-lines">
+            <div className="solve-result-line">
+              <span className="solve-result-label">실행시간</span>
+              <strong className="solve-result-value">{formatMs(executionResult.executionTimeMs)}</strong>
+            </div>
+            <div className="solve-result-line">
+              <span className="solve-result-label">반환 행 수</span>
+              <strong className="solve-result-value">{executionResult.rows.length}</strong>
+            </div>
+          </div>
+
+          {executionResult.message ? <p className="solve-pane-result-message">{executionResult.message}</p> : null}
+          {renderResultTable(executionResult, '표시할 실행 결과가 없다.')}
+        </div>
+      </section>
+    );
+  };
+
+  const renderEditorPanel = (isFloating: boolean) => (
+    <section className={`panel-card solve-pane solve-pane-editor ${isFloating ? 'is-floating' : ''}`}>
+      {renderPanelHeader('editor', isFloating)}
 
       <div className="solve-editor-surface">
         <div className="solve-editor-surface-header">
@@ -483,7 +727,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             <button type="button" className="btn ghost" onClick={() => setSql(problem.starterSql)}>
               초기화
             </button>
-            <button type="button" className="btn secondary" onClick={handleRun} disabled={sql.trim().length === 0}>
+            <button type="button" className="btn secondary" onClick={handleExecute} disabled={sql.trim().length === 0}>
               실행
             </button>
             <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0}>
@@ -492,43 +736,38 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           </div>
         </div>
 
-        <textarea
-          className="solve-sql-editor"
-          spellCheck={false}
-          value={sql}
-          onChange={(event) => setSql(event.target.value)}
-          aria-label="SQL 에디터"
-        />
+        <div className="solve-editor-surface-body">
+          <textarea
+            className="solve-sql-editor"
+            spellCheck={false}
+            value={sql}
+            onChange={(event) => setSql(event.target.value)}
+            aria-label="SQL Editor"
+          />
+          {renderExecutionSheet()}
+        </div>
       </div>
     </section>
   );
 
-  const rightPanel = (
-    <section className="panel-card solve-pane solve-pane-right">
-      <div className="solve-pane-header">
-        <div>
-          <p className="panel-meta">실행 결과</p>
-          <h2 className="panel-title">실행 결과</h2>
-        </div>
-        {renderPanelActions('right')}
-      </div>
+  const renderSubmitPanel = (isFloating: boolean) => (
+    <section className={`panel-card solve-pane ${isFloating ? 'is-floating' : ''}`}>
+      {renderPanelHeader('submit', isFloating)}
 
-      {result ? (
-        <>
+      {submitResult ? (
+        <div className="solve-pane-result-stack">
           <div className="solve-result-lines">
             <div className="solve-result-line">
               <span className="solve-result-label">판정</span>
-              <strong className="solve-result-value">{result.status === 'success' ? '정답' : '재확인 필요'}</strong>
+              <strong className="solve-result-value">{submitResult.status === 'success' ? '정답' : '확인 필요'}</strong>
             </div>
             <div className="solve-result-line">
               <span className="solve-result-label">실행시간</span>
-              <strong className="solve-result-value">{formatMs(result.executionTimeMs)}</strong>
-            </div>
-            <div className="solve-result-line">
-              <span className="solve-result-label">스캔 행 수</span>
-              <strong className="solve-result-value">{formatCount(result.scanRows)}</strong>
+              <strong className="solve-result-value">{formatMs(submitResult.executionTimeMs)}</strong>
             </div>
           </div>
+
+          {submitResult.message ? <p className="solve-pane-result-message">{submitResult.message}</p> : null}
 
           <div className="solve-performance-card">
             <p className="solve-performance-title">성능 비교</p>
@@ -543,25 +782,23 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               </div>
               <div className="solve-performance-item">
                 <span>현재 속도 구간</span>
-                <strong>{resultTimePercent ? `상위 ${resultTimePercent}%` : '비교 데이터 없음'}</strong>
-              </div>
-              <div className="solve-performance-item">
-                <span>현재 스캔 행 수 구간</span>
-                <strong>{resultScanRowsPercent ? `상위 ${resultScanRowsPercent}%` : '비교 데이터 없음'}</strong>
+                <strong>{submitTimePercent ? `상위 ${submitTimePercent}%` : '비교 데이터 없음'}</strong>
               </div>
             </div>
           </div>
-        </>
+        </div>
       ) : (
-        <div className="solve-result-empty">실행 또는 제출 후 결과가 이 영역에 표시됩니다.</div>
+        <div className="solve-result-empty">제출 후 결과가 이 영역에 표시된다.</div>
       )}
     </section>
   );
 
-  const panelContent: Record<PanelKey, ReactNode> = {
-    left: leftPanel,
-    center: editorPanel,
-    right: rightPanel,
+  const renderPanel = (panelKey: PanelKey, isFloating: boolean): ReactNode => {
+    if (panelKey === 'editor') {
+      return renderEditorPanel(isFloating);
+    }
+
+    return renderSubmitPanel(isFloating);
   };
 
   const renderSplitter = (leftKey: PanelKey, rightKey: PanelKey) => (
@@ -571,7 +808,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       aria-label={`${panelLabels[leftKey]}와 ${panelLabels[rightKey]} 너비 조절`}
       onMouseDown={(event) => {
         event.preventDefault();
-        setDragState({
+        setWorkspaceDragState({
           leftKey,
           rightKey,
           startX: event.clientX,
@@ -586,143 +823,107 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   return (
     <div className="page-stack">
-      <div className="solve-page-topbar">
-        <button type="button" className="btn secondary solve-back-button" onClick={() => navigate(PROBLEMS_PATH)}>
-          문제 목록
-        </button>
+      <div className="solve-page-topbar solve-page-topbar-dbms">
+        <div className="solve-workspace-toolbar-group">
+          {availableDbms.map((dbms) => (
+            <button
+              key={dbms}
+              type="button"
+              className={`mini-toggle solve-dbms-button ${selectedDbms === dbms ? 'is-selected' : ''}`}
+              onClick={() => setSelectedDbms(dbms)}
+            >
+              {getDbmsLabel(dbms)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <section className="panel-card solve-page-hero">
-        {lastActionAt && lastActionLabel ? (
-          <div className="solve-page-hero-meta">
-            <span className="subtle-chip">
-              {lastActionLabel} {lastActionAt}
-            </span>
-          </div>
-        ) : null}
-
-        <div className="solve-page-hero-copy">
+        <div className="solve-page-hero-copy solve-page-hero-copy-wide">
           <div className="solve-title-row">
-            <span className="solve-problem-number">문제 {problem.number}</span>
-            <h1 className="solve-problem-title">{problem.title}</h1>
+            <span className="solve-problem-number">문제 {displayProblemNumber}</span>
+            <h1 className="solve-problem-title">{displayProblemTitle}</h1>
           </div>
-          <p className="content-text solve-problem-description">{problem.description}</p>
+
+          {problemLoadError ? <p className="content-text solve-problem-description">{problemLoadError}</p> : null}
+          {!problemLoadError && problemDetail == null ? (
+            <p className="content-text solve-problem-description">문제 상세를 불러오는 중...</p>
+          ) : null}
+          {problemDetail ? <ProblemDetailContent detail={problemDetail} /> : null}
         </div>
       </section>
 
       <section className="panel-card solve-workspace-card">
         <div className="solve-workspace-toolbar">
-          <div className="solve-workspace-toolbar-group">
-            {availableDbms.map((dbms) => (
+          <div className="solve-workspace-panel-tabs">
+            {panelOrder.map((panelKey) => (
               <button
-                key={dbms}
+                key={panelKey}
                 type="button"
-                className={`mini-toggle solve-dbms-button ${selectedDbms === dbms ? 'is-selected' : ''}`}
-                onClick={() => setSelectedDbms(dbms)}
+                className={`mini-toggle solve-workspace-panel-tab ${panelVisibility[panelKey] ? 'is-selected' : ''} ${panelVisibility[panelKey] && detachedPanels[panelKey] ? 'is-detached' : ''}`}
+                aria-pressed={panelVisibility[panelKey]}
+                onClick={() => togglePanelVisibility(panelKey)}
               >
-                {getDbmsLabel(dbms)}
+                <span>{panelLabels[panelKey]}</span>
+                {panelVisibility[panelKey] && detachedPanels[panelKey] ? <span className="solve-panel-state-chip">PIP</span> : null}
               </button>
             ))}
-          </div>
-
-          <div className="solve-workspace-toolbar-group">
-            {hiddenPanelChips.length > 0 ? (
-              hiddenPanelChips.map((panelKey) => (
-                <button
-                  key={panelKey}
-                  type="button"
-                  className="mini-toggle solve-restore-button"
-                  aria-label={`${panelLabels[panelKey]} 다시 표시`}
-                  onClick={() => restorePanel(panelKey)}
-                >
-                  <span className="solve-restore-icon" aria-hidden="true">
-                    +
-                  </span>
-                  <span>{panelLabels[panelKey]}</span>
-                </button>
-              ))
-            ) : (
-              <span className="subtle-chip">모든 패널 표시 중</span>
-            )}
           </div>
         </div>
 
         <div className="solve-workspace" ref={workspaceRef}>
-          {visibleMainPanels.length === 0 ? (
-            <div className="solve-workspace-empty">닫아둔 패널을 다시 열어주세요.</div>
+          {visibleWorkspacePanels.length === 0 ? (
+            <div className="solve-workspace-empty">탭을 눌러 작업영역을 다시 열어라.</div>
           ) : (
-            visibleMainPanels.map((panelKey, index) => (
-              <div key={panelKey} className={`solve-workspace-segment solve-workspace-segment-${panelKey}`} style={{ flex: `${panelWeights[panelKey]} 1 0` }}>
-                {panelContent[panelKey]}
-                {index < visibleMainPanels.length - 1 ? renderSplitter(panelKey, visibleMainPanels[index + 1]) : null}
+            visibleWorkspacePanels.map((panelKey, index) => (
+              <div key={panelKey} className="solve-workspace-segment" style={{ flex: `${panelWeights[panelKey]} 1 0` }}>
+                {renderPanel(panelKey, false)}
+                {index < visibleWorkspacePanels.length - 1 ? renderSplitter(panelKey, visibleWorkspacePanels[index + 1]) : null}
               </div>
             ))
           )}
         </div>
       </section>
 
-      {panelVisibility.center && editorDetached ? (
-        <section className="panel-card solve-floating-editor" style={editorThemeStyle}>
-          <div className="solve-pane-header">
-            <div>
-              <p className="panel-meta">분리 에디터</p>
-              <h2 className="panel-title">에디터 PIP</h2>
-            </div>
-            <div className="solve-pane-actions">
-              <button
-                type="button"
-                className="mini-toggle solve-pane-action solve-pane-action-icon is-selected"
-                aria-label="에디터 다시 붙이기"
-                onClick={toggleEditorDetach}
-              >
-                <span aria-hidden="true">↙</span>
-              </button>
-              <button
-                type="button"
-                className="mini-toggle solve-pane-action solve-pane-action-icon"
-                aria-label="에디터 닫기"
-                onClick={() => togglePanelVisibility('center')}
-              >
-                <span aria-hidden="true">×</span>
-              </button>
-            </div>
-          </div>
-          <div className="solve-editor-toolbar">
-            <div className="solve-theme-picker" role="group" aria-label="에디터 테마 선택">
-              {Object.entries(editorThemes).map(([themeKey, theme]) => (
-                <button
-                  key={themeKey}
-                  type="button"
-                  className={`mini-toggle solve-theme-button ${editorTheme === themeKey ? 'is-selected' : ''}`}
-                  onClick={() => setEditorTheme(themeKey as EditorThemeKey)}
-                >
-                  {theme.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="solve-editor-surface">
-            <div className="solve-editor-surface-header">
-              <span className="solve-editor-file">main.sql</span>
-              <div className="solve-editor-actions">
-                <button type="button" className="btn secondary" onClick={handleRun} disabled={sql.trim().length === 0}>
-                  실행
-                </button>
-                <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0}>
-                  제출
-                </button>
-              </div>
-            </div>
-            <textarea
-              className="solve-sql-editor"
-              spellCheck={false}
-              value={sql}
-              onChange={(event) => setSql(event.target.value)}
-              aria-label="SQL 에디터 PIP"
-            />
-          </div>
-        </section>
-      ) : null}
+      {visibleFloatingPanels.map((panelKey) => (
+        <div
+          key={panelKey}
+          className="solve-floating-pane-shell"
+          style={{
+            left: `${floatingLayouts[panelKey].left}px`,
+            top: `${floatingLayouts[panelKey].top}px`,
+            width: `${floatingLayouts[panelKey].width}px`,
+            height: `${floatingLayouts[panelKey].height}px`,
+          }}
+        >
+          {renderPanel(panelKey, true)}
+          <button
+            type="button"
+            className="solve-floating-pane-resize"
+            aria-label={`${panelLabels[panelKey]} 크기 조절`}
+            onMouseDown={(event) => startFloatingResize(panelKey, event)}
+          >
+            <span aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+
+      {visibleExternalWindows.map((panelKey) => (
+        <PanelExternalWindow
+          key={`external-${panelKey}`}
+          panelKey={panelKey}
+          title={`Quertimizer - ${panelLabels[panelKey]}`}
+          layout={floatingLayouts[panelKey]}
+          onClose={() =>
+            setExternalWindowPanels((current) => ({
+              ...current,
+              [panelKey]: false,
+            }))
+          }
+        >
+          <div className="solve-external-window-root-inner">{renderPanel(panelKey, false)}</div>
+        </PanelExternalWindow>
+      ))}
     </div>
   );
 }

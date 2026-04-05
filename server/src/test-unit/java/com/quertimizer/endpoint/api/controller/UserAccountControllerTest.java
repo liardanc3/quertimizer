@@ -11,8 +11,9 @@ import com.quertimizer.endpoint.api.dto.request.SignupReq;
 import com.quertimizer.endpoint.api.dto.response.FindUserIdRes;
 import com.quertimizer.endpoint.api.handler.ApiExceptionHandler;
 import com.quertimizer.endpoint.websocket.handler.SessionWebSocketHandler;
-import com.quertimizer.logging.LogFormatter;
+import com.quertimizer.log.LogFormatter;
 import com.quertimizer.service.UserAccountService;
+import com.quertimizer.store.SessionStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -56,9 +56,6 @@ class UserAccountControllerTest {
     private UserAccountService userAccountService;
 
     @MockitoBean
-    private SecurityContextRepository securityContextRepository;
-
-    @MockitoBean
     private TokenBasedRememberMeServices rememberMeServices;
 
     @MockitoBean
@@ -66,6 +63,9 @@ class UserAccountControllerTest {
 
     @MockitoBean
     private LogFormatter logFormatter;
+
+    @MockitoBean
+    private SessionStore sessionStore;
 
     @Nested
     @DisplayName("/signup")
@@ -98,7 +98,7 @@ class UserAccountControllerTest {
                 // then
                 result.andExpect(status().isCreated());
                 verify(userAccountService).signup(any(SignupReq.class));
-                verify(securityContextRepository).saveContext(any(), any(), any());
+                verify(sessionStore).saveContext(any(), any(), any());
             }
         }
 
@@ -124,7 +124,7 @@ class UserAccountControllerTest {
                 // then
                 result.andExpect(status().isBadRequest());
                 verify(userAccountService, never()).signup(any(SignupReq.class));
-                verify(securityContextRepository, never()).saveContext(any(), any(), any());
+                verify(sessionStore, never()).saveContext(any(), any(), any());
             }
         }
     }
@@ -317,7 +317,7 @@ class UserAccountControllerTest {
                 // then
                 result.andExpect(status().isOk());
                 verify(userAccountService).login(any(LoginReq.class));
-                verify(securityContextRepository).saveContext(any(), any(), any());
+                verify(sessionStore).saveContext(any(), any(), any());
                 verify(rememberMeServices).logout(any(), any(), any());
                 verify(rememberMeServices, never()).loginSuccess(any(), any(), any());
             }
@@ -343,7 +343,7 @@ class UserAccountControllerTest {
                 // then
                 result.andExpect(status().isOk());
                 verify(userAccountService).login(any(LoginReq.class));
-                verify(securityContextRepository).saveContext(any(), any(), any());
+                verify(sessionStore).saveContext(any(), any(), any());
                 verify(rememberMeServices).loginSuccess(any(), any(), any());
             }
         }
@@ -369,7 +369,7 @@ class UserAccountControllerTest {
                 // then
                 result.andExpect(status().isBadRequest());
                 verify(userAccountService, never()).login(any(LoginReq.class));
-                verify(securityContextRepository, never()).saveContext(any(), any(), any());
+                verify(sessionStore, never()).saveContext(any(), any(), any());
             }
         }
     }
@@ -672,6 +672,7 @@ class UserAccountControllerTest {
 
                 // then
                 result.andExpect(status().isOk());
+                verify(sessionStore).removeSession(session.getId());
                 verify(sessionWebSocketHandler).closeSessionSockets(session.getId());
                 verify(rememberMeServices, atLeastOnce()).logout(any(), any(), any());
             }
@@ -701,7 +702,7 @@ class UserAccountControllerTest {
                 result.andExpect(status().isOk())
                         .andExpect(jsonPath("$.authenticated").value(true))
                         .andExpect(jsonPath("$.userId").value("tester"));
-                verify(securityContextRepository).saveContext(any(), any(), any());
+                verify(sessionStore).saveContext(any(), any(), any());
             }
         }
 
@@ -719,7 +720,7 @@ class UserAccountControllerTest {
                 result.andExpect(status().isOk())
                         .andExpect(jsonPath("$.authenticated").value(false))
                         .andExpect(jsonPath("$.userId").doesNotExist());
-                verify(securityContextRepository, never()).saveContext(any(), any(), any());
+                verify(sessionStore, never()).saveContext(any(), any(), any());
             }
         }
     }

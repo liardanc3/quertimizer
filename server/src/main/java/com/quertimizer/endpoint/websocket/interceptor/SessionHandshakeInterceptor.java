@@ -1,6 +1,6 @@
 package com.quertimizer.endpoint.websocket.interceptor;
 
-import com.quertimizer.logging.LogFormatter;
+import com.quertimizer.log.LogFormatter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;

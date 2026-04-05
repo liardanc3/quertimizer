@@ -18,7 +18,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextRepository;
 
@@ -36,7 +35,7 @@ public class SecurityConfig {
                                                    SecurityContextRepository securityContextRepository,
                                                    TokenBasedRememberMeServices rememberMeServices) throws Exception {
 
-        // 세션 기반 인증, 로그인 유지, API 로깅 필터를 Security 흐름에 연결
+        // 세션, remember-me, API 로그 필터 구성
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -53,15 +52,10 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // 유저 인증정보 세션 저장
-    @Bean
-    public SecurityContextRepository securityContextRepository() {
-        return new HttpSessionSecurityContextRepository();
-    }
-
     @Bean
     public UserDetailsService userDetailsService() {
 
+        // userId 기준 인증 사용자 조회
         return username -> userRepository.findById(username)
                 .map(user ->
                         new org.springframework.security.core.userdetails.User(
@@ -72,18 +66,17 @@ public class SecurityConfig {
                 .orElseThrow(() -> new UsernameNotFoundException(username));
     }
 
-    // 로그인 유지 쿠키 설정
     @Bean
     public TokenBasedRememberMeServices rememberMeServices(UserDetailsService userDetailsService) {
         TokenBasedRememberMeServices rememberMeServices =
                 new TokenBasedRememberMeServices("quertimizer-remember-me-key", userDetailsService);
 
+        // 로그인 유지 쿠키 설정
         rememberMeServices.setCookieName("quertimizer-remember-me");
         rememberMeServices.setTokenValiditySeconds((int) Duration.ofDays(180).toSeconds());
         return rememberMeServices;
     }
 
-    // 서버에서 SHA512 한번 더 적용
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new PasswordEncoder() {
@@ -102,6 +95,7 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
 
+        // DB 사용자 인증 provider 구성
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);

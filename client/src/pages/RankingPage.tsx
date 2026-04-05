@@ -28,11 +28,6 @@ const sortOptions: Array<{
     label: '평균 실행시간 백분위',
     description: '낮을수록 더 빠른 상위권 풀이입니다.',
   },
-  {
-    id: 'avgScanRowsPercentile',
-    label: '평균 스캔 행 수 백분위',
-    description: '낮을수록 더 적은 행을 읽은 상위권 풀이입니다.',
-  },
 ];
 
 function compareRankingEntries(sortKey: RankingMetricKey, left: RankingEntry, right: RankingEntry) {
@@ -40,24 +35,13 @@ function compareRankingEntries(sortKey: RankingMetricKey, left: RankingEntry, ri
     return (
       right.solvedCount - left.solvedCount ||
       left.avgExecutionPercentile - right.avgExecutionPercentile ||
-      left.avgScanRowsPercentile - right.avgScanRowsPercentile ||
-      left.handle.localeCompare(right.handle)
-    );
-  }
-
-  if (sortKey === 'avgExecutionPercentile') {
-    return (
-      left.avgExecutionPercentile - right.avgExecutionPercentile ||
-      right.solvedCount - left.solvedCount ||
-      left.avgScanRowsPercentile - right.avgScanRowsPercentile ||
       left.handle.localeCompare(right.handle)
     );
   }
 
   return (
-    left.avgScanRowsPercentile - right.avgScanRowsPercentile ||
-    right.solvedCount - left.solvedCount ||
     left.avgExecutionPercentile - right.avgExecutionPercentile ||
+    right.solvedCount - left.solvedCount ||
     left.handle.localeCompare(right.handle)
   );
 }
@@ -218,7 +202,6 @@ export default function RankingPage() {
               <span role="columnheader">사용자</span>
               <span role="columnheader">해결한 문제</span>
               <span role="columnheader">평균 실행시간 백분위</span>
-              <span role="columnheader">평균 스캔 행 수 백분위</span>
             </div>
 
             {pagedEntries.map((entry) => {
@@ -248,10 +231,6 @@ export default function RankingPage() {
 
                   <div className="ranking-cell" data-label="평균 실행시간 백분위">
                     <strong>{formatPercent(entry.avgExecutionPercentile)}</strong>
-                  </div>
-
-                  <div className="ranking-cell" data-label="평균 스캔 행 수 백분위">
-                    <strong>{formatPercent(entry.avgScanRowsPercentile)}</strong>
                   </div>
                 </article>
               );

@@ -1,50 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DomainTabs from '../components/home/DomainTabs';
 import ProblemList from '../components/home/ProblemList';
 import ProblemModeSwitch from '../components/home/ProblemModeSwitch';
 import ProblemStatusFilter from '../components/home/ProblemStatusFilter';
-import { mockProblems } from '../mocks/problems';
-import type { DomainType, ProblemSummary, RuntimeDistribution } from '../types/domain';
+import { fetchProblems, type ProblemPage } from '../lib/problemApi';
+import { useMockSession } from '../lib/session';
+import type { DomainType } from '../types/domain';
 
-const PAGE_SIZE = 10;
 type SolvedCountSortOrder = 'desc' | 'asc';
+type SolveState = 'all' | 'solved' | 'unsolved' | 'none';
 
-function getSearchableDistributions(problem: ProblemSummary): RuntimeDistribution[] {
-  if (problem.runtimeDistributions) {
-    return Object.values(problem.runtimeDistributions).filter((distribution): distribution is RuntimeDistribution =>
-      Boolean(distribution)
-    );
+function resolveSolveState(showSolved: boolean, showUnsolved: boolean): SolveState {
+  if (showSolved && showUnsolved) {
+    return 'all';
   }
 
-  return problem.runtimeDistribution ? [problem.runtimeDistribution] : [];
+  if (showSolved) {
+    return 'solved';
+  }
+
+  if (showUnsolved) {
+    return 'unsolved';
+  }
+
+  return 'none';
 }
 
-function matchesSearch(problem: ProblemSummary, query: string) {
-  if (!query) {
-    return true;
-  }
-
-  return (
-    String(problem.number).includes(query) ||
-    problem.title.toLowerCase().includes(query) ||
-    problem.tags.some((tag) => tag.toLowerCase().includes(query)) ||
-    getSearchableDistributions(problem).some(
-      (distribution) =>
-        distribution.fastestNickname.toLowerCase().includes(query) ||
-        distribution.samples.some((sample) => sample.nickname.toLowerCase().includes(query))
-    )
-  );
-}
-
-function matchesSolvedState(problem: ProblemSummary, showSolved: boolean, showUnsolved: boolean) {
-  if (problem.solvedAt) {
-    return showSolved;
-  }
-
-  return showUnsolved;
+function createEmptyProblemPage(): ProblemPage {
+  return {
+    currentPage: 1,
+    pageSize: 20,
+    totalCount: 0,
+    totalPages: 1,
+    problems: [],
+  };
 }
 
 export default function HomePage() {
+  const { isAuthenticated, isReady, userId } = useMockSession();
   const [domain, setDomain] = useState<DomainType>('rdbms');
   const [showTags, setShowTags] = useState(true);
   const [showStats, setShowStats] = useState(true);
@@ -54,34 +47,77 @@ export default function HomePage() {
   const [draftSearchValue, setDraftSearchValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [requestedPage, setRequestedPage] = useState(1);
+  const [problemPage, setProblemPage] = useState<ProblemPage>(createEmptyProblemPage());
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  const applySearch = (value: string) => {
+  const canShowSolveState = isReady && isAuthenticated;
+  const solveState = canShowSolveState ? resolveSolveState(showSolved, showUnsolved) : 'all';
+
+  useEffect(() => {
+    if (domain !== 'rdbms') {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProblems() {
+      setIsLoading(true);
+      setLoadFailed(false);
+
+      try {
+        const fetchedProblemPage = await fetchProblems({
+          page: requestedPage,
+          query: searchQuery,
+          solveState,
+          solvedCountSort: solvedCountSortOrder,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setProblemPage(fetchedProblemPage);
+        if (fetchedProblemPage.currentPage !== requestedPage) {
+          setRequestedPage(fetchedProblemPage.currentPage);
+        }
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setLoadFailed(true);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadProblems();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [domain, requestedPage, searchQuery, solveState, solvedCountSortOrder]);
+
+  const resolvedProblems = useMemo(
+    () =>
+      problemPage.problems.map((problem) => ({
+        ...problem,
+        isSolved:
+          canShowSolveState && userId != null
+            ? (problem.submittedHistories ?? []).some((submittedHistory) => submittedHistory.userId === userId)
+            : null,
+      })),
+    [canShowSolveState, problemPage.problems, userId]
+  );
+
+  function applySearch(value: string) {
     setDraftSearchValue(value);
     setSearchQuery(value);
     setRequestedPage(1);
-  };
-
-  const normalizedSearchValue = searchQuery.trim().toLowerCase();
-  const filteredProblems = mockProblems
-    .filter(
-      (problem) =>
-        problem.domain === domain &&
-        matchesSearch(problem, normalizedSearchValue) &&
-        matchesSolvedState(problem, showSolved, showUnsolved)
-    )
-    .sort((left, right) => {
-      const solvedCountGap =
-        solvedCountSortOrder === 'asc' ? left.solvedCount - right.solvedCount : right.solvedCount - left.solvedCount;
-
-      if (solvedCountGap !== 0) {
-        return solvedCountGap;
-      }
-
-      return left.number - right.number;
-    });
-  const totalPages = Math.max(1, Math.ceil(filteredProblems.length / PAGE_SIZE));
-  const currentPage = Math.min(requestedPage, totalPages);
-  const pagedProblems = filteredProblems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  }
 
   return (
     <div className="page-stack">
@@ -104,14 +140,14 @@ export default function HomePage() {
           >
             <label className="problem-search-field">
               <span className="problem-search-icon" aria-hidden="true">
-                ⌕
+                🔎
               </span>
               <input
                 type="search"
                 value={draftSearchValue}
                 onChange={(event) => setDraftSearchValue(event.target.value)}
                 className="text-field problem-search-input"
-                placeholder="문제 번호, 제목, 태그, 닉네임 검색"
+                placeholder="문제 번호, 제목, 유저 ID 검색"
                 aria-label="문제 검색"
               />
             </label>
@@ -129,19 +165,23 @@ export default function HomePage() {
             <div className="problem-board-controls">
               <ProblemModeSwitch label="태그 표시" checked={showTags} onChange={setShowTags} />
               <ProblemModeSwitch label="통계 표시" checked={showStats} onChange={setShowStats} />
-              <ProblemStatusFilter
-                showSolved={showSolved}
-                showUnsolved={showUnsolved}
-                onToggleSolved={() => {
-                  setShowSolved((value) => !value);
-                  setRequestedPage(1);
-                }}
-                onToggleUnsolved={() => {
-                  setShowUnsolved((value) => !value);
-                  setRequestedPage(1);
-                }}
-              />
-              <div className="problem-control-group problem-sort-group" role="group" aria-label="푼 사람 수 정렬">
+
+              {canShowSolveState ? (
+                <ProblemStatusFilter
+                  showSolved={showSolved}
+                  showUnsolved={showUnsolved}
+                  onToggleSolved={() => {
+                    setShowSolved((value) => !value);
+                    setRequestedPage(1);
+                  }}
+                  onToggleUnsolved={() => {
+                    setShowUnsolved((value) => !value);
+                    setRequestedPage(1);
+                  }}
+                />
+              ) : null}
+
+              <div className="problem-control-group problem-sort-group" role="group" aria-label="푼 사람 정렬">
                 <span className="problem-control-label">푼 사람</span>
                 <div className="problem-status-buttons">
                   <button
@@ -171,26 +211,42 @@ export default function HomePage() {
             </div>
           </div>
 
-          <ProblemList problems={pagedProblems} showTags={showTags} showStats={showStats} onSearchSelect={applySearch} />
+          {isLoading ? (
+            <section className="problem-list is-empty">
+              <div className="problem-empty-state">문제 목록을 불러오는 중입니다.</div>
+            </section>
+          ) : loadFailed ? (
+            <section className="problem-list is-empty">
+              <div className="problem-empty-state">문제 목록을 불러오지 못했습니다.</div>
+            </section>
+          ) : (
+            <ProblemList
+              problems={resolvedProblems}
+              showTags={showTags}
+              showStats={showStats}
+              showSolveState={canShowSolveState}
+              onSearchSelect={applySearch}
+            />
+          )}
 
-          {filteredProblems.length > 0 ? (
+          {!isLoading && !loadFailed && problemPage.totalCount > 0 ? (
             <div className="problem-pagination" role="navigation" aria-label="문제 페이지">
               <button
                 type="button"
                 className="mini-toggle problem-page-button"
                 onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
+                disabled={problemPage.currentPage === 1}
               >
                 이전
               </button>
 
               <div className="problem-page-numbers">
-                {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                {Array.from({ length: problemPage.totalPages }, (_, index) => index + 1).map((page) => (
                   <button
                     key={page}
                     type="button"
-                    className={`mini-toggle problem-page-button ${page === currentPage ? 'is-selected' : ''}`}
-                    aria-current={page === currentPage ? 'page' : undefined}
+                    className={`mini-toggle problem-page-button ${page === problemPage.currentPage ? 'is-selected' : ''}`}
+                    aria-current={page === problemPage.currentPage ? 'page' : undefined}
                     onClick={() => setRequestedPage(page)}
                   >
                     {page}
@@ -201,14 +257,14 @@ export default function HomePage() {
               <button
                 type="button"
                 className="mini-toggle problem-page-button"
-                onClick={() => setRequestedPage((page) => Math.min(totalPages, page + 1))}
-                disabled={currentPage === totalPages}
+                onClick={() => setRequestedPage((page) => Math.min(problemPage.totalPages, page + 1))}
+                disabled={problemPage.currentPage === problemPage.totalPages}
               >
                 다음
               </button>
 
               <span className="problem-pagination-meta">
-                {currentPage} / {totalPages}
+                {problemPage.currentPage} / {problemPage.totalPages}
               </span>
             </div>
           ) : null}
@@ -225,7 +281,7 @@ export default function HomePage() {
             <span className="section-badge is-disabled">Coming Soon</span>
           </div>
           <p className="content-text">
-            문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개할 예정입니다.
+            문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개될 예정입니다.
           </p>
         </section>
       </div>

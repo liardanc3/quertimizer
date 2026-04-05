@@ -12,6 +12,7 @@ import com.quertimizer.endpoint.api.dto.response.FindUserIdRes;
 import com.quertimizer.endpoint.api.dto.response.SessionMeRes;
 import com.quertimizer.endpoint.websocket.handler.SessionWebSocketHandler;
 import com.quertimizer.service.UserAccountService;
+import com.quertimizer.store.SessionStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -40,6 +41,7 @@ public class UserAccountController {
     private final TokenBasedRememberMeServices rememberMeServices;
     private final SecurityContextRepository securityContextRepository;
     private final SessionWebSocketHandler sessionWebSocketHandler;
+    private final SessionStore sessionStore;
 
     @PostMapping("/signup")
     public ResponseEntity<Void> signup(@Valid @RequestBody SignupReq request,
@@ -100,6 +102,7 @@ public class UserAccountController {
 
         // 인증정보/세션 정리
         if (session != null) {
+            sessionStore.removeSession(session.getId());
             sessionWebSocketHandler.closeSessionSockets(session.getId());
         }
         rememberMeServices.logout(httpRequest, httpResponse, authentication);

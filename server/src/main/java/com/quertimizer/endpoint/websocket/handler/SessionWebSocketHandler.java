@@ -1,6 +1,6 @@
 package com.quertimizer.endpoint.websocket.handler;
 
-import com.quertimizer.logging.LogFormatter;
+import com.quertimizer.log.LogFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

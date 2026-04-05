@@ -1,6 +1,6 @@
 package com.quertimizer.endpoint.websocket.interceptor;
 
-import com.quertimizer.logging.LogFormatter;
+import com.quertimizer.log.LogFormatter;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
