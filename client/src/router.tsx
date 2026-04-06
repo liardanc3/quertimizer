@@ -52,6 +52,7 @@ interface ProfileRoute {
 
 interface ProfileActivityRoute {
   type: 'profileActivity';
+  handle?: string;
 }
 
 type AppRoute =
@@ -108,12 +109,17 @@ function parseRoute(pathname: string): AppRoute {
     return { type: 'communityDetail', postId: decodeURIComponent(communityPostMatch[1]) };
   }
 
+  if (normalizedPathname === '/profile') {
+    return { type: 'profile' };
+  }
+
   if (normalizedPathname === '/profile/activity') {
     return { type: 'profileActivity' };
   }
 
-  if (normalizedPathname === '/profile') {
-    return { type: 'profile' };
+  const profileActivityMatch = normalizedPathname.match(/^\/profile\/([\w-]+)\/activity$/);
+  if (profileActivityMatch) {
+    return { type: 'profileActivity', handle: decodeURIComponent(profileActivityMatch[1]) };
   }
 
   const profileMatch = normalizedPathname.match(/^\/profile\/([\w-]+)$/);
@@ -159,7 +165,7 @@ export default function AppRouter() {
   }
 
   if (route.type === 'profileActivity') {
-    return <ProfileActivityPage />;
+    return <ProfileActivityPage key={route.handle ?? 'me'} handle={route.handle} />;
   }
 
   if (route.type === 'profile') {

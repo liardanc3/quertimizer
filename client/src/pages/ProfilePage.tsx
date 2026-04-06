@@ -1,30 +1,36 @@
-import { useEffect, useState } from 'react';
-import { PROFILE_ACTIVITY_PATH, getProfilePath, navigate } from '../lib/navigation';
-import { getMockProfileByHandle, mockCurrentHandle, mockProfiles } from '../mocks/profile';
-import type {
-  DbmsType,
-  Profile,
-  ProfileLinks,
-  ProfileSettings,
-  ProfileSolvedRecord,
-  SqlEditorPreset,
-  SqlVisibility,
-} from '../types/domain';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getProfileActivityPath, getProfilePath, navigate } from '../lib/navigation';
+import {
+  fetchMyProfileSummary,
+  fetchMySolvedProblems,
+  fetchMySolvedRecords,
+  fetchProfileSummary,
+  fetchSolvedProblems,
+  fetchSolvedRecords,
+  updateMyProfile,
+  type UpdateUserProfilePayload,
+  type UserProfileLink,
+  type UserProfileSolvedProblems,
+  type UserProfileSolvedRecord,
+  type UserProfileSolvedRecords,
+  type UserProfileSummary,
+} from '../lib/profileApi';
+import { syncSession, useMockSession } from '../lib/session';
+import type { DbmsType } from '../types/domain';
+import './ProfilePage.css';
 
 interface ProfilePageProps {
   handle?: string;
 }
 
 interface ProfileEditDraft {
-  avatarUrl: string;
   bio: string;
-  links: ProfileLinks;
-}
-
-interface PasswordDraft {
-  currentPassword: string;
-  nextPassword: string;
-  confirmPassword: string;
+  links: UserProfileLink[];
+  defaultDbms: DbmsType;
+  sqlPublic: boolean;
+  executionPercentilePublic: boolean;
+  solvedRecordsPublic: boolean;
+  solvedProblemCountPublic: boolean;
 }
 
 interface FeedbackState {
@@ -32,397 +38,387 @@ interface FeedbackState {
   message: string;
 }
 
-type SortKey = 'problemNumber' | 'executionTimeMs' | 'solvedAt';
+type RecordSortField = 'problemId' | 'executionTimeMs' | 'submittedAt';
 type SortDirection = 'asc' | 'desc';
-type ProfileLinkKind = keyof ProfileLinks;
-
-const numberFormatter = new Intl.NumberFormat('ko-KR');
-const dateFormatter = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' });
 
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
   { value: 'oracle', label: 'Oracle' },
 ];
 
-const editorPresetOptions: Array<{ value: SqlEditorPreset; label: string; description: string }> = [
-  { value: 'focused', label: '집중형', description: '에디터 중심으로 빠르게 풀이' },
-  { value: 'balanced', label: '균형형', description: '에디터와 결과 확인 균형' },
-  { value: 'analysis', label: '분석형', description: '실행계획과 튜닝 점검에 최적화' },
-];
+const emptySolvedProblems: UserProfileSolvedProblems = {
+  solvedProblemCount: 0,
+  solvedProblemIds: [],
+};
 
-const visibilityOptions: Array<{ value: SqlVisibility; label: string; description: string }> = [
-  { value: 'public', label: '공개', description: '누구나 SQL 풀이를 볼 수 있습니다.' },
-  { value: 'followers', label: '팔로우만', description: '승인된 사람에게만 풀이를 공개합니다.' },
-  { value: 'private', label: '비공개', description: '본인만 SQL 기록을 확인합니다.' },
-];
+const emptySolvedRecords: UserProfileSolvedRecords = {
+  solvedRecords: [],
+};
 
-const linkMeta: Array<{ kind: ProfileLinkKind; label: string; placeholder: string }> = [
-  { kind: 'blog', label: 'BLOG', placeholder: 'blog.example.dev' },
-  { kind: 'github', label: 'GITHUB', placeholder: 'github.com/handle' },
-  { kind: 'email', label: 'EMAIL', placeholder: 'hello@example.com' },
-];
+const numberFormatter = new Intl.NumberFormat('ko-KR');
 
-function createEditDraft(profile: Profile): ProfileEditDraft {
+function createEditDraft(profile: UserProfileSummary): ProfileEditDraft {
   return {
-    avatarUrl: profile.avatarUrl ?? '',
     bio: profile.bio,
-    links: {
-      blog: profile.links.blog ?? '',
-      github: profile.links.github ?? '',
-      email: profile.links.email ?? '',
-    },
+    links: profile.links.length > 0 ? profile.links : [{ type: '', value: '' }],
+    defaultDbms: profile.defaultDbms,
+    sqlPublic: profile.sqlPublic,
+    executionPercentilePublic: profile.executionPercentilePublic,
+    solvedRecordsPublic: profile.solvedRecordsPublic,
+    solvedProblemCountPublic: profile.solvedProblemCountPublic,
   };
 }
 
-function createPasswordDraft(): PasswordDraft {
-  return {
-    currentPassword: '',
-    nextPassword: '',
-    confirmPassword: '',
-  };
-}
-
-function normalizeLinkValue(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function normalizeExternalHref(kind: ProfileLinkKind, value: string) {
-  if (kind === 'email') {
-    return value.startsWith('mailto:') ? value : `mailto:${value}`;
+function formatPercentile(value: number | null) {
+  if (value == null) {
+    return '-';
   }
 
-  if (value.startsWith('http://') || value.startsWith('https://')) {
-    return value;
+  return `${Math.round(value * 10) / 10}%`;
+}
+
+function formatRecordDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '-';
   }
 
-  return `https://${value}`;
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${year}.${month}.${day} ${hours}:${minutes}`;
 }
 
-function getDisplayLinkValue(kind: ProfileLinkKind, value: string) {
-  if (kind === 'email') {
-    return value.replace(/^mailto:/, '');
+function normalizeLinksForSave(links: UserProfileLink[]) {
+  return links
+    .map((link) => ({
+      type: link.type.trim(),
+      value: link.value.trim(),
+    }))
+    .filter((link) => link.type !== '' && link.value !== '');
+}
+
+function getNextSortDirection(currentDirection?: SortDirection) {
+  if (currentDirection == null) {
+    return 'asc';
   }
 
-  return value.replace(/^https?:\/\//, '');
-}
-
-function getInitials(profile: Pick<Profile, 'handle' | 'name'>) {
-  const source = profile.handle || profile.name || 'SQ';
-  return source
-    .replace(/[^a-zA-Z0-9가-힣]/g, '')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-function getAverageExecutionTime(records: ProfileSolvedRecord[]) {
-  if (records.length === 0) {
-    return 0;
+  if (currentDirection === 'asc') {
+    return 'desc';
   }
 
-  return records.reduce((sum, record) => sum + record.executionTimeMs, 0) / records.length;
+  return null;
 }
 
-function getLatestSolvedAt(records: ProfileSolvedRecord[]) {
-  if (records.length === 0) {
-    return undefined;
+function compareRecords(field: RecordSortField, direction: SortDirection, left: UserProfileSolvedRecord, right: UserProfileSolvedRecord) {
+  let comparedValue = 0;
+
+  if (field === 'problemId') {
+    comparedValue = left.problemId.localeCompare(right.problemId);
   }
 
-  return records.reduce((latest, record) => {
-    if (!latest) {
-      return record.solvedAt;
-    }
-
-    return new Date(record.solvedAt).getTime() > new Date(latest).getTime() ? record.solvedAt : latest;
-  }, records[0]?.solvedAt);
-}
-
-function matchesRecordSearch(record: ProfileSolvedRecord, query: string) {
-  if (!query) {
-    return true;
+  if (field === 'executionTimeMs') {
+    comparedValue = left.executionTimeMs - right.executionTimeMs;
   }
 
-  const normalizedQuery = query.trim().toLowerCase();
-  return (
-    String(record.problemNumber).includes(normalizedQuery) ||
-    record.problemTitle.toLowerCase().includes(normalizedQuery) ||
-    dateFormatter.format(new Date(record.solvedAt)).toLowerCase().includes(normalizedQuery)
-  );
-}
-
-function sortRecords(records: ProfileSolvedRecord[], sortKey: SortKey, sortDirection: SortDirection) {
-  return [...records].sort((left, right) => {
-    let compareValue = 0;
-
-    if (sortKey === 'problemNumber') {
-      compareValue = left.problemNumber - right.problemNumber;
-    }
-
-    if (sortKey === 'executionTimeMs') {
-      compareValue = left.executionTimeMs - right.executionTimeMs;
-    }
-
-    if (sortKey === 'solvedAt') {
-      compareValue = new Date(left.solvedAt).getTime() - new Date(right.solvedAt).getTime();
-    }
-
-    if (compareValue === 0) {
-      compareValue = left.problemNumber - right.problemNumber;
-    }
-
-    return sortDirection === 'asc' ? compareValue : -compareValue;
-  });
-}
-
-function SortButton({
-  active,
-  direction,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  direction: SortDirection;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className={`profile-sort-button ${active ? 'is-active' : ''}`} onClick={onClick}>
-      <span>{label}</span>
-      <span className="profile-sort-icon" aria-hidden="true">
-        {active ? (direction === 'asc' ? '↑' : '↓') : '↕'}
-      </span>
-    </button>
-  );
-}
-
-function ProfileAvatar({
-  profile,
-  src,
-  className,
-}: {
-  profile: Pick<Profile, 'handle' | 'name'>;
-  src?: string;
-  className: string;
-}) {
-  const [hasImageError, setHasImageError] = useState(false);
-  const normalizedSrc = src?.trim();
-
-  useEffect(() => {
-    setHasImageError(false);
-  }, [normalizedSrc]);
-
-  if (!normalizedSrc || hasImageError) {
-    return (
-      <div className={`${className} is-fallback`} aria-hidden="true">
-        {getInitials(profile)}
-      </div>
-    );
+  if (field === 'submittedAt') {
+    comparedValue = new Date(left.submittedAt).getTime() - new Date(right.submittedAt).getTime();
   }
 
-  return (
-    <img
-      className={className}
-      src={normalizedSrc}
-      alt={`${profile.handle} 프로필`}
-      onError={() => setHasImageError(true)}
-    />
-  );
+  return direction === 'asc' ? comparedValue : comparedValue * -1;
 }
 
-function NotFoundState() {
+function SortIcon({ direction }: { direction?: SortDirection }) {
+  return <span aria-hidden="true">{direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '↕'}</span>;
+}
+
+function FilterIcon({ isActive }: { isActive: boolean }) {
+  return <span aria-hidden="true">{isActive ? '●' : '◌'}</span>;
+}
+
+function EmptyProfileState() {
   return (
     <div className="page-stack">
       <section className="panel-card">
         <p className="panel-meta">프로필</p>
-        <h1 className="page-title">프로필을 찾을 수 없습니다.</h1>
-        <p className="muted-text">등록된 핸들을 다시 확인하거나 아래 공개 프로필로 이동해 주세요.</p>
+        <h1 className="page-title">조회할 프로필이 없다.</h1>
+        <p className="muted-text">공개 프로필은 <code>/profile/{'{userId}'}</code> 경로로 조회할 수 있다.</p>
       </section>
+    </div>
+  );
+}
 
-      <section className="panel-card compact">
-        <div className="profile-discovery-list">
-          {mockProfiles.map((profile) => (
-            <button
-              key={profile.handle}
-              type="button"
-              className="mini-toggle profile-discovery-button"
-              onClick={() => navigate(getProfilePath(profile.handle))}
-            >
-              @{profile.handle}
-            </button>
-          ))}
-        </div>
+function LoadingState() {
+  return (
+    <div className="page-stack">
+      <section className="panel-card">
+        <p className="panel-meta">프로필</p>
+        <h1 className="page-title">프로필을 불러오는 중...</h1>
+      </section>
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="page-stack">
+      <section className="panel-card">
+        <p className="panel-meta">프로필</p>
+        <h1 className="page-title">프로필을 불러오지 못했다.</h1>
+        <p className="muted-text">{message}</p>
       </section>
     </div>
   );
 }
 
 export default function ProfilePage({ handle }: ProfilePageProps) {
-  const sourceProfile = getMockProfileByHandle(handle);
-  const [profile, setProfile] = useState<Profile | null>(sourceProfile ?? null);
+  const { isAuthenticated, isReady, userId } = useMockSession();
+  const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
+  const [solvedProblems, setSolvedProblems] = useState<UserProfileSolvedProblems>(emptySolvedProblems);
+  const [solvedRecords, setSolvedRecords] = useState<UserProfileSolvedRecords>(emptySolvedRecords);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
+  const [isSolvedProblemsLoading, setIsSolvedProblemsLoading] = useState(true);
+  const [isSolvedRecordsLoading, setIsSolvedRecordsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [editDraft, setEditDraft] = useState<ProfileEditDraft | null>(sourceProfile ? createEditDraft(sourceProfile) : null);
-  const [settingsDraft, setSettingsDraft] = useState<ProfileSettings | null>(sourceProfile?.settings ?? null);
-  const [passwordDraft, setPasswordDraft] = useState(createPasswordDraft);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('solvedAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [editDraft, setEditDraft] = useState<ProfileEditDraft | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [recordSortField, setRecordSortField] = useState<RecordSortField | null>(null);
+  const [recordSortDirection, setRecordSortDirection] = useState<SortDirection | null>(null);
+  const [visibleDbmsFilters, setVisibleDbmsFilters] = useState<DbmsType[]>(['postgresql', 'oracle']);
+  const [isDbmsFilterOpen, setIsDbmsFilterOpen] = useState(false);
+  const dbmsFilterRef = useRef<HTMLDivElement | null>(null);
 
-  if (!sourceProfile || !profile || !editDraft || !settingsDraft) {
-    return <NotFoundState />;
-  }
+  const resolvedProfileId = handle ?? userId;
+  const isOwnProfile = isAuthenticated && userId != null && resolvedProfileId === userId;
+  const visibleLinks = profileSummary?.links ?? [];
+  const solvedProblemIds = useMemo(() => solvedProblems.solvedProblemIds, [solvedProblems]);
+  const showExecutionPercentiles = isOwnProfile || profileSummary?.executionPercentilePublic === true;
+  const showSolvedProblemSection = isOwnProfile || profileSummary?.solvedProblemCountPublic === true;
+  const showSolvedRecordsSection = isOwnProfile || profileSummary?.solvedRecordsPublic === true;
+  const visibleSolvedRecords = useMemo(() => {
+    const filteredRecords = solvedRecords.solvedRecords.filter((record) => visibleDbmsFilters.includes(record.dbms));
 
-  const isOwnProfile = profile.handle === mockCurrentHandle;
-  const visibleLinks = linkMeta
-    .map(({ kind, label }) => {
-      const rawValue = profile.links[kind];
+    if (recordSortField == null || recordSortDirection == null) {
+      return filteredRecords;
+    }
 
-      if (!rawValue) {
-        return null;
-      }
+    return [...filteredRecords].sort((left, right) => compareRecords(recordSortField, recordSortDirection, left, right));
+  }, [recordSortDirection, recordSortField, solvedRecords, visibleDbmsFilters]);
 
-      return {
-        kind,
-        label,
-        href: normalizeExternalHref(kind, rawValue),
-        displayValue: getDisplayLinkValue(kind, rawValue),
-      };
-    })
-    .filter((link): link is NonNullable<typeof link> => Boolean(link));
-
-  const solvedNumbers = [...profile.solvedProblems].sort((left, right) => left.problemNumber - right.problemNumber);
-  const filteredRecords = profile.solvedProblems.filter((record) => matchesRecordSearch(record, searchQuery));
-  const sortedRecords = sortRecords(filteredRecords, sortKey, sortDirection);
-  const averageExecutionTime = getAverageExecutionTime(profile.solvedProblems);
-  const latestSolvedAt = getLatestSolvedAt(profile.solvedProblems);
-
-  function toggleSort(nextKey: SortKey) {
-    if (sortKey === nextKey) {
-      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+  useEffect(() => {
+    if (!isReady) {
       return;
     }
 
-    setSortKey(nextKey);
-    setSortDirection(nextKey === 'problemNumber' ? 'asc' : 'desc');
-  }
-
-  function openEditPanel() {
-    if (!profile) {
+    if (!resolvedProfileId) {
+      setProfileSummary(null);
+      setSolvedProblems(emptySolvedProblems);
+      setSolvedRecords(emptySolvedRecords);
+      setIsSummaryLoading(false);
+      setIsSolvedProblemsLoading(false);
+      setIsSolvedRecordsLoading(false);
+      setErrorMessage(null);
       return;
     }
 
-    setEditDraft(createEditDraft(profile));
+    let cancelled = false;
+
+    setIsSummaryLoading(true);
+    setIsSolvedProblemsLoading(true);
+    setIsSolvedRecordsLoading(true);
+    setErrorMessage(null);
     setFeedback(null);
-    setIsSettingsOpen(false);
-    setIsEditOpen((open) => !open);
-  }
+    setSolvedProblems(emptySolvedProblems);
+    setSolvedRecords(emptySolvedRecords);
 
-  function openSettingsPanel() {
-    if (!profile) {
-      return;
-    }
+    const loadProfileSummary = isOwnProfile ? fetchMyProfileSummary() : fetchProfileSummary(resolvedProfileId);
+    const loadSolvedProblems = isOwnProfile ? fetchMySolvedProblems() : fetchSolvedProblems(resolvedProfileId);
+    const loadSolvedRecords = isOwnProfile ? fetchMySolvedRecords() : fetchSolvedRecords(resolvedProfileId);
 
-    setSettingsDraft(profile.settings);
-    setPasswordDraft(createPasswordDraft());
-    setFeedback(null);
-    setIsEditOpen(false);
-    setIsSettingsOpen((open) => !open);
-  }
+    loadProfileSummary
+      .then((nextProfileSummary: UserProfileSummary) => {
+        if (cancelled) {
+          return;
+        }
 
-  function saveProfileChanges() {
-    if (!profile || !editDraft) {
-      return;
-    }
+        setProfileSummary(nextProfileSummary);
+        setEditDraft(createEditDraft(nextProfileSummary));
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
 
-    const nextProfile: Profile = {
-      ...profile,
-      avatarUrl: normalizeLinkValue(editDraft.avatarUrl),
-      bio: editDraft.bio.trim() || '소개글이 아직 등록되지 않았습니다.',
-      links: {
-        blog: normalizeLinkValue(editDraft.links.blog),
-        github: normalizeLinkValue(editDraft.links.github),
-        email: normalizeLinkValue(editDraft.links.email),
-      },
+        setProfileSummary(null);
+        setEditDraft(null);
+        setErrorMessage(error instanceof Error ? error.message : '프로필 조회에 실패했다.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsSummaryLoading(false);
+        }
+      });
+
+    loadSolvedProblems
+      .then((nextSolvedProblems) => {
+        if (!cancelled) {
+          setSolvedProblems(nextSolvedProblems);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSolvedProblems(emptySolvedProblems);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsSolvedProblemsLoading(false);
+        }
+      });
+
+    loadSolvedRecords
+      .then((nextSolvedRecords) => {
+        if (!cancelled) {
+          setSolvedRecords(nextSolvedRecords);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSolvedRecords(emptySolvedRecords);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsSolvedRecordsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
     };
+  }, [isOwnProfile, isReady, resolvedProfileId]);
 
-    setProfile(nextProfile);
-    setEditDraft(createEditDraft(nextProfile));
-    setIsEditOpen(false);
-    setFeedback({ tone: 'success', message: '프로필 정보가 저장되었습니다. (mock)' });
-  }
-
-  function saveSettingsChanges() {
-    if (!profile || !settingsDraft) {
+  useEffect(() => {
+    if (!isDbmsFilterOpen) {
       return;
     }
 
-    const passwordRequested =
-      passwordDraft.currentPassword || passwordDraft.nextPassword || passwordDraft.confirmPassword;
-
-    if (passwordRequested) {
-      if (!passwordDraft.currentPassword || !passwordDraft.nextPassword || !passwordDraft.confirmPassword) {
-        setFeedback({ tone: 'error', message: '비밀번호 변경 항목을 모두 입력해 주세요.' });
+    function handlePointerDown(event: MouseEvent) {
+      if (dbmsFilterRef.current?.contains(event.target as Node)) {
         return;
       }
 
-      if (passwordDraft.nextPassword.length < 8) {
-        setFeedback({ tone: 'error', message: '새 비밀번호는 8자 이상으로 입력해 주세요.' });
-        return;
-      }
-
-      if (passwordDraft.nextPassword !== passwordDraft.confirmPassword) {
-        setFeedback({ tone: 'error', message: '새 비밀번호와 확인 값이 일치하지 않습니다.' });
-        return;
-      }
+      setIsDbmsFilterOpen(false);
     }
 
-    const nextProfile: Profile = {
-      ...profile,
-      settings: settingsDraft,
-    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isDbmsFilterOpen]);
 
-    setProfile(nextProfile);
-    setSettingsDraft(nextProfile.settings);
-    setPasswordDraft(createPasswordDraft());
-    setIsSettingsOpen(false);
-    setFeedback({
-      tone: 'success',
-      message: passwordRequested ? '개인 설정과 비밀번호 변경이 저장되었습니다. (mock)' : '개인 설정이 저장되었습니다. (mock)',
+  if (!isReady || isSummaryLoading) {
+    return <LoadingState />;
+  }
+
+  if (!resolvedProfileId) {
+    return <EmptyProfileState />;
+  }
+
+  if (!profileSummary) {
+    return <ErrorState message={errorMessage ?? '프로필을 찾을 수 없다.'} />;
+  }
+
+  function updateDraft(updater: (draft: ProfileEditDraft) => ProfileEditDraft) {
+    setEditDraft((currentDraft) => (currentDraft ? updater(currentDraft) : currentDraft));
+  }
+
+  function toggleRecordSort(field: RecordSortField) {
+    if (recordSortField !== field) {
+      setRecordSortField(field);
+      setRecordSortDirection('asc');
+      return;
+    }
+
+    const nextDirection = getNextSortDirection(recordSortDirection ?? undefined);
+
+    if (nextDirection == null) {
+      setRecordSortField(null);
+      setRecordSortDirection(null);
+      return;
+    }
+
+    setRecordSortDirection(nextDirection);
+  }
+
+  function toggleDbmsFilter(dbms: DbmsType) {
+    setVisibleDbmsFilters((currentFilters) => {
+      if (currentFilters.includes(dbms)) {
+        if (currentFilters.length === 1) {
+          return currentFilters;
+        }
+
+        return currentFilters.filter((currentDbms) => currentDbms !== dbms);
+      }
+
+      return [...currentFilters, dbms];
     });
+  }
+
+  async function saveProfile() {
+    if (!editDraft) {
+      return;
+    }
+
+    const normalizedLinks = normalizeLinksForSave(editDraft.links);
+    const payload: UpdateUserProfilePayload = {
+      bio: editDraft.bio,
+      links: normalizedLinks,
+      defaultDbms: editDraft.defaultDbms,
+      sqlPublic: editDraft.sqlPublic,
+      executionPercentilePublic: editDraft.executionPercentilePublic,
+      solvedRecordsPublic: editDraft.solvedRecordsPublic,
+      solvedProblemCountPublic: editDraft.solvedProblemCountPublic,
+    };
+
+    try {
+      const updatedProfile = await updateMyProfile(payload);
+      setProfileSummary(updatedProfile);
+      setEditDraft(createEditDraft(updatedProfile));
+      setIsEditOpen(false);
+      setFeedback({ tone: 'success', message: '프로필을 저장했다.' });
+      void syncSession();
+    } catch (error) {
+      setFeedback({
+        tone: 'error',
+        message: error instanceof Error ? error.message : '프로필 저장에 실패했다.',
+      });
+    }
   }
 
   return (
     <div className="page-stack">
       <section className="panel-card profile-hero-card">
-        <div className="profile-hero-layout">
-          <ProfileAvatar profile={profile} src={profile.avatarUrl} className="profile-page-avatar profile-page-avatar-lg" />
-
+        <div className="profile-hero-layout profile-hero-layout-simple">
           <div className="profile-hero-copy">
             <div className="profile-hero-meta-row">
               <p className="panel-meta">프로필</p>
               <span className="subtle-chip">{isOwnProfile ? '내 프로필' : '공개 프로필'}</span>
             </div>
 
-            <h1 className="page-title">@{profile.handle}</h1>
-            <p className="profile-name-line">
-              {profile.name} · {profile.tier}
-            </p>
-            <p className="profile-bio-text">{profile.bio}</p>
+            <h1 className="page-title">@{profileSummary.userId}</h1>
+            <p className="profile-bio-text">{profileSummary.bio || '소개글이 없다.'}</p>
 
             {visibleLinks.length > 0 ? (
               <div className="profile-link-list">
-                {visibleLinks.map((link) => (
-                  <a
-                    key={link.kind}
-                    className="profile-link-chip"
-                    href={link.href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <span className="profile-link-label">{link.label}</span>
-                    <span className="profile-link-value">{link.displayValue}</span>
-                  </a>
+                {visibleLinks.map((link, index) => (
+                  <div key={`${link.type}-${link.value}-${index}`} className="profile-link-chip">
+                    <span className="profile-link-label">{link.type}</span>
+                    <span className="profile-link-value">{link.value}</span>
+                  </div>
                 ))}
               </div>
             ) : null}
@@ -430,14 +426,16 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
 
           {isOwnProfile ? (
             <div className="profile-hero-actions">
-              <button type="button" className="btn ghost" onClick={() => navigate(PROFILE_ACTIVITY_PATH)}>
-                내 활동
-              </button>
-              <button type="button" className="btn secondary" onClick={openEditPanel}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => {
+                  setEditDraft(createEditDraft(profileSummary));
+                  setFeedback(null);
+                  setIsEditOpen((value) => !value);
+                }}
+              >
                 {isEditOpen ? '편집 닫기' : '프로필 편집'}
-              </button>
-              <button type="button" className="btn ghost" onClick={openSettingsPanel}>
-                {isSettingsOpen ? '설정 닫기' : '설정'}
               </button>
             </div>
           ) : null}
@@ -450,286 +448,373 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
         </section>
       ) : null}
 
-      <section className="panel-card compact">
-        <div className="profile-summary-grid">
-          <article className="profile-summary-card">
-            <p className="stat-label">해결한 문제 수</p>
-            <p className="profile-summary-value">{numberFormatter.format(profile.solvedCount)}</p>
-          </article>
-          <article className="profile-summary-card">
-            <p className="stat-label">평균 실행 시간</p>
-            <p className="profile-summary-value">{averageExecutionTime.toFixed(1)} ms</p>
-          </article>
-          <article className="profile-summary-card">
-            <p className="stat-label">최근 해결 날짜</p>
-            <p className="profile-summary-value">{latestSolvedAt ? dateFormatter.format(new Date(latestSolvedAt)) : '-'}</p>
-          </article>
-        </div>
-      </section>
-
-      {isOwnProfile && isEditOpen ? (
-        <section className="panel-card">
-          <div className="panel-heading-row responsive">
-            <div>
-              <p className="panel-meta">프로필 편집</p>
-              <h2 className="panel-title">프로필 편집</h2>
-            </div>
-            <span className="subtle-chip">사진 · 소개글 · 외부 링크</span>
-          </div>
-
-          <div className="profile-editor-layout">
-            <div className="profile-editor-preview">
-              <ProfileAvatar profile={profile} src={editDraft.avatarUrl} className="profile-page-avatar profile-page-avatar-md" />
-              <p className="hint-text">이미지 URL을 비워두면 기본 아바타가 표시됩니다.</p>
-            </div>
-
-            <div className="profile-editor-fields">
-              <label className="field-stack">
-                <span className="field-label">프로필 사진 URL</span>
-                <input
-                  className="text-field"
-                  value={editDraft.avatarUrl}
-                  onChange={(event) =>
-                    setEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            avatarUrl: event.target.value,
-                          }
-                        : draft
-                    )
-                  }
-                  placeholder="/favicon.svg 또는 https://..."
-                />
-              </label>
-
-              <label className="field-stack">
-                <span className="field-label">소개글</span>
-                <textarea
-                  className="text-field profile-textarea"
-                  value={editDraft.bio}
-                  onChange={(event) =>
-                    setEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            bio: event.target.value,
-                          }
-                        : draft
-                    )
-                  }
-                  placeholder="사용하는 DBMS, 관심 있는 SQL 주제, 학습 스타일을 소개해 보세요."
-                />
-              </label>
-
-              <div className="profile-link-editor-grid">
-                {linkMeta.map((link) => (
-                  <label key={link.kind} className="field-stack">
-                    <span className="field-label">{link.label}</span>
-                    <input
-                      className="text-field"
-                      value={editDraft.links[link.kind] ?? ''}
-                      onChange={(event) =>
-                        setEditDraft((draft) =>
-                          draft
-                            ? {
-                                ...draft,
-                                links: {
-                                  ...draft.links,
-                                  [link.kind]: event.target.value,
-                                },
-                              }
-                            : draft
-                        )
-                      }
-                      placeholder={link.placeholder}
-                    />
-                  </label>
-                ))}
-              </div>
-
-              <div className="auth-actions">
-                <button type="button" className="btn primary" onClick={saveProfileChanges}>
-                  저장
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => {
-                    setEditDraft(createEditDraft(profile));
-                    setIsEditOpen(false);
-                  }}
-                >
-                  취소
-                </button>
-              </div>
-            </div>
+      {showExecutionPercentiles ? (
+        <section className="panel-card compact">
+          <div className="profile-summary-grid">
+            <article className="profile-summary-card">
+              <p className="stat-label">평균 실행시간 백분위 (PostgreSQL)</p>
+              <p className="profile-summary-value">{formatPercentile(profileSummary.averageExecutionPercentilePostgresql)}</p>
+            </article>
+            <article className="profile-summary-card">
+              <p className="stat-label">평균 실행시간 백분위 (Oracle)</p>
+              <p className="profile-summary-value">{formatPercentile(profileSummary.averageExecutionPercentileOracle)}</p>
+            </article>
           </div>
         </section>
       ) : null}
 
-      {isOwnProfile && isSettingsOpen ? (
+      <section className="panel-card compact">
+        <div className="profile-summary-grid">
+          <button
+            type="button"
+            className="profile-summary-card profile-activity-card"
+            onClick={() => navigate(getProfileActivityPath(handle, 'posts'))}
+          >
+            <p className="stat-label">작성한 게시글</p>
+            <p className="profile-summary-value">{numberFormatter.format(profileSummary.authoredPostCount)}</p>
+          </button>
+          <button
+            type="button"
+            className="profile-summary-card profile-activity-card"
+            onClick={() => navigate(getProfileActivityPath(handle, 'likes'))}
+          >
+            <p className="stat-label">좋아요 누른 글</p>
+            <p className="profile-summary-value">{numberFormatter.format(profileSummary.likedPostCount)}</p>
+          </button>
+          <button
+            type="button"
+            className="profile-summary-card profile-activity-card"
+            onClick={() => navigate(getProfileActivityPath(handle, 'comments'))}
+          >
+            <p className="stat-label">작성한 댓글</p>
+            <p className="profile-summary-value">{numberFormatter.format(profileSummary.commentCount)}</p>
+          </button>
+        </div>
+      </section>
+
+      {isOwnProfile && isEditOpen && editDraft ? (
         <section className="panel-card">
           <div className="panel-heading-row responsive">
-            <div>
-              <p className="panel-meta">설정</p>
-              <h2 className="panel-title">개인 설정</h2>
-            </div>
-            <span className="subtle-chip">RDBMS · 에디터 · 공개 범위 · 비밀번호</span>
+            <span className="subtle-chip">링크 최대 10개</span>
           </div>
 
           <div className="profile-settings-stack">
+            <label className="field-stack">
+              <span className="field-label">소개글</span>
+              <textarea
+                className="text-field profile-textarea"
+                value={editDraft.bio}
+                onChange={(event) =>
+                  updateDraft((draft) => ({
+                    ...draft,
+                    bio: event.target.value,
+                  }))
+                }
+                placeholder="소개글을 입력해라."
+              />
+            </label>
+
             <div className="profile-settings-group">
-              <div>
-                <p className="field-label">기본 RDBMS</p>
-                <p className="hint-text">문제 풀이 화면에 처음 선택될 DBMS입니다.</p>
+              <div className="panel-heading-row responsive">
+                <div className="profile-link-heading">
+                  <p className="field-label">프로필 링크</p>
+                  <button
+                    type="button"
+                    className="profile-link-add-button"
+                    aria-label="프로필 링크 추가"
+                    disabled={editDraft.links.length >= 10}
+                    onClick={() =>
+                      updateDraft((draft) => ({
+                        ...draft,
+                        links: [...draft.links, { type: '', value: '' }],
+                      }))
+                    }
+                  >
+                    +
+                  </button>
+                </div>
               </div>
+
+              <div className="profile-link-editor-list">
+                {editDraft.links.map((link, index) => (
+                  <div key={`profile-link-${index}`} className="profile-link-editor-row">
+                    <input
+                      className="text-field"
+                      value={link.type}
+                      onChange={(event) =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          links: draft.links.map((currentLink, currentIndex) =>
+                            currentIndex === index
+                              ? {
+                                  ...currentLink,
+                                  type: event.target.value,
+                                }
+                              : currentLink
+                          ),
+                        }))
+                      }
+                      placeholder="blog"
+                    />
+                    <input
+                      className="text-field"
+                      value={link.value}
+                      onChange={(event) =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          links: draft.links.map((currentLink, currentIndex) =>
+                            currentIndex === index
+                              ? {
+                                  ...currentLink,
+                                  value: event.target.value,
+                                }
+                              : currentLink
+                          ),
+                        }))
+                      }
+                      placeholder="github.com/user"
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      disabled={editDraft.links.length === 1}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          links: draft.links.filter((_, currentIndex) => currentIndex !== index),
+                        }))
+                      }
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="profile-inline-settings">
+              <div className="profile-inline-setting">
+                <p className="field-label">선호 DBMS</p>
               <div className="segmented profile-settings-segmented">
                 {dbmsOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
-                    className={`segmented-btn ${settingsDraft.defaultDbms === option.value ? 'is-selected' : ''}`}
+                    className={`segmented-btn ${editDraft.defaultDbms === option.value ? 'is-selected' : ''}`}
                     onClick={() =>
-                      setSettingsDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              defaultDbms: option.value,
-                            }
-                          : draft
-                      )
+                      updateDraft((draft) => ({
+                        ...draft,
+                        defaultDbms: option.value,
+                      }))
                     }
                   >
                     {option.label}
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="profile-settings-group">
-              <div>
-                <p className="field-label">SQL 에디터 기본값</p>
-                <p className="hint-text">원하는 풀이 스타일에 맞춰 기본 에디터 프리셋을 선택합니다.</p>
               </div>
-              <div className="profile-option-grid">
-                {editorPresetOptions.map((option) => (
+              <div className="profile-inline-setting">
+                <p className="field-label">실행시간 백분위</p>
+                <div className="segmented profile-settings-segmented">
                   <button
-                    key={option.value}
                     type="button"
-                    className={`profile-option-card ${settingsDraft.sqlEditorPreset === option.value ? 'is-selected' : ''}`}
+                    className={`segmented-btn ${editDraft.executionPercentilePublic ? 'is-selected' : ''}`}
                     onClick={() =>
-                      setSettingsDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              sqlEditorPreset: option.value,
-                            }
-                          : draft
-                      )
+                      updateDraft((draft) => ({
+                        ...draft,
+                        executionPercentilePublic: true,
+                      }))
                     }
                   >
-                    <strong>{option.label}</strong>
-                    <span>{option.description}</span>
+                    공개
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={`segmented-btn ${!editDraft.executionPercentilePublic ? 'is-selected' : ''}`}
+                    onClick={() =>
+                      updateDraft((draft) => ({
+                        ...draft,
+                        executionPercentilePublic: false,
+                      }))
+                    }
+                  >
+                    비공개
+                  </button>
+                </div>
+              </div>
+              <div className="profile-inline-setting">
+                <p className="field-label">풀이 기록</p>
+                <div className="segmented profile-settings-segmented">
+                  <button
+                    type="button"
+                    className={`segmented-btn ${editDraft.solvedRecordsPublic ? 'is-selected' : ''}`}
+                    onClick={() =>
+                      updateDraft((draft) => ({
+                        ...draft,
+                        solvedRecordsPublic: true,
+                      }))
+                    }
+                  >
+                    공개
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-btn ${!editDraft.solvedRecordsPublic ? 'is-selected' : ''}`}
+                    onClick={() =>
+                      updateDraft((draft) => ({
+                        ...draft,
+                        solvedRecordsPublic: false,
+                      }))
+                    }
+                  >
+                    비공개
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="profile-settings-group">
+            <div className="profile-settings-group is-hidden">
               <div>
                 <p className="field-label">SQL 공개 설정</p>
-                <p className="hint-text">제출한 SQL 풀이와 기록의 기본 공개 범위를 지정합니다.</p>
+                <p className="hint-text">프로필에 SQL 기록 공개 여부를 저장한다.</p>
               </div>
-              <div className="profile-option-grid">
-                {visibilityOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`profile-option-card ${settingsDraft.sqlVisibility === option.value ? 'is-selected' : ''}`}
-                    onClick={() =>
-                      setSettingsDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              sqlVisibility: option.value,
-                            }
-                          : draft
-                      )
-                    }
-                  >
-                    <strong>{option.label}</strong>
-                    <span>{option.description}</span>
-                  </button>
-                ))}
+              <div className="segmented profile-settings-segmented">
+                <button
+                  type="button"
+                  className={`segmented-btn ${editDraft.sqlPublic ? 'is-selected' : ''}`}
+                  onClick={() =>
+                    updateDraft((draft) => ({
+                      ...draft,
+                      sqlPublic: true,
+                    }))
+                  }
+                >
+                  공개
+                </button>
+                <button
+                  type="button"
+                  className={`segmented-btn ${!editDraft.sqlPublic ? 'is-selected' : ''}`}
+                  onClick={() =>
+                    updateDraft((draft) => ({
+                      ...draft,
+                      sqlPublic: false,
+                    }))
+                  }
+                >
+                  비공개
+                </button>
               </div>
             </div>
 
-            <div className="profile-settings-group">
+            <div className="profile-settings-group is-hidden">
               <div>
-                <p className="field-label">비밀번호 변경</p>
-                <p className="hint-text">변경이 필요할 때만 입력하면 됩니다.</p>
+                <p className="field-label">프로필 노출 설정</p>
+                <p className="hint-text">공개 프로필에서 어떤 기록을 보여줄지 저장한다.</p>
               </div>
-              <div className="profile-password-grid">
-                <label className="field-stack">
-                  <span className="field-label">현재 비밀번호</span>
-                  <input
-                    type="password"
-                    className="text-field"
-                    value={passwordDraft.currentPassword}
-                    onChange={(event) =>
-                      setPasswordDraft((draft) => ({
-                        ...draft,
-                        currentPassword: event.target.value,
-                      }))
-                    }
-                    placeholder="현재 비밀번호"
-                  />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">새 비밀번호</span>
-                  <input
-                    type="password"
-                    className="text-field"
-                    value={passwordDraft.nextPassword}
-                    onChange={(event) =>
-                      setPasswordDraft((draft) => ({
-                        ...draft,
-                        nextPassword: event.target.value,
-                      }))
-                    }
-                    placeholder="8자 이상"
-                  />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">새 비밀번호 확인</span>
-                  <input
-                    type="password"
-                    className="text-field"
-                    value={passwordDraft.confirmPassword}
-                    onChange={(event) =>
-                      setPasswordDraft((draft) => ({
-                        ...draft,
-                        confirmPassword: event.target.value,
-                      }))
-                    }
-                    placeholder="새 비밀번호를 다시 입력"
-                  />
-                </label>
+
+              <div className="profile-visibility-stack">
+                <div className="profile-visibility-item">
+                  <p className="field-label">실행시간 백분위</p>
+                  <div className="segmented profile-settings-segmented">
+                    <button
+                      type="button"
+                      className={`segmented-btn ${editDraft.executionPercentilePublic ? 'is-selected' : ''}`}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          executionPercentilePublic: true,
+                        }))
+                      }
+                    >
+                      공개
+                    </button>
+                    <button
+                      type="button"
+                      className={`segmented-btn ${!editDraft.executionPercentilePublic ? 'is-selected' : ''}`}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          executionPercentilePublic: false,
+                        }))
+                      }
+                    >
+                      비공개
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profile-visibility-item">
+                  <p className="field-label">풀이 기록</p>
+                  <div className="segmented profile-settings-segmented">
+                    <button
+                      type="button"
+                      className={`segmented-btn ${editDraft.solvedRecordsPublic ? 'is-selected' : ''}`}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          solvedRecordsPublic: true,
+                        }))
+                      }
+                    >
+                      공개
+                    </button>
+                    <button
+                      type="button"
+                      className={`segmented-btn ${!editDraft.solvedRecordsPublic ? 'is-selected' : ''}`}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          solvedRecordsPublic: false,
+                        }))
+                      }
+                    >
+                      비공개
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profile-visibility-item">
+                  <p className="field-label">푼 문제 수</p>
+                  <div className="segmented profile-settings-segmented">
+                    <button
+                      type="button"
+                      className={`segmented-btn ${editDraft.solvedProblemCountPublic ? 'is-selected' : ''}`}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          solvedProblemCountPublic: true,
+                        }))
+                      }
+                    >
+                      공개
+                    </button>
+                    <button
+                      type="button"
+                      className={`segmented-btn ${!editDraft.solvedProblemCountPublic ? 'is-selected' : ''}`}
+                      onClick={() =>
+                        updateDraft((draft) => ({
+                          ...draft,
+                          solvedProblemCountPublic: false,
+                        }))
+                      }
+                    >
+                      비공개
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="auth-actions">
-              <button type="button" className="btn primary" onClick={saveSettingsChanges}>
-                설정 저장
+              <button type="button" className="btn primary" onClick={() => void saveProfile()}>
+                저장
               </button>
               <button
                 type="button"
                 className="btn ghost"
                 onClick={() => {
-                  setSettingsDraft(profile.settings);
-                  setPasswordDraft(createPasswordDraft());
-                  setIsSettingsOpen(false);
+                  setEditDraft(createEditDraft(profileSummary));
+                  setIsEditOpen(false);
                 }}
               >
                 취소
@@ -739,104 +824,158 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
         </section>
       ) : null}
 
-      <section className="panel-card">
-        <div className="panel-heading-row responsive">
-          <div>
+      {showSolvedProblemSection ? (
+        <section className="panel-card">
+          <div className="panel-heading-row responsive">
             <p className="panel-meta">해결한 문제</p>
-            <h2 className="panel-title">해결한 문제 번호</h2>
+            <span className="subtle-chip">문제 {numberFormatter.format(solvedProblems.solvedProblemCount)}개</span>
           </div>
-          <span className="subtle-chip">문제 {profile.solvedCount}개</span>
-        </div>
 
-        <div className="profile-problem-chip-list">
-          {solvedNumbers.map((record) => (
-            <button
-              key={record.id}
-              type="button"
-              className="mini-toggle profile-problem-chip"
-              onClick={() => navigate(`/problems/${record.problemId}`)}
-            >
-              #{record.problemNumber}
-            </button>
-          ))}
-        </div>
-      </section>
+          {isSolvedProblemsLoading ? (
+            <div className="profile-empty-state">불러오는 중이다.</div>
+          ) : solvedProblemIds.length > 0 ? (
+            <div className="profile-problem-chip-list">
+              {solvedProblemIds.map((problemId) => (
+                <button
+                  key={problemId}
+                  type="button"
+                  className="mini-toggle profile-problem-chip"
+                  onClick={() => navigate(`/problems/${problemId}`)}
+                >
+                  {problemId}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="profile-empty-state">아직 해결한 문제가 없다.</div>
+          )}
+        </section>
+      ) : null}
 
-      <section className="panel-card">
-        <div className="panel-heading-row responsive profile-records-toolbar">
-          <div>
+      {showSolvedRecordsSection ? (
+        <section className="panel-card">
+          <div className="panel-heading-row responsive">
             <p className="panel-meta">해결 기록</p>
-            <h2 className="panel-title">해결 기록</h2>
           </div>
 
-          <label className="profile-record-search">
-            <span className="profile-record-search-label">검색</span>
-            <input
-              type="search"
-              className="text-field"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="문제 번호, 제목, 해결 날짜 검색"
-              aria-label="해결 기록 검색"
-            />
-          </label>
-        </div>
+          {isSolvedRecordsLoading ? (
+            <div className="profile-empty-state">불러오는 중이다.</div>
+          ) : visibleSolvedRecords.length > 0 ? (
+            <div className="profile-records-shell">
+              <div className="profile-records-scroll">
+                <table className="profile-records-table">
+                  <thead>
+                    <tr>
+                      <th>
+                        <div className="profile-record-header">
+                          <span>문제 번호</span>
+                          <button
+                            type="button"
+                            className={`profile-record-icon-button ${recordSortField === 'problemId' ? 'is-active' : ''}`}
+                            onClick={() => toggleRecordSort('problemId')}
+                            aria-label="문제 번호 정렬"
+                          >
+                            <SortIcon direction={recordSortField === 'problemId' ? recordSortDirection ?? undefined : undefined} />
+                          </button>
+                        </div>
+                      </th>
+                      <th>
+                        <div className="profile-record-header" ref={dbmsFilterRef}>
+                          <span>DBMS</span>
+                          <button
+                            type="button"
+                            className={`profile-record-icon-button ${visibleDbmsFilters.length !== dbmsOptions.length ? 'is-active' : ''}`}
+                            onClick={() => setIsDbmsFilterOpen((value) => !value)}
+                            aria-label="DBMS 필터"
+                          >
+                            <FilterIcon isActive={visibleDbmsFilters.length !== dbmsOptions.length} />
+                          </button>
 
-        {sortedRecords.length > 0 ? (
-          <div className="profile-records-scroll">
-            <table className="profile-records-table">
-              <thead>
-                <tr>
-                  <th>
-                    <SortButton
-                      active={sortKey === 'problemNumber'}
-                      direction={sortDirection}
-                      label="문제 번호"
-                      onClick={() => toggleSort('problemNumber')}
-                    />
-                  </th>
-                  <th>
-                    <SortButton
-                      active={sortKey === 'executionTimeMs'}
-                      direction={sortDirection}
-                      label="실행 시간"
-                      onClick={() => toggleSort('executionTimeMs')}
-                    />
-                  </th>
-                  <th>
-                    <SortButton
-                      active={sortKey === 'solvedAt'}
-                      direction={sortDirection}
-                      label="해결 날짜"
-                      onClick={() => toggleSort('solvedAt')}
-                    />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRecords.map((record) => (
-                  <tr key={record.id}>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn text inline profile-record-link"
-                        onClick={() => navigate(`/problems/${record.problemId}`)}
-                      >
-                        <span>#{record.problemNumber}</span>
-                        <span className="profile-record-title">{record.problemTitle}</span>
-                      </button>
-                    </td>
-                    <td>{record.executionTimeMs.toFixed(1)} ms</td>
-                    <td>{dateFormatter.format(new Date(record.solvedAt))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="profile-empty-state">검색 조건에 맞는 해결 기록이 없습니다.</div>
-        )}
-      </section>
+                          {isDbmsFilterOpen ? (
+                            <div className="profile-record-filter-popover">
+                              {dbmsOptions.map((option) => (
+                                <label key={option.value} className="profile-record-filter-option">
+                                  <input
+                                    type="checkbox"
+                                    checked={visibleDbmsFilters.includes(option.value)}
+                                    onChange={() => toggleDbmsFilter(option.value)}
+                                  />
+                                  <span>{option.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </th>
+                      <th>
+                        <div className="profile-record-header">
+                          <span>실행 시간</span>
+                          <button
+                            type="button"
+                            className={`profile-record-icon-button ${recordSortField === 'executionTimeMs' ? 'is-active' : ''}`}
+                            onClick={() => toggleRecordSort('executionTimeMs')}
+                            aria-label="실행 시간 정렬"
+                          >
+                            <SortIcon direction={recordSortField === 'executionTimeMs' ? recordSortDirection ?? undefined : undefined} />
+                          </button>
+                        </div>
+                      </th>
+                      <th>
+                        <div className="profile-record-header">
+                          <span>제출 시각</span>
+                          <button
+                            type="button"
+                            className={`profile-record-icon-button ${recordSortField === 'submittedAt' ? 'is-active' : ''}`}
+                            onClick={() => toggleRecordSort('submittedAt')}
+                            aria-label="제출 시각 정렬"
+                          >
+                            <SortIcon direction={recordSortField === 'submittedAt' ? recordSortDirection ?? undefined : undefined} />
+                          </button>
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleSolvedRecords.map((record) => (
+                      <tr key={`${record.problemId}-${record.dbms}-${record.submittedAt}`}>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn text inline profile-record-link"
+                            onClick={() => navigate(`/problems/${record.problemId}`)}
+                          >
+                            <span className="profile-record-problem-id">{record.problemId}</span>
+                            <span className="profile-record-title">{record.problemTitle}</span>
+                          </button>
+                        </td>
+                        <td>
+                          <span className="profile-record-dbms-text">{record.dbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}</span>
+                        </td>
+                        <td>
+                          <span className="profile-record-execution-time">{`${Math.round(record.executionTimeMs * 10) / 10} ms`}</span>
+                        </td>
+                        <td>
+                          <span className="profile-record-date">{formatRecordDate(record.submittedAt)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="profile-empty-state">표시할 해결 기록이 없다.</div>
+          )}
+        </section>
+      ) : null}
+
+      {!isOwnProfile && isAuthenticated && userId ? (
+        <section className="panel-card compact">
+          <button type="button" className="btn ghost" onClick={() => navigate(getProfilePath())}>
+            내 프로필로 이동
+          </button>
+        </section>
+      ) : null}
     </div>
   );
 }

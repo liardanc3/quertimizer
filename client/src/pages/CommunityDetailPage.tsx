@@ -1,17 +1,15 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import CommunityCommentThread from '../components/community/CommunityCommentThread';
 import {
   addCommunityComment,
   deleteCommunityPost,
-  getCommunityComments,
-  getCommunityPostById,
-  getCommunityStoreSnapshot,
-  isCommunityPostLiked,
-  subscribeCommunityStore,
+  fetchCommunityPostDetail,
+  toggleCommunityCommentLike,
   toggleCommunityPostLike,
-} from '../lib/communityStore';
-import { COMMUNITY_PATH, getCommunityPostEditPath, navigate } from '../lib/navigation';
-import { mockCurrentHandle } from '../mocks/profile';
+  type CommunityPostDetail,
+} from '../lib/communityApi';
+import { COMMUNITY_PATH, getCommunityPostEditPath, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
+import { useMockSession } from '../lib/session';
 
 interface CommunityDetailPageProps {
   postId: string;
@@ -30,19 +28,55 @@ function formatBoardDate(value: string) {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
-  useSyncExternalStore(subscribeCommunityStore, getCommunityStoreSnapshot, () => '');
+function isProblemTag(tag: string) {
+  return /^\d{5}-\d{5}$/.test(tag.trim());
+}
 
-  const post = getCommunityPostById(postId);
-  const comments = getCommunityComments(postId);
+export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
+  const { isAuthenticated } = useMockSession();
+  const [post, setPost] = useState<CommunityPostDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+  const [hoveredTag, setHoveredTag] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const isLiked = isCommunityPostLiked(postId);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    fetchCommunityPostDetail(postId)
+      .then((nextPost) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPost(nextPost);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPost(null);
+        setErrorMessage(error instanceof Error ? error.message : '게시글을 불러오지 못했다.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [postId]);
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -85,23 +119,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     return () => window.removeEventListener('keydown', handleEscape);
   }, [lightboxImage]);
 
-  if (!post) {
-    return (
-      <div className="page-stack">
-        <section className="panel-card community-detail-card">
-          <button type="button" className="btn ghost community-back-button" onClick={() => navigate(COMMUNITY_PATH)}>
-            뒤로가기
-          </button>
-          <p className="panel-meta">커뮤니티</p>
-          <h1 className="page-title">게시글을 찾을 수 없습니다.</h1>
-          <p className="muted-text">삭제되었거나 잘못된 경로입니다. 목록으로 돌아가 다시 확인해 주세요.</p>
-        </section>
-      </div>
-    );
-  }
-
-  const postTitle = post.title;
-
   function handleBack() {
     if (window.history.state?.from) {
       window.history.back();
@@ -111,22 +128,60 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     navigate(COMMUNITY_PATH);
   }
 
-  function handleToggleLike() {
-    const nextLiked = toggleCommunityPostLike(postId);
-    setFeedback(nextLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.');
+  async function reloadPost(feedbackMessage?: string) {
+    try {
+      const nextPost = await fetchCommunityPostDetail(postId);
+      setPost(nextPost);
+      if (feedbackMessage) {
+        setFeedback(feedbackMessage);
+      }
+    } catch {
+      setFeedback('게시글을 새로고침하지 못했다.');
+    }
   }
 
-  function handleSubmitComment() {
+  async function handleToggleLike() {
+    if (!isAuthenticated) {
+      setFeedback('로그인 후 이용할 수 있다.');
+      return;
+    }
+
+    try {
+      const reaction = await toggleCommunityPostLike(postId);
+      setPost((currentPost) =>
+        currentPost
+          ? {
+              ...currentPost,
+              likes: reaction.likeCount,
+              likedByCurrentUser: reaction.liked,
+            }
+          : currentPost,
+      );
+      setFeedback(reaction.liked ? '좋아요를 눌렀다.' : '좋아요를 취소했다.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '좋아요 처리에 실패했다.');
+    }
+  }
+
+  async function handleSubmitComment() {
+    if (!isAuthenticated) {
+      setFeedback('로그인 후 이용할 수 있다.');
+      return;
+    }
+
     if (!commentDraft.trim()) {
       return;
     }
 
-    addCommunityComment({
-      postId,
-      content: commentDraft,
-    });
-    setCommentDraft('');
-    setFeedback('댓글이 등록되었습니다.');
+    try {
+      await addCommunityComment(postId, {
+        content: commentDraft,
+      });
+      setCommentDraft('');
+      await reloadPost('댓글을 등록했다.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '댓글 등록에 실패했다.');
+    }
   }
 
   function handleToggleReply(commentId: string) {
@@ -140,28 +195,46 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     }));
   }
 
-  function handleSubmitReply(commentId: string) {
+  async function handleSubmitReply(commentId: string) {
+    if (!isAuthenticated) {
+      setFeedback('로그인 후 이용할 수 있다.');
+      return;
+    }
+
     const replyDraft = replyDrafts[commentId]?.trim();
 
     if (!replyDraft) {
       return;
     }
 
-    addCommunityComment({
-      postId,
-      content: replyDraft,
-      parentId: commentId,
-    });
-    setReplyDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [commentId]: '',
-    }));
-    setActiveReplyId(null);
-    setFeedback('대댓글이 등록되었습니다.');
+    try {
+      await addCommunityComment(postId, {
+        content: replyDraft,
+        parentCommentId: Number(commentId),
+      });
+      setReplyDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [commentId]: '',
+      }));
+      setActiveReplyId(null);
+      await reloadPost('대댓글을 등록했다.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '대댓글 등록에 실패했다.');
+    }
   }
 
-  function handleOpenTag(tag: string) {
-    navigate(`${COMMUNITY_PATH}?tag=${encodeURIComponent(tag)}`);
+  async function handleToggleCommentLike(commentId: string) {
+    if (!isAuthenticated) {
+      setFeedback('로그인 후 이용할 수 있다.');
+      return;
+    }
+
+    try {
+      await toggleCommunityCommentLike(commentId);
+      await reloadPost();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '댓글 좋아요 처리에 실패했다.');
+    }
   }
 
   async function handleCopyLink() {
@@ -169,23 +242,22 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
     try {
       await navigator.clipboard.writeText(path);
-      setFeedback('게시글 링크를 복사했습니다.');
+      setFeedback('게시글 링크를 복사했다.');
     } catch {
-      setFeedback('링크 복사에 실패했습니다.');
+      setFeedback('링크 복사에 실패했다.');
     } finally {
       setIsMenuOpen(false);
     }
   }
 
-  function handleDeletePost() {
-    deleteCommunityPost(postId);
-    setIsMenuOpen(false);
-    handleBack();
-  }
-
-  function handleReportPost() {
-    setIsMenuOpen(false);
-    setFeedback('신고 기능은 운영 API 연결 전 단계입니다. 접수 UI만 먼저 반영했습니다.');
+  async function handleDeletePost() {
+    try {
+      await deleteCommunityPost(postId);
+      setIsMenuOpen(false);
+      handleBack();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '게시글 삭제에 실패했다.');
+    }
   }
 
   function handleContentClick(event: ReactMouseEvent<HTMLDivElement>) {
@@ -197,21 +269,46 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
     setLightboxImage({
       src: target.currentSrc || target.src,
-      alt: target.alt || postTitle,
+      alt: target.alt || post?.title || '',
     });
+  }
+
+  function openTagSearch(tag: string) {
+    window.open(`${window.location.origin}${COMMUNITY_PATH}?tag=${encodeURIComponent(tag)}`, '_blank', 'noopener,noreferrer');
+    setHoveredTag(null);
+  }
+
+  function openProblem(tag: string) {
+    window.open(`${window.location.origin}${PROBLEMS_PATH}/${encodeURIComponent(tag)}`, '_blank', 'noopener,noreferrer');
+    setHoveredTag(null);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="page-stack">
+        <section className="panel-card community-detail-card">
+          <h1 className="community-detail-title">게시글을 불러오는 중이다.</h1>
+        </section>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div className="page-stack">
+        <section className="panel-card community-detail-card">
+          <h1 className="community-detail-title">게시글을 찾을 수 없다.</h1>
+          <p className="muted-text">{errorMessage ?? '삭제되었거나 잘못된 경로다.'}</p>
+        </section>
+      </div>
+    );
   }
 
   return (
     <div className="page-stack">
       <section className="panel-card community-detail-card">
         <div className="community-detail-topbar">
-          <button type="button" className="btn ghost community-back-button" onClick={handleBack}>
-            뒤로가기
-          </button>
-
           <div className="community-detail-topbar-actions">
-            {post.isPinned ? <span className="subtle-chip">고정글</span> : null}
-
             <div className="community-detail-menu" ref={menuRef}>
               <button
                 type="button"
@@ -221,12 +318,12 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                 aria-haspopup="menu"
                 aria-expanded={isMenuOpen}
               >
-                •••
+                ⋯
               </button>
 
               {isMenuOpen ? (
                 <div className="community-detail-menu-panel" role="menu" aria-label="게시글 옵션">
-                  {post.authorHandle === mockCurrentHandle ? (
+                  {post.editable ? (
                     <button
                       type="button"
                       className="community-detail-menu-item"
@@ -245,7 +342,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                   <button type="button" className="community-detail-menu-item" role="menuitem" onClick={handleCopyLink}>
                     링크 복사
                   </button>
-                  {post.authorHandle === mockCurrentHandle ? (
+                  {post.editable ? (
                     <button
                       type="button"
                       className="community-detail-menu-item is-danger"
@@ -254,11 +351,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                     >
                       삭제
                     </button>
-                  ) : (
-                    <button type="button" className="community-detail-menu-item" role="menuitem" onClick={handleReportPost}>
-                      신고
-                    </button>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -266,34 +359,71 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         </div>
 
         <div className="community-detail-header">
-          <p className="panel-meta">커뮤니티</p>
-          <h1 className="page-title community-detail-title">{post.title}</h1>
-
-          <div className="community-detail-meta">
-            <span>@{post.authorHandle}</span>
-            <span>{formatBoardDate(post.createdAt)}</span>
-            <span>조회수 {numberFormatter.format(post.views)}</span>
-            <span>좋아요 {numberFormatter.format(post.likes)}</span>
-            {post.updatedAt ? <span>수정 {formatBoardDate(post.updatedAt)}</span> : null}
-          </div>
+          <h1 className="community-detail-title">{post.title}</h1>
 
           <div className="community-detail-tags">
             {post.tags.map((tag) => (
-              <button key={tag} type="button" className="community-detail-tag" onClick={() => handleOpenTag(tag)}>
-                #{tag}
-              </button>
+              <div
+                key={tag}
+                className="community-detail-tag-wrap"
+                onMouseEnter={() => setHoveredTag(tag)}
+                onMouseLeave={() => setHoveredTag((currentTag) => (currentTag === tag ? null : currentTag))}
+              >
+                <button type="button" className="community-detail-tag">
+                  #{tag}
+                </button>
+
+                {hoveredTag === tag ? (
+                  <div className="community-tag-hover-menu">
+                    <button type="button" className="community-tag-hover-item" onClick={() => openTagSearch(tag)}>
+                      커뮤니티에서 태그 검색
+                    </button>
+                    {isProblemTag(tag) ? (
+                      <button type="button" className="community-tag-hover-item" onClick={() => openProblem(tag)}>
+                        문제로 이동
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ))}
+          </div>
+
+          <div className="community-detail-meta">
+            <button
+              type="button"
+              className="community-author-button"
+              onClick={() => navigate(getProfilePath(post.authorHandle))}
+            >
+              <span>{post.authorHandle}</span>
+            </button>
+            <span>{formatBoardDate(post.createdAt)}</span>
+            <span>조회수 {numberFormatter.format(post.views)}</span>
+            <span>댓글 {numberFormatter.format(post.comments)}</span>
+            {post.updatedAt ? <span>수정 {formatBoardDate(post.updatedAt)}</span> : null}
           </div>
 
           <div className="community-detail-actions">
             <button
               type="button"
-              className={`btn ${isLiked ? 'primary' : 'secondary'} community-like-button`}
+              className={`community-like-button ${post.likedByCurrentUser ? 'is-liked' : ''}`}
               onClick={handleToggleLike}
+              aria-pressed={post.likedByCurrentUser}
+              aria-label={post.likedByCurrentUser ? '좋아요 취소' : '좋아요'}
             >
-              {isLiked ? '좋아요 취소' : '좋아요'}
+              <span className="community-like-icon" aria-hidden="true">
+                👍
+              </span>
+              <span>{numberFormatter.format(post.likes)}</span>
             </button>
-            <span className="community-detail-reaction-count">댓글 {numberFormatter.format(post.comments)}개</span>
+          </div>
+
+          <div className="community-content-body" onClick={handleContentClick}>
+            <p className="community-detail-lead">{post.excerpt}</p>
+            <div
+              className="community-detail-rich-content"
+              dangerouslySetInnerHTML={{ __html: post.contentHtml || `<p>${post.content}</p>` }}
+            />
           </div>
         </div>
       </section>
@@ -303,16 +433,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           <p className="community-feedback-text">{feedback}</p>
         </section>
       ) : null}
-
-      <section className="panel-card community-content-card">
-        <div className="community-content-body" onClick={handleContentClick}>
-          <p className="community-detail-lead">{post.excerpt}</p>
-          <div
-            className="community-detail-rich-content"
-            dangerouslySetInnerHTML={{ __html: post.contentHtml ?? `<p>${post.content}</p>` }}
-          />
-        </div>
-      </section>
 
       <section className="panel-card community-comments-card">
         <div className="panel-heading-row responsive">
@@ -332,7 +452,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
             className="text-field community-comment-textarea"
             value={commentDraft}
             onChange={(event) => setCommentDraft(event.target.value)}
-            placeholder="댓글을 입력하세요."
+            placeholder="댓글을 입력해라"
           />
           <div className="community-comment-compose-actions">
             <button type="button" className="btn primary" onClick={handleSubmitComment}>
@@ -342,8 +462,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         </div>
 
         <div className="community-comment-list">
-          {comments.length > 0 ? (
-            comments.map((comment) => (
+          {post.commentTree.length > 0 ? (
+            post.commentTree.map((comment) => (
               <CommunityCommentThread
                 key={comment.id}
                 comment={comment}
@@ -352,10 +472,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                 onToggleReply={handleToggleReply}
                 onChangeReplyDraft={handleChangeReplyDraft}
                 onSubmitReply={handleSubmitReply}
+                onToggleLike={handleToggleCommentLike}
               />
             ))
           ) : (
-            <div className="community-comment-empty">첫 댓글을 남겨보세요.</div>
+            <div className="community-comment-empty">첫 댓글을 남겨라.</div>
           )}
         </div>
       </section>

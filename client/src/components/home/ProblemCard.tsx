@@ -4,7 +4,6 @@ import ProblemRuntimeChart from './ProblemRuntimeChart';
 
 interface ProblemCardProps {
   problem: ProblemSummary;
-  showTags: boolean;
   showStats: boolean;
   showSolveState: boolean;
   onSearchSelect: (value: string) => void;
@@ -18,17 +17,13 @@ function stopCardEvent(event: MouseEvent<HTMLElement>) {
 
 export default function ProblemCard({
   problem,
-  showTags,
   showStats,
   showSolveState,
   onSearchSelect,
   onSelect,
 }: ProblemCardProps) {
-  const [isTagExpanded, setIsTagExpanded] = useState(true);
   const [isStatsExpanded, setIsStatsExpanded] = useState(true);
   const [activeSolvedCount, setActiveSolvedCount] = useState(problem.solvedCount);
-  const visibleTags = problem.tags.slice(0, 5);
-  const visibleTagsEnabled = showTags && isTagExpanded && visibleTags.length > 0;
   const visibleStatsEnabled = showStats && isStatsExpanded;
   const problemNumber = problem.problemNumber ?? String(problem.number);
 
@@ -80,17 +75,6 @@ export default function ProblemCard({
             <div className="problem-card-actions" role="group" aria-label={`${problemNumber} \uD45C\uC2DC \uC635\uC158`}>
               <button
                 type="button"
-                className={`mini-toggle problem-card-action ${isTagExpanded ? 'is-selected' : ''}`}
-                aria-pressed={isTagExpanded}
-                onClick={(event) => {
-                  stopCardEvent(event);
-                  setIsTagExpanded((value) => !value);
-                }}
-              >
-                {'\uD0DC\uADF8'}
-              </button>
-              <button
-                type="button"
                 className={`mini-toggle problem-card-action ${isStatsExpanded ? 'is-selected' : ''}`}
                 aria-pressed={isStatsExpanded}
                 onClick={(event) => {
@@ -116,16 +100,6 @@ export default function ProblemCard({
           onSolvedCountChange={setActiveSolvedCount}
         />
       </div>
-
-      {visibleTagsEnabled ? (
-        <div className="tag-row problem-card-tags">
-          {visibleTags.map((tag) => (
-            <span key={tag} className="tag-item">
-              #{tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
     </article>
   );
 }

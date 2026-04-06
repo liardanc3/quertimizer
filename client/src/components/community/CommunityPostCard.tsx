@@ -91,7 +91,7 @@ function createHighlightParts(text: string, rawTerms: string[]) {
     parts.push(
       <mark key={`${text}-${match.start}-${index}`} className="community-highlight">
         {text.slice(match.start, match.end)}
-      </mark>
+      </mark>,
     );
     cursor = match.end;
   });
@@ -116,47 +116,43 @@ export default function CommunityPostCard({
   }
 
   const highlightTerms = [searchQuery, activeTag].filter(Boolean);
-  const shouldShowPreview = Boolean(searchQuery.trim() || activeTag.trim());
-  const matchedTags = post.tags.filter((tag) => !activeTag || normalizeKeyword(tag) === normalizeKeyword(activeTag));
 
   return (
-    <article className={`community-board-row ${post.isPinned ? 'is-pinned' : ''}`.trim()} role="row">
+    <article className="community-board-row" role="row">
       <div className="community-board-cell community-board-title-cell" data-label="제목">
+        {post.tags.length > 0 ? (
+          <div className="community-row-tags">
+            {post.tags.slice(0, 5).map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="community-inline-tag-button"
+                onClick={() => onSelectTag(tag)}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="community-row-title-line">
-          {post.isPinned ? <span className="subtle-chip community-inline-chip">고정</span> : null}
           <a href={getCommunityPostPath(post.id)} className="community-post-title-button" onClick={handleOpenPost}>
             <strong className="community-row-title">{createHighlightParts(post.title, highlightTerms)}</strong>
           </a>
         </div>
 
-        {shouldShowPreview ? (
-          <div className="community-search-preview">
-            <p className="community-search-preview-text">{createHighlightParts(post.excerpt, highlightTerms)}</p>
-            {matchedTags.length > 0 ? (
-              <div className="community-search-preview-tags">
-                {matchedTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className="community-inline-tag-button"
-                    onClick={() => onSelectTag(tag)}
-                  >
-                    #{tag}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+        {searchQuery.trim() !== '' ? (
+          <p className="community-search-preview-text">{createHighlightParts(post.excerpt, highlightTerms)}</p>
         ) : null}
       </div>
 
       <div className="community-board-cell community-board-author" data-label="아이디">
         <button
           type="button"
-          className="btn text inline community-author-button"
+          className="community-author-button"
           onClick={() => navigate(getProfilePath(post.authorHandle))}
         >
-          <span className="community-author-id">@{post.authorHandle}</span>
+          <span className="community-author-id">{post.authorHandle}</span>
         </button>
       </div>
 
@@ -170,6 +166,10 @@ export default function CommunityPostCard({
 
       <div className="community-board-cell community-board-metric" data-label="좋아요">
         {numberFormatter.format(post.likes)}
+      </div>
+
+      <div className="community-board-cell community-board-metric" data-label="댓글">
+        {numberFormatter.format(post.comments)}
       </div>
     </article>
   );

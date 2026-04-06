@@ -47,6 +47,7 @@ interface FindUserIdResponse {
 interface SessionMeResponse {
   authenticated?: boolean;
   userId?: string | null;
+  defaultDbms?: string | null;
 }
 
 export class SignupApiError extends Error {
@@ -97,6 +98,7 @@ export interface FindUserIdResult {
 export interface SessionMeResult {
   authenticated: boolean;
   userId: string | null;
+  defaultDbms: 'postgresql' | 'oracle' | null;
 }
 
 export function getApiBaseUrl() {
@@ -297,6 +299,7 @@ export async function fetchSessionMe() {
     return {
       authenticated: data.authenticated === true,
       userId: typeof data.userId === 'string' && data.userId.trim() !== '' ? data.userId : null,
+      defaultDbms: data.defaultDbms === 'oracle' ? 'oracle' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
     } satisfies SessionMeResult;
   } catch {
     throw new Error('세션 복원 확인에 실패했습니다.');

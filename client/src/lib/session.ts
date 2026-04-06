@@ -17,12 +17,14 @@ interface SessionSnapshot {
   isAuthenticated: boolean;
   isReady: boolean;
   userId: string | null;
+  defaultDbms: 'postgresql' | 'oracle' | null;
 }
 
 let sessionSnapshot: SessionSnapshot = {
   isAuthenticated: readPersistedAuthentication(),
   isReady: false,
   userId: null,
+  defaultDbms: null,
 };
 let sessionAlert: SessionAlert | null = null;
 let syncSessionPromise: Promise<boolean> | null = null;
@@ -69,6 +71,7 @@ function subscribe(callback: () => void) {
       isAuthenticated,
       isReady: sessionSnapshot.isReady,
       userId: isAuthenticated ? sessionSnapshot.userId : null,
+      defaultDbms: isAuthenticated ? sessionSnapshot.defaultDbms : null,
     };
     callback();
   }
@@ -142,6 +145,7 @@ export function loginMock(rememberLogin = false) {
     isAuthenticated: true,
     isReady: true,
     userId: sessionSnapshot.userId,
+    defaultDbms: sessionSnapshot.defaultDbms,
   });
 }
 
@@ -167,6 +171,7 @@ export async function syncSession() {
           isAuthenticated: false,
           isReady: true,
           userId: null,
+          defaultDbms: null,
         });
 
         if (hadAuthenticatedState) {
@@ -185,6 +190,7 @@ export async function syncSession() {
         isAuthenticated: true,
         isReady: true,
         userId: session.userId,
+        defaultDbms: session.defaultDbms,
       });
       return true;
     } catch {
@@ -213,20 +219,23 @@ export function logoutMock() {
     isAuthenticated: false,
     isReady: true,
     userId: null,
+    defaultDbms: null,
   });
 }
 
 export function useMockSession() {
-  const { isAuthenticated, isReady, userId } = useSyncExternalStore(subscribe, getSnapshot, () => ({
+  const { isAuthenticated, isReady, userId, defaultDbms } = useSyncExternalStore(subscribe, getSnapshot, () => ({
     isAuthenticated: false,
     isReady: false,
     userId: null,
+    defaultDbms: null,
   }));
 
   return {
     isAuthenticated,
     isReady,
     userId,
+    defaultDbms,
     login: loginMock,
     logout: logoutMock,
   };

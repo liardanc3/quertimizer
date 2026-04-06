@@ -1,9 +1,10 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useMockSession } from '../../lib/session';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '../../types/domain';
 
 const TARGET_BUCKET_COUNT = 40;
+const MIN_VISUAL_BUCKET_COUNT = 12;
 const numberFormatter = new Intl.NumberFormat('ko-KR');
 
 type MarkerKey = 'fastest' | 'mine';
@@ -51,6 +52,11 @@ interface BucketModel {
   buckets: BucketView[];
   minValue: number;
   maxValue: number;
+}
+
+interface DisplayBucketLayout {
+  displayBuckets: Array<BucketView | null>;
+  actualBucketIndexes: number[];
 }
 
 interface BucketFilterDefinition {
@@ -279,6 +285,44 @@ function buildBucketModel(samples: RuntimeSample[]): BucketModel | null {
   };
 }
 
+function buildDisplayBucketLayout(bucketModel: BucketModel): DisplayBucketLayout {
+  const actualBucketCount = bucketModel.buckets.length;
+  const displayBucketCount = Math.max(actualBucketCount, MIN_VISUAL_BUCKET_COUNT);
+
+  if (actualBucketCount >= displayBucketCount) {
+    return {
+      displayBuckets: bucketModel.buckets,
+      actualBucketIndexes: bucketModel.buckets.map((_, index) => index),
+    };
+  }
+
+  const actualBucketIndexes: number[] = [];
+
+  for (let index = 0; index < actualBucketCount; index += 1) {
+    if (actualBucketCount === 1) {
+      actualBucketIndexes.push(Math.floor(displayBucketCount / 2));
+      continue;
+    }
+
+    const previousIndex = index > 0 ? actualBucketIndexes[index - 1] : -1;
+    const remainingBucketCount = actualBucketCount - index - 1;
+    const idealIndex = Math.round((index * (displayBucketCount - 1)) / (actualBucketCount - 1));
+    const maximumIndex = displayBucketCount - remainingBucketCount - 1;
+    actualBucketIndexes.push(Math.min(Math.max(idealIndex, previousIndex + 1), maximumIndex));
+  }
+
+  const displayBuckets = Array.from({ length: displayBucketCount }, () => null as BucketView | null);
+
+  bucketModel.buckets.forEach((bucket, index) => {
+    displayBuckets[actualBucketIndexes[index]] = bucket;
+  });
+
+  return {
+    displayBuckets,
+    actualBucketIndexes,
+  };
+}
+
 function buildTimeSummary(samples: RuntimeSample[]) {
   if (samples.length === 0) {
     return null;
@@ -369,11 +413,12 @@ function buildPlanSectionRatioItems(args: {
 }
 
 export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedCountChange }: ProblemRuntimeChartProps) {
-  const { userId } = useMockSession();
+  const { userId, defaultDbms } = useMockSession();
   const samples = useMemo(() => toSamples(problem, userId), [problem, userId]);
   const availableDbms = useMemo(() => DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key)), [samples]);
   const defaultPlanSections = useMemo(() => PLAN_SECTION_OPTIONS.map((section) => section.key), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0]?.key ?? 'postgresql');
+  const isDbmsInitializedRef = useRef(false);
   const [filterMatchMode, setFilterMatchMode] = useState<FilterMatchMode>('or');
   const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(defaultPlanSections);
   const [showPlanDetails, setShowPlanDetails] = useState(false);
@@ -382,10 +427,31 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
   const [floatingTooltip, setFloatingTooltip] = useState<FloatingTooltipState | null>(null);
 
   useEffect(() => {
-    if (availableDbms.length > 0 && !availableDbms.some((option) => option.key === selectedDbms)) {
+    if (availableDbms.length === 0) {
+      return;
+    }
+
+    if (!isDbmsInitializedRef.current) {
+      isDbmsInitializedRef.current = true;
+
+      if (defaultDbms && availableDbms.some((option) => option.key === defaultDbms)) {
+        setSelectedDbms(defaultDbms);
+        return;
+      }
+
+      setSelectedDbms(availableDbms[0].key);
+      return;
+    }
+
+    if (!availableDbms.some((option) => option.key === selectedDbms)) {
+      if (defaultDbms && availableDbms.some((option) => option.key === defaultDbms)) {
+        setSelectedDbms(defaultDbms);
+        return;
+      }
+
       setSelectedDbms(availableDbms[0].key);
     }
-  }, [availableDbms, selectedDbms]);
+  }, [availableDbms, defaultDbms, selectedDbms]);
 
   const activeSamples = useMemo(() => samples.filter((sample) => sample.dbms === selectedDbms), [samples, selectedDbms]);
   const availableBucketFilters = useMemo(() => buildAvailableBucketFilters(selectedDbms), [selectedDbms]);
@@ -437,6 +503,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
     });
   }, [activeSamples, filterMatchMode, hasActiveHintSelection, selectedBucketEntries, selectedDbms, selectedHintFilters]);
   const bucketModel = useMemo(() => buildBucketModel(filteredSamples), [filteredSamples]);
+  const displayBucketLayout = useMemo(() => (bucketModel ? buildDisplayBucketLayout(bucketModel) : null), [bucketModel]);
   const timeSummary = useMemo(() => buildTimeSummary(filteredSamples), [filteredSamples]);
   const markers = useMemo(() => buildMarkers(filteredSamples), [filteredSamples]);
   const maxBucketCount = bucketModel ? Math.max(1, ...bucketModel.buckets.map((bucket) => bucket.count)) : 1;
@@ -451,9 +518,11 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
         0,
         bucketModel.buckets.length - 1
       );
-      return { ...marker, rowIndex: marker.key === 'mine' ? 0 : 1, targetPercent: ((bucketIndex + 0.5) / bucketModel.buckets.length) * 100 };
+      const displayBucketIndex = displayBucketLayout?.actualBucketIndexes[bucketIndex] ?? bucketIndex;
+      const displayBucketCount = displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length;
+      return { ...marker, rowIndex: marker.key === 'mine' ? 0 : 1, targetPercent: ((displayBucketIndex + 0.5) / displayBucketCount) * 100 };
     });
-  }, [bucketModel, markers]);
+  }, [bucketModel, displayBucketLayout, markers]);
   const markersByRow = useMemo(
     () => [placedMarkers.find((marker) => marker.key === 'mine') ?? null, placedMarkers.find((marker) => marker.key === 'fastest') ?? null],
     [placedMarkers]
@@ -764,22 +833,36 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                 ))}
               </div>
 
-              <div className="runtime-bars" style={{ gridTemplateColumns: `repeat(${bucketModel.buckets.length}, minmax(0, 1fr))` }}>
-                {bucketModel.buckets.map((bucket, index) => {
-                  const isMineBucket = markers.some((marker) => marker.key === 'mine' && marker.value >= bucket.startValue && marker.value < bucket.startValue + bucketModel.bucketSize);
-                  const axisLabel = index === 0 ? firstAxisLabel : index === bucketModel.buckets.length - 1 ? lastAxisLabel : null;
+              <div className="runtime-bars" style={{ gridTemplateColumns: `repeat(${displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length}, minmax(0, 1fr))` }}>
+                {(displayBucketLayout?.displayBuckets ?? bucketModel.buckets).map((bucket, index) => {
+                  const isMineBucket =
+                    bucket != null &&
+                    markers.some((marker) => marker.key === 'mine' && marker.value >= bucket.startValue && marker.value < bucket.startValue + bucketModel.bucketSize);
+                  const singleValueLabelIndex = displayBucketLayout?.actualBucketIndexes[0] ?? 0;
+                  const axisLabel =
+                    bucketModel.minValue === bucketModel.maxValue
+                      ? index === singleValueLabelIndex
+                        ? firstAxisLabel
+                        : null
+                      : index === 0
+                        ? firstAxisLabel
+                        : index === (displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length) - 1
+                          ? lastAxisLabel
+                          : null;
 
                   return (
-                    <div key={bucket.startValue} className={`runtime-bar-slot tooltip-anchor ${isMineBucket ? 'is-mine' : ''}`}>
+                    <div key={bucket ? bucket.startValue : `empty-${index}`} className={`runtime-bar-slot tooltip-anchor ${isMineBucket ? 'is-mine' : ''}`}>
                       <span
                         className={`runtime-bar ${isMineBucket ? 'is-mine' : ''}`}
-                        style={{ height: bucket.count === 0 ? '0%' : `${Math.max((bucket.count / maxBucketCount) * 100, 9)}%` }}
+                        style={{ height: bucket == null || bucket.count === 0 ? '0%' : `${Math.max((bucket.count / maxBucketCount) * 100, 9)}%` }}
                       />
                       {axisLabel ? <span className="runtime-axis-inline">{axisLabel}</span> : null}
-                      <span className="ui-tooltip runtime-bar-tooltip">
-                        <span className="ui-tooltip-title">{`${Math.round(bucket.startValue)}-${Math.round(bucket.startValue + bucketModel.bucketSize - 1)}ms`}</span>
-                        <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
-                      </span>
+                      {bucket ? (
+                        <span className="ui-tooltip runtime-bar-tooltip">
+                          <span className="ui-tooltip-title">{`${Math.round(bucket.startValue)}-${Math.round(bucket.startValue + bucketModel.bucketSize - 1)}ms`}</span>
+                          <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
+                        </span>
+                      ) : null}
                     </div>
                   );
                 })}

@@ -195,17 +195,14 @@ export interface Profile {
 }
 
 export interface RankingEntry {
-  handle: string;
-  name: string;
-  tier: string;
+  userId: string;
   solvedCount: number;
   avgExecutionPercentile: number;
-  avgScanRowsPercentile: number;
   monthlyRankDelta: Record<RankingMetricKey, number>;
 }
 
 export type RankingLeaderboardByDbms = Record<DbmsType, RankingEntry[]>;
-export type RankingMetricKey = 'solvedCount' | 'avgExecutionPercentile' | 'avgScanRowsPercentile';
+export type RankingMetricKey = 'solvedCount' | 'avgExecutionPercentile';
 
 export type CommunityPostCategory = 'tip' | 'question' | 'discussion' | 'notice';
 export type CommunityTagKind = 'problem' | 'tech' | 'topic';
@@ -233,6 +230,8 @@ export interface CommunityPostSummary {
   views: number;
   likes: number;
   comments: number;
+  likedByCurrentUser?: boolean;
+  editable?: boolean;
   isPinned?: boolean;
   isResolved?: boolean;
 }
@@ -243,5 +242,6 @@ export interface CommunityComment {
   content: string;
   createdAt: string;
   likes: number;
+  likedByCurrentUser?: boolean;
   replies: CommunityComment[];
 }

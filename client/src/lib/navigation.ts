@@ -22,6 +22,16 @@ export function getProfilePath(handle?: string) {
   return `${PROFILE_PATH}/${encodeURIComponent(handle)}`;
 }
 
+export function getProfileActivityPath(handle?: string, tab?: 'posts' | 'comments' | 'likes') {
+  const basePath = handle ? `${PROFILE_PATH}/${encodeURIComponent(handle)}/activity` : PROFILE_ACTIVITY_PATH;
+
+  if (!tab) {
+    return basePath;
+  }
+
+  return `${basePath}?tab=${encodeURIComponent(tab)}`;
+}
+
 export function getCommunityPostPath(postId: string) {
   return `${COMMUNITY_PATH}/${encodeURIComponent(postId)}`;
 }

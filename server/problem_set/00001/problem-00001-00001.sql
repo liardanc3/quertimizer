@@ -137,3 +137,78 @@ SET
     data_sample = EXCLUDED.data_sample,
     output_sample = EXCLUDED.output_sample,
     answer = EXCLUDED.answer;
+
+DELETE FROM quertimizer.problem_solve_history
+WHERE problem_id = '00001-00001'
+  AND user_id = 'liardanc3'
+  AND dbms_type IN ('POSTGRESQL', 'ORACLE');
+
+INSERT INTO quertimizer.problem_solve_history (
+    problem_id,
+    user_id,
+    dbms_type,
+    submitted_sql,
+    execution_time_ms,
+    scan_rows,
+    execution_plan_element,
+    submitted_at
+)
+VALUES
+(
+    '00001-00001',
+    'liardanc3',
+    'POSTGRESQL',
+    $postgresql_sql$
+SELECT
+    c.customer_id,
+    c.customer_name,
+    COUNT(DISTINCT o.order_id) AS order_count,
+    SUM(oi.quantity * oi.unit_price) AS total_amount
+FROM customers c
+JOIN orders o
+    ON c.customer_id = o.customer_id
+JOIN order_items oi
+    ON o.order_id = oi.order_id
+WHERE o.ordered_at >= TIMESTAMP '2024-03-01 00:00:00'
+  AND o.ordered_at < TIMESTAMP '2024-04-01 00:00:00'
+GROUP BY
+    c.customer_id,
+    c.customer_name
+ORDER BY
+    total_amount DESC,
+    c.customer_id ASC
+    $postgresql_sql$,
+    97,
+    0,
+    536954882,
+    TIMESTAMP '2026-04-05 21:10:00'
+),
+(
+    '00001-00001',
+    'liardanc3',
+    'ORACLE',
+    $oracle_sql$
+SELECT
+    c.customer_id,
+    c.customer_name,
+    COUNT(DISTINCT o.order_id) AS order_count,
+    SUM(oi.quantity * oi.unit_price) AS total_amount
+FROM customers c
+JOIN orders o
+    ON c.customer_id = o.customer_id
+JOIN order_items oi
+    ON o.order_id = oi.order_id
+WHERE o.ordered_at >= TIMESTAMP '2024-03-01 00:00:00'
+  AND o.ordered_at < TIMESTAMP '2024-04-01 00:00:00'
+GROUP BY
+    c.customer_id,
+    c.customer_name
+ORDER BY
+    total_amount DESC,
+    c.customer_id ASC
+    $oracle_sql$,
+    121,
+    0,
+    8523780,
+    TIMESTAMP '2026-04-05 21:11:00'
+);

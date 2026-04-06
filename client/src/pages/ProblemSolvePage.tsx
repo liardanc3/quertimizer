@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type R
 import { createPortal } from 'react-dom';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import { fetchProblemDetail, type ProblemDetailData } from '../lib/problemApi';
+import { ProblemSocketClient, ProblemSocketError, type ProblemSocketMessage } from '../lib/problemSocket';
+import { useMockSession } from '../lib/session';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
-import type { DbmsType, MockResult, ProblemDetail, RuntimeDistribution } from '../types/domain';
+import type { DbmsType, ProblemDetail } from '../types/domain';
 
 interface ProblemSolvePageProps {
   problemId: string;
@@ -70,6 +72,19 @@ interface PanelExternalWindowProps {
   children: ReactNode;
 }
 
+type ProblemExecutionMode = 'select' | 'explain' | 'explain_analyze' | 'command';
+
+interface ProblemExecutionResult {
+  success: boolean;
+  mode: ProblemExecutionMode;
+  message: string;
+  columns: string[];
+  rows: string[][];
+  planLines: string[];
+  rowCount: number;
+  executionTimeMs?: number;
+}
+
 const panelOrder: PanelKey[] = ['editor', 'submit'];
 
 const panelLabels: Record<PanelKey, string> = {
@@ -99,8 +114,12 @@ function getAvailableDbms(problem: ProblemDetail) {
   return problem.dbmsOptions.filter((dbms) => !problem.disabledDbms.includes(dbms));
 }
 
-function getRuntimeDistribution(problem: ProblemDetail, selectedDbms: DbmsType): RuntimeDistribution | undefined {
-  return problem.runtimeDistributions?.[selectedDbms] ?? problem.runtimeDistribution;
+function resolvePreferredDbms(availableDbms: DbmsType[], fallbackDbms: DbmsType[], defaultDbms: DbmsType | null) {
+  if (defaultDbms && availableDbms.includes(defaultDbms)) {
+    return defaultDbms;
+  }
+
+  return availableDbms[0] ?? fallbackDbms[0] ?? 'postgresql';
 }
 
 function formatMs(value?: number) {
@@ -138,15 +157,6 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
   };
 }
 
-function getTopPercent(values: number[], currentValue: number) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  const betterCount = values.filter((value) => value < currentValue).length;
-  return Math.max(1, Math.round(((betterCount + 1) / (values.length + 1)) * 100));
-}
-
 function createInitialFloatingLayouts(): FloatingPanelLayoutState {
   return {
     editor: {
@@ -172,17 +182,40 @@ function formatCellValue(value: string | number | boolean | null | undefined) {
   return String(value);
 }
 
-function createResultColumnLabels(result: MockResult) {
-  const columnCount = result.rows.reduce((maxCount, row) => Math.max(maxCount, row.columns.length), 0);
-  return Array.from({ length: columnCount }, (_, index) => `컬럼 ${index + 1}`);
+function createProblemExecutionError(message: string): ProblemExecutionResult {
+  return {
+    success: false,
+    mode: 'command',
+    message,
+    columns: [],
+    rows: [],
+    planLines: [],
+    rowCount: 0,
+  };
 }
 
-function renderResultTable(result: MockResult | null, emptyMessage: string) {
-  if (result == null || result.rows.length === 0) {
+function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecutionResult {
+  return {
+    success: message.success ?? false,
+    mode: (message.mode as ProblemExecutionMode | null) ?? 'command',
+    message: message.message ?? '',
+    columns: message.columns ?? [],
+    rows: message.rows ?? [],
+    planLines: message.planLines ?? [],
+    rowCount: message.rowCount ?? 0,
+    executionTimeMs: message.executionTimeMs ?? undefined,
+  };
+}
+
+function renderResultTable(columns: string[], rows: string[][], emptyMessage: string) {
+  if (rows.length === 0) {
     return <div className="solve-result-empty solve-result-empty-table">{emptyMessage}</div>;
   }
 
-  const columnLabels = createResultColumnLabels(result);
+  const columnLabels =
+    columns.length > 0
+      ? columns
+      : Array.from({ length: rows.reduce((maxCount, row) => Math.max(maxCount, row.length), 0) }, (_, index) => `컬럼 ${index + 1}`);
 
   return (
     <div className="result-table-scroll">
@@ -197,10 +230,10 @@ function renderResultTable(result: MockResult | null, emptyMessage: string) {
           </tr>
         </thead>
         <tbody>
-          {result.rows.map((row, rowIndex) => (
+          {rows.map((row, rowIndex) => (
             <tr key={`result-row-${rowIndex}`}>
               {columnLabels.map((columnLabel, columnIndex) => (
-                <td key={`result-row-${rowIndex}-${columnLabel}`}>{formatCellValue(row.columns[columnIndex])}</td>
+                <td key={`result-row-${rowIndex}-${columnLabel}`}>{formatCellValue(row[columnIndex])}</td>
               ))}
             </tr>
           ))}
@@ -208,6 +241,30 @@ function renderResultTable(result: MockResult | null, emptyMessage: string) {
       </table>
     </div>
   );
+}
+
+function renderExecutionContent(executionResult: ProblemExecutionResult) {
+  if (!executionResult.success) {
+    return null;
+  }
+
+  if (executionResult.mode === 'select') {
+    return renderResultTable(executionResult.columns, executionResult.rows, '표시할 실행 결과가 없다.');
+  }
+
+  if (executionResult.mode === 'explain' || executionResult.mode === 'explain_analyze') {
+    if (executionResult.planLines.length === 0) {
+      return <div className="solve-result-empty solve-result-empty-table">표시할 실행 계획이 없다.</div>;
+    }
+
+    return (
+      <div className="solve-plan-block">
+        <pre className="solve-plan-lines">{executionResult.planLines.join('\n')}</pre>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function copyDocumentStyles(targetDocument: Document) {
@@ -321,12 +378,15 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const problemSocketRef = useRef<ProblemSocketClient | null>(null);
+  const { defaultDbms, isAuthenticated } = useMockSession();
   const fallbackProblem = createFallbackProblemDetail(problemId);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
-  const [executionResult, setExecutionResult] = useState<MockResult | null>(null);
+  const [executionResult, setExecutionResult] = useState<ProblemExecutionResult | null>(null);
   const [isExecutionSheetOpen, setIsExecutionSheetOpen] = useState(false);
-  const [submitResult, setSubmitResult] = useState<MockResult | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibilityState>({
     editor: true,
     submit: true,
@@ -349,15 +409,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [floatingResizeState, setFloatingResizeState] = useState<FloatingResizeState | null>(null);
   const problem = fallbackProblem;
   const availableDbms = getAvailableDbms(problem);
-  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0] ?? problem.dbmsOptions[0] ?? 'postgresql');
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
+    resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null)
+  );
   const [sql, setSql] = useState(problem.starterSql);
 
-  const runtimeDistribution = getRuntimeDistribution(problem, selectedDbms);
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
     problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중...'));
-  const submitTimePercent =
-    submitResult && runtimeDistribution ? getTopPercent(runtimeDistribution.samples.map((sample) => sample.timeMs), submitResult.executionTimeMs) : null;
 
   const visibleWorkspacePanels = panelOrder.filter(
     (panelKey) => panelVisibility[panelKey] && !detachedPanels[panelKey] && !externalWindowPanels[panelKey],
@@ -398,9 +457,59 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setSql(fallbackProblem.starterSql);
     setExecutionResult(null);
     setIsExecutionSheetOpen(false);
-    setSubmitResult(null);
-    setSelectedDbms(availableDbms[0] ?? problem.dbmsOptions[0] ?? 'postgresql');
-  }, [availableDbms, fallbackProblem.starterSql, problem.dbmsOptions, problemId]);
+    setIsExecuting(false);
+    setSubmitMessage(null);
+    setSelectedDbms(resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
+  }, [availableDbms, defaultDbms, fallbackProblem.starterSql, problem.dbmsOptions, problemId]);
+
+  useEffect(() => {
+    const problemSocketClient = new ProblemSocketClient({
+      onMessage: (message) => {
+        if (message.type === 'connected' || message.type === 'problem.leave.result') {
+          return;
+        }
+
+        if (message.type === 'problem.execute.result' || message.type === 'error') {
+          setIsExecuting(false);
+          setExecutionResult(
+            message.type === 'error'
+              ? createProblemExecutionError(message.message ?? '문제 실행에 실패했다.')
+              : toProblemExecutionResult(message)
+          );
+          setIsExecutionSheetOpen(true);
+        }
+      },
+      onClose: () => {
+        setIsExecuting(false);
+      },
+      onError: () => {
+        setIsExecuting(false);
+      },
+    });
+
+    problemSocketRef.current = problemSocketClient;
+
+    return () => {
+      problemSocketClient.leave(problemId);
+      problemSocketClient.close();
+
+      if (problemSocketRef.current === problemSocketClient) {
+        problemSocketRef.current = null;
+      }
+    };
+  }, [problemId]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      problemSocketRef.current?.leave(problemId);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [problemId]);
 
   useEffect(() => {
     if (!workspaceDragState) {
@@ -527,13 +636,48 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     };
   }, [floatingLayouts, floatingResizeState]);
 
-  const handleExecute = () => {
-    setExecutionResult(problem.mockResult);
-    setIsExecutionSheetOpen(true);
+  const handleExecute = async () => {
+    if (!isAuthenticated) {
+      setExecutionResult(createProblemExecutionError('로그인 후 문제를 실행할 수 있다.'));
+      setIsExecutionSheetOpen(true);
+      return;
+    }
+
+    if (selectedDbms !== 'postgresql') {
+      setExecutionResult(createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.'));
+      setIsExecutionSheetOpen(true);
+      return;
+    }
+
+    if (sql.trim().length === 0) {
+      setExecutionResult(createProblemExecutionError('실행할 SQL을 입력해라.'));
+      setIsExecutionSheetOpen(true);
+      return;
+    }
+
+    try {
+      const problemSocketClient = problemSocketRef.current;
+      if (!problemSocketClient) {
+        throw new ProblemSocketError('문제 실행 소켓을 준비하지 못했다.');
+      }
+
+      setIsExecuting(true);
+      setExecutionResult(null);
+      setIsExecutionSheetOpen(true);
+      await problemSocketClient.execute(problemId, sql, selectedDbms);
+    } catch (error) {
+      setIsExecuting(false);
+      setExecutionResult(
+        createProblemExecutionError(
+          error instanceof ProblemSocketError ? error.message : '문제 실행 연결에 실패했다.'
+        )
+      );
+      setIsExecutionSheetOpen(true);
+    }
   };
 
   const handleSubmit = () => {
-    setSubmitResult(problem.mockResult);
+    setSubmitMessage('제출과 채점 기능은 아직 준비중이다.');
     setPanelVisibility((current) => ({
       ...current,
       submit: true,
@@ -676,7 +820,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   );
 
   const renderExecutionSheet = () => {
-    if (!executionResult || !isExecutionSheetOpen) {
+    if (!isExecutionSheetOpen) {
       return null;
     }
 
@@ -695,19 +839,39 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         </div>
 
         <div className="solve-pane-result-stack">
-          <div className="solve-result-lines">
-            <div className="solve-result-line">
-              <span className="solve-result-label">실행시간</span>
-              <strong className="solve-result-value">{formatMs(executionResult.executionTimeMs)}</strong>
-            </div>
-            <div className="solve-result-line">
-              <span className="solve-result-label">반환 행 수</span>
-              <strong className="solve-result-value">{executionResult.rows.length}</strong>
-            </div>
-          </div>
+          {isExecuting ? (
+            <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
+          ) : executionResult ? (
+            <>
+              <div className="solve-result-lines">
+                <div className="solve-result-line">
+                  <span className="solve-result-label">실행 시간</span>
+                  <strong className="solve-result-value">{formatMs(executionResult.executionTimeMs)}</strong>
+                </div>
+                <div className="solve-result-line">
+                  <span className="solve-result-label">
+                    {executionResult.mode === 'select'
+                      ? '반환 행 수'
+                      : executionResult.mode === 'command'
+                        ? '처리 결과'
+                        : '계획 라인 수'}
+                  </span>
+                  <strong className="solve-result-value">
+                    {executionResult.mode === 'command'
+                      ? executionResult.success
+                        ? '완료'
+                        : '실패'
+                      : executionResult.rowCount}
+                  </strong>
+                </div>
+              </div>
 
-          {executionResult.message ? <p className="solve-pane-result-message">{executionResult.message}</p> : null}
-          {renderResultTable(executionResult, '표시할 실행 결과가 없다.')}
+              {executionResult.message ? <p className="solve-pane-result-message">{executionResult.message}</p> : null}
+              {renderExecutionContent(executionResult)}
+            </>
+          ) : (
+            <div className="solve-result-empty solve-result-empty-table">실행 결과가 아직 없다.</div>
+          )}
         </div>
       </section>
     );
@@ -727,8 +891,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             <button type="button" className="btn ghost" onClick={() => setSql(problem.starterSql)}>
               초기화
             </button>
-            <button type="button" className="btn secondary" onClick={handleExecute} disabled={sql.trim().length === 0}>
-              실행
+            <button type="button" className="btn secondary" onClick={handleExecute} disabled={sql.trim().length === 0 || isExecuting}>
+              {isExecuting ? '실행 중' : '실행'}
             </button>
             <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0}>
               제출
@@ -754,38 +918,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     <section className={`panel-card solve-pane ${isFloating ? 'is-floating' : ''}`}>
       {renderPanelHeader('submit', isFloating)}
 
-      {submitResult ? (
+      {submitMessage ? (
         <div className="solve-pane-result-stack">
-          <div className="solve-result-lines">
-            <div className="solve-result-line">
-              <span className="solve-result-label">판정</span>
-              <strong className="solve-result-value">{submitResult.status === 'success' ? '정답' : '확인 필요'}</strong>
-            </div>
-            <div className="solve-result-line">
-              <span className="solve-result-label">실행시간</span>
-              <strong className="solve-result-value">{formatMs(submitResult.executionTimeMs)}</strong>
-            </div>
-          </div>
-
-          {submitResult.message ? <p className="solve-pane-result-message">{submitResult.message}</p> : null}
-
-          <div className="solve-performance-card">
-            <p className="solve-performance-title">성능 비교</p>
-            <div className="solve-performance-list">
-              <div className="solve-performance-item">
-                <span>이 문제 최소 실행시간</span>
-                <strong>{formatMs(runtimeDistribution?.fastestTimeMs)}</strong>
-              </div>
-              <div className="solve-performance-item">
-                <span>이 문제 평균 실행시간</span>
-                <strong>{formatMs(runtimeDistribution?.averageTimeMs)}</strong>
-              </div>
-              <div className="solve-performance-item">
-                <span>현재 속도 구간</span>
-                <strong>{submitTimePercent ? `상위 ${submitTimePercent}%` : '비교 데이터 없음'}</strong>
-              </div>
-            </div>
-          </div>
+          <p className="solve-pane-result-message">{submitMessage}</p>
         </div>
       ) : (
         <div className="solve-result-empty">제출 후 결과가 이 영역에 표시된다.</div>

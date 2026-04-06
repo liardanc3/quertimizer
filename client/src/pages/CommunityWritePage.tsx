@@ -11,12 +11,16 @@ import {
 import {
   clearCommunityEditorDraft,
   getCommunityEditorDraft,
-  getCommunityPostById,
   saveCommunityEditorDraft,
-  saveCommunityPost,
 } from '../lib/communityStore';
+import {
+  createCommunityPost,
+  fetchCommunityPostDetail,
+  fetchCommunityTagSuggestions,
+  updateCommunityPost,
+  type CommunityTagSuggestion,
+} from '../lib/communityApi';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
-import { mockCommunityTagLibrary } from '../mocks/community';
 
 interface CommunityWritePageProps {
   postId?: string;
@@ -35,48 +39,6 @@ function normalizeKeyword(value: string) {
     .normalize('NFKD')
     .replace(/[_\-\s]+/g, '')
     .replace(/[^\p{L}\p{N}]/gu, '');
-}
-
-function getTagScore(label: string, aliases: string[], query: string) {
-  if (!query) {
-    return 0;
-  }
-
-  const candidates = [label, ...aliases].map((candidate) => normalizeKeyword(candidate));
-  let score = 0;
-
-  for (const candidate of candidates) {
-    if (candidate === query) {
-      score = Math.max(score, 4);
-      continue;
-    }
-
-    if (candidate.startsWith(query)) {
-      score = Math.max(score, 3);
-      continue;
-    }
-
-    if (candidate.includes(query)) {
-      score = Math.max(score, 2);
-    }
-  }
-
-  return score;
-}
-
-function resolveTagLabel(value: string) {
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue) {
-    return '';
-  }
-
-  const normalizedValue = normalizeKeyword(trimmedValue);
-  const matchedTag = mockCommunityTagLibrary.find((tag) =>
-    [tag.label, ...tag.aliases].some((candidate) => normalizeKeyword(candidate) === normalizedValue)
-  );
-
-  return matchedTag?.label ?? trimmedValue;
 }
 
 function escapeHtmlAttribute(value: string) {
@@ -109,7 +71,6 @@ function createEmptyValues(): EditorValues {
 }
 
 export default function CommunityWritePage({ postId }: CommunityWritePageProps) {
-  const post = postId ? getCommunityPostById(postId) : undefined;
   const draftKey = postId ? `community-edit-${postId}` : 'community-write';
   const [title, setTitle] = useState('');
   const [draftTag, setDraftTag] = useState('');
@@ -117,6 +78,9 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
   const [editorHtml, setEditorHtml] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [draftRecoveredAt, setDraftRecoveredAt] = useState<string | null>(null);
+  const [tagSuggestions, setTagSuggestions] = useState<CommunityTagSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(Boolean(postId));
+  const [notFound, setNotFound] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -124,60 +88,88 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
   const hydratedRef = useRef(false);
 
   const normalizedDraftTag = normalizeKeyword(draftTag);
-  const suggestedTags = useMemo(
-    () =>
-      mockCommunityTagLibrary
-        .filter(
-          (tag) =>
-            !selectedTags.some((selectedTag) => normalizeKeyword(selectedTag) === normalizeKeyword(tag.label))
-        )
-        .map((tag) => ({
-          ...tag,
-          score: getTagScore(tag.label, tag.aliases, normalizedDraftTag),
-        }))
-        .filter((tag) => normalizedDraftTag && tag.score > 0)
-        .sort((left, right) => right.score - left.score || right.usageCount - left.usageCount)
-        .slice(0, 5),
-    [normalizedDraftTag, selectedTags]
-  );
   const isEditorEmpty = !hasMeaningfulHtml(editorHtml);
 
   useEffect(() => {
-    if (postId && !post) {
+    if (!postId) {
+      const savedDraft = getCommunityEditorDraft(draftKey);
+      const nextValues = savedDraft
+        ? {
+            title: savedDraft.title,
+            draftTag: savedDraft.draftTag,
+            selectedTags: savedDraft.selectedTags,
+            contentHtml: savedDraft.contentHtml,
+          }
+        : createEmptyValues();
+
+      setTitle(nextValues.title);
+      setDraftTag(nextValues.draftTag);
+      setSelectedTags(nextValues.selectedTags);
+      setEditorHtml(nextValues.contentHtml);
+      setDraftRecoveredAt(savedDraft?.updatedAt ?? null);
+      hydratedRef.current = true;
+
+      window.requestAnimationFrame(() => {
+        if (editorRef.current) {
+          editorRef.current.innerHTML = nextValues.contentHtml;
+        }
+      });
       return;
     }
 
-    const savedDraft = getCommunityEditorDraft(draftKey);
-    const baseValues: EditorValues = post
-      ? {
+    let cancelled = false;
+    setIsLoading(true);
+
+    fetchCommunityPostDetail(postId)
+      .then((post) => {
+        if (cancelled) {
+          return;
+        }
+
+        const savedDraft = getCommunityEditorDraft(draftKey);
+        const baseValues: EditorValues = {
           title: post.title,
           draftTag: '',
           selectedTags: post.tags,
-          contentHtml: post.contentHtml ?? `<p>${post.content}</p>`,
+          contentHtml: post.contentHtml,
+        };
+        const nextValues = savedDraft
+          ? {
+              title: savedDraft.title,
+              draftTag: savedDraft.draftTag,
+              selectedTags: savedDraft.selectedTags,
+              contentHtml: savedDraft.contentHtml,
+            }
+          : baseValues;
+
+        setTitle(nextValues.title);
+        setDraftTag(nextValues.draftTag);
+        setSelectedTags(nextValues.selectedTags);
+        setEditorHtml(nextValues.contentHtml);
+        setDraftRecoveredAt(savedDraft?.updatedAt ?? null);
+        hydratedRef.current = true;
+        setNotFound(false);
+
+        window.requestAnimationFrame(() => {
+          if (editorRef.current) {
+            editorRef.current.innerHTML = nextValues.contentHtml;
+          }
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNotFound(true);
         }
-      : createEmptyValues();
-
-    const nextValues: EditorValues = savedDraft
-      ? {
-          title: savedDraft.title,
-          draftTag: savedDraft.draftTag,
-          selectedTags: savedDraft.selectedTags,
-          contentHtml: savedDraft.contentHtml,
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
         }
-      : baseValues;
+      });
 
-    setTitle(nextValues.title);
-    setDraftTag(nextValues.draftTag);
-    setSelectedTags(nextValues.selectedTags);
-    setEditorHtml(nextValues.contentHtml);
-    setDraftRecoveredAt(savedDraft?.updatedAt ?? null);
-    hydratedRef.current = true;
-
-    window.requestAnimationFrame(() => {
-      if (editorRef.current) {
-        editorRef.current.innerHTML = nextValues.contentHtml;
-      }
-    });
+    return () => {
+      cancelled = true;
+    };
   }, [draftKey, postId]);
 
   useEffect(() => {
@@ -204,7 +196,43 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
     return () => window.clearTimeout(timeoutId);
   }, [draftKey, draftTag, editorHtml, selectedTags, title]);
 
-  if (postId && !post) {
+  useEffect(() => {
+    if (!normalizedDraftTag) {
+      setTagSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchCommunityTagSuggestions(draftTag)
+      .then((nextTagSuggestions) => {
+        if (!cancelled) {
+          setTagSuggestions(nextTagSuggestions);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTagSuggestions([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftTag, normalizedDraftTag]);
+
+  if (isLoading) {
+    return (
+      <div className="page-stack">
+        <section className="panel-card community-detail-card">
+          <p className="panel-meta">커뮤니티</p>
+          <h1 className="page-title">글 정보를 불러오는 중이다.</h1>
+        </section>
+      </div>
+    );
+  }
+
+  if (postId && notFound) {
     return (
       <div className="page-stack">
         <section className="panel-card community-detail-card">
@@ -212,8 +240,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
             뒤로가기
           </button>
           <p className="panel-meta">커뮤니티</p>
-          <h1 className="page-title">수정할 게시글을 찾을 수 없습니다.</h1>
-          <p className="muted-text">삭제되었거나 잘못된 경로입니다. 목록으로 돌아가 다시 확인해 주세요.</p>
+          <h1 className="page-title">수정할 게시글을 찾을 수 없다.</h1>
         </section>
       </div>
     );
@@ -302,14 +329,14 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
     document.execCommand(
       'insertHTML',
       false,
-      `<figure class="community-editor-figure"><img src="${escapeHtmlAttribute(source)}" alt="${escapeHtmlAttribute(altText)}" /></figure><p><br /></p>`
+      `<figure class="community-editor-figure"><img src="${escapeHtmlAttribute(source)}" alt="${escapeHtmlAttribute(altText)}" /></figure><p><br /></p>`,
     );
     syncEditorHtml();
   }
 
   function readAndInsertImage(file: File) {
     if (!file.type.startsWith('image/')) {
-      setFeedback('이미지 파일만 첨부할 수 있습니다.');
+      setFeedback('이미지 파일만 첨부할 수 있다.');
       return;
     }
 
@@ -325,8 +352,8 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
   }
 
   function handleAddTag(tagLabel: string) {
-    const resolvedLabel = resolveTagLabel(tagLabel);
-    const normalizedLabel = normalizeKeyword(resolvedLabel);
+    const trimmedTagLabel = tagLabel.trim();
+    const normalizedLabel = normalizeKeyword(trimmedTagLabel);
 
     if (!normalizedLabel) {
       return;
@@ -335,7 +362,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
     setSelectedTags((currentTags) =>
       currentTags.some((currentTag) => normalizeKeyword(currentTag) === normalizedLabel)
         ? currentTags
-        : [...currentTags, resolvedLabel]
+        : [...currentTags, trimmedTagLabel],
     );
     setDraftTag('');
     setFeedback(null);
@@ -385,57 +412,57 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
   }
 
   function handleResetToSavedSource() {
-    const baseValues: EditorValues = post
-      ? {
-          title: post.title,
-          draftTag: '',
-          selectedTags: post.tags,
-          contentHtml: post.contentHtml ?? `<p>${post.content}</p>`,
-        }
-      : createEmptyValues();
-
-    setTitle(baseValues.title);
-    setDraftTag(baseValues.draftTag);
-    setSelectedTags(baseValues.selectedTags);
-    setEditorHtml(baseValues.contentHtml);
     clearCommunityEditorDraft(draftKey);
     setDraftRecoveredAt(null);
-
-    if (editorRef.current) {
-      editorRef.current.innerHTML = baseValues.contentHtml;
-    }
+    window.location.reload();
   }
 
   function handleClearDraft() {
     clearCommunityEditorDraft(draftKey);
     setDraftRecoveredAt(null);
-    setFeedback('임시저장을 비웠습니다.');
+    setFeedback('임시 저장을 비웠다.');
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!title.trim() || !hasMeaningfulHtml(editorHtml)) {
-      setFeedback('제목과 본문은 반드시 입력해야 합니다.');
+      setFeedback('제목과 본문은 반드시 입력해야 한다.');
       return;
     }
 
-    const savedPostId = saveCommunityPost({
-      postId,
-      title,
-      tags: selectedTags,
-      contentHtml: editorHtml,
-    });
+    try {
+      let savedPostId = postId;
 
-    clearCommunityEditorDraft(draftKey);
-    navigate(getCommunityPostPath(savedPostId), {
-      state: {
-        from: window.history.state?.from ?? COMMUNITY_PATH,
-      },
-    });
+      if (postId) {
+        await updateCommunityPost(postId, {
+          title,
+          tags: selectedTags,
+          contentHtml: editorHtml,
+        });
+      } else {
+        savedPostId = await createCommunityPost({
+          title,
+          tags: selectedTags,
+          contentHtml: editorHtml,
+        });
+      }
+
+      clearCommunityEditorDraft(draftKey);
+      navigate(getCommunityPostPath(savedPostId!), {
+        state: {
+          from: window.history.state?.from ?? COMMUNITY_PATH,
+        },
+      });
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '게시글 저장에 실패했다.');
+    }
   }
 
+  const suggestedTags = useMemo(
+    () => tagSuggestions.filter((tag) => !selectedTags.some((selectedTag) => normalizeKeyword(selectedTag) === normalizeKeyword(tag.tag))),
+    [selectedTags, tagSuggestions],
+  );
   const savedDraftLabel = draftRecoveredAt ? new Date(draftRecoveredAt).toLocaleString('ko-KR') : null;
   const pageTitle = postId ? '게시글 수정' : '글쓰기';
-  const pageMeta = '커뮤니티';
   const pageChip = postId ? '글 수정' : '글쓰기';
 
   return (
@@ -457,20 +484,20 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
         </div>
 
         <div className="community-write-header">
-          <p className="panel-meta">{pageMeta}</p>
+          <p className="panel-meta">커뮤니티</p>
           <h1 className="page-title">{pageTitle}</h1>
-          <p className="muted-text">태그 추천, 이미지 첨부, 본문 서식, 임시저장 복구까지 한 화면에서 이어집니다.</p>
+          <p className="muted-text">굵게, 인용, 이미지 첨부, 임시 저장 복구까지 같은 화면에서 처리한다.</p>
         </div>
 
         {savedDraftLabel ? (
           <div className="community-draft-strip">
             <div className="community-draft-copy">
-              <strong>임시저장을 불러왔습니다.</strong>
-              <span>{savedDraftLabel} 기준으로 이어서 작성 중입니다.</span>
+              <strong>임시 저장을 불러왔다.</strong>
+              <span>{savedDraftLabel} 기준 내용으로 이어서 작성 중이다.</span>
             </div>
             <div className="community-draft-actions">
               <button type="button" className="btn ghost" onClick={handleClearDraft}>
-                임시저장 비우기
+                임시 저장 비우기
               </button>
               <button type="button" className="btn secondary" onClick={handleResetToSavedSource}>
                 {postId ? '원본으로 되돌리기' : '새 글로 초기화'}
@@ -490,7 +517,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
                   setTitle(event.target.value);
                   setFeedback(null);
                 }}
-                placeholder="제목을 입력하세요."
+                placeholder="제목을 입력해."
               />
             </label>
 
@@ -504,7 +531,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
                     value={draftTag}
                     onChange={(event) => setDraftTag(event.target.value)}
                     onKeyDown={handleTagKeyDown}
-                    placeholder="예: left_join, 101"
+                    placeholder="예: left_join, 00001-00001"
                   />
                   <button
                     type="button"
@@ -514,7 +541,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
                     aria-label="입력한 태그 추가"
                     title="입력한 태그 추가"
                   >
-                    <span aria-hidden="true">↵</span>
+                    +
                   </button>
                 </div>
 
@@ -522,31 +549,29 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
                   <div className="community-tag-related-box">
                     <div className="community-tag-related-head">
                       <span className="community-tag-related-title">관련 태그</span>
-                      <span className="community-tag-related-caption">입력할수록 더 가깝게 맞춰집니다.</span>
+                      <span className="community-tag-related-caption">입력값과 비슷한 태그를 보여준다.</span>
                     </div>
 
                     {suggestedTags.length > 0 ? (
                       <div className="community-tag-related-list">
                         {suggestedTags.map((tag) => (
                           <button
-                            key={tag.id}
+                            key={tag.tag}
                             type="button"
                             className="community-tag-related-item"
-                            onClick={() => handleAddTag(tag.label)}
+                            onClick={() => handleAddTag(tag.tag)}
                           >
-                            <span className="community-tag-related-name">#{tag.label}</span>
-                            <span className="community-tag-related-desc">{tag.description}</span>
+                            <span className="community-tag-related-name">#{tag.tag}</span>
+                            <span className="community-tag-related-desc">사용 {tag.usageCount}회</span>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <p className="community-tag-related-empty">비슷한 태그가 없으면 새 태그로 바로 추가됩니다.</p>
+                      <p className="community-tag-related-empty">비슷한 태그가 없으면 새 태그로 바로 추가된다.</p>
                     )}
                   </div>
                 ) : (
-                  <p className="hint-text community-tag-helper">
-                    태그를 한 글자씩 입력할 때마다 비슷한 태그가 아래에 바로 나타납니다.
-                  </p>
+                  <p className="hint-text community-tag-helper">태그를 1글자 이상 입력하면 비슷한 태그가 아래에 나온다.</p>
                 )}
               </div>
 
@@ -570,7 +595,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
             <div className="field-stack">
               <div className="community-editor-label-row">
                 <span className="field-label">본문</span>
-                <span className="hint-text">굵게, 소제목, 목록, 인용, 이미지 첨부</span>
+                <span className="hint-text">굵게, 인용, 링크, 이미지 첨부</span>
               </div>
 
               <div className="community-editor-shell">
@@ -587,34 +612,15 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
                     type="button"
                     className="mini-toggle community-editor-tool"
                     onMouseDown={handleToolbarMouseDown}
-                    onClick={() => runEditorCommand('formatBlock', 'h2')}
-                  >
-                    H2
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleToolbarMouseDown}
-                    onClick={() => runEditorCommand('insertUnorderedList')}
-                  >
-                    목록
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleToolbarMouseDown}
                     onClick={() => runEditorCommand('formatBlock', 'blockquote')}
                   >
-                    인용
+                    "
                   </button>
                   <button
                     type="button"
                     className="mini-toggle community-editor-tool"
                     onMouseDown={handleToolbarMouseDown}
-                    onClick={() => {
-                      rememberSelection();
-                      imageInputRef.current?.click();
-                    }}
+                    onClick={() => imageInputRef.current?.click()}
                   >
                     이미지
                   </button>
@@ -622,65 +628,30 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
 
                 <div
                   ref={editorRef}
-                  className={`community-editor-surface${isEditorEmpty ? ' is-empty' : ''}`}
+                  className={`community-editor-body ${isEditorEmpty ? 'is-empty' : ''}`.trim()}
                   contentEditable
                   suppressContentEditableWarning
-                  data-placeholder="질문 상황, 시도한 SQL, 실행 계획 이미지 등을 함께 적어주세요."
                   onInput={syncEditorHtml}
-                  onPaste={handleEditorPaste}
                   onBlur={rememberSelection}
                   onKeyUp={rememberSelection}
                   onMouseUp={rememberSelection}
-                  onFocus={rememberSelection}
+                  onPaste={handleEditorPaste}
+                  data-placeholder="본문을 입력해."
                 />
               </div>
             </div>
 
-            {feedback ? <p className="community-write-feedback">{feedback}</p> : null}
+            {feedback ? <p className="community-editor-feedback">{feedback}</p> : null}
 
-            <div className="auth-actions">
-              <button type="button" className="btn primary" onClick={handleSubmit}>
-                {postId ? '수정 저장' : '등록'}
-              </button>
+            <div className="community-write-actions">
               <button type="button" className="btn ghost" onClick={handleCancel}>
                 취소
               </button>
+              <button type="button" className="btn primary" onClick={handleSubmit}>
+                {postId ? '수정 저장' : '등록'}
+              </button>
             </div>
           </div>
-
-          <aside className="community-write-sidebar">
-            <section className="community-sidebar-card">
-              <div className="community-sidebar-header">
-                <div>
-                  <p className="panel-meta">편집 도움</p>
-                  <h2 className="panel-title">편집 도움</h2>
-                </div>
-                <span className="subtle-chip">에디터</span>
-              </div>
-
-              <div className="community-write-guide">
-                <p>굵게 버튼으로 오류 메시지나 핵심 조건을 바로 강조할 수 있습니다.</p>
-                <p>이미지 버튼이나 이미지 붙여넣기로 실행 계획 캡처를 본문 중간에 넣을 수 있습니다.</p>
-                <p>임시저장은 자동으로 저장되며, 다음에 다시 와도 이어서 수정할 수 있습니다.</p>
-              </div>
-            </section>
-
-            <section className="community-sidebar-card">
-              <div className="community-sidebar-header">
-                <div>
-                  <p className="panel-meta">작성 안내</p>
-                  <h2 className="panel-title">작성 팁</h2>
-                </div>
-                <span className="subtle-chip">가이드</span>
-              </div>
-
-              <div className="community-write-guide">
-                <p>제목에는 문제 번호나 핵심 키워드를 같이 넣으면 검색 노출에 유리합니다.</p>
-                <p>질문 글이라면 기대한 결과와 실제 결과, 시도한 SQL을 함께 적어두는 편이 좋습니다.</p>
-                <p>태그는 입력 중 바로 뜨는 관련 태그를 먼저 눌러서 표기 중복을 줄이도록 구성했습니다.</p>
-              </div>
-            </section>
-          </aside>
         </div>
       </section>
     </div>

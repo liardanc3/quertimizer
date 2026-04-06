@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -89,6 +90,10 @@ public class UserAccountService {
 
     public boolean isDuplicatedEmail(String email) {
         return userRepository.existsByEmail(email);
+    }
+
+    public Optional<User> findUser(String userId) {
+        return userRepository.findById(userId);
     }
 
     public Authentication login(LoginReq request) {

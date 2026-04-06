@@ -39,7 +39,6 @@ function createEmptyProblemPage(): ProblemPage {
 export default function HomePage() {
   const { isAuthenticated, isReady, userId } = useMockSession();
   const [domain, setDomain] = useState<DomainType>('rdbms');
-  const [showTags, setShowTags] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [showSolved, setShowSolved] = useState(true);
   const [showUnsolved, setShowUnsolved] = useState(true);
@@ -163,7 +162,6 @@ export default function HomePage() {
         <section className="panel-card problem-board">
           <div className="problem-board-header">
             <div className="problem-board-controls">
-              <ProblemModeSwitch label="태그 표시" checked={showTags} onChange={setShowTags} />
               <ProblemModeSwitch label="통계 표시" checked={showStats} onChange={setShowStats} />
 
               {canShowSolveState ? (
@@ -222,7 +220,6 @@ export default function HomePage() {
           ) : (
             <ProblemList
               problems={resolvedProblems}
-              showTags={showTags}
               showStats={showStats}
               showSolveState={canShowSolveState}
               onSearchSelect={applySearch}

@@ -23,11 +23,11 @@ export default function CommunityPostList({
       <section className="community-board-table is-empty">
         <div className="community-empty-state">
           <div className="community-empty-state-icon" aria-hidden="true">
-            ⌕
+            ⌁
           </div>
           <div className="community-empty-state-copy">
-            <strong>조건에 맞는 게시글이 아직 없습니다.</strong>
-            <p>검색어를 바꾸거나 필터를 해제해서 다시 찾아보세요.</p>
+            <strong>조건에 맞는 게시글이 아직 없다.</strong>
+            <p>검색어를 바꾸거나 필터를 해제해서 다시 찾아봐.</p>
           </div>
           <button type="button" className="btn secondary" onClick={onResetFilters}>
             검색 초기화
@@ -45,6 +45,7 @@ export default function CommunityPostList({
         <span role="columnheader">작성일</span>
         <span role="columnheader">조회수</span>
         <span role="columnheader">좋아요</span>
+        <span role="columnheader">댓글수</span>
       </div>
 
       {posts.map((post) => (

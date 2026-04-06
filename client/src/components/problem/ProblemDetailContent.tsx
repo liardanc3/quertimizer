@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { ProblemDetailData, ProblemOutputSampleData, ProblemSampleTableData } from '../../lib/problemApi';
 import ReactFlowDiagram from './ReactFlowDiagram';
 
@@ -507,6 +507,10 @@ function formatColumnKey(column: ParsedTableColumn) {
   return '-';
 }
 
+function getSectionToggleLabel(isCollapsed: boolean) {
+  return isCollapsed ? '펼치기' : '접기';
+}
+
 function ResizableGrid({ columns, rows, emptyMessage, initialWeights, minimumWeights, compact = false, resetKey = 0 }: ResizableGridProps) {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>([]);
@@ -649,6 +653,8 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
   const [erdResetKey, setErdResetKey] = useState(0);
   const [tableDragState, setTableDragState] = useState<DragState | null>(null);
   const [sampleDragState, setSampleDragState] = useState<DragState | null>(null);
+  const [tableDropTargetName, setTableDropTargetName] = useState<string | null>(null);
+  const [sampleDropTargetName, setSampleDropTargetName] = useState<string | null>(null);
   const [collapsedTableNames, setCollapsedTableNames] = useState<string[]>([]);
   const [collapsedSampleTableNames, setCollapsedSampleTableNames] = useState<string[]>([]);
   const [openedTableNames, setOpenedTableNames] = useState<string[]>([]);
@@ -782,8 +788,9 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
     description: string,
     isCollapsed: boolean,
     onToggle: () => void,
+    isDropTarget: boolean,
     onDrop: () => void,
-    onDragStart: () => void,
+    onDragStart: (event: DragEvent<HTMLSpanElement>) => void,
     onDragEnd: () => void,
     content: ReactNode,
     dragState: DragState | null,
@@ -791,8 +798,23 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
   ) => (
     <div
       key={`${keyPrefix}-${tableName}`}
-      className={`solve-detail-table-block ${dragState?.tableName === tableName ? 'is-dragging' : ''}`}
-      onDragOver={(event) => event.preventDefault()}
+      className={`solve-detail-table-block ${dragState?.tableName === tableName ? 'is-dragging' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+      onDragEnter={() => {
+        if (dragState == null) {
+          return;
+        }
+
+        if (keyPrefix === 'table') {
+          setTableDropTargetName(tableName);
+          return;
+        }
+
+        setSampleDropTargetName(tableName);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+      }}
       onDrop={onDrop}
     >
       <div className="solve-detail-table-block-header">
@@ -801,6 +823,7 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
             className="solve-detail-table-drag-handle"
             draggable
             aria-hidden="true"
+            title="드래그해서 순서 변경"
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >
@@ -813,6 +836,8 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
         </div>
 
         <div className="solve-detail-table-block-copy">
+          {dragState?.tableName === tableName ? <span className="solve-detail-drag-state">이동 중</span> : null}
+          {isDropTarget && dragState?.tableName !== tableName ? <span className="solve-detail-drop-state">여기에 놓기</span> : null}
           <p className="solve-detail-table-description">{description}</p>
           <p className="solve-detail-table-name">{tableName}</p>
         </div>
@@ -828,12 +853,14 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
         {renderTextBlock(descriptionLines, '문제 설명이 없다.')}
       </section>
 
-      <section className="solve-detail-section">
+      <section className="solve-detail-section solve-detail-section-table">
         <div className="solve-detail-section-header">
-          <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('table')}>
-            <span className={`solve-detail-section-arrow ${collapsedSections.table ? '' : 'is-open'}`}>{'>'}</span>
-            <h2 className="solve-detail-section-title">테이블</h2>
-          </button>
+          <div className="solve-detail-section-title-row">
+            <h2 className="solve-detail-section-title">테이블 정보</h2>
+            <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('table')}>
+              {getSectionToggleLabel(collapsedSections.table)}
+            </button>
+          </div>
           <button type="button" className="solve-detail-section-action" aria-label="테이블 너비 초기화" onClick={() => resetGridLayout('table')}>
             <RefreshIcon />
           </button>
@@ -863,13 +890,22 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
                     table.description,
                     collapsedTableNames.includes(table.name),
                     () => toggleCollapsedName(table.name, setCollapsedTableNames),
+                    tableDropTargetName === table.name && tableDragState?.tableName !== table.name,
                     () => {
                       if (!tableDragState) return;
                       moveOpenedName(tableDragState.tableName, table.name, setOpenedTableNames);
                       setTableDragState(null);
+                      setTableDropTargetName(null);
                     },
-                    () => setTableDragState({ tableName: table.name }),
-                    () => setTableDragState(null),
+                    (event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      setTableDragState({ tableName: table.name });
+                      setTableDropTargetName(table.name);
+                    },
+                    () => {
+                      setTableDragState(null);
+                      setTableDropTargetName(null);
+                    },
                     <ResizableGrid
                       columns={tableDefinitionColumns}
                       rows={table.columns.map((column) => [
@@ -896,12 +932,14 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
         ) : null}
       </section>
 
-      <section className="solve-detail-section">
+      <section className="solve-detail-section solve-detail-section-erd">
         <div className="solve-detail-section-header">
-          <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('erd')}>
-            <span className={`solve-detail-section-arrow ${collapsedSections.erd ? '' : 'is-open'}`}>{'>'}</span>
+          <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">ERD</h2>
-          </button>
+            <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('erd')}>
+              {getSectionToggleLabel(collapsedSections.erd)}
+            </button>
+          </div>
           <button type="button" className="solve-detail-section-action" aria-label="ERD 다시 맞춤" onClick={() => setErdResetKey((current) => current + 1)}>
             <RefreshIcon />
           </button>
@@ -920,12 +958,14 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
         ) : null}
       </section>
 
-      <section className="solve-detail-section">
+      <section className="solve-detail-section solve-detail-section-data-sample">
         <div className="solve-detail-section-header">
-          <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('dataSample')}>
-            <span className={`solve-detail-section-arrow ${collapsedSections.dataSample ? '' : 'is-open'}`}>{'>'}</span>
+          <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">데이터 예시</h2>
-          </button>
+            <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('dataSample')}>
+              {getSectionToggleLabel(collapsedSections.dataSample)}
+            </button>
+          </div>
           <button type="button" className="solve-detail-section-action" aria-label="데이터 예시 너비 초기화" onClick={() => resetGridLayout('dataSample')}>
             <RefreshIcon />
           </button>
@@ -957,13 +997,22 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
                     tableDefinition?.description ?? '예시 데이터',
                     collapsedSampleTableNames.includes(table.name),
                     () => toggleCollapsedName(table.name, setCollapsedSampleTableNames),
+                    sampleDropTargetName === table.name && sampleDragState?.tableName !== table.name,
                     () => {
                       if (!sampleDragState) return;
                       moveOpenedName(sampleDragState.tableName, table.name, setOpenedSampleTableNames);
                       setSampleDragState(null);
+                      setSampleDropTargetName(null);
                     },
-                    () => setSampleDragState({ tableName: table.name }),
-                    () => setSampleDragState(null),
+                    (event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      setSampleDragState({ tableName: table.name });
+                      setSampleDropTargetName(table.name);
+                    },
+                    () => {
+                      setSampleDragState(null);
+                      setSampleDropTargetName(null);
+                    },
                     <ResizableGrid
                       columns={table.columns.map((column) => ({ key: column, label: column }))}
                       rows={table.rows}
@@ -983,27 +1032,37 @@ export default function ProblemDetailContent({ detail }: ProblemDetailContentPro
       </section>
 
       <section className="solve-detail-section solve-detail-section-condition">
-        <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('condition')}>
-          <span className={`solve-detail-section-arrow ${collapsedSections.condition ? '' : 'is-open'}`}>{'>'}</span>
-          <h2 className="solve-detail-section-title">조건</h2>
-        </button>
+        <div className="solve-detail-section-header">
+          <div className="solve-detail-section-title-row">
+            <h2 className="solve-detail-section-title">조건</h2>
+            <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('condition')}>
+              {getSectionToggleLabel(collapsedSections.condition)}
+            </button>
+          </div>
+        </div>
         {!collapsedSections.condition ? <div className="solve-detail-section-body">{renderTextBlock(conditionLines, '조건 정보가 없다.')}</div> : null}
       </section>
 
       <section className="solve-detail-section solve-detail-section-output">
-        <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('output')}>
-          <span className={`solve-detail-section-arrow ${collapsedSections.output ? '' : 'is-open'}`}>{'>'}</span>
-          <h2 className="solve-detail-section-title">출력</h2>
-        </button>
+        <div className="solve-detail-section-header">
+          <div className="solve-detail-section-title-row">
+            <h2 className="solve-detail-section-title">출력</h2>
+            <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('output')}>
+              {getSectionToggleLabel(collapsedSections.output)}
+            </button>
+          </div>
+        </div>
         {!collapsedSections.output ? <div className="solve-detail-section-body">{renderTextBlock(outputLines, '출력 정보가 없다.')}</div> : null}
       </section>
 
-      <section className="solve-detail-section">
+      <section className="solve-detail-section solve-detail-section-output-sample">
         <div className="solve-detail-section-header">
-          <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('outputSample')}>
-            <span className={`solve-detail-section-arrow ${collapsedSections.outputSample ? '' : 'is-open'}`}>{'>'}</span>
+          <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">출력 예시</h2>
-          </button>
+            <button type="button" className="solve-detail-section-toggle" onClick={() => toggleSection('outputSample')}>
+              {getSectionToggleLabel(collapsedSections.outputSample)}
+            </button>
+          </div>
           <button type="button" className="solve-detail-section-action" aria-label="출력 예시 너비 초기화" onClick={() => resetGridLayout('outputSample')}>
             <RefreshIcon />
           </button>

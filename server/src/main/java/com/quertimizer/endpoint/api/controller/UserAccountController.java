@@ -48,7 +48,7 @@ public class UserAccountController {
                                        HttpServletRequest httpRequest,
                                        HttpServletResponse httpResponse) {
 
-        // 회원가입 처리 후 인증정보 세션에 저장(바로 로그인처리)
+        // 회원가입 처리, 인증정보 세션 저장
         Authentication authentication = userAccountService.signup(request);
         saveAuthenticationToSession(authentication, httpRequest, httpResponse);
 
@@ -58,20 +58,22 @@ public class UserAccountController {
     @PostMapping("/duplicate-check/userId")
     public ResponseEntity<DuplicateCheckRes> checkDuplicateUserId(@Valid @RequestBody DuplicateCheckUserIdReq request) {
 
-        // 아이디 중복검사 결과 반환
+        // userId 중복 확인
         if (userAccountService.isDuplicatedUserId(request.getUserId())) {
             return ResponseEntity.ok(DuplicateCheckRes.duplicated(DUPLICATED_USER_ID));
         }
+
         return ResponseEntity.ok(DuplicateCheckRes.available());
     }
 
     @PostMapping("/duplicate-check/email")
     public ResponseEntity<DuplicateCheckRes> checkDuplicateEmail(@Valid @RequestBody DuplicateCheckEmailReq request) {
 
-        // 이메일 중복검사 결과 반환
+        // email 중복 확인
         if (userAccountService.isDuplicatedEmail(request.getEmail())) {
             return ResponseEntity.ok(DuplicateCheckRes.duplicated(DUPLICATED_EMAIL));
         }
+
         return ResponseEntity.ok(DuplicateCheckRes.available());
     }
 
@@ -80,11 +82,11 @@ public class UserAccountController {
                                       HttpServletRequest httpRequest,
                                       HttpServletResponse httpResponse) {
 
-        // 로그인 처리 후 인증정보 세션에 저장
+        // 로그인 처리, 인증정보 세션 저장
         Authentication authentication = userAccountService.login(request);
         saveAuthenticationToSession(authentication, httpRequest, httpResponse);
 
-        // 로그인 유지 여부 처리
+        // remember-me 쿠키 처리
         if (request.isRememberLogin()) {
             rememberMeServices.loginSuccess(httpRequest, httpResponse, authentication);
         } else {
@@ -100,11 +102,12 @@ public class UserAccountController {
                                        Authentication authentication) {
         HttpSession session = httpRequest.getSession(false);
 
-        // 인증정보/세션 정리
+        // 인증정보, 세션 연결 정리
         if (session != null) {
             sessionStore.removeSession(session.getId());
             sessionWebSocketHandler.closeSessionSockets(session.getId());
         }
+
         rememberMeServices.logout(httpRequest, httpResponse, authentication);
         new SecurityContextLogoutHandler().logout(httpRequest, httpResponse, authentication);
 
@@ -116,14 +119,17 @@ public class UserAccountController {
                                                    HttpServletResponse httpResponse,
                                                    Authentication authentication) {
 
+        // 인증 세션 없음
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return ResponseEntity.ok(SessionMeRes.unauthenticated());
         }
 
-        // remember-me로 복원된 인증도 세션에 저장해 이후 요청과 WebSocket handshake에 재사용
+        // remember-me 복원 뒤 새 세션에 인증정보 재저장
         saveAuthenticationToSession(authentication, httpRequest, httpResponse);
 
-        return ResponseEntity.ok(SessionMeRes.authenticated(authentication.getName()));
+        return ResponseEntity.ok(userAccountService.findUser(authentication.getName())
+                .map(user -> SessionMeRes.authenticated(user.getUserId(), user.getResolvedDefaultDbms()))
+                .orElseGet(() -> SessionMeRes.authenticated(authentication.getName(), null)));
     }
 
     @PostMapping("/find-id/send-code")
@@ -138,7 +144,7 @@ public class UserAccountController {
     @PostMapping("/find-id/verify-code")
     public ResponseEntity<FindUserIdRes> findUserId(@Valid @RequestBody AccountRecoveryCodeReq request) {
 
-        // 인증코드 확인 후 아이디 반환
+        // 인증코드 확인, userId 반환
         return ResponseEntity.ok(userAccountService.findUserId(request));
     }
 
@@ -154,7 +160,7 @@ public class UserAccountController {
     @PostMapping("/find-password/verify-code")
     public ResponseEntity<Void> verifyFindPasswordCode(@Valid @RequestBody AccountRecoveryCodeReq request) {
 
-        // 인증코드 확인 후 비밀번호 재설정 가능상태로 변경
+        // 인증코드 확인, 비밀번호 재설정 가능 상태 전환
         userAccountService.verifyFindPasswordCode(request);
 
         return ResponseEntity.ok().build();

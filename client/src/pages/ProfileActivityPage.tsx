@@ -1,7 +1,20 @@
-import { useState, useSyncExternalStore } from 'react';
-import { getCommunityActivityData, getCommunityStoreSnapshot, subscribeCommunityStore } from '../lib/communityStore';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  fetchCommunityCommentsByUser,
+  fetchCommunityPostsByUser,
+  fetchLikedPostsByUser,
+  fetchMyCommunityComments,
+  fetchMyCommunityPosts,
+  fetchMyLikedPosts,
+  type ProfileCommunityComment,
+  type ProfileCommunityPost,
+} from '../lib/communityApi';
 import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
-import { mockCurrentHandle } from '../mocks/profile';
+import { useMockSession } from '../lib/session';
+
+interface ProfileActivityPageProps {
+  handle?: string;
+}
 
 type ActivityTab = 'posts' | 'comments' | 'likes';
 
@@ -18,31 +31,100 @@ function formatBoardDate(value: string) {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-export default function ProfileActivityPage() {
-  useSyncExternalStore(subscribeCommunityStore, getCommunityStoreSnapshot, () => '');
+function readActiveTab(): ActivityTab {
+  const tab = new URLSearchParams(window.location.search).get('tab');
 
-  const [activeTab, setActiveTab] = useState<ActivityTab>('posts');
-  const activity = getCommunityActivityData(mockCurrentHandle);
-  const tabs: Array<{ id: ActivityTab; label: string; count: number }> = [
-    { id: 'posts', label: '내 글', count: activity.posts.length },
-    { id: 'comments', label: '내 댓글', count: activity.comments.length },
-    { id: 'likes', label: '좋아요한 글', count: activity.likedPosts.length },
-  ];
+  return tab === 'comments' || tab === 'likes' ? tab : 'posts';
+}
+
+export default function ProfileActivityPage({ handle }: ProfileActivityPageProps) {
+  const { userId } = useMockSession();
+  const resolvedUserId = handle ?? userId;
+  const [activeTab, setActiveTab] = useState<ActivityTab>(readActiveTab());
+  const [posts, setPosts] = useState<ProfileCommunityPost[]>([]);
+  const [likedPosts, setLikedPosts] = useState<ProfileCommunityPost[]>([]);
+  const [comments, setComments] = useState<ProfileCommunityComment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!resolvedUserId) {
+      setPosts([]);
+      setLikedPosts([]);
+      setComments([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    const loadPosts = handle ? fetchCommunityPostsByUser(resolvedUserId) : fetchMyCommunityPosts();
+    const loadLikedPosts = handle ? fetchLikedPostsByUser(resolvedUserId) : fetchMyLikedPosts();
+    const loadComments = handle ? fetchCommunityCommentsByUser(resolvedUserId) : fetchMyCommunityComments();
+
+    Promise.all([loadPosts, loadLikedPosts, loadComments])
+      .then(([nextPosts, nextLikedPosts, nextComments]) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPosts(nextPosts);
+        setLikedPosts(nextLikedPosts);
+        setComments(nextComments);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        setErrorMessage(error instanceof Error ? error.message : '활동 기록 조회에 실패했다.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [handle, resolvedUserId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', activeTab);
+    const query = params.toString();
+    const nextPath = `${window.location.pathname}${query ? `?${query}` : ''}`;
+
+    window.history.replaceState(window.history.state ?? {}, '', nextPath);
+  }, [activeTab]);
+
+  const tabs: Array<{ id: ActivityTab; label: string; count: number }> = useMemo(() => [
+    { id: 'posts', label: '작성한 글', count: posts.length },
+    { id: 'comments', label: '작성한 댓글', count: comments.length },
+    { id: 'likes', label: '좋아요한 글', count: likedPosts.length },
+  ], [comments.length, likedPosts.length, posts.length]);
+
+  if (!resolvedUserId) {
+    return null;
+  }
 
   return (
     <div className="page-stack">
       <section className="panel-card community-activity-hero">
         <div className="community-detail-topbar">
-          <button type="button" className="btn ghost community-back-button" onClick={() => navigate(getProfilePath())}>
+          <button type="button" className="btn ghost community-back-button" onClick={() => navigate(getProfilePath(handle))}>
             뒤로가기
           </button>
-          <span className="subtle-chip">내 활동</span>
+          <span className="subtle-chip">활동</span>
         </div>
 
         <div className="community-activity-header">
           <p className="panel-meta">활동 기록</p>
-          <h1 className="page-title">내 활동</h1>
-          <p className="muted-text">작성 글, 댓글, 좋아요한 글을 한 번에 모아보는 화면입니다.</p>
+          <h1 className="page-title">커뮤니티 활동</h1>
+          <p className="muted-text">작성한 글, 댓글, 좋아요한 글을 한곳에서 본다.</p>
         </div>
 
         <div className="community-activity-summary">
@@ -70,15 +152,18 @@ export default function ProfileActivityPage() {
           ))}
         </div>
 
-        {activeTab === 'posts' ? (
-          activity.posts.length > 0 ? (
+        {isLoading ? <div className="community-activity-empty">불러오는 중이다.</div> : null}
+        {!isLoading && errorMessage ? <div className="community-activity-empty">{errorMessage}</div> : null}
+
+        {!isLoading && !errorMessage && activeTab === 'posts' ? (
+          posts.length > 0 ? (
             <div className="community-activity-list">
-              {activity.posts.map((post) => (
+              {posts.map((post) => (
                 <button
-                  key={post.id}
+                  key={post.postId}
                   type="button"
                   className="community-activity-item"
-                  onClick={() => navigate(getCommunityPostPath(post.id))}
+                  onClick={() => navigate(getCommunityPostPath(post.postId))}
                 >
                   <div className="community-activity-item-head">
                     <strong>{post.title}</strong>
@@ -86,23 +171,23 @@ export default function ProfileActivityPage() {
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
-                    <span>좋아요 {numberFormatter.format(post.likes)}</span>
-                    <span>댓글 {numberFormatter.format(post.comments)}</span>
+                    <span>좋아요 {numberFormatter.format(post.likeCount)}</span>
+                    <span>댓글 {numberFormatter.format(post.commentCount)}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="community-activity-empty">아직 작성한 글이 없습니다.</div>
+            <div className="community-activity-empty">아직 작성한 글이 없다.</div>
           )
         ) : null}
 
-        {activeTab === 'comments' ? (
-          activity.comments.length > 0 ? (
+        {!isLoading && !errorMessage && activeTab === 'comments' ? (
+          comments.length > 0 ? (
             <div className="community-activity-list">
-              {activity.comments.map((comment) => (
+              {comments.map((comment) => (
                 <button
-                  key={comment.id}
+                  key={comment.commentId}
                   type="button"
                   className="community-activity-item"
                   onClick={() => navigate(getCommunityPostPath(comment.postId))}
@@ -113,25 +198,25 @@ export default function ProfileActivityPage() {
                   </div>
                   <p>{comment.content}</p>
                   <div className="community-activity-item-meta">
-                    <span>{comment.depth > 0 ? '대댓글' : '댓글'}</span>
+                    <span>{comment.reply ? '대댓글' : '댓글'}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="community-activity-empty">아직 남긴 댓글이 없습니다.</div>
+            <div className="community-activity-empty">아직 작성한 댓글이 없다.</div>
           )
         ) : null}
 
-        {activeTab === 'likes' ? (
-          activity.likedPosts.length > 0 ? (
+        {!isLoading && !errorMessage && activeTab === 'likes' ? (
+          likedPosts.length > 0 ? (
             <div className="community-activity-list">
-              {activity.likedPosts.map((post) => (
+              {likedPosts.map((post) => (
                 <button
-                  key={post.id}
+                  key={post.postId}
                   type="button"
                   className="community-activity-item"
-                  onClick={() => navigate(getCommunityPostPath(post.id))}
+                  onClick={() => navigate(getCommunityPostPath(post.postId))}
                 >
                   <div className="community-activity-item-head">
                     <strong>{post.title}</strong>
@@ -139,14 +224,14 @@ export default function ProfileActivityPage() {
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
-                    <span>@{post.authorHandle}</span>
-                    <span>좋아요 {numberFormatter.format(post.likes)}</span>
+                    <span>좋아요 {numberFormatter.format(post.likeCount)}</span>
+                    <span>댓글 {numberFormatter.format(post.commentCount)}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="community-activity-empty">좋아요한 글이 아직 없습니다.</div>
+            <div className="community-activity-empty">좋아요한 글이 아직 없다.</div>
           )
         ) : null}
       </section>
