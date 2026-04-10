@@ -1,8 +1,16 @@
 package com.quertimizer.endpoint.websocket.handler;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.constant.DbmsType;
+import com.quertimizer.endpoint.websocket.dto.ProblemExecuteRes;
+import com.quertimizer.endpoint.websocket.dto.ProblemSocketReq;
 import com.quertimizer.log.LogFormatter;
+import com.quertimizer.service.ProblemQueryService;
+import com.quertimizer.service.ProblemWorkspaceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -10,6 +18,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -18,7 +27,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class SessionWebSocketHandler extends TextWebSocketHandler {
 
+    private final ObjectMapper objectMapper;
     private final LogFormatter logFormatter;
+    private final ProblemQueryService problemQueryService;
+    private final ProblemWorkspaceService problemWorkspaceService;
+    @Qualifier("problemExecutingExecutor")
+    private final TaskExecutor problemExecutingExecutor;
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionSockets = new ConcurrentHashMap<>();
 
     @Override
@@ -32,19 +46,35 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
             sessionSockets.computeIfAbsent(sessionId, key -> ConcurrentHashMap.newKeySet()).add(session);
         }
 
-        // 연결 완료 로그 기록 후 초기 연결 메시지 전송
+        // 연결 완료 로그 기록 및 초기 연결 메시지 전송
         log.info("{}", logFormatter.formatWebSocketLine(actor, "WebSocket connection open", null));
         sendTextMessage(session, "{\"type\":\"connected\",\"userId\":\"" + userId + "\"}");
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String actor = resolveActor(session);
         String prefix = logFormatter.prefix(actor);
 
         // 클라이언트에서 보낸 payload 로그 기록
         log.info("{}", logFormatter.formatWebSocketLine(actor, "WebSocket client-send", null));
         logLines(logFormatter.formatRequestBodyLines(prefix, message.getPayload()));
+
+        try {
+            ProblemSocketReq request = objectMapper.readValue(message.getPayload(), ProblemSocketReq.class);
+            if (request.type() == null || request.type().isBlank()) {
+                return;
+            }
+
+            switch (request.type()) {
+                case "problem.execute" -> handleProblemExecute(session, request);
+                case "problem.leave" -> handleProblemLeave(session, request);
+                default -> {
+                }
+            }
+        } catch (Exception exception) {
+            sendObjectMessage(session, ProblemExecuteRes.error(resolveErrorMessage(exception)));
+        }
     }
 
     @Override
@@ -56,19 +86,20 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
             removeSessionSocket(sessionId, session);
         }
 
+        // 연결 종료 후 문제 작업용 스키마 정리 예약
+        problemWorkspaceService.handleConnectionClose(session.getId());
         log.info("{}", logFormatter.formatWebSocketLine(actor, "WebSocket connection close", status.toString()));
     }
 
     public void closeSessionSockets(String sessionId) {
 
-        // 로그아웃한 HttpSession에 연결된 모든 WebSocket 종료
+        // 로그아웃 후 HttpSession에 연결된 모든 WebSocket 종료
         Set<WebSocketSession> webSocketSessions = sessionSockets.remove(sessionId);
         if (webSocketSessions == null) {
             return;
         }
 
         for (WebSocketSession webSocketSession : webSocketSessions) {
-
             if (!webSocketSession.isOpen()) {
                 continue;
             }
@@ -80,6 +111,24 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    private void handleProblemExecute(WebSocketSession session, ProblemSocketReq request) throws Exception {
+        String authenticatedUserId = resolveAuthenticatedUserId(session);
+
+        // SQL 실행은 별도 쓰레드에서 비동기 처리
+        problemExecutingExecutor.execute(() -> executeProblemQuery(session, request, authenticatedUserId));
+    }
+
+    private void handleProblemLeave(WebSocketSession session, ProblemSocketReq request) throws Exception {
+
+        // 명시적 페이지 이탈 후 작업용 스키마 정리
+        problemWorkspaceService.handleExplicitLeave(session.getId());
+        sendObjectMessage(session, ProblemExecuteRes.leaveSuccess(request.problemId()));
+    }
+
+    private void sendObjectMessage(WebSocketSession session, Object payload) throws Exception {
+        sendTextMessage(session, objectMapper.writeValueAsString(payload));
+    }
+
     private void sendTextMessage(WebSocketSession session, String payload) throws Exception {
         String actor = resolveActor(session);
         String prefix = logFormatter.prefix(actor);
@@ -87,7 +136,27 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         // 서버에서 보내는 payload도 동일한 형식으로 로그 기록
         log.info("{}", logFormatter.formatWebSocketLine(actor, "WebSocket server-send", null));
         logLines(logFormatter.formatResponseBodyLines(prefix, payload));
-        session.sendMessage(new TextMessage(payload));
+
+        synchronized (session) {
+            if (!session.isOpen()) {
+                return;
+            }
+
+            session.sendMessage(new TextMessage(payload));
+        }
+    }
+
+    private String resolveAuthenticatedUserId(WebSocketSession session) {
+        String userId = (String) session.getAttributes().get("userId");
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("로그인 정보가 없다.");
+        }
+
+        return userId;
+    }
+
+    private DbmsType resolveDbmsType(String dbms) {
+        return "oracle".equalsIgnoreCase(dbms) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
     }
 
     private String resolveActor(WebSocketSession session) {
@@ -115,9 +184,46 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         });
     }
 
-    private void logLines(java.util.List<String> logLines) {
+    private String resolveErrorMessage(Exception exception) {
+        if (exception.getMessage() != null && !exception.getMessage().isBlank()) {
+            return exception.getMessage();
+        }
+
+        return "문제 실행 처리에 실패했다.";
+    }
+
+    private void logLines(List<String> logLines) {
         for (String logLine : logLines) {
             log.info("{}", logLine);
+        }
+    }
+
+    private void executeProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedUserId) {
+        try {
+            ProblemQueryService.QueryExecutionResult executionResult = problemQueryService.executeInteractiveSql(
+                    authenticatedUserId,
+                    session.getId(),
+                    request.problemId(),
+                    request.sql(),
+                    resolveDbmsType(request.dbms())
+            );
+
+            sendObjectMessage(session, ProblemExecuteRes.executionSuccess(
+                    executionResult.problemId(),
+                    executionResult.mode(),
+                    executionResult.message(),
+                    executionResult.columns(),
+                    executionResult.rows(),
+                    executionResult.planLines(),
+                    executionResult.rowCount(),
+                    executionResult.executionTimeMs()
+            ));
+        } catch (Exception exception) {
+            try {
+                sendObjectMessage(session, ProblemExecuteRes.error(resolveErrorMessage(exception)));
+            } catch (Exception sendException) {
+                log.warn("문제 실행 실패 응답 전송에 실패했다.", sendException);
+            }
         }
     }
 

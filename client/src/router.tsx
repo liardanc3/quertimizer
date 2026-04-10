@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import AdminPage from './pages/AdminPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
 import CommunityPage from './pages/CommunityPage';
 import CommunityWritePage from './pages/CommunityWritePage';
@@ -31,6 +32,10 @@ interface CommunityRoute {
   type: 'community';
 }
 
+interface AdminRoute {
+  type: 'admin';
+}
+
 interface CommunityDetailRoute {
   type: 'communityDetail';
   postId: string;
@@ -60,6 +65,7 @@ type AppRoute =
   | ProblemsRoute
   | RankingRoute
   | CommunityRoute
+  | AdminRoute
   | CommunityWriteRoute
   | CommunityEditRoute
   | CommunityDetailRoute
@@ -87,12 +93,20 @@ function parseRoute(pathname: string): AppRoute {
     return { type: 'problems' };
   }
 
+  if (normalizedPathname === '/problems/create') {
+    return { type: 'admin' };
+  }
+
   if (normalizedPathname === '/ranking') {
     return { type: 'ranking' };
   }
 
   if (normalizedPathname === '/community') {
     return { type: 'community' };
+  }
+
+  if (normalizedPathname === '/admin') {
+    return { type: 'admin' };
   }
 
   if (normalizedPathname === '/community/write') {
@@ -150,6 +164,10 @@ export default function AppRouter() {
 
   if (route.type === 'community') {
     return <CommunityPage />;
+  }
+
+  if (route.type === 'admin') {
+    return <AdminPage />;
   }
 
   if (route.type === 'communityWrite') {

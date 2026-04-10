@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
+  ADMIN_PATH,
   COMMUNITY_PATH,
   LANDING_SIGNUP_PATH,
   PROBLEMS_PATH,
@@ -49,7 +50,7 @@ function formatNotificationTime(value: string) {
 }
 
 export default function Header() {
-  const { isAuthenticated, logout } = useMockSession();
+  const { isAuthenticated, isAdmin, logout } = useMockSession();
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
@@ -57,6 +58,8 @@ export default function Header() {
 
   const activeNav = pathname.startsWith(RANKING_PATH)
     ? 'ranking'
+    : pathname.startsWith(ADMIN_PATH)
+      ? 'admin'
     : pathname.startsWith(COMMUNITY_PATH)
       ? 'community'
       : pathname.startsWith(PROBLEMS_PATH)
@@ -169,6 +172,15 @@ export default function Header() {
           >
             커뮤니티
           </button>
+          {isAuthenticated && isAdmin ? (
+            <button
+              type="button"
+              className={`nav-pill ${activeNav === 'admin' ? 'is-active' : ''}`}
+              onClick={() => navigate(ADMIN_PATH)}
+            >
+              관리자
+            </button>
+          ) : null}
         </nav>
 
         <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>

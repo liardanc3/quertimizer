@@ -26,7 +26,7 @@ public class ProblemQueryService {
     private static final Pattern CREATE_INDEX_PATTERN = Pattern.compile("^CREATE\\s+(UNIQUE\\s+)?INDEX\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern DROP_INDEX_PATTERN = Pattern.compile("^DROP\\s+INDEX\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXPLAIN_ANALYZE_PATTERN = Pattern.compile("^EXPLAIN\\s+(\\([^)]*ANALYZE[^)]*\\)|ANALYZE\\b)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern OTHER_WORKSPACE_PATTERN = Pattern.compile("\\b[a-z0-9_]+_problem_set_\\d{5}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern OTHER_WORKSPACE_PATTERN = Pattern.compile("\\b[a-z0-9_]+_problem_\\d{5}_\\d{5}\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern BASE_WORKSPACE_PATTERN = Pattern.compile("\\bproblem_set_\\d{5}\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("\\bproblem_[a-z0-9_]+_template\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern MULTI_STATEMENT_PATTERN = Pattern.compile(";(?=.+\\S)");
@@ -116,7 +116,7 @@ public class ProblemQueryService {
         String currentWorkspacePrefix = sanitizeWorkspacePrefix(userId);
         while (otherWorkspaceMatcher.find()) {
             String schemaName = otherWorkspaceMatcher.group().toLowerCase(Locale.ROOT);
-            if (!schemaName.startsWith(currentWorkspacePrefix + "_problem_set_")) {
+            if (!schemaName.startsWith(currentWorkspacePrefix + "_problem_")) {
                 throw new IllegalArgumentException("다른 사용자 작업용 스키마에는 접근할 수 없다.");
             }
         }
@@ -247,7 +247,7 @@ public class ProblemQueryService {
             sanitizedUserId = "u_" + sanitizedUserId;
         }
 
-        int maxPrefixLength = Math.max(1, 63 - "_problem_set_00000".length());
+        int maxPrefixLength = Math.max(1, 63 - "_problem_00001_00001".length());
         return sanitizedUserId.length() > maxPrefixLength
                 ? sanitizedUserId.substring(0, maxPrefixLength)
                 : sanitizedUserId;

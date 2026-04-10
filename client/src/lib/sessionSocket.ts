@@ -5,6 +5,12 @@ const SESSION_SOCKET_PATH = '/ws/session';
 let sessionSocket: WebSocket | null = null;
 let connectPromise: Promise<void> | null = null;
 const manualCloseSockets = new WeakSet<WebSocket>();
+const messageListeners = new Set<(message: SessionSocketMessage) => void>();
+
+export interface SessionSocketMessage {
+  type: string;
+  [key: string]: unknown;
+}
 
 export class SessionSocketError extends Error {
   constructor(message = '로그인 웹소켓 연결에 실패했습니다.') {
@@ -73,6 +79,12 @@ export function connectSessionSocket() {
 
     socket.addEventListener('open', resolveConnection, { once: true });
     socket.addEventListener('error', rejectConnection, { once: true });
+    socket.addEventListener('message', (event) => {
+      try {
+        notifyMessageListeners(JSON.parse(event.data) as SessionSocketMessage);
+      } catch {
+      }
+    });
     socket.addEventListener(
       'close',
       () => {
@@ -91,6 +103,33 @@ export function connectSessionSocket() {
   return connectPromise;
 }
 
+export async function sendSessionSocketMessage(payload: object) {
+  await connectSessionSocket();
+
+  if (sessionSocket?.readyState !== WebSocket.OPEN) {
+    throw new SessionSocketError();
+  }
+
+  sessionSocket.send(JSON.stringify(payload));
+}
+
+export function sendSessionSocketMessageIfOpen(payload: object) {
+  if (sessionSocket?.readyState !== WebSocket.OPEN) {
+    return false;
+  }
+
+  sessionSocket.send(JSON.stringify(payload));
+  return true;
+}
+
+export function subscribeSessionSocketMessages(listener: (message: SessionSocketMessage) => void) {
+  messageListeners.add(listener);
+
+  return () => {
+    messageListeners.delete(listener);
+  };
+}
+
 export function disconnectSessionSocket() {
   if (!sessionSocket) {
     return;
@@ -104,4 +143,10 @@ export function disconnectSessionSocket() {
 
 export function isSessionSocketOpen() {
   return sessionSocket?.readyState === WebSocket.OPEN;
+}
+
+function notifyMessageListeners(message: SessionSocketMessage) {
+  for (const messageListener of messageListeners) {
+    messageListener(message);
+  }
 }

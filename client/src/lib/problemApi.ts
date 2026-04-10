@@ -23,6 +23,31 @@ interface ProblemPageResponse {
   problems?: ProblemListItemResponse[];
 }
 
+interface ProblemDetailResponse {
+  problemId?: string;
+  title?: string;
+  description?: string;
+  ddlPostgresql?: string;
+  ddlOracle?: string;
+  dataPostgresql?: string;
+  dataOracle?: string;
+  condition?: string;
+  output?: string;
+  outputSample?: string;
+}
+
+interface ProblemSetSummaryResponse {
+  problemSetId?: string;
+}
+
+interface ProblemSetDetailResponse {
+  problemSetId?: string;
+  ddlPostgresql?: string;
+  ddlOracle?: string;
+  dataPostgresql?: string;
+  dataOracle?: string;
+}
+
 export interface ProblemSampleTableData {
   name: string;
   columns: string[];
@@ -34,26 +59,44 @@ export interface ProblemOutputSampleData {
   rows: Array<Array<string | number | boolean | null>>;
 }
 
-interface ProblemDetailResponse {
-  problemId?: string;
-  title?: string;
-  description?: string;
-  ddl?: string;
-  condition?: string;
-  output?: string;
-  dataSample?: string;
-  outputSample?: string;
-}
-
 export interface ProblemDetailData {
   problemId: string;
   title: string;
   description: string;
-  ddl: string;
+  ddlPostgresql: string;
+  ddlOracle: string;
+  dataPostgresql: string;
+  dataOracle: string;
   condition: string;
   output: string;
-  dataSample: string;
   outputSample: string;
+}
+
+export interface ProblemSetSummary {
+  problemSetId: string;
+}
+
+export interface ProblemSetDetailData {
+  problemSetId: string;
+  ddlPostgresql: string;
+  ddlOracle: string;
+  dataPostgresql: string;
+  dataOracle: string;
+}
+
+export interface CreateProblemPayload {
+  title: string;
+  description: string;
+  ddlPostgresql: string;
+  ddlOracle: string;
+  condition: string;
+  output: string;
+  outputSample: string;
+  answer: string;
+  problemSetMode: 'existing' | 'new';
+  problemSetId?: string;
+  dataPostgresql?: string;
+  dataOracle?: string;
 }
 
 export interface FetchProblemsParams {
@@ -147,10 +190,12 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       typeof data.problemId !== 'string' ||
       typeof data.title !== 'string' ||
       typeof data.description !== 'string' ||
-      typeof data.ddl !== 'string' ||
+      typeof data.ddlPostgresql !== 'string' ||
+      typeof data.ddlOracle !== 'string' ||
+      typeof data.dataPostgresql !== 'string' ||
+      typeof data.dataOracle !== 'string' ||
       typeof data.condition !== 'string' ||
       typeof data.output !== 'string' ||
-      typeof data.dataSample !== 'string' ||
       typeof data.outputSample !== 'string'
     ) {
       throw new Error();
@@ -160,10 +205,12 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       problemId: data.problemId,
       title: data.title,
       description: data.description,
-      ddl: data.ddl,
+      ddlPostgresql: data.ddlPostgresql,
+      ddlOracle: data.ddlOracle,
+      dataPostgresql: data.dataPostgresql,
+      dataOracle: data.dataOracle,
       condition: data.condition,
       output: data.output,
-      dataSample: data.dataSample,
       outputSample: data.outputSample,
     };
   } catch {
@@ -228,5 +275,106 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
     };
   } catch {
     throw new Error('문제 목록 조회에 실패했다.');
+  }
+}
+
+export async function fetchProblemSets(): Promise<ProblemSetSummary[]> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/admin/problem-sets`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error('테이블셋 목록 조회에 실패했다.');
+  }
+
+  if (!response.ok) {
+    throw new Error('테이블셋 목록 조회에 실패했다.');
+  }
+
+  try {
+    const data = (await response.json()) as ProblemSetSummaryResponse[];
+
+    return Array.isArray(data)
+      ? data
+          .filter((item): item is Required<ProblemSetSummaryResponse> => typeof item.problemSetId === 'string')
+          .map((item) => ({ problemSetId: item.problemSetId }))
+      : [];
+  } catch {
+    throw new Error('테이블셋 목록 조회에 실패했다.');
+  }
+}
+
+export async function fetchProblemSetDetail(problemSetId: string): Promise<ProblemSetDetailData> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/admin/problem-sets/${encodeURIComponent(problemSetId)}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error('테이블셋 상세 조회에 실패했다.');
+  }
+
+  if (!response.ok) {
+    throw new Error('테이블셋 상세 조회에 실패했다.');
+  }
+
+  try {
+    const data = (await response.json()) as ProblemSetDetailResponse;
+    if (
+      typeof data.problemSetId !== 'string' ||
+      typeof data.ddlPostgresql !== 'string' ||
+      typeof data.ddlOracle !== 'string' ||
+      typeof data.dataPostgresql !== 'string' ||
+      typeof data.dataOracle !== 'string'
+    ) {
+      throw new Error();
+    }
+
+    return {
+      problemSetId: data.problemSetId,
+      ddlPostgresql: data.ddlPostgresql,
+      ddlOracle: data.ddlOracle,
+      dataPostgresql: data.dataPostgresql,
+      dataOracle: data.dataOracle,
+    };
+  } catch {
+    throw new Error('테이블셋 상세 조회에 실패했다.');
+  }
+}
+
+export async function createProblem(payload: CreateProblemPayload): Promise<string> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/admin/problems`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('문제 생성에 실패했다.');
+  }
+
+  if (!response.ok) {
+    throw new Error('문제 생성에 실패했다.');
+  }
+
+  try {
+    const data = (await response.json()) as { problemId?: string };
+    if (typeof data.problemId !== 'string') {
+      throw new Error();
+    }
+
+    return data.problemId;
+  } catch {
+    throw new Error('문제 생성에 실패했다.');
   }
 }

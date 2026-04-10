@@ -128,8 +128,8 @@ public class UserAccountController {
         saveAuthenticationToSession(authentication, httpRequest, httpResponse);
 
         return ResponseEntity.ok(userAccountService.findUser(authentication.getName())
-                .map(user -> SessionMeRes.authenticated(user.getUserId(), user.getResolvedDefaultDbms()))
-                .orElseGet(() -> SessionMeRes.authenticated(authentication.getName(), null)));
+                .map(user -> SessionMeRes.authenticated(user.getUserId(), user.getResolvedDefaultDbms(), user.getResolvedRole().name().toLowerCase()))
+                .orElseGet(() -> SessionMeRes.authenticated(authentication.getName(), null, null)));
     }
 
     @PostMapping("/find-id/send-code")

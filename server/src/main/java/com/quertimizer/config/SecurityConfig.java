@@ -1,5 +1,6 @@
 package com.quertimizer.config;
 
+import com.quertimizer.constant.UserRole;
 import com.quertimizer.filter.ApiLoggingFilter;
 import com.quertimizer.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class SecurityConfig {
                 .addFilterAfter(apiLoggingFilter, SecurityContextHolderFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/login", "/logout", "/signup").permitAll()
+                        .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().permitAll());
 
         return http.build();
@@ -61,7 +63,7 @@ public class SecurityConfig {
                         new org.springframework.security.core.userdetails.User(
                                 user.getUserId(),
                                 user.getPassword(),
-                                AuthorityUtils.NO_AUTHORITIES
+                                AuthorityUtils.createAuthorityList("ROLE_" + user.getResolvedRole().name())
                         ))
                 .orElseThrow(() -> new UsernameNotFoundException(username));
     }

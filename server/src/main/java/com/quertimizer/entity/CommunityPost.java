@@ -63,6 +63,26 @@ public class CommunityPost {
         );
     }
 
+    public static CommunityPost create(String postId,
+                                       String userId,
+                                       String title,
+                                       String contentHtml,
+                                       String contentText,
+                                       LocalDateTime createdAt) {
+        return new CommunityPost(
+                postId,
+                userId,
+                title,
+                contentHtml,
+                contentText,
+                0,
+                0,
+                0,
+                createdAt,
+                null
+        );
+    }
+
     public void changeContent(String title, String contentHtml, String contentText) {
         this.title = title;
         this.contentHtml = contentHtml;

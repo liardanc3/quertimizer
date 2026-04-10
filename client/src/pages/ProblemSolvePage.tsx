@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+﻿import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import { fetchProblemDetail, type ProblemDetailData } from '../lib/problemApi';
-import { ProblemSocketClient, ProblemSocketError, type ProblemSocketMessage } from '../lib/problemSocket';
+import {
+  SessionSocketError,
+  sendSessionSocketMessage,
+  sendSessionSocketMessageIfOpen,
+  subscribeSessionSocketMessages,
+  type SessionSocketMessage,
+} from '../lib/sessionSocket';
 import { useMockSession } from '../lib/session';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import type { DbmsType, ProblemDetail } from '../types/domain';
@@ -21,14 +27,6 @@ interface PanelVisibilityState {
 interface PanelDetachState {
   editor: boolean;
   submit: boolean;
-}
-
-interface WorkspaceDragState {
-  leftKey: PanelKey;
-  rightKey: PanelKey;
-  startX: number;
-  startLeftWeight: number;
-  startRightWeight: number;
 }
 
 interface FloatingPanelLayout {
@@ -72,7 +70,15 @@ interface PanelExternalWindowProps {
   children: ReactNode;
 }
 
+interface CollapsedCardState {
+  editor: boolean;
+  execute: boolean;
+  submit: boolean;
+  resultTable: boolean;
+}
+
 type ProblemExecutionMode = 'select' | 'explain' | 'explain_analyze' | 'command';
+const EXECUTION_RESULT_PAGE_SIZE = 10;
 
 interface ProblemExecutionResult {
   success: boolean;
@@ -85,10 +91,59 @@ interface ProblemExecutionResult {
   executionTimeMs?: number;
 }
 
+interface ProblemSocketMessage extends SessionSocketMessage {
+  success?: boolean;
+  problemId?: string | null;
+  mode?: string | null;
+  message?: string | null;
+  columns?: string[];
+  rows?: string[][];
+  planLines?: string[];
+  rowCount?: number;
+  executionTimeMs?: number | null;
+}
+
+type SqlAutocompleteKind = 'keyword' | 'table' | 'column';
+
+interface SqlAutocompleteItem {
+  value: string;
+  kind: SqlAutocompleteKind;
+  detail?: string;
+}
+
+interface GridColumn {
+  key: string;
+  label: string;
+}
+
+interface GridResizeState {
+  columnIndex: number;
+  startX: number;
+  startWidths: number[];
+}
+
+interface SqlAutocompleteState {
+  items: SqlAutocompleteItem[];
+  selectedIndex: number;
+  tokenStart: number;
+  tokenEnd: number;
+  left: number;
+  top: number;
+  maxWidth: number;
+  maxHeight: number;
+}
+
+interface SqlAutocompleteAnchor {
+  left: number;
+  top: number;
+  maxWidth: number;
+  maxHeight: number;
+}
+
 const panelOrder: PanelKey[] = ['editor', 'submit'];
 
 const panelLabels: Record<PanelKey, string> = {
-  editor: 'SQL Editor',
+  editor: '에디터',
   submit: '제출 결과',
 };
 
@@ -101,6 +156,56 @@ const panelMinHeights: Record<PanelKey, number> = {
   editor: 320,
   submit: 260,
 };
+
+const SQL_AUTOCOMPLETE_KEYWORDS = [
+  'SELECT',
+  'FROM',
+  'WHERE',
+  'GROUP BY',
+  'ORDER BY',
+  'HAVING',
+  'LIMIT',
+  'OFFSET',
+  'JOIN',
+  'INNER JOIN',
+  'LEFT JOIN',
+  'RIGHT JOIN',
+  'FULL JOIN',
+  'ON',
+  'AS',
+  'AND',
+  'OR',
+  'NOT',
+  'IN',
+  'EXISTS',
+  'BETWEEN',
+  'LIKE',
+  'IS NULL',
+  'IS NOT NULL',
+  'COUNT',
+  'SUM',
+  'AVG',
+  'MIN',
+  'MAX',
+  'DISTINCT',
+  'CASE',
+  'WHEN',
+  'THEN',
+  'ELSE',
+  'END',
+  'WITH',
+  'UNION',
+  'EXPLAIN',
+  'EXPLAIN ANALYZE',
+  'CREATE INDEX',
+  'DROP INDEX',
+];
+const SQL_EDITOR_INDENT = '    ';
+const SQL_EDITOR_MIN_HEIGHT = 256;
+const SQL_EDITOR_DEFAULT_FONT_SIZE = 13.5;
+const SQL_EDITOR_MIN_FONT_SIZE = 11;
+const SQL_EDITOR_MAX_FONT_SIZE = 24;
+const SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT = 4;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -122,12 +227,30 @@ function resolvePreferredDbms(availableDbms: DbmsType[], fallbackDbms: DbmsType[
   return availableDbms[0] ?? fallbackDbms[0] ?? 'postgresql';
 }
 
-function formatMs(value?: number) {
-  if (value === undefined) {
+function formatGroupedNumber(value?: number) {
+  if (value == null) {
     return '-';
   }
 
-  return `${Math.round(value * 10) / 10}ms`;
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+function formatExecutionSummary(executionResult: ProblemExecutionResult) {
+  const timeLabel = `${formatGroupedNumber(executionResult.executionTimeMs == null ? undefined : Math.round(executionResult.executionTimeMs))} ms`;
+
+  if (executionResult.mode === 'select') {
+    return `${timeLabel} ${formatGroupedNumber(executionResult.rowCount)} rows`;
+  }
+
+  if (executionResult.mode === 'command') {
+    return `${timeLabel} ${executionResult.success ? 'done' : 'failed'}`;
+  }
+
+  return `${timeLabel} ${formatGroupedNumber(executionResult.rowCount)} lines`;
+}
+
+function getExecutionResultPageCount(rowCount: number) {
+  return Math.max(1, Math.ceil(rowCount / EXECUTION_RESULT_PAGE_SIZE));
 }
 
 function toProblemSequence(problemId: string) {
@@ -135,6 +258,21 @@ function toProblemSequence(problemId: string) {
   const parsedNumber = Number.parseInt(problemSequence ?? '', 10);
 
   return Number.isNaN(parsedNumber) ? 0 : parsedNumber;
+}
+
+function buildColumnTemplate(columnWidths: number[]) {
+  return columnWidths.map((width) => `${width}px`).join(' ');
+}
+
+function resolveColumnWidths(containerWidth: number, columnCount: number, initialWeights?: number[]) {
+  const fallbackWeights = initialWeights ?? Array.from({ length: columnCount }, () => 1);
+  const totalWeight = fallbackWeights.reduce((sum, weight) => sum + weight, 0);
+
+  if (containerWidth <= 0 || totalWeight <= 0) {
+    return fallbackWeights.map(() => 160);
+  }
+
+  return fallbackWeights.map((weight) => (weight / totalWeight) * containerWidth);
 }
 
 function createFallbackProblemDetail(problemId: string): ProblemDetail {
@@ -166,8 +304,8 @@ function createInitialFloatingLayouts(): FloatingPanelLayoutState {
       height: 620,
     },
     submit: {
-      left: 812,
-      top: 118,
+      left: 840,
+      top: 500,
       width: 400,
       height: 330,
     },
@@ -194,6 +332,244 @@ function createProblemExecutionError(message: string): ProblemExecutionResult {
   };
 }
 
+function shouldRenderExecutionMessage(message: string) {
+  return !['조회 결과를 반환했다.', '실행 계획을 반환했다.'].includes(message.trim());
+}
+
+function resolveProblemDdl(detail: ProblemDetailData | null, dbms: DbmsType) {
+  const preferredDdl = dbms === 'oracle' ? detail?.ddlOracle ?? '' : detail?.ddlPostgresql ?? '';
+  const fallbackDdl = dbms === 'oracle' ? detail?.ddlPostgresql ?? '' : detail?.ddlOracle ?? '';
+
+  return preferredDdl.trim() !== '' ? preferredDdl : fallbackDdl;
+}
+
+function extractAutocompleteItemsFromDdl(ddl: string): SqlAutocompleteItem[] {
+  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\(([\s\S]*?)\);/gi;
+  const items: SqlAutocompleteItem[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = createTablePattern.exec(ddl)) != null) {
+    const tableName = match[1];
+    const tableBody = match[2];
+
+    items.push({
+      value: tableName,
+      kind: 'table',
+    });
+
+    tableBody
+      .split('\n')
+      .map((line) => line.trim().replace(/,$/, ''))
+      .filter(Boolean)
+      .forEach((line) => {
+        if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b/i.test(line)) {
+          return;
+        }
+
+        const columnMatch = line.match(/^("?[\w]+"?)\s+/);
+        if (!columnMatch) {
+          return;
+        }
+
+        items.push({
+          value: columnMatch[1].replace(/"/g, ''),
+          kind: 'column',
+          detail: tableName,
+        });
+      });
+  }
+
+  return items.filter(
+    (item, index, source) =>
+      source.findIndex(
+        (candidate) =>
+          candidate.value.toLowerCase() === item.value.toLowerCase() &&
+          candidate.kind === item.kind &&
+          (candidate.detail ?? '') === (item.detail ?? ''),
+      ) === index,
+  );
+}
+
+function getAutocompleteTokenRange(value: string, caretIndex: number) {
+  let tokenStart = caretIndex;
+  let tokenEnd = caretIndex;
+
+  while (tokenStart > 0 && /[A-Za-z0-9_]/.test(value[tokenStart - 1])) {
+    tokenStart -= 1;
+  }
+
+  while (tokenEnd < value.length && /[A-Za-z0-9_]/.test(value[tokenEnd])) {
+    tokenEnd += 1;
+  }
+
+  const currentToken = value.slice(tokenStart, tokenEnd);
+  const typedToken = value.slice(tokenStart, caretIndex);
+
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(currentToken) || typedToken.length === 0) {
+    return null;
+  }
+
+  return {
+    tokenStart,
+    tokenEnd,
+    currentToken,
+    typedToken,
+  };
+}
+
+function createAutocompleteSuggestions(items: SqlAutocompleteItem[], typedToken: string) {
+  const normalizedTypedToken = typedToken.toLowerCase();
+  const kindPriority: Record<SqlAutocompleteKind, number> = {
+    keyword: 0,
+    table: 1,
+    column: 2,
+  };
+
+  return items
+    .filter((item) => {
+      if (!item.value.toLowerCase().startsWith(normalizedTypedToken)) {
+        return false;
+      }
+
+      if (item.kind === 'keyword' && item.value.replace(/\s+/g, '').length < 3) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((left, right) => {
+      const kindOrder = kindPriority[left.kind] - kindPriority[right.kind];
+      if (kindOrder !== 0) {
+        return kindOrder;
+      }
+
+      const leftExact = left.value.toLowerCase() === normalizedTypedToken ? 1 : 0;
+      const rightExact = right.value.toLowerCase() === normalizedTypedToken ? 1 : 0;
+      if (leftExact !== rightExact) {
+        return leftExact - rightExact;
+      }
+
+      if (left.value.length !== right.value.length) {
+        return left.value.length - right.value.length;
+      }
+
+      return left.value.localeCompare(right.value);
+      })
+      .slice(0, 6);
+}
+
+function indentSqlEditorValue(value: string, selectionStart: number, selectionEnd: number) {
+  if (selectionStart === selectionEnd) {
+    const nextSql = `${value.slice(0, selectionStart)}${SQL_EDITOR_INDENT}${value.slice(selectionEnd)}`;
+    const nextCaretIndex = selectionStart + SQL_EDITOR_INDENT.length;
+
+    return {
+      nextSql,
+      nextSelectionStart: nextCaretIndex,
+      nextSelectionEnd: nextCaretIndex,
+    };
+  }
+
+  const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+  const selectedText = value.slice(lineStart, selectionEnd);
+  const indentedText = selectedText
+    .split('\n')
+    .map((line) => `${SQL_EDITOR_INDENT}${line}`)
+    .join('\n');
+  const lineCount = selectedText.split('\n').length;
+
+  return {
+    nextSql: `${value.slice(0, lineStart)}${indentedText}${value.slice(selectionEnd)}`,
+    nextSelectionStart: selectionStart + SQL_EDITOR_INDENT.length,
+    nextSelectionEnd: selectionEnd + SQL_EDITOR_INDENT.length * lineCount,
+  };
+}
+
+function measureAutocompleteAnchor(textarea: HTMLTextAreaElement, value: string, caretIndex: number, suggestionCount: number): SqlAutocompleteAnchor {
+  const computedStyle = window.getComputedStyle(textarea);
+  const mirror = document.createElement('div');
+  const mirrorHost = textarea.parentElement ?? document.body;
+  const textareaRect = textarea.getBoundingClientRect();
+  const mirrorStyleProperties = [
+    'box-sizing',
+    'padding-top',
+    'padding-right',
+    'padding-bottom',
+    'padding-left',
+    'border-top-width',
+    'border-right-width',
+    'border-bottom-width',
+    'border-left-width',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'letter-spacing',
+    'line-height',
+    'text-transform',
+    'text-indent',
+    'tab-size',
+  ];
+
+  mirrorStyleProperties.forEach((property) => {
+    mirror.style.setProperty(property, computedStyle.getPropertyValue(property));
+  });
+
+  mirror.style.position = 'absolute';
+  mirror.style.visibility = 'hidden';
+  mirror.style.pointerEvents = 'none';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.wordBreak = 'break-word';
+  mirror.style.overflowWrap = 'anywhere';
+  mirror.style.left = '0';
+  mirror.style.top = '0';
+  mirror.style.width = `${textarea.clientWidth}px`;
+  mirror.style.minHeight = `${textarea.clientHeight}px`;
+  mirror.style.overflow = 'hidden';
+
+  mirror.textContent = value.slice(0, caretIndex);
+
+  const caretMarker = document.createElement('span');
+  caretMarker.textContent = value.slice(caretIndex, caretIndex + 1) || ' ';
+  mirror.appendChild(caretMarker);
+  mirrorHost.appendChild(mirror);
+  const editorPadding = 12;
+  const panelGap = 8;
+  const lineHeight = caretMarker.offsetHeight || Number.parseFloat(computedStyle.lineHeight) || Number.parseFloat(computedStyle.fontSize) * 1.5 || 20;
+  const availableWidth = Math.max(160, textarea.clientWidth - editorPadding * 2);
+  const maxWidth = Math.min(448, availableWidth);
+  const caretLeft = caretMarker.offsetLeft - textarea.scrollLeft;
+  const left = clamp(textareaRect.left + caretLeft, editorPadding, Math.max(editorPadding, window.innerWidth - maxWidth - editorPadding));
+  const caretTop = caretMarker.offsetTop - textarea.scrollTop;
+  const caretBottom = caretTop + lineHeight;
+  const panelMaxHeight = 184;
+  const desiredVisibleItems = Math.min(suggestionCount, 6);
+  const overflowVisibleItems = Math.min(suggestionCount, SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT);
+  const desiredPopupHeight = Math.min(panelMaxHeight, 18 + desiredVisibleItems * 30);
+  const belowTop = caretBottom + panelGap;
+  const availableBelow = Math.max(0, textarea.clientHeight - belowTop - editorPadding);
+  const exceedsEditor = availableBelow < desiredPopupHeight;
+  const overflowAllowance = overflowVisibleItems * 30;
+  const maxHeight = Math.max(
+    0,
+    Math.min(
+      exceedsEditor ? availableBelow + overflowAllowance : desiredPopupHeight,
+      desiredPopupHeight,
+      Math.max(56, window.innerHeight - (textareaRect.top + belowTop) - editorPadding),
+    ),
+  );
+  const top = textareaRect.top + belowTop;
+
+  mirrorHost.removeChild(mirror);
+
+  return {
+    left,
+    top,
+    maxWidth,
+    maxHeight,
+  };
+}
+
 function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecutionResult {
   return {
     success: message.success ?? false,
@@ -207,7 +583,18 @@ function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecuti
   };
 }
 
-function renderResultTable(columns: string[], rows: string[][], emptyMessage: string) {
+function renderResultTable(
+  columns: string[],
+  rows: string[][],
+  emptyMessage: string,
+  currentPage: number,
+  onPageChange: (page: number) => void,
+  pageInput: string,
+  onPageInputChange: (value: string) => void,
+  collapsed: boolean,
+  onToggleCollapse: () => void,
+  resetKey: number,
+) {
   if (rows.length === 0) {
     return <div className="solve-result-empty solve-result-empty-table">{emptyMessage}</div>;
   }
@@ -217,39 +604,112 @@ function renderResultTable(columns: string[], rows: string[][], emptyMessage: st
       ? columns
       : Array.from({ length: rows.reduce((maxCount, row) => Math.max(maxCount, row.length), 0) }, (_, index) => `컬럼 ${index + 1}`);
 
+  const totalPages = getExecutionResultPageCount(rows.length);
+  const normalizedPage = clamp(currentPage, 1, totalPages);
+  const pageRows = rows.slice(
+    (normalizedPage - 1) * EXECUTION_RESULT_PAGE_SIZE,
+    normalizedPage * EXECUTION_RESULT_PAGE_SIZE,
+  );
+  const gridColumns = columnLabels.map((columnLabel) => ({ key: columnLabel, label: columnLabel }));
+  const gridRows = pageRows.map((row) => columnLabels.map((_, columnIndex) => formatCellValue(row[columnIndex])));
+
   return (
-    <div className="result-table-scroll">
-      <table className="result-table solve-pane-result-table">
-        <thead>
-          <tr>
-            {columnLabels.map((columnLabel) => (
-              <th key={columnLabel} scope="col">
-                {columnLabel}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={`result-row-${rowIndex}`}>
-              {columnLabels.map((columnLabel, columnIndex) => (
-                <td key={`result-row-${rowIndex}-${columnLabel}`}>{formatCellValue(row[columnIndex])}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="solve-result-table-block">
+      <div className="solve-detail-table-block solve-result-table-shell">
+        <div className="solve-detail-table-block-header">
+          <div className="solve-detail-table-block-actions">
+            <button type="button" className="solve-detail-table-toggle" aria-expanded={!collapsed} onClick={onToggleCollapse}>
+              <span className={`solve-detail-table-toggle-icon ${collapsed ? '' : 'is-open'}`}>{'>'}</span>
+            </button>
+          </div>
+
+          <div className="solve-detail-table-block-copy">
+            <p className="solve-detail-table-name solve-result-table-name">Result</p>
+          </div>
+        </div>
+
+        {!collapsed ? <ExecutionResultGrid columns={gridColumns} rows={gridRows} emptyMessage={emptyMessage} resetKey={resetKey} /> : null}
+      </div>
+
+      {!collapsed && totalPages > 1 ? (
+        <div className="solve-result-pagination">
+          <button
+            type="button"
+            className="mini-toggle solve-result-pagination-button"
+            onClick={() => onPageChange(normalizedPage - 1)}
+            disabled={normalizedPage === 1}
+          >
+            이전
+          </button>
+          <span className="solve-result-pagination-label">
+            {normalizedPage} / {totalPages}
+          </span>
+          <form
+            className="solve-result-pagination-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const parsedPage = Number.parseInt(pageInput, 10);
+              if (Number.isNaN(parsedPage)) {
+                onPageInputChange(String(normalizedPage));
+                return;
+              }
+
+              onPageChange(clamp(parsedPage, 1, totalPages));
+            }}
+          >
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              className="text-field solve-result-pagination-input"
+              value={pageInput}
+              onChange={(event) => onPageInputChange(event.target.value)}
+            />
+            <button type="submit" className="mini-toggle solve-result-pagination-button">
+              이동
+            </button>
+          </form>
+          <button
+            type="button"
+            className="mini-toggle solve-result-pagination-button"
+            onClick={() => onPageChange(normalizedPage + 1)}
+            disabled={normalizedPage === totalPages}
+          >
+            다음
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function renderExecutionContent(executionResult: ProblemExecutionResult) {
+function renderExecutionContent(
+  executionResult: ProblemExecutionResult,
+  currentPage: number,
+  onPageChange: (page: number) => void,
+  pageInput: string,
+  onPageInputChange: (value: string) => void,
+  collapsed: boolean,
+  onToggleCollapse: () => void,
+  resetKey: number,
+) {
   if (!executionResult.success) {
     return null;
   }
 
   if (executionResult.mode === 'select') {
-    return renderResultTable(executionResult.columns, executionResult.rows, '표시할 실행 결과가 없다.');
+    return renderResultTable(
+      executionResult.columns,
+      executionResult.rows,
+      '표시할 실행 결과가 없다.',
+      currentPage,
+      onPageChange,
+      pageInput,
+      onPageInputChange,
+      collapsed,
+      onToggleCollapse,
+      resetKey,
+    );
   }
 
   if (executionResult.mode === 'explain' || executionResult.mode === 'explain_analyze') {
@@ -305,6 +765,145 @@ function CloseIcon() {
         fill="currentColor"
       />
     </svg>
+  );
+}
+
+function CollapseChevronIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d={collapsed ? 'M4.2 6.2 8 10l3.8-3.8' : 'M4.2 9.8 8 6l3.8 3.8'}
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M16.2 9.1a6.2 6.2 0 1 1-1.6-4.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+      <path d="M12.8 3.2h2.8V6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function ExecutionResultGrid({ columns, rows, emptyMessage, resetKey }: { columns: GridColumn[]; rows: string[][]; emptyMessage: string; resetKey: number }) {
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [columnWidths, setColumnWidths] = useState<number[]>([]);
+  const [resizeState, setResizeState] = useState<GridResizeState | null>(null);
+  const columnSignature = columns.map((column) => column.key).join('|');
+
+  useEffect(() => {
+    if (!gridRef.current || columns.length === 0) {
+      setColumnWidths([]);
+      return;
+    }
+
+    const containerWidth = gridRef.current.getBoundingClientRect().width;
+    setColumnWidths(resolveColumnWidths(containerWidth, columns.length));
+  }, [columnSignature, columns.length, resetKey]);
+
+  useEffect(() => {
+    if (!resizeState) {
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!gridRef.current) {
+        return;
+      }
+
+      const containerWidth = gridRef.current.getBoundingClientRect().width;
+      const minimumColumnWidths = resizeState.startWidths.map(() => Math.max(88, containerWidth * 0.08));
+      const deltaWidth = event.clientX - resizeState.startX;
+      const leftWidth = resizeState.startWidths[resizeState.columnIndex];
+      const rightWidth = resizeState.startWidths[resizeState.columnIndex + 1];
+      const pairWidth = leftWidth + rightWidth;
+      const nextLeftWidth = Math.min(
+        Math.max(leftWidth + deltaWidth, minimumColumnWidths[resizeState.columnIndex]),
+        pairWidth - minimumColumnWidths[resizeState.columnIndex + 1],
+      );
+      const nextWidths = [...resizeState.startWidths];
+
+      nextWidths[resizeState.columnIndex] = nextLeftWidth;
+      nextWidths[resizeState.columnIndex + 1] = pairWidth - nextLeftWidth;
+      setColumnWidths(nextWidths);
+    };
+
+    const handleMouseUp = () => {
+      setResizeState(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizeState]);
+
+  if (columns.length === 0) {
+    return <p className="solve-detail-empty">{emptyMessage}</p>;
+  }
+
+  const resolvedColumnWidths = columnWidths.length === columns.length ? columnWidths : resolveColumnWidths(0, columns.length);
+  const columnTemplate = buildColumnTemplate(resolvedColumnWidths);
+  const rowWidth = `${resolvedColumnWidths.reduce((sum, width) => sum + width, 0)}px`;
+
+  const renderResizer = (columnIndex: number, label: string) => {
+    if (columnIndex >= columns.length - 1) {
+      return null;
+    }
+
+    return (
+      <button
+        type="button"
+        className="solve-detail-grid-resizer"
+        aria-label={`${label} 너비 조절`}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          setResizeState({
+            columnIndex,
+            startX: event.clientX,
+            startWidths: resolvedColumnWidths,
+          });
+        }}
+      />
+    );
+  };
+
+  return (
+    <div className="solve-detail-grid-table solve-result-grid-table" ref={gridRef}>
+      <div className="solve-detail-grid-row solve-detail-grid-row-head is-compact" style={{ gridTemplateColumns: columnTemplate, width: rowWidth }}>
+        {columns.map((column, columnIndex) => (
+          <div key={column.key} className="solve-detail-grid-cell solve-detail-grid-cell-head is-compact">
+            <span>{column.label}</span>
+            {renderResizer(columnIndex, column.label)}
+          </div>
+        ))}
+      </div>
+
+      {rows.length > 0 ? (
+        rows.map((row, rowIndex) => (
+          <div key={`execution-grid-row-${rowIndex}`} className="solve-detail-grid-row is-compact" style={{ gridTemplateColumns: columnTemplate, width: rowWidth }}>
+            {columns.map((column, columnIndex) => (
+              <div key={`execution-grid-row-${rowIndex}-${column.key}`} className="solve-detail-grid-cell is-compact">
+                {formatCellValue(row[columnIndex])}
+                {renderResizer(columnIndex, column.label)}
+              </div>
+            ))}
+          </div>
+        ))
+      ) : (
+        <p className="solve-detail-empty">{emptyMessage}</p>
+      )}
+    </div>
   );
 }
 
@@ -377,16 +976,24 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 }
 
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
-  const workspaceRef = useRef<HTMLDivElement | null>(null);
-  const problemSocketRef = useRef<ProblemSocketClient | null>(null);
+  const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const { defaultDbms, isAuthenticated } = useMockSession();
   const fallbackProblem = createFallbackProblemDetail(problemId);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<ProblemExecutionResult | null>(null);
-  const [isExecutionSheetOpen, setIsExecutionSheetOpen] = useState(false);
+  const [executionResultPage, setExecutionResultPage] = useState(1);
+  const [executionResultPageInput, setExecutionResultPageInput] = useState('1');
   const [isExecuting, setIsExecuting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [autocompleteState, setAutocompleteState] = useState<SqlAutocompleteState | null>(null);
+  const [collapsedCards, setCollapsedCards] = useState<CollapsedCardState>({
+    editor: false,
+    execute: false,
+    submit: false,
+    resultTable: false,
+  });
+  const [executionResultGridResetKey, setExecutionResultGridResetKey] = useState(0);
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibilityState>({
     editor: true,
     submit: true,
@@ -399,11 +1006,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     editor: false,
     submit: false,
   });
-  const [panelWeights, setPanelWeights] = useState<Record<PanelKey, number>>({
-    editor: 65,
-    submit: 35,
-  });
-  const [workspaceDragState, setWorkspaceDragState] = useState<WorkspaceDragState | null>(null);
   const [floatingLayouts, setFloatingLayouts] = useState<FloatingPanelLayoutState>(() => createInitialFloatingLayouts());
   const [floatingMoveState, setFloatingMoveState] = useState<FloatingMoveState | null>(null);
   const [floatingResizeState, setFloatingResizeState] = useState<FloatingResizeState | null>(null);
@@ -413,14 +1015,27 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null)
   );
   const [sql, setSql] = useState(problem.starterSql);
+  const [sqlEditorFontSize, setSqlEditorFontSize] = useState(SQL_EDITOR_DEFAULT_FONT_SIZE);
+  const selectedDdl = useMemo(() => resolveProblemDdl(problemDetail, selectedDbms), [problemDetail, selectedDbms]);
+  const ddlAutocompleteItems = useMemo(() => extractAutocompleteItemsFromDdl(selectedDdl), [selectedDdl]);
+  const autocompleteItems = useMemo(
+    () => [
+      ...SQL_AUTOCOMPLETE_KEYWORDS.map(
+        (keyword) =>
+          ({
+            value: keyword,
+            kind: 'keyword',
+          }) satisfies SqlAutocompleteItem,
+      ),
+      ...ddlAutocompleteItems,
+    ],
+    [ddlAutocompleteItems],
+  );
 
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
-    problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중...'));
+    problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중..'));
 
-  const visibleWorkspacePanels = panelOrder.filter(
-    (panelKey) => panelVisibility[panelKey] && !detachedPanels[panelKey] && !externalWindowPanels[panelKey],
-  );
   const visibleFloatingPanels = panelOrder.filter(
     (panelKey) => panelVisibility[panelKey] && detachedPanels[panelKey] && !externalWindowPanels[panelKey],
   );
@@ -456,52 +1071,100 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   useEffect(() => {
     setSql(fallbackProblem.starterSql);
     setExecutionResult(null);
-    setIsExecutionSheetOpen(false);
+    setExecutionResultPage(1);
     setIsExecuting(false);
     setSubmitMessage(null);
     setSelectedDbms(resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
-  }, [availableDbms, defaultDbms, fallbackProblem.starterSql, problem.dbmsOptions, problemId]);
+  }, [defaultDbms, problemId]);
 
   useEffect(() => {
-    const problemSocketClient = new ProblemSocketClient({
-      onMessage: (message) => {
-        if (message.type === 'connected' || message.type === 'problem.leave.result') {
-          return;
-        }
+    if (!sqlEditorRef.current) {
+      return;
+    }
 
-        if (message.type === 'problem.execute.result' || message.type === 'error') {
-          setIsExecuting(false);
-          setExecutionResult(
-            message.type === 'error'
-              ? createProblemExecutionError(message.message ?? '문제 실행에 실패했다.')
-              : toProblemExecutionResult(message)
-          );
-          setIsExecutionSheetOpen(true);
-        }
-      },
-      onClose: () => {
-        setIsExecuting(false);
-      },
-      onError: () => {
-        setIsExecuting(false);
-      },
-    });
+    const textarea = sqlEditorRef.current;
+    textarea.style.height = '0px';
+    textarea.style.height = `${Math.max(SQL_EDITOR_MIN_HEIGHT, textarea.scrollHeight)}px`;
+  }, [collapsedCards.editor, sql, sqlEditorFontSize]);
 
-    problemSocketRef.current = problemSocketClient;
+  useEffect(() => {
+    if (autocompleteState == null || !sqlEditorRef.current) {
+      return;
+    }
+
+    updateAutocompleteState(sqlEditorRef.current.value, sqlEditorRef.current.selectionStart ?? sqlEditorRef.current.value.length);
+  }, [autocompleteState != null, sqlEditorFontSize]);
+
+  useEffect(() => {
+    if (autocompleteState == null) {
+      return;
+    }
+
+    const handleViewportChange = () => {
+      refreshAutocompleteFromEditor();
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
 
     return () => {
-      problemSocketClient.leave(problemId);
-      problemSocketClient.close();
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [autocompleteState, sqlEditorFontSize]);
 
-      if (problemSocketRef.current === problemSocketClient) {
-        problemSocketRef.current = null;
+  useEffect(() => {
+    const unsubscribe = subscribeSessionSocketMessages((message) => {
+      if (message.type === 'connected' || message.type === 'problem.leave.result') {
+        return;
       }
+
+      if (message.type === 'problem.execute.result' || message.type === 'error') {
+        setIsExecuting(false);
+        setExecutionResult(
+          message.type === 'error'
+            ? createProblemExecutionError(((message as ProblemSocketMessage).message ?? '문제 실행에 실패했다.'))
+            : toProblemExecutionResult(message as ProblemSocketMessage)
+        );
+        setCollapsedCards((current) => ({
+          ...current,
+          execute: false,
+        }));
+        setPanelVisibility((current) => ({
+          ...current,
+          editor: true,
+        }));
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      sendSessionSocketMessageIfOpen({
+        type: 'problem.leave',
+        problemId,
+      });
     };
   }, [problemId]);
 
   useEffect(() => {
+    setExecutionResultPage(1);
+    setExecutionResultPageInput('1');
+    setCollapsedCards((current) => ({
+      ...current,
+      resultTable: false,
+    }));
+  }, [executionResult]);
+
+  useEffect(() => {
+    setExecutionResultPageInput(String(executionResultPage));
+  }, [executionResultPage]);
+
+  useEffect(() => {
     const handleBeforeUnload = () => {
-      problemSocketRef.current?.leave(problemId);
+      sendSessionSocketMessageIfOpen({
+        type: 'problem.leave',
+        problemId,
+      });
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -510,47 +1173,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [problemId]);
-
-  useEffect(() => {
-    if (!workspaceDragState) {
-      return;
-    }
-
-    const handleMove = (event: MouseEvent) => {
-      if (!workspaceRef.current) {
-        return;
-      }
-
-      const rect = workspaceRef.current.getBoundingClientRect();
-      const deltaPercent = ((event.clientX - workspaceDragState.startX) / rect.width) * 100;
-      const pairTotal = workspaceDragState.startLeftWeight + workspaceDragState.startRightWeight;
-      const leftMinPercent = (panelMinWidths[workspaceDragState.leftKey] / rect.width) * 100;
-      const rightMinPercent = (panelMinWidths[workspaceDragState.rightKey] / rect.width) * 100;
-      const nextLeftWeight = clamp(
-        workspaceDragState.startLeftWeight + deltaPercent,
-        leftMinPercent,
-        pairTotal - rightMinPercent,
-      );
-
-      setPanelWeights((current) => ({
-        ...current,
-        [workspaceDragState.leftKey]: nextLeftWeight,
-        [workspaceDragState.rightKey]: pairTotal - nextLeftWeight,
-      }));
-    };
-
-    const handleUp = () => {
-      setWorkspaceDragState(null);
-    };
-
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-    };
-  }, [workspaceDragState]);
 
   useEffect(() => {
     if (!floatingMoveState) {
@@ -636,55 +1258,255 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     };
   }, [floatingLayouts, floatingResizeState]);
 
-  const handleExecute = async () => {
-    if (!isAuthenticated) {
-      setExecutionResult(createProblemExecutionError('로그인 후 문제를 실행할 수 있다.'));
-      setIsExecutionSheetOpen(true);
+  useEffect(() => {
+    setAutocompleteState(null);
+  }, [problemId, selectedDbms]);
+
+  const updateAutocompleteState = (nextSql: string, caretIndex: number) => {
+    const tokenRange = getAutocompleteTokenRange(nextSql, caretIndex);
+    if (!tokenRange) {
+      setAutocompleteState(null);
       return;
     }
 
-    if (selectedDbms !== 'postgresql') {
-      setExecutionResult(createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.'));
-      setIsExecutionSheetOpen(true);
+    const suggestions = createAutocompleteSuggestions(autocompleteItems, tokenRange.typedToken);
+    if (suggestions.length === 0) {
+      setAutocompleteState(null);
       return;
     }
 
-    if (sql.trim().length === 0) {
-      setExecutionResult(createProblemExecutionError('실행할 SQL을 입력해라.'));
-      setIsExecutionSheetOpen(true);
+    if (
+      tokenRange.currentToken.toLowerCase() === tokenRange.typedToken.toLowerCase() &&
+      suggestions.some((item) => item.value.toLowerCase() === tokenRange.currentToken.toLowerCase())
+    ) {
+      setAutocompleteState(null);
       return;
     }
 
-    try {
-      const problemSocketClient = problemSocketRef.current;
-      if (!problemSocketClient) {
-        throw new ProblemSocketError('문제 실행 소켓을 준비하지 못했다.');
+    const autocompleteAnchor = sqlEditorRef.current
+        ? measureAutocompleteAnchor(sqlEditorRef.current, nextSql, caretIndex, suggestions.length)
+        : {
+            left: 12,
+            top: 12,
+            maxWidth: 320,
+            maxHeight: 180,
+          };
+
+    if (autocompleteAnchor.maxHeight < 40) {
+      setAutocompleteState(null);
+      return;
+    }
+
+    setAutocompleteState(() => ({
+      items: suggestions,
+      selectedIndex: 0,
+      tokenStart: tokenRange.tokenStart,
+        tokenEnd: tokenRange.tokenEnd,
+        left: autocompleteAnchor.left,
+        top: autocompleteAnchor.top,
+        maxWidth: autocompleteAnchor.maxWidth,
+        maxHeight: autocompleteAnchor.maxHeight,
+      }));
+  };
+
+  const refreshAutocompleteFromEditor = () => {
+    if (!sqlEditorRef.current) {
+      return;
+    }
+
+    updateAutocompleteState(sqlEditorRef.current.value, sqlEditorRef.current.selectionStart ?? sqlEditorRef.current.value.length);
+  };
+
+  const applyAutocompleteItem = (item: SqlAutocompleteItem) => {
+    if (!autocompleteState) {
+      return;
+    }
+
+    const nextSql = `${sql.slice(0, autocompleteState.tokenStart)}${item.value}${sql.slice(autocompleteState.tokenEnd)}`;
+    const nextCaretIndex = autocompleteState.tokenStart + item.value.length;
+
+    setSql(nextSql);
+    setAutocompleteState(null);
+
+    requestAnimationFrame(() => {
+      if (!sqlEditorRef.current) {
+        return;
       }
 
-      setIsExecuting(true);
-      setExecutionResult(null);
-      setIsExecutionSheetOpen(true);
-      await problemSocketClient.execute(problemId, sql, selectedDbms);
-    } catch (error) {
-      setIsExecuting(false);
-      setExecutionResult(
-        createProblemExecutionError(
-          error instanceof ProblemSocketError ? error.message : '문제 실행 연결에 실패했다.'
-        )
-      );
-      setIsExecutionSheetOpen(true);
-    }
+      sqlEditorRef.current.focus();
+      sqlEditorRef.current.setSelectionRange(nextCaretIndex, nextCaretIndex);
+    });
+  };
+
+  const handleEditorChange = (nextSql: string, caretIndex: number) => {
+    setSql(nextSql);
+    updateAutocompleteState(nextSql, caretIndex);
+  };
+
+  const changeSqlEditorFontSize = (delta: number) => {
+    setSqlEditorFontSize((current) => clamp(current + delta, SQL_EDITOR_MIN_FONT_SIZE, SQL_EDITOR_MAX_FONT_SIZE));
   };
 
   const handleSubmit = () => {
-    setSubmitMessage('제출과 채점 기능은 아직 준비중이다.');
+    setSubmitMessage('제출과 채점 기능은 아직 준비 중이다.');
     setPanelVisibility((current) => ({
       ...current,
       submit: true,
     }));
   };
 
+  const executeSql = async () => {
+    if (!isAuthenticated) {
+      setExecutionResult(createProblemExecutionError('로그인 후 문제를 실행할 수 있다.'));
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      return;
+    }
+
+    if (selectedDbms !== 'postgresql') {
+      setExecutionResult(createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.'));
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      return;
+    }
+
+    if (sql.trim().length === 0) {
+      setExecutionResult(createProblemExecutionError('실행할 SQL을 입력해야 한다.'));
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      return;
+    }
+
+    try {
+      setIsExecuting(true);
+      setExecutionResult(null);
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      await sendSessionSocketMessage({
+        type: 'problem.execute',
+        problemId,
+        sql,
+        dbms: selectedDbms,
+      });
+    } catch (error) {
+      setIsExecuting(false);
+      setExecutionResult(
+        createProblemExecutionError(
+          error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.'
+        )
+      );
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+    }
+  };
+
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      setAutocompleteState(null);
+      void executeSql();
+      return;
+    }
+
+    if (!autocompleteState && event.key === 'Tab') {
+      event.preventDefault();
+
+      const selectionStart = event.currentTarget.selectionStart ?? 0;
+      const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart;
+      const { nextSql, nextSelectionStart, nextSelectionEnd } = indentSqlEditorValue(sql, selectionStart, selectionEnd);
+
+      setSql(nextSql);
+      setAutocompleteState(null);
+
+      requestAnimationFrame(() => {
+        if (!sqlEditorRef.current) {
+          return;
+        }
+
+        sqlEditorRef.current.focus();
+        sqlEditorRef.current.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+      });
+      return;
+    }
+
+    if (!autocompleteState) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setAutocompleteState((current) =>
+        current == null
+          ? current
+          : {
+              ...current,
+              selectedIndex: (current.selectedIndex + 1) % current.items.length,
+            },
+      );
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setAutocompleteState((current) =>
+        current == null
+          ? current
+          : {
+              ...current,
+              selectedIndex: (current.selectedIndex - 1 + current.items.length) % current.items.length,
+            },
+      );
+      return;
+    }
+
+    if (event.key === 'Tab' || event.key === 'Enter') {
+      event.preventDefault();
+      applyAutocompleteItem(autocompleteState.items[autocompleteState.selectedIndex]);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setAutocompleteState(null);
+    }
+  };
+
+  const handleEditorWheel = (event: ReactWheelEvent<HTMLTextAreaElement>) => {
+    if (!event.ctrlKey) {
+      return;
+    }
+
+    event.preventDefault();
+    changeSqlEditorFontSize(event.deltaY < 0 ? 1 : -1);
+  };
+
   const togglePanelVisibility = (panelKey: PanelKey) => {
+    if (panelVisibility[panelKey] && (detachedPanels[panelKey] || externalWindowPanels[panelKey])) {
+      setDetachedPanels((current) => ({
+        ...current,
+        [panelKey]: false,
+      }));
+      setExternalWindowPanels((current) => ({
+        ...current,
+        [panelKey]: false,
+      }));
+      setPanelVisibility((current) => ({
+        ...current,
+        [panelKey]: true,
+      }));
+      return;
+    }
+
     const nextVisible = !panelVisibility[panelKey];
 
     if (!nextVisible && detachedPanels[panelKey]) {
@@ -785,7 +1607,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className={`mini-toggle solve-pane-action solve-pane-action-icon ${externalWindowPanels[panelKey] ? 'is-selected' : ''}`}
-        aria-label={externalWindowPanels[panelKey] ? `${panelLabels[panelKey]} 새 창 닫기` : `${panelLabels[panelKey]} 새 창으로 열기`}
+        aria-label={externalWindowPanels[panelKey] ? `Restore ${panelLabels[panelKey]} from external window` : `Open ${panelLabels[panelKey]} in external window`}
         onClick={() => togglePanelExternalWindow(panelKey)}
       >
         <ExternalWindowIcon />
@@ -793,7 +1615,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className={`mini-toggle solve-pane-action solve-pane-action-icon ${detachedPanels[panelKey] ? 'is-selected' : ''}`}
-        aria-label={detachedPanels[panelKey] ? `${panelLabels[panelKey]} 다시 붙이기` : `${panelLabels[panelKey]} PIP 열기`}
+        aria-label={detachedPanels[panelKey] ? `Restore ${panelLabels[panelKey]} from PIP` : `Open ${panelLabels[panelKey]} in PIP`}
         onClick={() => togglePanelDetach(panelKey)}
       >
         <PipIcon />
@@ -801,7 +1623,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className="mini-toggle solve-pane-action solve-pane-action-icon"
-        aria-label={`${panelLabels[panelKey]} 닫기`}
+        aria-label={`Close ${panelLabels[panelKey]}`}
         onClick={() => togglePanelVisibility(panelKey)}
       >
         <CloseIcon />
@@ -811,120 +1633,216 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   const renderPanelHeader = (panelKey: PanelKey, isFloating: boolean) => (
     <div
-      className={`solve-pane-header ${isFloating ? 'is-draggable' : ''}`}
+      className={`solve-pane-header solve-detail-section-header ${isFloating ? 'is-draggable' : ''}`}
       onMouseDown={isFloating ? (event) => startFloatingMove(panelKey, event) : undefined}
     >
-      <h2 className="panel-title solve-pane-title">{panelLabels[panelKey]}</h2>
+      <div className="solve-detail-section-title-row">
+        <h2 className="solve-detail-section-title solve-pane-title">{panelLabels[panelKey]}</h2>
+      </div>
       {renderPanelActions(panelKey)}
     </div>
   );
 
-  const renderExecutionSheet = () => {
-    if (!isExecutionSheetOpen) {
-      return null;
-    }
+  const toggleCardCollapse = (cardKey: keyof CollapsedCardState) => {
+    setCollapsedCards((current) => ({
+      ...current,
+      [cardKey]: !current[cardKey],
+    }));
+  };
 
-    return (
-      <section className="solve-editor-result-sheet is-open">
-        <div className="solve-editor-result-sheet-header">
-          <strong className="solve-editor-result-sheet-title">실행 결과</strong>
-          <button
-            type="button"
-            className="mini-toggle solve-editor-result-sheet-close"
-            aria-label="실행 결과 닫기"
-            onClick={() => setIsExecutionSheetOpen(false)}
-          >
-            <CloseIcon />
-          </button>
+  const renderCollapseDivider = (cardKey: keyof CollapsedCardState) => (
+    <div className="solve-card-collapse-divider">
+      <button
+        type="button"
+        className="solve-card-collapse-button"
+        aria-label={collapsedCards[cardKey] ? '펼치기' : '접기'}
+        aria-expanded={!collapsedCards[cardKey]}
+        onClick={() => toggleCardCollapse(cardKey)}
+      >
+        <CollapseChevronIcon collapsed={collapsedCards[cardKey]} />
+      </button>
+    </div>
+  );
+
+  const renderEditorPanel = (isFloating: boolean) => (
+    <section className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane solve-pane-editor ${isFloating ? 'is-floating' : ''}`}>
+      {renderPanelHeader('editor', isFloating)}
+      {renderCollapseDivider('editor')}
+
+      {!collapsedCards.editor ? (
+        <div className="solve-editor-stack">
+          <div className="solve-editor-surface">
+            <div className="solve-editor-surface-header">
+              <div className="solve-editor-surface-meta">
+                <span className="solve-editor-file">main.sql</span>
+                <span className="subtle-chip inverted">{getDbmsLabel(selectedDbms)}</span>
+              </div>
+              <div className="solve-editor-actions">
+                <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
+                  {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
+                </button>
+                <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0}>
+                  제출
+                </button>
+              </div>
+            </div>
+
+              <div className="solve-editor-surface-body">
+                  <div className="solve-editor-zoom-controls" aria-label="에디터 글씨 크기 조절">
+                    <button type="button" className="mini-toggle solve-editor-zoom-button" onClick={() => changeSqlEditorFontSize(1)}>
+                      +
+                    </button>
+                    <button type="button" className="mini-toggle solve-editor-zoom-button" onClick={() => changeSqlEditorFontSize(-1)}>
+                      -
+                    </button>
+                  </div>
+
+                  <textarea
+                    ref={sqlEditorRef}
+                    className="solve-sql-editor"
+                    spellCheck={false}
+                    style={{ fontSize: `${sqlEditorFontSize}px` }}
+                    value={sql}
+                    onChange={(event) => handleEditorChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
+                    onClick={refreshAutocompleteFromEditor}
+                    onScroll={refreshAutocompleteFromEditor}
+                    onWheel={handleEditorWheel}
+                    onKeyUp={(event) => {
+                      if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                        return;
+                    }
+
+                  refreshAutocompleteFromEditor();
+                }}
+                onKeyDown={handleEditorKeyDown}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    setAutocompleteState(null);
+                  }, 120);
+                }}
+                aria-label="에디터"
+                />
+
+                {autocompleteState
+                  ? createPortal(
+                      <div
+                        className="solve-editor-autocomplete"
+                        style={{
+                          left: `${autocompleteState.left}px`,
+                          top: `${autocompleteState.top}px`,
+                          maxWidth: `${autocompleteState.maxWidth}px`,
+                          maxHeight: `${autocompleteState.maxHeight}px`,
+                        }}
+                        role="listbox"
+                        aria-label="SQL 자동완성"
+                      >
+                        {autocompleteState.items.map((item, index) => (
+                          <button
+                            key={`${item.kind}-${item.value}-${item.detail ?? ''}`}
+                            type="button"
+                            className={`solve-editor-autocomplete-item ${index === autocompleteState.selectedIndex ? 'is-selected' : ''}`}
+                            role="option"
+                            aria-selected={index === autocompleteState.selectedIndex}
+                            onMouseEnter={() =>
+                              setAutocompleteState((current) =>
+                                current == null
+                                  ? current
+                                  : {
+                                      ...current,
+                                      selectedIndex: index,
+                                    },
+                              )
+                            }
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              applyAutocompleteItem(item);
+                            }}
+                          >
+                            <span className={`solve-editor-autocomplete-kind is-${item.kind}`}>
+                              {item.kind === 'keyword' ? 'SQL' : item.kind === 'table' ? 'TABLE' : 'COLUMN'}
+                            </span>
+                            <span className="solve-editor-autocomplete-value">{item.value}</span>
+                            {item.detail ? <span className="solve-editor-autocomplete-detail">{item.detail}</span> : null}
+                          </button>
+                        ))}
+                      </div>,
+                      document.body,
+                    )
+                  : null}
+            </div>
+          </div>
+
         </div>
+      ) : null}
+    </section>
+  );
 
+  const renderExecutionPanel = () => (
+    <section className="solve-surface-section solve-inline-result-block">
+      <div className="solve-pane-header solve-pane-header-inline solve-detail-section-header">
+        <div className="solve-detail-section-title-row">
+          <h2 className="solve-detail-section-title solve-pane-title">실행 결과</h2>
+        </div>
+        <button
+          type="button"
+          className="solve-detail-section-action"
+          aria-label="실행 결과 너비 초기화"
+          onClick={() => setExecutionResultGridResetKey((current) => current + 1)}
+          disabled={executionResult?.mode !== 'select'}
+        >
+          <RefreshIcon />
+        </button>
+      </div>
+      {renderCollapseDivider('execute')}
+
+      {!collapsedCards.execute ? (
         <div className="solve-pane-result-stack">
           {isExecuting ? (
             <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
           ) : executionResult ? (
             <>
-              <div className="solve-result-lines">
-                <div className="solve-result-line">
-                  <span className="solve-result-label">실행 시간</span>
-                  <strong className="solve-result-value">{formatMs(executionResult.executionTimeMs)}</strong>
-                </div>
-                <div className="solve-result-line">
-                  <span className="solve-result-label">
-                    {executionResult.mode === 'select'
-                      ? '반환 행 수'
-                      : executionResult.mode === 'command'
-                        ? '처리 결과'
-                        : '계획 라인 수'}
-                  </span>
-                  <strong className="solve-result-value">
-                    {executionResult.mode === 'command'
-                      ? executionResult.success
-                        ? '완료'
-                        : '실패'
-                      : executionResult.rowCount}
-                  </strong>
-                </div>
-              </div>
+              <p className="solve-result-summary">{formatExecutionSummary(executionResult)}</p>
 
-              {executionResult.message ? <p className="solve-pane-result-message">{executionResult.message}</p> : null}
-              {renderExecutionContent(executionResult)}
+              {executionResult.message && shouldRenderExecutionMessage(executionResult.message) ? (
+                <p className="solve-pane-result-message">{executionResult.message}</p>
+              ) : null}
+              {renderExecutionContent(
+                executionResult,
+                executionResultPage,
+                setExecutionResultPage,
+                executionResultPageInput,
+                setExecutionResultPageInput,
+                collapsedCards.resultTable,
+                () =>
+                  setCollapsedCards((current) => ({
+                    ...current,
+                    resultTable: !current.resultTable,
+                  })),
+                executionResultGridResetKey,
+              )}
             </>
           ) : (
             <div className="solve-result-empty solve-result-empty-table">실행 결과가 아직 없다.</div>
           )}
         </div>
-      </section>
-    );
-  };
-
-  const renderEditorPanel = (isFloating: boolean) => (
-    <section className={`panel-card solve-pane solve-pane-editor ${isFloating ? 'is-floating' : ''}`}>
-      {renderPanelHeader('editor', isFloating)}
-
-      <div className="solve-editor-surface">
-        <div className="solve-editor-surface-header">
-          <div className="solve-editor-surface-meta">
-            <span className="solve-editor-file">main.sql</span>
-            <span className="subtle-chip inverted">{getDbmsLabel(selectedDbms)}</span>
-          </div>
-          <div className="solve-editor-actions">
-            <button type="button" className="btn ghost" onClick={() => setSql(problem.starterSql)}>
-              초기화
-            </button>
-            <button type="button" className="btn secondary" onClick={handleExecute} disabled={sql.trim().length === 0 || isExecuting}>
-              {isExecuting ? '실행 중' : '실행'}
-            </button>
-            <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0}>
-              제출
-            </button>
-          </div>
-        </div>
-
-        <div className="solve-editor-surface-body">
-          <textarea
-            className="solve-sql-editor"
-            spellCheck={false}
-            value={sql}
-            onChange={(event) => setSql(event.target.value)}
-            aria-label="SQL Editor"
-          />
-          {renderExecutionSheet()}
-        </div>
-      </div>
+      ) : null}
     </section>
   );
 
   const renderSubmitPanel = (isFloating: boolean) => (
-    <section className={`panel-card solve-pane ${isFloating ? 'is-floating' : ''}`}>
+    <section className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane ${isFloating ? 'is-floating' : ''}`}>
       {renderPanelHeader('submit', isFloating)}
+      {renderCollapseDivider('submit')}
 
-      {submitMessage ? (
-        <div className="solve-pane-result-stack">
-          <p className="solve-pane-result-message">{submitMessage}</p>
-        </div>
-      ) : (
-        <div className="solve-result-empty">제출 후 결과가 이 영역에 표시된다.</div>
-      )}
+      {!collapsedCards.submit ? (
+        submitMessage ? (
+          <div className="solve-pane-result-stack">
+            <p className="solve-pane-result-message">{submitMessage}</p>
+          </div>
+        ) : (
+          <div className="solve-result-empty">제출 결과가 아직 없다.</div>
+        )
+      ) : null}
     </section>
   );
 
@@ -935,26 +1853,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     return renderSubmitPanel(isFloating);
   };
-
-  const renderSplitter = (leftKey: PanelKey, rightKey: PanelKey) => (
-    <button
-      type="button"
-      className="solve-pane-splitter"
-      aria-label={`${panelLabels[leftKey]}와 ${panelLabels[rightKey]} 너비 조절`}
-      onMouseDown={(event) => {
-        event.preventDefault();
-        setWorkspaceDragState({
-          leftKey,
-          rightKey,
-          startX: event.clientX,
-          startLeftWeight: panelWeights[leftKey],
-          startRightWeight: panelWeights[rightKey],
-        });
-      }}
-    >
-      <span />
-    </button>
-  );
 
   return (
     <div className="page-stack">
@@ -973,52 +1871,26 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         </div>
       </div>
 
-      <section className="panel-card solve-page-hero">
+      <section className="solve-page-hero solve-surface-section">
         <div className="solve-page-hero-copy solve-page-hero-copy-wide">
-          <div className="solve-title-row">
+        <div className="solve-title-row">
             <span className="solve-problem-number">문제 {displayProblemNumber}</span>
             <h1 className="solve-problem-title">{displayProblemTitle}</h1>
           </div>
 
           {problemLoadError ? <p className="content-text solve-problem-description">{problemLoadError}</p> : null}
           {!problemLoadError && problemDetail == null ? (
-            <p className="content-text solve-problem-description">문제 상세를 불러오는 중...</p>
+            <p className="content-text solve-problem-description">문제 상세를 불러오는 중..</p>
           ) : null}
-          {problemDetail ? <ProblemDetailContent detail={problemDetail} /> : null}
         </div>
+        {problemDetail ? <ProblemDetailContent detail={problemDetail} selectedDbms={selectedDbms} /> : null}
       </section>
 
-      <section className="panel-card solve-workspace-card">
-        <div className="solve-workspace-toolbar">
-          <div className="solve-workspace-panel-tabs">
-            {panelOrder.map((panelKey) => (
-              <button
-                key={panelKey}
-                type="button"
-                className={`mini-toggle solve-workspace-panel-tab ${panelVisibility[panelKey] ? 'is-selected' : ''} ${panelVisibility[panelKey] && detachedPanels[panelKey] ? 'is-detached' : ''}`}
-                aria-pressed={panelVisibility[panelKey]}
-                onClick={() => togglePanelVisibility(panelKey)}
-              >
-                <span>{panelLabels[panelKey]}</span>
-                {panelVisibility[panelKey] && detachedPanels[panelKey] ? <span className="solve-panel-state-chip">PIP</span> : null}
-              </button>
-            ))}
-          </div>
-        </div>
+      {panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor ? renderEditorPanel(false) : null}
 
-        <div className="solve-workspace" ref={workspaceRef}>
-          {visibleWorkspacePanels.length === 0 ? (
-            <div className="solve-workspace-empty">탭을 눌러 작업영역을 다시 열어라.</div>
-          ) : (
-            visibleWorkspacePanels.map((panelKey, index) => (
-              <div key={panelKey} className="solve-workspace-segment" style={{ flex: `${panelWeights[panelKey]} 1 0` }}>
-                {renderPanel(panelKey, false)}
-                {index < visibleWorkspacePanels.length - 1 ? renderSplitter(panelKey, visibleWorkspacePanels[index + 1]) : null}
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+      {renderExecutionPanel()}
+
+      {panelVisibility.submit && !detachedPanels.submit && !externalWindowPanels.submit ? renderSubmitPanel(false) : null}
 
       {visibleFloatingPanels.map((panelKey) => (
         <div
@@ -1062,3 +1934,4 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     </div>
   );
 }
+

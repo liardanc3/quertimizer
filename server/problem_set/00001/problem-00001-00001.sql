@@ -1,21 +1,19 @@
-INSERT INTO quertimizer.problem (
-    problem_id,
-    title,
-    description,
-    ddl,
-    condition,
-    output,
-    data_sample,
-    output_sample,
-    answer
-)
-VALUES (
-    '00001-00001',
-    '3월 고객별 주문 건수와 총 주문 금액 조회',
-    $description$
+INSERT INTO quertimizer.problem (problem_id,
+                                 title,
+                                 description,
+                                 ddl_postgresql,
+                                 ddl_oracle,
+                                 condition,
+                                 output,
+                                 data_sample,
+                                 output_sample,
+                                 answer)
+VALUES ('00001-00001',
+        '3월 고객별 주문 건수와 총 주문 금액 조회',
+        $description$
 2024년 3월에 발생한 주문을 기준으로 고객별 주문 건수와 총 주문 금액을 조회해라.
 $description$,
-    $ddl$
+        $ddl_postgresql$
 CREATE TABLE customers (
     customer_id INTEGER PRIMARY KEY,
     customer_name VARCHAR(50) NOT NULL,
@@ -64,8 +62,58 @@ COMMENT ON COLUMN order_items.product_category IS '상품 카테고리';
 COMMENT ON COLUMN order_items.quantity IS '구매 수량';
 COMMENT ON COLUMN order_items.unit_price IS '상품 단가';
 COMMENT ON COLUMN order_items.discount_amount IS '할인 금액';
-$ddl$,
-    $condition$
+$ddl_postgresql$,
+        $ddl_oracle$
+CREATE TABLE customers (
+    customer_id NUMBER(10) PRIMARY KEY,
+    customer_name VARCHAR2(50 CHAR) NOT NULL,
+    region VARCHAR2(30 CHAR) NOT NULL,
+    signup_date DATE NOT NULL
+);
+
+COMMENT ON TABLE customers IS '고객 기본 정보';
+COMMENT ON COLUMN customers.customer_id IS '고객 ID';
+COMMENT ON COLUMN customers.customer_name IS '고객 이름';
+COMMENT ON COLUMN customers.region IS '고객 지역';
+COMMENT ON COLUMN customers.signup_date IS '가입일';
+
+CREATE TABLE orders (
+    order_id NUMBER(10) PRIMARY KEY,
+    customer_id NUMBER(10) NOT NULL,
+    ordered_at TIMESTAMP NOT NULL,
+    order_status VARCHAR2(20 CHAR) NOT NULL,
+    payment_method VARCHAR2(30 CHAR) NOT NULL,
+    CONSTRAINT fk_orders_customers
+        FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
+);
+
+COMMENT ON TABLE orders IS '주문 기본 정보';
+COMMENT ON COLUMN orders.order_id IS '주문 ID';
+COMMENT ON COLUMN orders.customer_id IS '주문한 고객 ID';
+COMMENT ON COLUMN orders.ordered_at IS '주문 일시';
+COMMENT ON COLUMN orders.order_status IS '주문 상태';
+COMMENT ON COLUMN orders.payment_method IS '결제 수단';
+
+CREATE TABLE order_items (
+    order_item_id NUMBER(10) PRIMARY KEY,
+    order_id NUMBER(10) NOT NULL,
+    product_category VARCHAR2(30 CHAR) NOT NULL,
+    quantity NUMBER(10) NOT NULL CHECK (quantity > 0),
+    unit_price NUMBER(12,2) NOT NULL CHECK (unit_price >= 0),
+    discount_amount NUMBER(12,2) NOT NULL CHECK (discount_amount >= 0),
+    CONSTRAINT fk_order_items_orders
+        FOREIGN KEY (order_id) REFERENCES orders (order_id)
+);
+
+COMMENT ON TABLE order_items IS '주문 상품 정보';
+COMMENT ON COLUMN order_items.order_item_id IS '주문 상품 ID';
+COMMENT ON COLUMN order_items.order_id IS '소속 주문 ID';
+COMMENT ON COLUMN order_items.product_category IS '상품 카테고리';
+COMMENT ON COLUMN order_items.quantity IS '구매 수량';
+COMMENT ON COLUMN order_items.unit_price IS '상품 단가';
+COMMENT ON COLUMN order_items.discount_amount IS '할인 금액';
+$ddl_oracle$,
+        $condition$
 orders.ordered_at >= '2024-03-01 00:00:00'
 orders.ordered_at < '2024-04-01 00:00:00'
 고객별 주문 건수는 COUNT(DISTINCT orders.order_id)로 계산한다.
@@ -73,13 +121,13 @@ orders.ordered_at < '2024-04-01 00:00:00'
 2024년 3월에 주문이 없는 고객은 결과에서 제외한다.
 결과는 total_amount 내림차순, customer_id 오름차순으로 정렬한다.
 $condition$,
-    $output$
+        $output$
 customer_id: 고객 ID
 customer_name: 고객 이름
 order_count: 2024년 3월 주문 건수
 total_amount: 2024년 3월 총 주문 금액
 $output$,
-    $data_sample$
+        $data_sample$
 INSERT INTO customers (customer_id, customer_name, region, signup_date)
 VALUES
     (1, '고객00001', 'BUSAN', '2023-01-18'),
@@ -101,12 +149,12 @@ VALUES
     (4, 1201, 'BEAUTY', 3, 26000.00, 0.00),
     (5, 1301, 'SPORTS', 1, 34000.00, 0.00);
 $data_sample$,
-    $output_sample$
+        $output_sample$
 customer_id,customer_name,order_count,total_amount
 1,고객00001,2,134000.00
 2,고객00002,1,78000.00
 $output_sample$,
-    $answer$
+        $answer$
 SELECT
     c.customer_id,
     c.customer_name,
@@ -125,18 +173,18 @@ GROUP BY
 ORDER BY
     total_amount DESC,
     c.customer_id ASC
-$answer$
-)
+$answer$)
 ON CONFLICT (problem_id) DO UPDATE
-SET
-    title = EXCLUDED.title,
-    description = EXCLUDED.description,
-    ddl = EXCLUDED.ddl,
-    condition = EXCLUDED.condition,
-    output = EXCLUDED.output,
-    data_sample = EXCLUDED.data_sample,
-    output_sample = EXCLUDED.output_sample,
-    answer = EXCLUDED.answer;
+    SET title          = EXCLUDED.title,
+        description    = EXCLUDED.description,
+        ddl_postgresql = EXCLUDED.ddl_postgresql,
+        ddl_oracle     = EXCLUDED.ddl_oracle,
+        condition      = EXCLUDED.condition,
+        output         = EXCLUDED.output,
+        data_sample    = EXCLUDED.data_sample,
+        output_sample  = EXCLUDED.output_sample,
+        answer         = EXCLUDED.answer;
+
 
 DELETE FROM quertimizer.problem_solve_history
 WHERE problem_id = '00001-00001'

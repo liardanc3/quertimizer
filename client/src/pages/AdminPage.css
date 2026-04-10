@@ -1,0 +1,61 @@
+.admin-page {
+  gap: 1.25rem;
+}
+
+.admin-page-header {
+  display: grid;
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.admin-page-title,
+.admin-page-placeholder-title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 1.06rem;
+  line-height: 1.35;
+}
+
+.admin-page-tab-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  flex-wrap: nowrap;
+  border-bottom: 1px solid #dbe6f2;
+  justify-content: flex-start;
+  overflow-x: auto;
+}
+
+.admin-page-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.3rem;
+  padding: 0.25rem 0.95rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.admin-page-tab:hover,
+.admin-page-tab:focus-visible {
+  color: #0f172a;
+}
+
+.admin-page-tab.is-selected {
+  color: #0f172a;
+  border-bottom-color: #2563eb;
+}
+
+.admin-page-placeholder {
+  display: grid;
+  gap: 0.7rem;
+}

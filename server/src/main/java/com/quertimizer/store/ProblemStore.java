@@ -2,12 +2,15 @@ package com.quertimizer.store;
 
 import com.quertimizer.constant.DbmsType;
 import com.quertimizer.entity.Problem;
+import com.quertimizer.entity.ProblemSet;
 import com.quertimizer.entity.ProblemSolveHistory;
 import com.quertimizer.repository.ProblemRepository;
+import com.quertimizer.repository.ProblemSetRepository;
 import com.quertimizer.repository.ProblemSolveHistoryRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -28,25 +31,35 @@ public class ProblemStore {
     private static final double BYTES_PER_MB = 1024d * 1024d;
 
     private final ProblemRepository problemRepository;
+    private final ProblemSetRepository problemSetRepository;
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
 
     private final Map<String, Problem> problemsById = new ConcurrentHashMap<>();
+    private final Map<String, ProblemSet> problemSetsById = new ConcurrentHashMap<>();
     private final Map<String, List<ProblemSolveHistory>> bestSubmittedHistoriesByProblemId = new ConcurrentHashMap<>();
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
     public void loadProblems() {
 
-        // 문제 목록 메모리 적재
+        // 문제 목록, 테이블셋 메모리 적재
         List<Problem> problems = problemRepository.findAll().stream()
                 .sorted(Comparator.comparing(Problem::getProblemId))
                 .toList();
+        List<ProblemSet> problemSets = problemSetRepository.findAll().stream()
+                .sorted(Comparator.comparing(ProblemSet::getProblemSetId))
+                .toList();
 
-        // 문제별 사용자, DBMS 기준 최고 제출 추출
+        // 문제별 사용자 DBMS 기준 최고 제출 추출
         Map<String, List<ProblemSolveHistory>> bestHistoriesByProblemId =
                 createBestSubmittedHistoriesByProblemId(problemSolveHistoryRepository.findAll());
 
         problemsById.clear();
+        problemSetsById.clear();
         bestSubmittedHistoriesByProblemId.clear();
+
+        for (ProblemSet problemSet : problemSets) {
+            problemSetsById.put(problemSet.getProblemSetId(), problemSet);
+        }
 
         for (Problem problem : problems) {
             problemsById.put(problem.getProblemId(), problem);
@@ -96,8 +109,18 @@ public class ProblemStore {
                 .toList();
     }
 
+    public List<ProblemSet> findAllProblemSets() {
+        return problemSetsById.values().stream()
+                .sorted(Comparator.comparing(ProblemSet::getProblemSetId))
+                .toList();
+    }
+
     public Optional<Problem> findProblem(String problemId) {
         return Optional.ofNullable(problemsById.get(problemId));
+    }
+
+    public Optional<ProblemSet> findProblemSet(String problemSetId) {
+        return Optional.ofNullable(problemSetsById.get(problemSetId));
     }
 
     public List<ProblemSolveHistory> findBestSubmittedHistories(String problemId) {
@@ -170,7 +193,7 @@ public class ProblemStore {
     private Map<String, List<ProblemSolveHistory>> createBestSubmittedHistoriesByProblemId(List<ProblemSolveHistory> histories) {
         Map<ProblemSubmittedHistoryKey, ProblemSolveHistory> bestHistoryByKey = new HashMap<>();
 
-        // 문제별 사용자, DBMS 기준 최고 제출 선별
+        // 문제별 사용자 DBMS 기준 최고 제출 선별
         for (ProblemSolveHistory history : histories) {
             ProblemSubmittedHistoryKey historyKey = new ProblemSubmittedHistoryKey(
                     history.getProblemId(),
@@ -230,7 +253,9 @@ public class ProblemStore {
         long problemBytes = problemsById.entrySet().stream()
                 .mapToLong(entry -> measureString(entry.getKey()) + measureProblem(entry.getValue()))
                 .sum();
-
+        long problemSetBytes = problemSetsById.entrySet().stream()
+                .mapToLong(entry -> measureString(entry.getKey()) + measureProblemSet(entry.getValue()))
+                .sum();
         long historyBytes = bestSubmittedHistoriesByProblemId.entrySet().stream()
                 .mapToLong(entry -> measureString(entry.getKey())
                         + entry.getValue().stream()
@@ -238,19 +263,28 @@ public class ProblemStore {
                         .sum())
                 .sum();
 
-        return problemBytes + historyBytes;
+        return problemBytes + problemSetBytes + historyBytes;
     }
 
     private long measureProblem(Problem problem) {
         return measureString(problem.getProblemId())
+                + measureString(problem.getResolvedProblemSetId())
                 + measureString(problem.getTitle())
                 + measureString(problem.getDescription())
-                + measureString(problem.getDdl())
+                + measureString(problem.getDdlPostgresql())
+                + measureString(problem.getDdlOracle())
                 + measureString(problem.getCondition())
                 + measureString(problem.getOutput())
-                + measureString(problem.getDataSample())
                 + measureString(problem.getOutputSample())
                 + measureString(problem.getAnswer());
+    }
+
+    private long measureProblemSet(ProblemSet problemSet) {
+        return measureString(problemSet.getProblemSetId())
+                + measureString(problemSet.getDdlPostgresql())
+                + measureString(problemSet.getDdlOracle())
+                + measureString(problemSet.getDataPostgresql())
+                + measureString(problemSet.getDataOracle());
     }
 
     private long measureProblemSolveHistory(ProblemSolveHistory history) {

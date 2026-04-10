@@ -22,4 +22,18 @@ public class AsyncExecutorConfig {
         return executor;
     }
 
+    @Bean(name = "problemExecutingExecutor")
+    public TaskExecutor problemExecutingExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        // 문제 SQL 실행 전용 실행기
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("problem-executing-");
+        executor.initialize();
+
+        return executor;
+    }
+
 }

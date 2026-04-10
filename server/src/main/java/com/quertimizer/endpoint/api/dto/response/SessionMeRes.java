@@ -13,16 +13,18 @@ public class SessionMeRes {
     private final boolean authenticated;
     private final String userId;
     private final String defaultDbms;
+    private final String role;
 
-    public static SessionMeRes authenticated(String userId, DbmsType defaultDbms) {
+    public static SessionMeRes authenticated(String userId, DbmsType defaultDbms, String role) {
         return new SessionMeRes(
                 true,
                 userId,
-                defaultDbms != null ? defaultDbms.getValue() : null
+                defaultDbms != null ? defaultDbms.getValue() : null,
+                role
         );
     }
 
     public static SessionMeRes unauthenticated() {
-        return new SessionMeRes(false, null, null);
+        return new SessionMeRes(false, null, null, null);
     }
 }

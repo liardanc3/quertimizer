@@ -111,6 +111,12 @@ button {
   flex-wrap: nowrap;
 }
 
+.header-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.72rem;
+}
+
 .nav-pill,
 .header-link-button {
   display: inline-flex;
@@ -124,6 +130,33 @@ button {
   color: #5b6b83;
   cursor: pointer;
   box-shadow: none;
+}
+
+.header-inline-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.7rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid rgba(15, 93, 179, 0.14);
+  border-radius: 999px;
+  background: rgba(15, 93, 179, 0.04);
+  color: #5b6b83;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.header-inline-action:hover {
+  color: #0f5db3;
+  border-color: rgba(15, 93, 179, 0.26);
+  background: rgba(15, 93, 179, 0.08);
+}
+
+.header-inline-action:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.28);
+  outline-offset: 2px;
 }
 
 .nav-pill {
@@ -1623,9 +1656,30 @@ button {
 
 .solve-page-hero {
   display: grid;
-  gap: 0.45rem;
-  padding: 0.95rem 1rem;
-  background: #fff;
+  gap: 1rem;
+  padding: 0;
+  background: transparent;
+}
+
+.panel-card.solve-page-hero,
+.panel-card.solve-pane {
+  overflow: hidden;
+}
+
+.solve-surface-section {
+  display: grid;
+  gap: 0.95rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.solve-surface-section.solve-pane,
+.solve-inline-result-block {
+  margin-top: 1rem;
 }
 
 .solve-page-hero-header,
@@ -1672,6 +1726,60 @@ button {
 
 .solve-page-hero-copy-wide {
   max-width: 100%;
+}
+
+.solve-card-collapse-divider,
+.solve-detail-section-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0.6rem;
+}
+
+.solve-card-collapse-divider::before,
+.solve-detail-section-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid #dbe6f2;
+  transform: translateY(-50%);
+}
+
+.solve-card-collapse-button,
+.solve-detail-section-divider-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  min-width: 1.65rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid #dbe6f2;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+.solve-card-collapse-button:hover,
+.solve-card-collapse-button:focus-visible,
+.solve-detail-section-divider-button:hover,
+.solve-detail-section-divider-button:focus-visible {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #334155;
+}
+
+.solve-card-collapse-button svg,
+.solve-detail-section-divider-button svg {
+  width: 0.92rem;
+  height: 0.92rem;
 }
 
 .solve-title-row {
@@ -1962,8 +2070,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0;
 }
 
 .solve-detail-section-title-row {
@@ -1972,33 +2079,10 @@ button {
   gap: 0.32rem;
 }
 
-.solve-detail-section-header .solve-detail-section-toggle {
+.solve-detail-section-header-actions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex: none;
-  margin-top: 0.08rem;
-  min-width: 2.2rem;
-  height: 1.1rem;
-  min-height: 1.1rem;
-  padding: 0 0.24rem;
-  border: 1px solid #dbe6f2;
-  border-radius: 0.3rem;
-  background: rgba(248, 250, 252, 0.92);
-  color: #64748b;
-  font-size: 0.56rem;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
-}
-
-.solve-detail-section-header .solve-detail-section-toggle:hover,
-.solve-detail-section-header .solve-detail-section-toggle:focus-visible {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #2563eb;
+  gap: 0.38rem;
 }
 
 .solve-detail-section-action {
@@ -2039,7 +2123,7 @@ button {
 .solve-detail-section-body {
   display: grid;
   gap: 0.96rem;
-  padding-top: 0.7rem;
+  padding-top: 0.85rem;
 }
 
 .solve-detail-text-block {
@@ -2143,13 +2227,13 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.34rem;
+  height: 1.34rem;
   border: 1px solid #dbe6f2;
-  border-radius: 0.42rem;
+  border-radius: 0.3rem;
   background: rgba(248, 250, 252, 0.92);
   color: #94a3b8;
-  font-size: 0.74rem;
+  font-size: 0.58rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -2365,6 +2449,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  margin-bottom: 0.55rem;
 }
 
 .solve-workspace-toolbar {
@@ -2407,9 +2492,9 @@ button {
 }
 
 .solve-dbms-button {
-  min-height: 1.9rem;
-  padding-inline: 0.82rem;
-  font-size: 0.75rem;
+  min-height: 1.38rem;
+  padding-inline: 0.56rem;
+  font-size: 0.64rem;
 }
 
 .solve-restore-button {
@@ -2474,38 +2559,45 @@ button {
   padding: 1rem;
 }
 
+.solve-surface-section.solve-pane {
+  padding: 0;
+}
+
 .solve-pane.is-floating {
   height: 100%;
 }
 
 .solve-pane-header {
-  position: sticky;
-  top: -1rem;
+  position: static;
   z-index: 6;
-  margin: -1rem -1rem 0;
-  padding: 1rem 1rem 0.75rem;
+  margin: 0;
+  padding: 0 0 0.75rem;
   gap: 0.75rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 84%, rgba(255, 255, 255, 0) 100%);
+  background: transparent;
 }
 
 .solve-pane-header.is-draggable {
-  position: static;
-  margin: 0;
-  padding: 0 0 0.75rem;
-  background: transparent;
   cursor: move;
 }
 
+.solve-pane-header .solve-pane-title {
+  margin: 0;
+}
+
+.solve-pane-header-inline {
+  justify-content: flex-start;
+}
+
 .solve-pane-action {
-  width: 1.92rem;
-  min-width: 1.92rem;
-  min-height: 1.92rem;
+  width: 1.8rem;
+  min-width: 1.8rem;
+  min-height: 1.8rem;
   padding: 0;
 }
 
 .solve-pane-action-icon {
-  width: 1.92rem;
-  min-width: 1.92rem;
+  width: 1.8rem;
+  min-width: 1.8rem;
   padding-inline: 0;
 }
 
@@ -2663,28 +2755,59 @@ button {
 }
 
 .solve-editor-surface {
-  --solve-editor-bg: #0f172a;
-  --solve-editor-fg: #e2e8f0;
-  --solve-editor-header: #162338;
-  --solve-editor-border: rgba(148, 163, 184, 0.24);
+  --solve-editor-bg: #ffffff;
+  --solve-editor-fg: #0f172a;
+  --solve-editor-header: #f8fafc;
+  --solve-editor-border: #dbe6f2;
+  --solve-editor-autocomplete-bg: rgba(255, 255, 255, 0.98);
+  --solve-editor-autocomplete-item-fg: #0f172a;
+  --solve-editor-autocomplete-item-secondary: #64748b;
+  --solve-editor-autocomplete-selected-bg: rgba(37, 99, 235, 0.1);
+  --solve-editor-chip-border: rgba(148, 163, 184, 0.22);
+  --solve-editor-chip-bg: rgba(148, 163, 184, 0.1);
+  --solve-editor-chip-fg: #475569;
+  --solve-editor-ghost-border: #dbe6f2;
+  --solve-editor-ghost-bg: #ffffff;
+  --solve-editor-ghost-fg: #334155;
   --solve-editor-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 32rem;
+  min-height: 16rem;
   position: relative;
   border-radius: 1.2rem;
   border: 1px solid var(--solve-editor-border);
   background: var(--solve-editor-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+  overflow: visible;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  .solve-editor-surface {
+    --solve-editor-bg: #0f172a;
+    --solve-editor-fg: #e2e8f0;
+    --solve-editor-header: #162338;
+    --solve-editor-border: rgba(148, 163, 184, 0.24);
+    --solve-editor-autocomplete-bg: rgba(13, 21, 35, 0.96);
+    --solve-editor-autocomplete-item-fg: #f8fafc;
+    --solve-editor-autocomplete-item-secondary: #94a3b8;
+    --solve-editor-autocomplete-selected-bg: rgba(37, 99, 235, 0.18);
+    --solve-editor-chip-border: rgba(148, 163, 184, 0.24);
+    --solve-editor-chip-bg: rgba(148, 163, 184, 0.14);
+    --solve-editor-chip-fg: #cbd5e1;
+    --solve-editor-ghost-border: rgba(148, 163, 184, 0.24);
+    --solve-editor-ghost-bg: rgba(15, 23, 42, 0.52);
+    --solve-editor-ghost-fg: #e2e8f0;
+    color-scheme: dark;
+  }
 }
 
 .solve-editor-surface-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.82rem 0.95rem;
+  gap: 0.55rem;
+  padding: 0.38rem 0.75rem;
   border-bottom: 1px solid var(--solve-editor-border);
   background: var(--solve-editor-header);
 }
@@ -2692,37 +2815,205 @@ button {
 .solve-editor-surface-meta {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.38rem;
   flex-wrap: wrap;
 }
 
 .solve-editor-surface-body {
   position: relative;
   min-height: 0;
+  overflow: visible;
+}
+
+.solve-editor-zoom-controls {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.75rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.solve-editor-zoom-button {
+  width: 1.55rem;
+  min-width: 1.55rem;
+  min-height: 1.55rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.solve-editor-stack {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
 }
 
 .solve-editor-file {
   color: var(--solve-editor-fg);
-  font-size: 0.84rem;
+  font-size: 0.72rem;
   font-weight: 800;
+}
+
+.solve-editor-surface .subtle-chip.inverted {
+  border-color: var(--solve-editor-chip-border);
+  background: var(--solve-editor-chip-bg);
+  color: var(--solve-editor-chip-fg);
+  padding: 0.18rem 0.48rem;
+  font-size: 0.62rem;
+}
+
+.solve-editor-surface .btn.ghost {
+  border-color: var(--solve-editor-ghost-border);
+  background: var(--solve-editor-ghost-bg);
+  color: var(--solve-editor-ghost-fg);
+}
+
+.solve-editor-actions {
+  gap: 0.34rem;
+}
+
+.solve-editor-actions .btn {
+  min-height: 1.48rem;
+  padding: 0.22rem 0.62rem;
+  border-radius: 0.56rem;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .solve-sql-editor {
   width: 100%;
-  height: 100%;
-  min-height: 100%;
+  min-height: 16rem;
   border: 0;
   background: transparent;
-  padding: 1rem 1.05rem;
+  padding: 1rem 4.6rem 1rem 1.05rem;
   color: var(--solve-editor-fg);
   font-family: var(--solve-editor-font);
-  font-size: 0.84rem;
   line-height: 1.7;
+  caret-color: var(--solve-editor-fg);
   resize: none;
+  overflow: hidden;
 }
 
 .solve-sql-editor:focus {
   outline: none;
+}
+
+.solve-editor-autocomplete {
+  position: fixed;
+  z-index: 9999;
+  display: grid;
+  gap: 0.14rem;
+  min-width: 11.5rem;
+  padding: 0.3rem;
+  border: 1px solid var(--solve-editor-border);
+  border-radius: 0.72rem;
+  background: var(--solve-editor-autocomplete-bg);
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.34);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.solve-editor-autocomplete-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.42rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 0.56rem;
+  background: transparent;
+  color: var(--solve-editor-autocomplete-item-fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.solve-editor-autocomplete-item.is-selected,
+.solve-editor-autocomplete-item:hover {
+  background: var(--solve-editor-autocomplete-selected-bg);
+}
+
+.solve-editor-autocomplete-item.is-selected {
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.42);
+}
+
+.solve-editor-autocomplete-item.is-selected .solve-editor-autocomplete-value {
+  color: #1d4ed8;
+}
+
+.solve-editor-autocomplete-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.8rem;
+  height: 1.02rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.solve-editor-autocomplete-kind.is-keyword {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+
+.solve-editor-autocomplete-kind.is-table {
+  background: rgba(16, 185, 129, 0.15);
+  color: #86efac;
+}
+
+.solve-editor-autocomplete-kind.is-column {
+  background: rgba(244, 114, 182, 0.15);
+  color: #f9a8d4;
+}
+
+.solve-editor-autocomplete-value {
+  min-width: 0;
+  color: var(--solve-editor-autocomplete-item-fg);
+  font-family: var(--solve-editor-font);
+  font-size: 0.71rem;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.solve-editor-autocomplete-detail {
+  color: var(--solve-editor-autocomplete-item-secondary);
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.solve-inline-result-block {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.solve-inline-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.solve-inline-result-title {
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
 .solve-editor-result-sheet {
@@ -2773,9 +3064,32 @@ button {
   gap: 0.64rem;
 }
 
+.solve-result-summary {
+  margin: 0;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
 .solve-pane-result-stack {
   display: grid;
   gap: 0.78rem;
+}
+
+.solve-result-table-block {
+  display: grid;
+  gap: 0.78rem;
+}
+
+.solve-result-table-name {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.solve-result-table-block .result-table-scroll {
+  margin-top: 0;
 }
 
 .solve-pane-result-message {
@@ -2789,7 +3103,14 @@ button {
   line-height: 1.6;
 }
 
-.solve-result-line,
+.solve-result-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
 .solve-performance-item {
   display: flex;
   align-items: center;
@@ -2810,7 +3131,15 @@ button {
   letter-spacing: 0.03em;
 }
 
-.solve-result-value,
+.solve-result-value {
+  margin-left: auto;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 800;
+  white-space: nowrap;
+  text-align: right;
+}
+
 .solve-performance-item strong {
   color: #0f172a;
   font-size: 0.92rem;
@@ -2856,6 +3185,51 @@ button {
 .solve-pane-result-table th,
 .solve-pane-result-table td {
   white-space: nowrap;
+  padding: 0.46rem 0.58rem;
+}
+
+.solve-pane-result-table th {
+  color: #475569;
+  font-size: 0.74rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.solve-pane-result-table td {
+  font-size: 0.79rem;
+}
+
+.solve-result-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.solve-result-pagination-button {
+  min-height: 1.72rem;
+  padding-inline: 0.62rem;
+  font-size: 0.72rem;
+}
+
+.solve-result-pagination-label {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.solve-result-pagination-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.solve-result-pagination-input {
+  width: 4.2rem;
+  min-height: 1.72rem;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.74rem;
 }
 
 .solve-plan-block {
@@ -5145,14 +5519,12 @@ button {
   }
 
   .solve-pane-header {
-    top: -0.88rem;
-    margin: -0.88rem -0.88rem 0;
-    padding: 0.88rem 0.88rem 0.65rem;
+    margin: 0;
+    padding: 0 0 0.65rem;
     align-items: flex-start;
   }
 
   .solve-pane-header.is-draggable {
-    top: auto;
     margin: 0;
     padding: 0 0 0.65rem;
   }
@@ -5168,16 +5540,14 @@ button {
   }
 
   .solve-editor-surface {
-    min-height: 24rem;
+    min-height: 16rem;
   }
 
-  .solve-result-line,
   .solve-performance-item {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .solve-result-value,
   .solve-performance-item strong {
     white-space: normal;
   }
@@ -6013,6 +6383,7 @@ button {
 
 .community-post-title-button:hover .community-row-title {
   color: #0f5db3;
+  text-decoration: none;
 }
 
 .community-post-title-button:focus-visible {

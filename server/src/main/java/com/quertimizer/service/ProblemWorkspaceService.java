@@ -1,5 +1,6 @@
 package com.quertimizer.service;
 
+import com.quertimizer.entity.Problem;
 import com.quertimizer.store.ProblemStore;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -32,6 +35,7 @@ public class ProblemWorkspaceService {
 
     private static final Duration DISCONNECTED_CLEANUP_DELAY = Duration.ofMinutes(10);
     private static final Duration WORKSPACE_INACTIVITY_TIMEOUT = Duration.ofMinutes(30);
+    private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile("CREATE TABLE\\s+(?:[\\w]+\\.)?(\\w+)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
     private final DataSource dataSource;
     private final ProblemStore problemStore;
@@ -41,31 +45,33 @@ public class ProblemWorkspaceService {
     private final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor(new CleanupThreadFactory());
 
     public WorkspaceHandle prepareWorkspace(String userId, String problemId, String socketId) {
-
-        // 문제 존재 여부 확인
-        problemStore.findProblem(problemId)
+        Problem problem = problemStore.findProblem(problemId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 문제다."));
 
-        String datasetId = resolveDatasetId(problemId);
-        String workspaceKey = createSchemaName(userId, datasetId);
+        String workspaceKey = createWorkspaceKey(userId, problemId);
         WorkspaceContext workspaceContext = workspaceByKey.computeIfAbsent(
                 workspaceKey,
-                key -> new WorkspaceContext(workspaceKey, createSchemaName(userId, datasetId), datasetId)
+                key -> new WorkspaceContext(
+                        workspaceKey,
+                        createSchemaName(userId, problemId),
+                        problem.getResolvedProblemSetId(),
+                        resolveProblemTableNames(problem)
+                )
         );
 
         synchronized (workspaceContext.monitor) {
 
-            // 연결된 소켓과 마지막 활동 시각 갱신
+            // 연결 정보, 마지막 활동 시각 갱신
             cancelCleanup(workspaceContext);
             workspaceContext.activeSocketIds.add(socketId);
             workspaceContext.lastActivityAt = Instant.now();
             workspaceKeyBySocketId.put(socketId, workspaceKey);
 
-            // 작업용 스키마가 없으면 복제본 생성
+            // 작업용 스키마가 없으면 문제 기준 subset 복제
             createWorkspaceIfMissing(workspaceContext);
         }
 
-        return new WorkspaceHandle(workspaceContext.schemaName, datasetId);
+        return new WorkspaceHandle(workspaceContext.schemaName, workspaceContext.problemSetId);
     }
 
     public void markActivity(String socketId) {
@@ -102,13 +108,13 @@ public class ProblemWorkspaceService {
 
     public void cleanupResidualWorkspaces() {
 
-        // 서버 재시작 후 남은 작업용 스키마 정리
+        // 서버 재시작 뒤 잔여 작업용 스키마 정리
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("""
                      SELECT schema_name
                      FROM information_schema.schemata
-                     WHERE schema_name LIKE '%\\_problem_set\\_%' ESCAPE '\\'
+                     WHERE schema_name LIKE '%\\_problem\\_%\\_%' ESCAPE '\\'
                        AND schema_name NOT LIKE 'problem_set\\_%' ESCAPE '\\'
                      """)) {
 
@@ -143,7 +149,7 @@ public class ProblemWorkspaceService {
 
         synchronized (workspaceContext.monitor) {
 
-            // 연결 종료된 소켓 제거
+            // 연결 종료 뒤 소켓 정보 제거
             workspaceContext.activeSocketIds.remove(socketId);
             workspaceContext.lastActivityAt = Instant.now();
 
@@ -208,7 +214,7 @@ public class ProblemWorkspaceService {
     }
 
     private void createWorkspaceIfMissing(WorkspaceContext workspaceContext) {
-        String baseSchemaName = "problem_set_" + workspaceContext.datasetId;
+        String baseSchemaName = "problem_set_" + workspaceContext.problemSetId;
 
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
@@ -219,7 +225,11 @@ public class ProblemWorkspaceService {
             // 작업용 스키마 생성
             statement.execute("CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(workspaceContext.schemaName));
 
-            List<String> tableNames = findBaseTableNames(connection, baseSchemaName);
+            List<String> tableNames = workspaceContext.tableNames;
+            if (tableNames.isEmpty()) {
+                throw new IllegalArgumentException("문제에서 사용할 테이블이 없다.");
+            }
+
             for (String tableName : tableNames) {
                 createWorkspaceTable(connection, baseSchemaName, workspaceContext.schemaName, tableName);
             }
@@ -239,31 +249,6 @@ public class ProblemWorkspaceService {
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 resultSet.next();
                 return resultSet.getInt(1) > 0;
-            }
-        }
-    }
-
-    private List<String> findBaseTableNames(Connection connection, String baseSchemaName) throws Exception {
-        try (var preparedStatement = connection.prepareStatement("""
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = ?
-                  AND table_type = 'BASE TABLE'
-                ORDER BY table_name
-                """)) {
-            preparedStatement.setString(1, baseSchemaName);
-
-            try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                List<String> tableNames = new ArrayList<>();
-                while (resultSet.next()) {
-                    tableNames.add(resultSet.getString("table_name"));
-                }
-
-                if (tableNames.isEmpty()) {
-                    throw new IllegalArgumentException("문제 템플릿 테이블셋을 찾을 수 없다.");
-                }
-
-                return tableNames;
             }
         }
     }
@@ -317,18 +302,30 @@ public class ProblemWorkspaceService {
         workspaceContext.cleanupFuture = null;
     }
 
-    private String resolveDatasetId(String problemId) {
-        String[] tokens = problemId.split("-");
-        if (tokens.length < 2 || tokens[0].isBlank()) {
-            throw new IllegalArgumentException("잘못된 문제 번호다.");
+    private List<String> resolveProblemTableNames(Problem problem) {
+        String ddl = problem.getDdlPostgresql() != null && !problem.getDdlPostgresql().isBlank()
+                ? problem.getDdlPostgresql()
+                : problem.getDdlOracle();
+        if (ddl == null || ddl.isBlank()) {
+            return List.of();
         }
 
-        return tokens[0];
+        List<String> tableNames = new ArrayList<>();
+        Matcher matcher = CREATE_TABLE_PATTERN.matcher(ddl);
+        while (matcher.find()) {
+            tableNames.add(matcher.group(1));
+        }
+
+        return tableNames.stream().distinct().toList();
     }
 
-    private String createSchemaName(String userId, String datasetId) {
+    private String createWorkspaceKey(String userId, String problemId) {
+        return sanitizeSchemaPrefix(userId) + ":" + problemId;
+    }
+
+    private String createSchemaName(String userId, String problemId) {
         String normalizedUserId = sanitizeSchemaPrefix(userId);
-        return normalizedUserId + "_problem_set_" + datasetId;
+        return normalizedUserId + "_problem_" + problemId.replace('-', '_');
     }
 
     private String sanitizeSchemaPrefix(String userId) {
@@ -341,7 +338,7 @@ public class ProblemWorkspaceService {
             sanitizedUserId = "u_" + sanitizedUserId;
         }
 
-        int maxPrefixLength = Math.max(1, 63 - "_problem_set_00000".length());
+        int maxPrefixLength = Math.max(1, 63 - "_problem_00001_00001".length());
         return sanitizedUserId.length() > maxPrefixLength
                 ? sanitizedUserId.substring(0, maxPrefixLength)
                 : sanitizedUserId;
@@ -351,22 +348,24 @@ public class ProblemWorkspaceService {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
-    public record WorkspaceHandle(String schemaName, String datasetId) {
+    public record WorkspaceHandle(String schemaName, String problemSetId) {
     }
 
     private static final class WorkspaceContext {
         private final String workspaceKey;
         private final String schemaName;
-        private final String datasetId;
+        private final String problemSetId;
+        private final List<String> tableNames;
         private final Set<String> activeSocketIds = ConcurrentHashMap.newKeySet();
         private final Object monitor = new Object();
         private Instant lastActivityAt = Instant.now();
         private ScheduledFuture<?> cleanupFuture;
 
-        private WorkspaceContext(String workspaceKey, String schemaName, String datasetId) {
+        private WorkspaceContext(String workspaceKey, String schemaName, String problemSetId, List<String> tableNames) {
             this.workspaceKey = workspaceKey;
             this.schemaName = schemaName;
-            this.datasetId = datasetId;
+            this.problemSetId = problemSetId;
+            this.tableNames = tableNames;
         }
     }
 

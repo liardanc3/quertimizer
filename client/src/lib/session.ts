@@ -18,6 +18,7 @@ interface SessionSnapshot {
   isReady: boolean;
   userId: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
+  role: 'user' | 'admin' | null;
 }
 
 let sessionSnapshot: SessionSnapshot = {
@@ -25,6 +26,7 @@ let sessionSnapshot: SessionSnapshot = {
   isReady: false,
   userId: null,
   defaultDbms: null,
+  role: null,
 };
 let sessionAlert: SessionAlert | null = null;
 let syncSessionPromise: Promise<boolean> | null = null;
@@ -72,6 +74,7 @@ function subscribe(callback: () => void) {
       isReady: sessionSnapshot.isReady,
       userId: isAuthenticated ? sessionSnapshot.userId : null,
       defaultDbms: isAuthenticated ? sessionSnapshot.defaultDbms : null,
+      role: isAuthenticated ? sessionSnapshot.role : null,
     };
     callback();
   }
@@ -146,6 +149,7 @@ export function loginMock(rememberLogin = false) {
     isReady: true,
     userId: sessionSnapshot.userId,
     defaultDbms: sessionSnapshot.defaultDbms,
+    role: sessionSnapshot.role,
   });
 }
 
@@ -153,8 +157,6 @@ export async function syncSession() {
   if (typeof window === 'undefined') {
     return false;
   }
-
-  const hadAuthenticatedState = sessionSnapshot.isAuthenticated || readPersistedAuthentication();
 
   if (syncSessionPromise) {
     return syncSessionPromise;
@@ -172,15 +174,9 @@ export async function syncSession() {
           isReady: true,
           userId: null,
           defaultDbms: null,
+          role: null,
         });
-
-        if (hadAuthenticatedState) {
-          updateSessionAlert({
-            level: 3,
-            message: '서버와의 통신이 끊겼습니다. 다시 로그인 해주세요.',
-            confirmLabel: '로그인하기',
-          });
-        }
+        updateSessionAlert(null);
 
         return false;
       }
@@ -191,6 +187,7 @@ export async function syncSession() {
         isReady: true,
         userId: session.userId,
         defaultDbms: session.defaultDbms,
+        role: session.role,
       });
       return true;
     } catch {
@@ -220,15 +217,17 @@ export function logoutMock() {
     isReady: true,
     userId: null,
     defaultDbms: null,
+    role: null,
   });
 }
 
 export function useMockSession() {
-  const { isAuthenticated, isReady, userId, defaultDbms } = useSyncExternalStore(subscribe, getSnapshot, () => ({
+  const { isAuthenticated, isReady, userId, defaultDbms, role } = useSyncExternalStore(subscribe, getSnapshot, () => ({
     isAuthenticated: false,
     isReady: false,
     userId: null,
     defaultDbms: null,
+    role: null,
   }));
 
   return {
@@ -236,6 +235,8 @@ export function useMockSession() {
     isReady,
     userId,
     defaultDbms,
+    role,
+    isAdmin: role === 'admin',
     login: loginMock,
     logout: logoutMock,
   };

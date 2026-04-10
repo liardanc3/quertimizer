@@ -1,6 +1,7 @@
 package com.quertimizer.entity;
 
 import com.quertimizer.constant.DbmsType;
+import com.quertimizer.constant.UserRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -33,6 +34,10 @@ public class User {
     private String bio;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "default_dbms", length = 20)
     private DbmsType defaultDbms;
 
@@ -63,6 +68,7 @@ public class User {
                 doubleHashedPassword,
                 email,
                 "",
+                UserRole.USER,
                 DbmsType.POSTGRESQL,
                 false,
                 true,
@@ -76,6 +82,10 @@ public class User {
 
     public void changePassword(String password) {
         this.password = password;
+    }
+
+    public void changeRole(UserRole role) {
+        this.role = role;
     }
 
     public void changeProfile(String bio,
@@ -99,6 +109,10 @@ public class User {
 
     public String getResolvedBio() {
         return bio != null ? bio : "";
+    }
+
+    public UserRole getResolvedRole() {
+        return role != null ? role : UserRole.USER;
     }
 
     public DbmsType getResolvedDefaultDbms() {
@@ -133,6 +147,7 @@ public class User {
                  String password,
                  String email,
                  String bio,
+                 UserRole role,
                  DbmsType defaultDbms,
                  Boolean sqlPublic,
                  Boolean executionPercentilePublic,
@@ -145,6 +160,7 @@ public class User {
         this.password = password;
         this.email = email;
         this.bio = bio;
+        this.role = role;
         this.defaultDbms = defaultDbms;
         this.sqlPublic = sqlPublic;
         this.executionPercentilePublic = executionPercentilePublic;

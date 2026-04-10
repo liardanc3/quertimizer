@@ -1,13 +1,15 @@
 export const PROBLEMS_PATH = '/problems';
+export const PROBLEM_CREATE_PATH = '/problems/create';
 export const RANKING_PATH = '/ranking';
 export const COMMUNITY_PATH = '/community';
+export const ADMIN_PATH = '/admin';
 export const COMMUNITY_WRITE_PATH = '/community/write';
 export const PROFILE_PATH = '/profile';
 export const PROFILE_ACTIVITY_PATH = '/profile/activity';
 export const LANDING_SIGNUP_PATH = '/#signup';
 export const LANDING_FIND_USER_ID_PATH = '/#find-user-id';
 export const LANDING_RESET_PASSWORD_PATH = '/#reset-password';
-export const DEFAULT_PROBLEM_PATH = '/problems/p-101';
+export const DEFAULT_PROBLEM_PATH = PROBLEMS_PATH;
 
 interface NavigateOptions {
   replace?: boolean;

@@ -52,6 +52,21 @@ public class CommunityComment {
         );
     }
 
+    public static CommunityComment create(String postId,
+                                          String userId,
+                                          Long parentCommentId,
+                                          String content,
+                                          LocalDateTime createdAt) {
+        return new CommunityComment(
+                postId,
+                userId,
+                parentCommentId,
+                content,
+                0,
+                createdAt
+        );
+    }
+
     public void increaseLikeCount() {
         this.likeCount += 1;
     }
