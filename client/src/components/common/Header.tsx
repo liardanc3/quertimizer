@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSPro
 import {
   ADMIN_PATH,
   COMMUNITY_PATH,
+  GUIDE_PATH,
   LANDING_SIGNUP_PATH,
   PROBLEMS_PATH,
   RANKING_PATH,
@@ -13,6 +14,7 @@ import logoImage from '../../assets/logo.svg';
 import { fetchVisibleMarqueeMessages, subscribeMarqueeChange } from '../../lib/marquee';
 import { useMockSession } from '../../lib/session';
 import { mockNotifications } from '../../mocks/notifications';
+import './Header.css';
 
 function subscribe(callback: () => void) {
   window.addEventListener('popstate', callback);
@@ -70,6 +72,8 @@ export default function Header() {
 
   const activeNav = pathname.startsWith(RANKING_PATH)
     ? 'ranking'
+    : pathname.startsWith(GUIDE_PATH)
+      ? 'guide'
     : pathname.startsWith(ADMIN_PATH)
       ? 'admin'
       : pathname.startsWith(COMMUNITY_PATH)
@@ -299,6 +303,13 @@ export default function Header() {
               onClick={() => navigate(COMMUNITY_PATH)}
             >
               커뮤니티
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${activeNav === 'guide' ? 'is-active' : ''}`}
+              onClick={() => navigate(GUIDE_PATH)}
+            >
+              가이드
             </button>
             {isAuthenticated && isAdmin ? (
               <button

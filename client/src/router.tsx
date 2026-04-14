@@ -3,6 +3,7 @@ import AdminPage from './pages/AdminPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
 import CommunityPage from './pages/CommunityPage';
 import CommunityWritePage from './pages/CommunityWritePage';
+import GuidePage from './pages/GuidePage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import ProfileActivityPage from './pages/ProfileActivityPage';
@@ -30,6 +31,10 @@ interface RankingRoute {
 
 interface CommunityRoute {
   type: 'community';
+}
+
+interface GuideRoute {
+  type: 'guide';
 }
 
 interface AdminRoute {
@@ -65,6 +70,7 @@ type AppRoute =
   | ProblemsRoute
   | RankingRoute
   | CommunityRoute
+  | GuideRoute
   | AdminRoute
   | CommunityWriteRoute
   | CommunityEditRoute
@@ -103,6 +109,10 @@ function parseRoute(pathname: string): AppRoute {
 
   if (normalizedPathname === '/community') {
     return { type: 'community' };
+  }
+
+  if (normalizedPathname === '/guide') {
+    return { type: 'guide' };
   }
 
   if (normalizedPathname === '/admin') {
@@ -164,6 +174,10 @@ export default function AppRouter() {
 
   if (route.type === 'community') {
     return <CommunityPage />;
+  }
+
+  if (route.type === 'guide') {
+    return <GuidePage />;
   }
 
   if (route.type === 'admin') {

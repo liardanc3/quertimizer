@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore, useState } from 'react';
 import AccountRecoveryOverlay from '../components/home/AccountRecoveryOverlay';
 import logoImage from '../assets/logo.svg';
+import './PublicHomePage.css';
 import {
   AuthApiError,
   SignupApiError,
@@ -554,6 +555,14 @@ export default function PublicHomePage() {
                   onChange={(event) => {
                     setSignupPasswordConfirm(event.target.value);
                     setSignupErrorReasons([]);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void handleSignup();
                   }}
                   placeholder="비밀번호를 다시 입력하세요"
                   autoComplete="new-password"

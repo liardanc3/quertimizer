@@ -2,6 +2,7 @@ export const PROBLEMS_PATH = '/problems';
 export const PROBLEM_CREATE_PATH = '/problems/create';
 export const RANKING_PATH = '/ranking';
 export const COMMUNITY_PATH = '/community';
+export const GUIDE_PATH = '/guide';
 export const ADMIN_PATH = '/admin';
 export const COMMUNITY_WRITE_PATH = '/community/write';
 export const PROFILE_PATH = '/profile';
