@@ -17,6 +17,7 @@ import {
   LANDING_SIGNUP_PATH,
   navigate,
 } from '../lib/navigation';
+import { useHomeSiteTitle } from '../lib/uiText';
 
 const SIGNUP_ID_PATTERN = /^[A-Za-z0-9_-]{1,15}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,6 +60,7 @@ const signupGuideLines = [
 ];
 
 export default function PublicHomePage() {
+  useHomeSiteTitle();
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [rememberLogin, setRememberLogin] = useState(false);

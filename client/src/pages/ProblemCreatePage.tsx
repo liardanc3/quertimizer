@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
 import StatusPopup from '../components/common/StatusPopup';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import {
@@ -35,8 +35,18 @@ interface PopupState {
   message: string;
 }
 
+type MissingFieldKey =
+  | 'title'
+  | 'description'
+  | 'condition'
+  | 'output'
+  | 'outputSample'
+  | 'answer'
+  | 'tableInfo'
+  | 'dataSample';
+
 interface MissingField {
-  key: string;
+  key: MissingFieldKey;
   label: string;
 }
 
@@ -47,6 +57,7 @@ const EMPTY_PROBLEM_SET_DETAIL: ProblemSetDetailData = {
   dataPostgresql: '',
   dataOracle: '',
 };
+const NEW_PROBLEM_SET_OPTION_VALUE = '__new__';
 
 function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
   const [appliedValue, setAppliedValue] = useState(initialValue);
@@ -196,6 +207,9 @@ function InlineEditActions({ isEditing, onEdit, onCancel, onConfirm }: { isEditi
 }
 
 export function ProblemCreateContent() {
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const heroSectionRef = useRef<HTMLElement | null>(null);
+  const answerSectionRef = useRef<HTMLElement | null>(null);
   const heroState = useEditableDraft({ title: '', description: '' });
   const conditionState = useEditableDraft('');
   const outputState = useEditableDraft('');
@@ -223,11 +237,17 @@ export function ProblemCreateContent() {
         if (cancelled) return;
 
         setProblemSets(nextProblemSets);
-        if (nextProblemSets.length > 0) {
-          setSelectedProblemSetId((current) => current ?? nextProblemSets[0].problemSetId);
+        if (nextProblemSets.length === 0) {
+          setProblemSetMode('new');
+          setSelectedProblemSetId(null);
+          return;
         }
+
+        setSelectedProblemSetId((current) => current ?? nextProblemSets[0].problemSetId);
       } catch {
         if (!cancelled) {
+          setProblemSetMode('new');
+          setSelectedProblemSetId(null);
           setProblemSetErrorMessage('\uD14C\uC774\uBE14\uC14B \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uB2E4.');
         }
       }
@@ -283,6 +303,12 @@ export function ProblemCreateContent() {
         dataPostgresql: dataState.appliedValue.postgresql,
         dataOracle: dataState.appliedValue.oracle,
       };
+  const selectedProblemSetValue = problemSetMode === 'existing' && selectedProblemSetId != null
+    ? selectedProblemSetId
+    : NEW_PROBLEM_SET_OPTION_VALUE;
+  const previewProblemSetId = problemSetMode === 'existing' && selectedProblemSetId != null
+    ? selectedProblemSetId
+    : '\uC2E0\uADDC';
 
   const availableTableNames = useMemo(() => {
     const fallbackDdl = currentProblemSetDetail.ddlPostgresql.trim() !== ''
@@ -315,7 +341,7 @@ export function ProblemCreateContent() {
 
   const previewDetail = useMemo<ProblemDetailData>(
     () => ({
-      problemId: `${selectedProblemSetId ?? '\uC2E0\uADDC'}-X`,
+      problemId: `${previewProblemSetId}-X`,
       title: heroState.appliedValue.title,
       description: heroState.appliedValue.description,
       ddlPostgresql: filteredDdlPostgresql,
@@ -336,7 +362,7 @@ export function ProblemCreateContent() {
       heroState.appliedValue.title,
       outputSampleState.appliedValue,
       outputState.appliedValue,
-      selectedProblemSetId,
+      previewProblemSetId,
     ],
   );
 
@@ -360,13 +386,111 @@ export function ProblemCreateContent() {
   const isOutputSampleMissing = missingFields.some((field) => field.key === 'outputSample');
   const isAnswerMissing = missingFields.some((field) => field.key === 'answer');
 
+  function handleProblemSetSelectChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextValue = event.target.value;
+
+    if (nextValue === NEW_PROBLEM_SET_OPTION_VALUE) {
+      setProblemSetMode('new');
+      setSelectedProblemSetId(null);
+      return;
+    }
+
+    setProblemSetMode('existing');
+    setSelectedProblemSetId(nextValue);
+  }
+
+  function scrollToMissingField(fieldKey: MissingFieldKey) {
+    const queryTarget = (selector: string) => pageRef.current?.querySelector<HTMLElement>(selector) ?? null;
+
+    const scrollToTarget = (selector: string, fallback: HTMLElement | null) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const targetElement = queryTarget(selector) ?? fallback;
+          if (!targetElement) {
+            return;
+          }
+
+          targetElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+
+          if (targetElement instanceof HTMLInputElement || targetElement instanceof HTMLTextAreaElement) {
+            targetElement.focus({ preventScroll: true });
+          }
+        });
+      });
+    };
+
+    if (fieldKey === 'title') {
+      if (!heroState.isEditing) {
+        heroState.startEditing();
+      }
+      scrollToTarget('.problem-create-title-input', heroSectionRef.current);
+      return;
+    }
+
+    if (fieldKey === 'description') {
+      if (!heroState.isEditing) {
+        heroState.startEditing();
+      }
+      scrollToTarget('.problem-create-description-editor', heroSectionRef.current);
+      return;
+    }
+
+    if (fieldKey === 'tableInfo') {
+      if (problemSetMode === 'new' && !ddlState.isEditing) {
+        ddlState.startEditing();
+      }
+
+      scrollToTarget('.solve-detail-section-table .problem-create-source-textarea', queryTarget('.solve-detail-section-table'));
+      return;
+    }
+
+    if (fieldKey === 'dataSample') {
+      if (problemSetMode === 'new' && !dataState.isEditing) {
+        dataState.startEditing();
+      }
+
+      scrollToTarget('.solve-detail-section-data-sample .problem-create-source-textarea', queryTarget('.solve-detail-section-data-sample'));
+      return;
+    }
+
+    if (fieldKey === 'condition') {
+      if (!conditionState.isEditing) {
+        conditionState.startEditing();
+      }
+      scrollToTarget('.solve-detail-section-condition .problem-create-inline-textarea', pageRef.current);
+      return;
+    }
+
+    if (fieldKey === 'output') {
+      if (!outputState.isEditing) {
+        outputState.startEditing();
+      }
+      scrollToTarget('.solve-detail-section-output .problem-create-inline-textarea', pageRef.current);
+      return;
+    }
+
+    if (fieldKey === 'outputSample') {
+      if (!outputSampleState.isEditing) {
+        outputSampleState.startEditing();
+      }
+      scrollToTarget('.solve-detail-section-output-sample .problem-create-inline-textarea', pageRef.current);
+      return;
+    }
+
+    if (fieldKey === 'answer') {
+      if (!answerState.isEditing) {
+        answerState.startEditing();
+      }
+      scrollToTarget('.problem-create-answer-textarea', answerSectionRef.current);
+    }
+  }
+
   async function handleCreateProblem() {
     if (missingFields.length > 0) {
-      setPopupState({
-        open: true,
-        level: 2,
-        message: `\uB2E4\uC74C \uD56D\uBAA9\uC744 \uBA3C\uC800 \uC785\uB825\uD574\uB77C: ${missingFields.map((field) => field.label).join(', ')}`,
-      });
+      scrollToMissingField(missingFields[0].key);
       return;
     }
 
@@ -398,8 +522,8 @@ export function ProblemCreateContent() {
 
   return (
     <>
-      <div className="page-stack problem-create-page">
-        <section className="solve-page-hero solve-surface-section problem-create-hero">
+      <div ref={pageRef} className="page-stack problem-create-page">
+        <section ref={heroSectionRef} className="solve-page-hero solve-surface-section problem-create-hero">
           <div className="solve-page-hero-copy solve-page-hero-copy-wide">
             <div className="problem-create-number-row">
               <div className="tooltip-anchor problem-create-problem-number-tooltip">
@@ -410,17 +534,14 @@ export function ProblemCreateContent() {
                   </div>
                 ) : null}
               </div>
-              <select className="text-field problem-create-select" value={selectedProblemSetId ?? ''} onChange={(event: ChangeEvent<HTMLSelectElement>) => { setProblemSetMode('existing'); setSelectedProblemSetId(event.target.value); }} disabled={problemSets.length === 0}>
-                {problemSets.length === 0 ? <option value="">{'\uD14C\uC774\uBE14\uC14B'}</option> : null}
+              <select className="text-field problem-create-select" value={selectedProblemSetValue} onChange={handleProblemSetSelectChange}>
+                <option value={NEW_PROBLEM_SET_OPTION_VALUE}>{'\uC2E0\uADDC \uD14C\uC774\uBE14\uC14B'}</option>
                 {problemSets.map((problemSet) => (
                   <option key={problemSet.problemSetId} value={problemSet.problemSetId}>
                     {getProblemSetLabel(problemSet.problemSetId)}
                   </option>
                 ))}
               </select>
-              <button type="button" className={`btn secondary problem-create-mode-button ${problemSetMode === 'new' ? 'is-selected' : ''}`.trim()} onClick={() => setProblemSetMode('new')}>
-                {'\uC2E0\uADDC \uD14C\uC774\uBE14\uC14B \uCD94\uAC00'}
-              </button>
             </div>
 
             <div className="problem-create-title-edit-row">
@@ -502,11 +623,15 @@ export function ProblemCreateContent() {
           conditionContent={
             conditionState.isEditing ? (
               <textarea className="text-field problem-create-inline-textarea" value={conditionState.draftValue} onChange={(event) => conditionState.setDraftValue(event.target.value)} placeholder={'\uC870\uAC74'} />
+            ) : isConditionMissing ? (
+              <></>
             ) : undefined
           }
           outputContent={
             outputState.isEditing ? (
               <textarea className="text-field problem-create-inline-textarea" value={outputState.draftValue} onChange={(event) => outputState.setDraftValue(event.target.value)} placeholder={'\uCD9C\uB825'} />
+            ) : isOutputMissing ? (
+              <></>
             ) : undefined
           }
           outputSampleBeforeContent={
@@ -518,7 +643,7 @@ export function ProblemCreateContent() {
           }
         />
 
-        <section className={`solve-detail-section problem-create-answer-surface ${buildSectionClassName(isAnswerMissing)}`.trim()}>
+        <section ref={answerSectionRef} className={`solve-detail-section problem-create-answer-surface ${buildSectionClassName(isAnswerMissing)}`.trim()}>
           <div className="solve-detail-section-header">
             <div className="solve-detail-section-title-row">
               <h2 className="solve-detail-section-title">{'\uC815\uB2F5 SQL'}</h2>

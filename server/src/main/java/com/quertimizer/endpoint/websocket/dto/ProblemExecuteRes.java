@@ -65,6 +65,36 @@ public record ProblemExecuteRes(String type,
         );
     }
 
+    public static ProblemExecuteRes submitSuccess(String problemId, String message, Long executionTimeMs) {
+        return new ProblemExecuteRes(
+                "problem.submit.result",
+                true,
+                problemId,
+                null,
+                message,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                executionTimeMs
+        );
+    }
+
+    public static ProblemExecuteRes submitFailure(String problemId, String message) {
+        return new ProblemExecuteRes(
+                "problem.submit.result",
+                false,
+                problemId,
+                null,
+                message,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                null
+        );
+    }
+
     public static ProblemExecuteRes leaveSuccess(String problemId) {
         return new ProblemExecuteRes(
                 "problem.leave.result",

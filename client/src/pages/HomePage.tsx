@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import DomainTabs from '../components/home/DomainTabs';
 import ProblemList from '../components/home/ProblemList';
 import ProblemModeSwitch from '../components/home/ProblemModeSwitch';
 import ProblemStatusFilter from '../components/home/ProblemStatusFilter';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
 import { useMockSession } from '../lib/session';
-import type { DomainType } from '../types/domain';
+import { useHomeSiteTitle } from '../lib/uiText';
 
 type SolvedCountSortOrder = 'desc' | 'asc';
 type SolveState = 'all' | 'solved' | 'unsolved' | 'none';
@@ -37,8 +36,8 @@ function createEmptyProblemPage(): ProblemPage {
 }
 
 export default function HomePage() {
+  useHomeSiteTitle();
   const { isAuthenticated, isReady, userId } = useMockSession();
-  const [domain, setDomain] = useState<DomainType>('rdbms');
   const [showStats, setShowStats] = useState(true);
   const [showSolved, setShowSolved] = useState(true);
   const [showUnsolved, setShowUnsolved] = useState(true);
@@ -54,10 +53,6 @@ export default function HomePage() {
   const solveState = canShowSolveState ? resolveSolveState(showSolved, showUnsolved) : 'all';
 
   useEffect(() => {
-    if (domain !== 'rdbms') {
-      return;
-    }
-
     let cancelled = false;
 
     async function loadProblems() {
@@ -98,7 +93,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [domain, requestedPage, searchQuery, solveState, solvedCountSortOrder]);
+  }, [requestedPage, searchQuery, solveState, solvedCountSortOrder]);
 
   const resolvedProblems = useMemo(
     () =>
@@ -122,22 +117,14 @@ export default function HomePage() {
     <div className="page-stack">
       <section className="panel-card compact problem-toolbar-card">
         <div className="problem-toolbar">
-          <DomainTabs
-            selectedDomain={domain}
-            onChange={(nextDomain) => {
-              setDomain(nextDomain);
-              setRequestedPage(1);
-            }}
-          />
-
           <form
-            className="problem-search-form"
+            className="problem-search-form home-problem-search-form"
             onSubmit={(event) => {
               event.preventDefault();
               applySearch(draftSearchValue);
             }}
           >
-            <label className="problem-search-field">
+            <label className="problem-search-field home-problem-search-field">
               <span className="problem-search-icon" aria-hidden="true">
                 🔎
               </span>
@@ -145,21 +132,20 @@ export default function HomePage() {
                 type="search"
                 value={draftSearchValue}
                 onChange={(event) => setDraftSearchValue(event.target.value)}
-                className="text-field problem-search-input"
+                className="text-field problem-search-input home-problem-search-input"
                 placeholder="문제 번호, 제목, 유저 ID 검색"
                 aria-label="문제 검색"
               />
-            </label>
 
-            <button type="submit" className="btn secondary problem-search-button">
-              검색
-            </button>
+              <button type="submit" className="btn secondary problem-search-button home-problem-search-button" aria-label="검색">
+                검색
+              </button>
+            </label>
           </form>
         </div>
       </section>
 
-      <div id="panel-rdbms" role="tabpanel" aria-labelledby="tab-rdbms" hidden={domain !== 'rdbms'}>
-        <section className="panel-card problem-board">
+      <section className="panel-card problem-board">
           <div className="problem-board-header">
             <div className="problem-board-controls">
               <ProblemModeSwitch label="통계 표시" checked={showStats} onChange={setShowStats} />
@@ -265,10 +251,9 @@ export default function HomePage() {
               </span>
             </div>
           ) : null}
-        </section>
-      </div>
+      </section>
 
-      <div id="panel-nosql" role="tabpanel" aria-labelledby="tab-nosql" hidden={domain !== 'nosql'}>
+      <div hidden>
         <section className="panel-card disabled-panel">
           <div className="panel-heading-row responsive">
             <div>

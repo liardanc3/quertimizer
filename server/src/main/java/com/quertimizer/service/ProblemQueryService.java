@@ -1,8 +1,11 @@
 package com.quertimizer.service;
 
 import com.quertimizer.constant.DbmsType;
+import com.quertimizer.entity.ProblemSubmitHistory;
+import com.quertimizer.repository.ProblemSubmitHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -10,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +38,7 @@ public class ProblemQueryService {
 
     private final DataSource dataSource;
     private final ProblemWorkspaceService problemWorkspaceService;
+    private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
 
     public QueryExecutionResult executeInteractiveSql(String userId,
                                                       String socketId,
@@ -70,6 +75,51 @@ public class ProblemQueryService {
             return executionResult.withExecutionTimeMs(Duration.ofNanos(System.nanoTime() - startTime).toMillis());
         } catch (SQLException exception) {
             throw new IllegalStateException(resolveSqlErrorMessage(exception), exception);
+        }
+    }
+
+    @Transactional
+    public ProblemSubmitResult submitProblemSql(String userId,
+                                               String socketId,
+                                               String problemId,
+                                               String sql,
+                                               DbmsType dbmsType) {
+        LocalDateTime submittedAt = LocalDateTime.now();
+        String submittedProblemId = normalizeProblemId(problemId);
+        String submittedSql = normalizeSubmittedSql(sql);
+
+        try {
+            QueryExecutionResult executionResult = executeSubmittedSql(userId, socketId, submittedProblemId, submittedSql, dbmsType);
+
+            problemSubmitHistoryRepository.save(ProblemSubmitHistory.create(
+                    submittedProblemId,
+                    userId,
+                    dbmsType,
+                    submittedSql,
+                    true,
+                    "제출을 기록했다.",
+                    executionResult.executionTimeMs(),
+                    executionResult.rowCount(),
+                    submittedAt
+            ));
+
+            return ProblemSubmitResult.success(submittedProblemId, "제출을 기록했다.", executionResult.executionTimeMs());
+        } catch (Exception exception) {
+            String message = resolveProblemSubmitErrorMessage(exception);
+
+            problemSubmitHistoryRepository.save(ProblemSubmitHistory.create(
+                    submittedProblemId,
+                    userId,
+                    dbmsType,
+                    submittedSql,
+                    false,
+                    message,
+                    0,
+                    0,
+                    submittedAt
+            ));
+
+            return ProblemSubmitResult.failure(submittedProblemId, message);
         }
     }
 
@@ -221,6 +271,53 @@ public class ProblemQueryService {
         throw new IllegalArgumentException("SELECT, EXPLAIN, EXPLAIN ANALYZE, CREATE INDEX, DROP INDEX만 실행할 수 있다.");
     }
 
+    private QueryExecutionResult executeSubmittedSql(String userId,
+                                                     String socketId,
+                                                     String problemId,
+                                                     String sql,
+                                                     DbmsType dbmsType) {
+        if (dbmsType != DbmsType.POSTGRESQL) {
+            throw new IllegalArgumentException("제출은 PostgreSQL만 지원한다.");
+        }
+
+        validateSql(sql, userId);
+        validateSubmittedSql(sql);
+
+        ProblemWorkspaceService.WorkspaceHandle workspaceHandle =
+                problemWorkspaceService.prepareWorkspace(userId, problemId, socketId);
+
+        try (Connection connection = dataSource.getConnection()) {
+
+            // 제출용 작업 스키마 기준 SQL 실행
+            connection.setAutoCommit(false);
+            configureExecutionConnection(connection, workspaceHandle.schemaName());
+
+            long startTime = System.nanoTime();
+            QueryExecutionResult executionResult = executeSelect(connection, sql, problemId);
+
+            connection.commit();
+            problemWorkspaceService.markActivity(socketId);
+
+            return executionResult.withExecutionTimeMs(Duration.ofNanos(System.nanoTime() - startTime).toMillis());
+        } catch (SQLException exception) {
+            throw new IllegalStateException(resolveSqlErrorMessage(exception), exception);
+        }
+    }
+
+    private void validateSubmittedSql(String sql) {
+        String normalizedSql = normalizeSql(sql);
+
+        if (normalizedSql.startsWith("SELECT ")) {
+            return;
+        }
+
+        if (normalizedSql.startsWith("WITH ") && !WRITE_CTE_PATTERN.matcher(normalizedSql).find()) {
+            return;
+        }
+
+        throw new IllegalArgumentException("제출은 SELECT만 지원한다.");
+    }
+
     private void validateForbiddenKeyword(String normalizedSql, String keyword, String message) {
         if (normalizedSql.contains(keyword)) {
             throw new IllegalArgumentException(message);
@@ -229,6 +326,14 @@ public class ProblemQueryService {
 
     private String trimTrailingSemicolon(String sql) {
         return sql.trim().replaceFirst(";\\s*$", "");
+    }
+
+    private String normalizeProblemId(String problemId) {
+        return problemId != null ? problemId.trim() : "";
+    }
+
+    private String normalizeSubmittedSql(String sql) {
+        return sql != null ? trimTrailingSemicolon(sql) : "";
     }
 
     private String normalizeSql(String sql) {
@@ -261,6 +366,12 @@ public class ProblemQueryService {
         return exception.getMessage() != null && !exception.getMessage().isBlank()
                 ? exception.getMessage()
                 : "SQL 실행에 실패했다.";
+    }
+
+    private String resolveProblemSubmitErrorMessage(Exception exception) {
+        return exception.getMessage() != null && !exception.getMessage().isBlank()
+                ? exception.getMessage()
+                : "제출 처리에 실패했다.";
     }
 
     private enum ExecutionMode {
@@ -296,6 +407,20 @@ public class ProblemQueryService {
 
         private QueryExecutionResult withExecutionTimeMs(long executionTimeMs) {
             return new QueryExecutionResult(problemId, mode, message, columns, rows, planLines, rowCount, executionTimeMs);
+        }
+    }
+
+    public record ProblemSubmitResult(String problemId,
+                                      boolean success,
+                                      String message,
+                                      Long executionTimeMs) {
+
+        private static ProblemSubmitResult success(String problemId, String message, long executionTimeMs) {
+            return new ProblemSubmitResult(problemId, true, message, executionTimeMs);
+        }
+
+        private static ProblemSubmitResult failure(String problemId, String message) {
+            return new ProblemSubmitResult(problemId, false, message, null);
         }
     }
 }

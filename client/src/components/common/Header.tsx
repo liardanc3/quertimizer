@@ -9,6 +9,7 @@ import {
   navigate,
 } from '../../lib/navigation';
 import { logout as requestLogout } from '../../lib/authApi';
+import { fetchVisibleMarqueeMessages, subscribeMarqueeChange } from '../../lib/marquee';
 import { useMockSession } from '../../lib/session';
 import { mockNotifications } from '../../mocks/notifications';
 
@@ -49,27 +50,32 @@ function formatNotificationTime(value: string) {
   return `${month}-${day} ${hours}:${minutes}`;
 }
 
+const HEADER_MARQUEE_MESSAGE = 'Quertimizer에 오신 것을 환영합니다.';
 export default function Header() {
-  const { isAuthenticated, isAdmin, logout } = useMockSession();
+  const { isAuthenticated, isAdmin, role, logout } = useMockSession();
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
+  const [marqueeMessage, setMarqueeMessage] = useState(HEADER_MARQUEE_MESSAGE);
   const notificationRootRef = useRef<HTMLDivElement | null>(null);
+  const marqueeShellRef = useRef<HTMLDivElement | null>(null);
+  const floatingHeaderRef = useRef<HTMLDivElement | null>(null);
 
   const activeNav = pathname.startsWith(RANKING_PATH)
     ? 'ranking'
     : pathname.startsWith(ADMIN_PATH)
       ? 'admin'
-    : pathname.startsWith(COMMUNITY_PATH)
-      ? 'community'
-      : pathname.startsWith(PROBLEMS_PATH)
-        ? 'problems'
-        : null;
+      : pathname.startsWith(COMMUNITY_PATH)
+        ? 'community'
+        : pathname.startsWith(PROBLEMS_PATH)
+          ? 'problems'
+          : null;
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => notification.isUnread).length,
     [notifications]
   );
+  const isFloatingHeaderVisible = true;
 
   useEffect(() => {
     setIsNotificationOpen(false);
@@ -100,6 +106,41 @@ export default function Header() {
       window.removeEventListener('keydown', handleEscape);
     };
   }, [isNotificationOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMarqueeMessage() {
+      try {
+        const messages = await fetchVisibleMarqueeMessages();
+
+        if (cancelled) {
+          return;
+        }
+
+        setMarqueeMessage(messages.length > 0 ? messages.join(' · ') : HEADER_MARQUEE_MESSAGE);
+      } catch {
+        if (!cancelled) {
+          setMarqueeMessage(HEADER_MARQUEE_MESSAGE);
+        }
+      }
+    }
+
+    void loadMarqueeMessage();
+
+    const intervalId = window.setInterval(() => {
+      void loadMarqueeMessage();
+    }, 30_000);
+    const unsubscribe = subscribeMarqueeChange(() => {
+      void loadMarqueeMessage();
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      unsubscribe();
+    };
+  }, [isAuthenticated, role]);
 
   function handleMarkAllRead() {
     setNotifications((currentNotifications) =>
@@ -138,147 +179,161 @@ export default function Header() {
 
   return (
     <header className="header">
-      <div className="header-inner">
-        <div className="header-brand-slot">
-          <button
-            type="button"
-            className="brand-button"
-            onClick={() => navigate(isAuthenticated ? PROBLEMS_PATH : '/')}
-            aria-label="quertimizer 홈으로 이동"
-          >
-            <img className="brand-logo" src="/favicon.svg" alt="quertimizer" />
-          </button>
+      <div ref={marqueeShellRef} className="header-marquee-shell" aria-label="긴급 공지">
+        <div className="header-marquee-track">
+          <span className="header-marquee-copy">{marqueeMessage}</span>
+          <span className="header-marquee-copy" aria-hidden="true">
+            {marqueeMessage}
+          </span>
         </div>
+      </div>
 
-        <nav className="header-nav" aria-label="주요 메뉴">
-          <button
-            type="button"
-            className={`nav-pill ${activeNav === 'problems' ? 'is-active' : ''}`}
-            onClick={() => navigate(PROBLEMS_PATH)}
-          >
-            문제
-          </button>
-          <button
-            type="button"
-            className={`nav-pill ${activeNav === 'ranking' ? 'is-active' : ''}`}
-            onClick={() => navigate(RANKING_PATH)}
-          >
-            랭킹
-          </button>
-          <button
-            type="button"
-            className={`nav-pill ${activeNav === 'community' ? 'is-active' : ''}`}
-            onClick={() => navigate(COMMUNITY_PATH)}
-          >
-            커뮤니티
-          </button>
-          {isAuthenticated && isAdmin ? (
+      <div
+        ref={floatingHeaderRef}
+        className={`header-floating-shell ${isFloatingHeaderVisible ? 'is-visible' : 'is-hidden'}`}
+      >
+        <div className="header-inner">
+          <div className="header-brand-slot">
             <button
               type="button"
-              className={`nav-pill ${activeNav === 'admin' ? 'is-active' : ''}`}
-              onClick={() => navigate(ADMIN_PATH)}
+              className="brand-button"
+              onClick={() => navigate(isAuthenticated ? PROBLEMS_PATH : '/')}
+              aria-label="quertimizer 홈으로 이동"
             >
-              관리자
+              <img className="brand-logo" src="/favicon.svg" alt="quertimizer" />
             </button>
-          ) : null}
-        </nav>
+          </div>
 
-        <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>
-          {isAuthenticated ? (
-            <>
-              <div className="header-notification" ref={notificationRootRef}>
-                <button
-                  type="button"
-                  className={`header-notification-button ${isNotificationOpen ? 'is-open' : ''}`}
-                  onClick={() => setIsNotificationOpen((currentState) => !currentState)}
-                  aria-label={unreadCount > 0 ? `알림 열기 (읽지 않음 ${unreadCount}개)` : '알림 열기'}
-                  aria-haspopup="dialog"
-                  aria-expanded={isNotificationOpen}
-                >
-                  <svg className="header-notification-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M12 3.75a4.25 4.25 0 0 0-4.25 4.25v1.14c0 .9-.28 1.77-.8 2.5l-1.27 1.79a1.75 1.75 0 0 0 1.43 2.77h9.78a1.75 1.75 0 0 0 1.43-2.77l-1.27-1.79a4.3 4.3 0 0 1-.8-2.5V8A4.25 4.25 0 0 0 12 3.75Z"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M9.75 18.25a2.25 2.25 0 0 0 4.5 0"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  {unreadCount > 0 ? <span className="header-notification-badge">{unreadCount}</span> : null}
-                </button>
-
-                {isNotificationOpen ? (
-                  <div className="header-notification-panel" role="dialog" aria-label="알림">
-                    <div className="header-notification-panel-header">
-                      <div className="header-notification-panel-copy">
-                        <p className="panel-meta">알림</p>
-                        <h2 className="header-notification-panel-title">알림함</h2>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn text header-notification-mark-button"
-                        onClick={handleMarkAllRead}
-                        disabled={unreadCount === 0}
-                      >
-                        모두 읽음
-                      </button>
-                    </div>
-
-                    <div className="header-notification-panel-status">
-                      <span className="subtle-chip">읽지 않음 {unreadCount}개</span>
-                    </div>
-
-                    <div className="header-notification-list">
-                      {notifications.map((notification) => (
-                        <button
-                          key={notification.id}
-                          type="button"
-                          className={`header-notification-item ${notification.isUnread ? 'is-unread' : ''}`}
-                          onClick={() => handleNotificationClick(notification.id, notification.href)}
-                        >
-                          <div className="header-notification-item-header">
-                            <strong>{notification.title}</strong>
-                            <span>{formatNotificationTime(notification.createdAt)}</span>
-                          </div>
-                          <p>{notification.message}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <button type="button" className="header-link-button profile-link-button" onClick={() => navigate(getProfilePath())}>
-                프로필
-              </button>
+          <nav className="header-nav" aria-label="주요 메뉴">
+            <button
+              type="button"
+              className={`nav-pill ${activeNav === 'problems' ? 'is-active' : ''}`}
+              onClick={() => navigate(PROBLEMS_PATH)}
+            >
+              문제
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${activeNav === 'ranking' ? 'is-active' : ''}`}
+              onClick={() => navigate(RANKING_PATH)}
+            >
+              랭킹
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${activeNav === 'community' ? 'is-active' : ''}`}
+              onClick={() => navigate(COMMUNITY_PATH)}
+            >
+              커뮤니티
+            </button>
+            {isAuthenticated && isAdmin ? (
               <button
                 type="button"
-                className="header-link-button"
-                onClick={() => {
-                  void handleLogout();
-                }}
+                className={`nav-pill ${activeNav === 'admin' ? 'is-active' : ''}`}
+                onClick={() => navigate(ADMIN_PATH)}
               >
-                로그아웃
+                관리자
               </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="header-link-button" onClick={focusAuthForm}>
-                로그인
-              </button>
-              <button type="button" className="header-link-button" onClick={() => navigate(LANDING_SIGNUP_PATH)}>
-                회원가입
-              </button>
-            </>
-          )}
+            ) : null}
+          </nav>
+
+          <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>
+            {isAuthenticated ? (
+              <>
+                <div className="header-notification" ref={notificationRootRef}>
+                  <button
+                    type="button"
+                    className={`header-notification-button ${isNotificationOpen ? 'is-open' : ''}`}
+                    onClick={() => setIsNotificationOpen((currentState) => !currentState)}
+                    aria-label={unreadCount > 0 ? `알림 열기 (읽지 않음 ${unreadCount}개)` : '알림 열기'}
+                    aria-haspopup="dialog"
+                    aria-expanded={isNotificationOpen}
+                  >
+                    <svg className="header-notification-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M12 3.75a4.25 4.25 0 0 0-4.25 4.25v1.14c0 .9-.28 1.77-.8 2.5l-1.27 1.79a1.75 1.75 0 0 0 1.43 2.77h9.78a1.75 1.75 0 0 0 1.43-2.77l-1.27-1.79a4.3 4.3 0 0 1-.8-2.5V8A4.25 4.25 0 0 0 12 3.75Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M9.75 18.25a2.25 2.25 0 0 0 4.5 0"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    {unreadCount > 0 ? <span className="header-notification-badge">{unreadCount}</span> : null}
+                  </button>
+
+                  {isNotificationOpen ? (
+                    <div className="header-notification-panel" role="dialog" aria-label="알림">
+                      <div className="header-notification-panel-header">
+                        <div className="header-notification-panel-copy">
+                          <p className="panel-meta">알림</p>
+                          <h2 className="header-notification-panel-title">알림함</h2>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn text header-notification-mark-button"
+                          onClick={handleMarkAllRead}
+                          disabled={unreadCount === 0}
+                        >
+                          모두 읽음
+                        </button>
+                      </div>
+
+                      <div className="header-notification-panel-status">
+                        <span className="subtle-chip">읽지 않음 {unreadCount}개</span>
+                      </div>
+
+                      <div className="header-notification-list">
+                        {notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            className={`header-notification-item ${notification.isUnread ? 'is-unread' : ''}`}
+                            onClick={() => handleNotificationClick(notification.id, notification.href)}
+                          >
+                            <div className="header-notification-item-header">
+                              <strong>{notification.title}</strong>
+                              <span>{formatNotificationTime(notification.createdAt)}</span>
+                            </div>
+                            <p>{notification.message}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <button type="button" className="header-link-button profile-link-button" onClick={() => navigate(getProfilePath())}>
+                  프로필
+                </button>
+                <button
+                  type="button"
+                  className="header-link-button"
+                  onClick={() => {
+                    void handleLogout();
+                  }}
+                >
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="header-link-button" onClick={focusAuthForm}>
+                  로그인
+                </button>
+                <button type="button" className="header-link-button" onClick={() => navigate(LANDING_SIGNUP_PATH)}>
+                  회원가입
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>

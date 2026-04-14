@@ -41,14 +41,6 @@
   flex-wrap: wrap;
 }
 
-.problem-create-mode-button {
-  min-height: 1.72rem;
-  padding: 0.12rem 0.5rem;
-  font-size: 0.68rem;
-  width: 8rem;
-  justify-content: center;
-}
-
 .problem-create-select-field,
 .problem-create-toolbar-group,
 .problem-create-table-selector,

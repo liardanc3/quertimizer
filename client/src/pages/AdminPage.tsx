@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useMockSession } from '../lib/session';
+import { AuthManageContent } from './AuthManagePage';
+import { GlobalConfigContent } from './GlobalConfigPage';
+import { MarqueeManageContent } from './MarqueeManagePage';
 import { ProblemCreateContent } from './ProblemCreatePage';
 import './AdminPage.css';
 
-type AdminTab = 'problemCreate' | 'globalConfig' | 'permissionManagement';
+type AdminTab = 'problemCreate' | 'globalConfig' | 'permissionManagement' | 'marqueeManagement';
 
 export default function AdminPage() {
   const { isReady, isAuthenticated, isAdmin } = useMockSession();
@@ -49,7 +52,7 @@ export default function AdminPage() {
             className={`admin-page-tab ${selectedTab === 'globalConfig' ? 'is-selected' : ''}`}
             onClick={() => setSelectedTab('globalConfig')}
           >
-            전역상수 설정
+            UI 텍스트 설정
           </button>
           <button
             type="button"
@@ -60,21 +63,26 @@ export default function AdminPage() {
           >
             권한 관리
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === 'marqueeManagement'}
+            className={`admin-page-tab ${selectedTab === 'marqueeManagement' ? 'is-selected' : ''}`}
+            onClick={() => setSelectedTab('marqueeManagement')}
+          >
+            전광판 관리
+          </button>
         </div>
       </div>
 
       {selectedTab === 'problemCreate' ? (
         <ProblemCreateContent />
       ) : selectedTab === 'globalConfig' ? (
-        <section className="panel-card admin-page-placeholder">
-          <h2 className="admin-page-placeholder-title">전역상수 설정</h2>
-          <p className="content-text">전역상수 설정 화면은 다음 단계에서 연결한다.</p>
-        </section>
+        <GlobalConfigContent />
+      ) : selectedTab === 'marqueeManagement' ? (
+        <MarqueeManageContent />
       ) : (
-        <section className="panel-card admin-page-placeholder">
-          <h2 className="admin-page-placeholder-title">권한 관리</h2>
-          <p className="content-text">권한 관리 화면은 다음 단계에서 연결한다.</p>
-        </section>
+        <AuthManageContent />
       )}
     </div>
   );

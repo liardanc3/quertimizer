@@ -985,6 +985,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [executionResultPage, setExecutionResultPage] = useState(1);
   const [executionResultPageInput, setExecutionResultPageInput] = useState('1');
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [autocompleteState, setAutocompleteState] = useState<SqlAutocompleteState | null>(null);
   const [collapsedCards, setCollapsedCards] = useState<CollapsedCardState>({
@@ -1119,6 +1120,20 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         return;
       }
 
+      if (message.type === 'problem.submit.result') {
+        setIsSubmitting(false);
+        setSubmitMessage((message as ProblemSocketMessage).message ?? '제출을 기록하지 못했다.');
+        setCollapsedCards((current) => ({
+          ...current,
+          submit: false,
+        }));
+        setPanelVisibility((current) => ({
+          ...current,
+          submit: true,
+        }));
+        return;
+      }
+
       if (message.type === 'problem.execute.result' || message.type === 'error') {
         setIsExecuting(false);
         setExecutionResult(
@@ -1158,6 +1173,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   useEffect(() => {
     setExecutionResultPageInput(String(executionResultPage));
   }, [executionResultPage]);
+
+  useEffect(() => {
+    setIsSubmitting(false);
+    setSubmitMessage(null);
+  }, [problemId]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -1348,11 +1368,49 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const handleSubmit = () => {
-    setSubmitMessage('제출과 채점 기능은 아직 준비 중이다.');
+    if (!isAuthenticated) {
+      setSubmitMessage('로그인 후 제출할 수 있다.');
+      setPanelVisibility((current) => ({
+        ...current,
+        submit: true,
+      }));
+      return;
+    }
+
+    if (selectedDbms !== 'postgresql') {
+      setSubmitMessage('제출은 PostgreSQL만 지원한다.');
+      setPanelVisibility((current) => ({
+        ...current,
+        submit: true,
+      }));
+      return;
+    }
+
+    if (sql.trim().length === 0) {
+      setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setPanelVisibility((current) => ({
+        ...current,
+        submit: true,
+      }));
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitMessage('제출 중이다.');
     setPanelVisibility((current) => ({
       ...current,
       submit: true,
     }));
+
+    void sendSessionSocketMessage({
+      type: 'problem.submit',
+      problemId,
+      sql,
+      dbms: selectedDbms,
+    }).catch((error) => {
+      setIsSubmitting(false);
+      setSubmitMessage(error instanceof SessionSocketError ? error.message : '제출 연결에 실패했다.');
+    });
   };
 
   const executeSql = async () => {
@@ -1681,8 +1739,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
                   {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
                 </button>
-                <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0}>
-                  제출
+                <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
+                  {isSubmitting ? '제출 중' : '제출'}
                 </button>
               </div>
             </div>

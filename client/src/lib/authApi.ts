@@ -100,7 +100,7 @@ export interface SessionMeResult {
   authenticated: boolean;
   userId: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
-  role: 'user' | 'admin' | null;
+  role: 'user' | 'admin' | 'problemGenerator' | null;
 }
 
 export function getApiBaseUrl() {
@@ -302,7 +302,14 @@ export async function fetchSessionMe() {
       authenticated: data.authenticated === true,
       userId: typeof data.userId === 'string' && data.userId.trim() !== '' ? data.userId : null,
       defaultDbms: data.defaultDbms === 'oracle' ? 'oracle' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
-      role: data.role === 'admin' ? 'admin' : data.role === 'user' ? 'user' : null,
+      role:
+        data.role === 'admin'
+          ? 'admin'
+          : data.role === 'user'
+            ? 'user'
+            : data.role === 'problem_generator'
+              ? 'problemGenerator'
+              : null,
     } satisfies SessionMeResult;
   } catch {
     throw new Error('세션 복원 확인에 실패했습니다.');

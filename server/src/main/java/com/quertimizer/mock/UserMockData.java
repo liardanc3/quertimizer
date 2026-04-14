@@ -44,6 +44,27 @@ public class UserMockData {
                 "실행 계획과 성능 비교 기록을 정리하는 계정",
                 DbmsType.POSTGRESQL
         ));
+        users.add(createUser(
+                "problemgen01",
+                "problemgen01@example.com",
+                UserRole.PROBLEM_GENERATOR,
+                "문제 출제와 검수를 담당하는 계정",
+                DbmsType.POSTGRESQL
+        ));
+        users.add(createUser(
+                "problemgen02",
+                "problemgen02@example.com",
+                UserRole.PROBLEM_GENERATOR,
+                "문제셋 구성과 예시 데이터를 관리하는 계정",
+                DbmsType.ORACLE
+        ));
+        users.add(createUser(
+                "problemgen03",
+                "problemgen03@example.com",
+                UserRole.PROBLEM_GENERATOR,
+                "문제 문구와 정답 SQL을 검토하는 계정",
+                DbmsType.POSTGRESQL
+        ));
 
         for (int index = 1; index <= 10; index++) {
             users.add(createUser(

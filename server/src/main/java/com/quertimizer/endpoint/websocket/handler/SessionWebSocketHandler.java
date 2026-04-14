@@ -68,6 +68,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
             switch (request.type()) {
                 case "problem.execute" -> handleProblemExecute(session, request);
+                case "problem.submit" -> handleProblemSubmit(session, request);
                 case "problem.leave" -> handleProblemLeave(session, request);
                 default -> {
                 }
@@ -116,6 +117,13 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
         // SQL 실행은 별도 쓰레드에서 비동기 처리
         problemExecutingExecutor.execute(() -> executeProblemQuery(session, request, authenticatedUserId));
+    }
+
+    private void handleProblemSubmit(WebSocketSession session, ProblemSocketReq request) throws Exception {
+        String authenticatedUserId = resolveAuthenticatedUserId(session);
+
+        // SQL 제출도 동일한 실행 쓰레드에서 비동기 처리
+        problemExecutingExecutor.execute(() -> submitProblemQuery(session, request, authenticatedUserId));
     }
 
     private void handleProblemLeave(WebSocketSession session, ProblemSocketReq request) throws Exception {
@@ -223,6 +231,35 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
                 sendObjectMessage(session, ProblemExecuteRes.error(resolveErrorMessage(exception)));
             } catch (Exception sendException) {
                 log.warn("문제 실행 실패 응답 전송에 실패했다.", sendException);
+            }
+        }
+    }
+
+    private void submitProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedUserId) {
+        try {
+            ProblemQueryService.ProblemSubmitResult submitResult = problemQueryService.submitProblemSql(
+                    authenticatedUserId,
+                    session.getId(),
+                    request.problemId(),
+                    request.sql(),
+                    resolveDbmsType(request.dbms())
+            );
+
+            sendObjectMessage(session, submitResult.success()
+                    ? ProblemExecuteRes.submitSuccess(
+                    submitResult.problemId(),
+                    submitResult.message(),
+                    submitResult.executionTimeMs()
+            )
+                    : ProblemExecuteRes.submitFailure(
+                    submitResult.problemId(),
+                    submitResult.message()
+            ));
+        } catch (Exception exception) {
+            try {
+                sendObjectMessage(session, ProblemExecuteRes.submitFailure(request.problemId(), resolveErrorMessage(exception)));
+            } catch (Exception sendException) {
+                log.warn("문제 제출 실패 응답 전송에 실패했다.", sendException);
             }
         }
     }

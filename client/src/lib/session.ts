@@ -18,7 +18,7 @@ interface SessionSnapshot {
   isReady: boolean;
   userId: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
-  role: 'user' | 'admin' | null;
+  role: 'user' | 'admin' | 'problemGenerator' | null;
 }
 
 let sessionSnapshot: SessionSnapshot = {
@@ -237,6 +237,7 @@ export function useMockSession() {
     defaultDbms,
     role,
     isAdmin: role === 'admin',
+    isProblemGenerator: role === 'problemGenerator',
     login: loginMock,
     logout: logoutMock,
   };
