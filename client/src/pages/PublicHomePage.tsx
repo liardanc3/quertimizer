@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore, useState } from 'react';
 import AccountRecoveryOverlay from '../components/home/AccountRecoveryOverlay';
+import logoImage from '../assets/logo.svg';
 import {
   AuthApiError,
   SignupApiError,
@@ -60,7 +61,11 @@ const signupGuideLines = [
 ];
 
 export default function PublicHomePage() {
-  useHomeSiteTitle();
+  const hash = useSyncExternalStore(subscribe, getSnapshot, () => '');
+  const overlayPageTitle =
+    hash === '#signup' ? '회원가입' : hash === '#find-user-id' ? '아이디 찾기' : hash === '#reset-password' ? '비밀번호 찾기' : null;
+
+  useHomeSiteTitle(overlayPageTitle);
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [rememberLogin, setRememberLogin] = useState(false);
@@ -80,7 +85,6 @@ export default function PublicHomePage() {
   const [signupEmailLastCheckedValue, setSignupEmailLastCheckedValue] = useState('');
   const signupIdCheckSequenceRef = useRef(0);
   const signupEmailCheckSequenceRef = useRef(0);
-  const hash = useSyncExternalStore(subscribe, getSnapshot, () => '');
   const prefilledLoginId =
     typeof window.history.state?.prefillLoginId === 'string'
       ? window.history.state.prefillLoginId.slice(0, 15)
@@ -110,13 +114,13 @@ export default function PublicHomePage() {
       ? SIGNUP_ID_HINT
       : !isSignupIdValid
         ? SIGNUP_ID_HINT
-        : signupIdCheckStatus === 'checking'
+      : signupIdCheckStatus === 'checking'
           ? SIGNUP_ID_CHECKING_MESSAGE
           : signupIdLastCheckedValue === normalizedSignupId && signupIdCheckStatus === 'duplicated' && signupIdCheckReason
             ? signupIdCheckReason
-            : signupIdLastCheckedValue === normalizedSignupId && signupIdCheckStatus === 'available'
+          : signupIdLastCheckedValue === normalizedSignupId && signupIdCheckStatus === 'available'
               ? SIGNUP_ID_AVAILABLE_MESSAGE
-              : SIGNUP_ID_HINT;
+              : '';
   const signupEmailHintMessage =
     normalizedEmail === ''
       ? SIGNUP_EMAIL_HINT
@@ -426,7 +430,7 @@ export default function PublicHomePage() {
     <div className={`public-home-shell ${isOverlayOpen ? 'is-signup' : ''}`}>
       {isSignupOpen ? (
         <div className="signup-overlay-layout" id="auth-form">
-          <div className="signup-close-row">
+          <div className="signup-close-row" data-title="회원가입">
             <button
               type="button"
               className="signup-close-button"
@@ -451,6 +455,7 @@ export default function PublicHomePage() {
 
             <section className="signup-card">
               <div className="signup-card-header">
+                <h1 className="signup-form-title">회원가입</h1>
                 <p className="panel-meta">회원가입</p>
               </div>
 
@@ -458,6 +463,7 @@ export default function PublicHomePage() {
                 <label className="field-label" htmlFor="signup-handle">
                   ID
                 </label>
+                <div className="signup-inline-field signup-inline-field-id">
                 <input
                   id="signup-handle"
                   className="text-field"
@@ -475,9 +481,12 @@ export default function PublicHomePage() {
                   maxLength={15}
                   aria-invalid={hasSignupIdError}
                 />
-                <p className={`hint-text signup-field-hint ${hasSignupIdError ? 'is-error' : hasSignupIdSuccess ? 'is-success' : ''}`}>
-                  {signupIdHintMessage}
-                </p>
+                </div>
+                {signupIdHintMessage ? (
+                  <p className={`hint-text signup-field-hint ${hasSignupIdError ? 'is-error' : hasSignupIdSuccess ? 'is-success' : ''}`}>
+                    {signupIdHintMessage}
+                  </p>
+                ) : null}
               </div>
 
               <div className="field-stack">
@@ -590,7 +599,7 @@ export default function PublicHomePage() {
         <AccountRecoveryOverlay mode="reset-password" onClose={closeOverlay} />
       ) : (
         <section className="public-home-content" id="auth-form">
-          <img className="mobile-landing-logo" src="/favicon.svg" alt="quertimizer" />
+          <img className="mobile-landing-logo" src={logoImage} alt="quertimizer" />
 
           <h1 className="landing-title-block">
             <span className="landing-title-primary">정답과 성능을 함께 평가하는</span>

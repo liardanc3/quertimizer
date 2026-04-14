@@ -1,0 +1,35 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- outer Q -->
+  <path fill="#2EA8FF" d="
+    M72 24
+    H184
+    L232 72
+    V184
+    L184 232
+    H72
+    L24 184
+    V72
+    Z"></path>
+
+  <!-- inner hole -->
+  <path fill="#ffffff" d="
+    M88 56
+    H168
+    L200 88
+    V168
+    L168 200
+    H88
+    L56 168
+    V88
+    Z"></path>
+
+  <!-- more prominent lightning -->
+  <path fill="#2EA8FF" d="
+    M116 108
+    L204 144
+    H158
+    L226 228
+    L98 162
+    H144
+    Z"></path>
+</svg>

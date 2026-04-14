@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import {
   ADMIN_PATH,
   COMMUNITY_PATH,
@@ -9,6 +9,7 @@ import {
   navigate,
 } from '../../lib/navigation';
 import { logout as requestLogout } from '../../lib/authApi';
+import logoImage from '../../assets/logo.svg';
 import { fetchVisibleMarqueeMessages, subscribeMarqueeChange } from '../../lib/marquee';
 import { useMockSession } from '../../lib/session';
 import { mockNotifications } from '../../mocks/notifications';
@@ -57,8 +58,14 @@ export default function Header() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
   const [marqueeMessage, setMarqueeMessage] = useState(HEADER_MARQUEE_MESSAGE);
+  const [marqueeMetrics, setMarqueeMetrics] = useState<{
+    startOffset: number;
+    endOffset: number;
+    durationSeconds: number;
+  } | null>(null);
   const notificationRootRef = useRef<HTMLDivElement | null>(null);
   const marqueeShellRef = useRef<HTMLDivElement | null>(null);
+  const marqueeCopyRef = useRef<HTMLSpanElement | null>(null);
   const floatingHeaderRef = useRef<HTMLDivElement | null>(null);
 
   const activeNav = pathname.startsWith(RANKING_PATH)
@@ -142,6 +149,65 @@ export default function Header() {
     };
   }, [isAuthenticated, role]);
 
+  useEffect(() => {
+    const marqueeShell = marqueeShellRef.current;
+    const marqueeCopy = marqueeCopyRef.current;
+    if (!marqueeShell || !marqueeCopy) {
+      return;
+    }
+
+    let animationFrameId = 0;
+
+    function updateMarqueeMetrics() {
+      animationFrameId = window.requestAnimationFrame(() => {
+        const currentMarqueeShell = marqueeShellRef.current;
+        const currentMarqueeCopy = marqueeCopyRef.current;
+        if (!currentMarqueeShell || !currentMarqueeCopy) {
+          return;
+        }
+
+        const shellWidth = Math.ceil(currentMarqueeShell.getBoundingClientRect().width);
+        const copyWidth = Math.ceil(currentMarqueeCopy.scrollWidth);
+        if (shellWidth <= 0 || copyWidth <= 0) {
+          return;
+        }
+
+        const durationSeconds = Math.max(Number(((shellWidth + copyWidth) / 92).toFixed(2)), 12);
+
+        setMarqueeMetrics((currentMetrics) =>
+          currentMetrics != null &&
+          currentMetrics.startOffset === shellWidth &&
+          currentMetrics.endOffset === -copyWidth &&
+          currentMetrics.durationSeconds === durationSeconds
+            ? currentMetrics
+            : {
+                startOffset: shellWidth,
+                endOffset: -copyWidth,
+                durationSeconds,
+              },
+        );
+      });
+    }
+
+    updateMarqueeMetrics();
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            window.cancelAnimationFrame(animationFrameId);
+            updateMarqueeMetrics();
+          });
+
+    resizeObserver?.observe(marqueeShell);
+    resizeObserver?.observe(marqueeCopy);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      resizeObserver?.disconnect();
+    };
+  }, [marqueeMessage]);
+
   function handleMarkAllRead() {
     setNotifications((currentNotifications) =>
       currentNotifications.map((notification) => ({
@@ -177,12 +243,20 @@ export default function Header() {
     navigate('/', { replace: true });
   }
 
+  const marqueeTrackStyle =
+    marqueeMetrics == null
+      ? undefined
+      : ({
+          '--header-marquee-start': `${marqueeMetrics.startOffset}px`,
+          '--header-marquee-end': `${marqueeMetrics.endOffset}px`,
+          '--header-marquee-duration': `${marqueeMetrics.durationSeconds}s`,
+        } as CSSProperties);
+
   return (
     <header className="header">
       <div ref={marqueeShellRef} className="header-marquee-shell" aria-label="긴급 공지">
-        <div className="header-marquee-track">
-          <span className="header-marquee-copy">{marqueeMessage}</span>
-          <span className="header-marquee-copy" aria-hidden="true">
+        <div className="header-marquee-track" style={marqueeTrackStyle}>
+          <span ref={marqueeCopyRef} className="header-marquee-copy">
             {marqueeMessage}
           </span>
         </div>
@@ -200,7 +274,7 @@ export default function Header() {
               onClick={() => navigate(isAuthenticated ? PROBLEMS_PATH : '/')}
               aria-label="quertimizer 홈으로 이동"
             >
-              <img className="brand-logo" src="/favicon.svg" alt="quertimizer" />
+              <img className="brand-logo" src={logoImage} alt="quertimizer" />
             </button>
           </div>
 

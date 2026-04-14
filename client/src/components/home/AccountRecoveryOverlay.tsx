@@ -216,7 +216,7 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
 
   return (
     <div className="signup-overlay-layout account-recovery-overlay" id="auth-form">
-      <div className="signup-close-row">
+      <div className="signup-close-row" data-title={overlayTitle}>
         <button
           type="button"
           className="signup-close-button"
@@ -241,7 +241,7 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
 
         <section className="signup-card">
           <div className="signup-card-header">
-            <p className="panel-meta">{overlayTitle}</p>
+            <h1 className="signup-form-title">{overlayTitle}</h1>
           </div>
 
           <div className="field-stack">

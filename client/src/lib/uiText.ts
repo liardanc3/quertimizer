@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getApiBaseUrl } from './authApi';
 
 interface UiTextResponse {
@@ -208,7 +208,9 @@ export async function deleteUiText(key: string, language: string): Promise<void>
   }
 }
 
-export function useHomeSiteTitle() {
+export function useHomeSiteTitle(overrideTitle?: string | null) {
+  const [siteTitle, setSiteTitle] = useState(DEFAULT_SITE_TITLE);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -220,10 +222,10 @@ export function useHomeSiteTitle() {
           return;
         }
 
-        document.title = uiText.value;
+        setSiteTitle(uiText.value);
       } catch {
         if (!cancelled) {
-          document.title = DEFAULT_SITE_TITLE;
+          setSiteTitle(DEFAULT_SITE_TITLE);
         }
       }
     }
@@ -234,4 +236,8 @@ export function useHomeSiteTitle() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    document.title = overrideTitle && overrideTitle.trim() !== '' ? overrideTitle : siteTitle;
+  }, [overrideTitle, siteTitle]);
 }
