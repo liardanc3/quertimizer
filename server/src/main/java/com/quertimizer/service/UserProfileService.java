@@ -56,33 +56,33 @@ public class UserProfileService {
     public Optional<UserProfileSummaryRes> getProfileSummary(String targetUserId, String currentUserId) {
         boolean isOwnProfile = targetUserId.equals(currentUserId);
 
-        return userRepository.findById(targetUserId)
+        return userRepository.findByUserId(targetUserId)
                 .map(user -> buildUserProfileSummary(user, isOwnProfile));
     }
 
     public Optional<UserProfileSolvedProblemsRes> getSolvedProblems(String targetUserId, String currentUserId) {
         boolean isOwnProfile = targetUserId.equals(currentUserId);
 
-        return userRepository.findById(targetUserId)
+        return userRepository.findByUserId(targetUserId)
                 .map(user -> buildSolvedProblems(user, isOwnProfile));
     }
 
     public Optional<UserProfileSolvedRecordsRes> getSolvedRecords(String targetUserId, String currentUserId) {
         boolean isOwnProfile = targetUserId.equals(currentUserId);
 
-        return userRepository.findById(targetUserId)
+        return userRepository.findByUserId(targetUserId)
                 .map(user -> buildSolvedRecords(user, isOwnProfile));
     }
 
     public Optional<UserProfileCommunityPostsRes> getCommunityPosts(String targetUserId) {
-        return userRepository.findById(targetUserId)
+        return userRepository.findByUserId(targetUserId)
                 .map(user -> new UserProfileCommunityPostsRes(
                         createCommunityPostResponses(communityPostRepository.findAllByUserIdOrderByCreatedAtDesc(targetUserId))
                 ));
     }
 
     public Optional<UserProfileCommunityPostsRes> getLikedPosts(String targetUserId) {
-        return userRepository.findById(targetUserId)
+        return userRepository.findByUserId(targetUserId)
                 .map(user -> {
                     List<String> likedPostIds = communityPostLikeRepository.findAllByIdUserIdOrderByCreatedAtDesc(targetUserId).stream()
                             .map(CommunityPostLike::getId)
@@ -103,7 +103,7 @@ public class UserProfileService {
     }
 
     public Optional<UserProfileCommunityCommentsRes> getCommunityComments(String targetUserId) {
-        return userRepository.findById(targetUserId)
+        return userRepository.findByUserId(targetUserId)
                 .map(user -> {
                     List<CommunityComment> comments = communityCommentRepository.findAllByUserIdOrderByCreatedAtDesc(targetUserId);
                     Map<String, String> postTitleByPostId = communityPostRepository.findAllByPostIdIn(
@@ -127,7 +127,7 @@ public class UserProfileService {
     }
 
     public Optional<UserProfileSummaryRes> updateProfile(String userId, UserProfileUpdateReq request) {
-        return userRepository.findById(userId)
+        return userRepository.findByUserId(userId)
                 .map(user -> {
                     // 소개글, 기본 설정 수정
                     user.changeProfile(
@@ -260,6 +260,7 @@ public class UserProfileService {
                                 .orElse(history.getProblemId()),
                         resolveDbmsType(history).getValue(),
                         history.getExecutionTimeMs(),
+                        history.getCost(),
                         history.getSubmittedAt()
                 ))
                 .toList();

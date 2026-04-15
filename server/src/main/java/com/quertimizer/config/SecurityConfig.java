@@ -34,7 +34,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    SecurityContextRepository securityContextRepository,
-                                                   TokenBasedRememberMeServices rememberMeServices) throws Exception {
+                                                   TokenBasedRememberMeServices rememberMeServices,
+                                                   SocialOAuth2SuccessHandler socialOAuth2SuccessHandler,
+                                                   SocialOAuth2FailureHandler socialOAuth2FailureHandler) throws Exception {
 
         // 세션, remember-me, API 로그 필터 구성
         http
@@ -43,11 +45,16 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
+                .oauth2Login(oauth2 -> oauth2
+                        .redirectionEndpoint(redirection -> redirection.baseUri("/login/*"))
+                        .successHandler(socialOAuth2SuccessHandler)
+                        .failureHandler(socialOAuth2FailureHandler)
+                )
                 .securityContext(context -> context.securityContextRepository(securityContextRepository))
                 .rememberMe(rememberMe -> rememberMe.rememberMeServices(rememberMeServices))
                 .addFilterAfter(apiLoggingFilter, SecurityContextHolderFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/login", "/logout", "/signup").permitAll()
+                        .requestMatchers("/login", "/login/*", "/logout", "/signup", "/oauth2/**").permitAll()
                         .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().permitAll());
 
@@ -58,10 +65,10 @@ public class SecurityConfig {
     public UserDetailsService userDetailsService() {
 
         // userId 기준 인증 사용자 조회
-        return username -> userRepository.findById(username)
+        return username -> userRepository.findByEmailIgnoreCase(username)
                 .map(user ->
                         new org.springframework.security.core.userdetails.User(
-                                user.getUserId(),
+                                user.getEmail(),
                                 user.getPassword(),
                                 AuthorityUtils.createAuthorityList("ROLE_" + user.getResolvedRole().name())
                         ))

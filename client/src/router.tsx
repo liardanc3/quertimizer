@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import AdminPage from './pages/AdminPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
 import CommunityPage from './pages/CommunityPage';
@@ -10,6 +10,7 @@ import ProfileActivityPage from './pages/ProfileActivityPage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
 import PublicHomePage from './pages/PublicHomePage';
 import RankingPage from './pages/RankingPage';
+import { PROBLEMS_PATH, navigate } from './lib/navigation';
 import { useMockSession } from './lib/session';
 
 interface ProblemRoute {
@@ -162,7 +163,24 @@ function parseRoute(pathname: string): AppRoute {
 export default function AppRouter() {
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const route = parseRoute(pathname);
-  const { isAuthenticated } = useMockSession();
+  const { isAuthenticated, userIdSetupRequired } = useMockSession();
+  const shouldRequireUserIdSetup = isAuthenticated && userIdSetupRequired;
+
+  useEffect(() => {
+    if (!shouldRequireUserIdSetup) {
+      return;
+    }
+
+    if (window.location.pathname === PROBLEMS_PATH) {
+      return;
+    }
+
+    navigate(PROBLEMS_PATH, { replace: true });
+  }, [pathname, shouldRequireUserIdSetup]);
+
+  if (shouldRequireUserIdSetup) {
+    return <HomePage />;
+  }
 
   if (route.type === 'problem') {
     return <ProblemSolvePage key={route.problemId} problemId={route.problemId} />;

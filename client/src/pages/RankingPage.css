@@ -414,3 +414,38 @@
     grid-template-columns: max-content max-content minmax(180px, 1fr);
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .ranking-note-card,
+  .ranking-summary-card,
+  .ranking-rank-badge {
+    border-color: var(--line-soft);
+    background: var(--surface-soft);
+  }
+
+  .ranking-note-text,
+  .ranking-control-label,
+  .ranking-summary-label,
+  .ranking-user-copy span,
+  .ranking-cell::before {
+    color: var(--ink-subtle);
+  }
+
+  .ranking-summary-value,
+  .ranking-cell strong,
+  .ranking-rank-badge {
+    color: var(--ink-strong);
+  }
+
+  .ranking-search-input {
+    color: var(--ink-strong);
+  }
+
+  .ranking-search-button {
+    color: var(--ink-soft);
+  }
+
+  .ranking-cell {
+    border-bottom-color: var(--line-soft);
+  }
+}

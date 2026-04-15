@@ -35,6 +35,7 @@ public class ProblemQueryService {
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("\\bproblem_[a-z0-9_]+_template\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern MULTI_STATEMENT_PATTERN = Pattern.compile(";(?=.+\\S)");
     private static final Pattern WRITE_CTE_PATTERN = Pattern.compile("\\bWITH\\b[\\s\\S]*\\b(INSERT|UPDATE|DELETE|MERGE)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PLAN_TOTAL_COST_PATTERN = Pattern.compile("cost=[0-9]+(?:\\.[0-9]+)?\\.\\.([0-9]+(?:\\.[0-9]+)?)", Pattern.CASE_INSENSITIVE);
 
     private final DataSource dataSource;
     private final ProblemWorkspaceService problemWorkspaceService;
@@ -61,9 +62,12 @@ public class ProblemQueryService {
             connection.setAutoCommit(false);
             configureExecutionConnection(connection, workspaceHandle.schemaName());
 
+            Double estimatedCost = executionMode == ExecutionMode.SELECT
+                    ? estimateQueryCost(connection, trimmedSql)
+                    : null;
             long startTime = System.nanoTime();
             QueryExecutionResult executionResult = switch (executionMode) {
-                case SELECT -> executeSelect(connection, trimmedSql, problemId);
+                case SELECT -> executeSelect(connection, trimmedSql, problemId, estimatedCost);
                 case EXPLAIN -> executeExplain(connection, trimmedSql, problemId, "explain");
                 case EXPLAIN_ANALYZE -> executeExplain(connection, trimmedSql, problemId, "explain_analyze");
                 case INDEX_COMMAND -> executeIndexCommand(connection, trimmedSql, problemId);
@@ -99,6 +103,7 @@ public class ProblemQueryService {
                     true,
                     "제출을 기록했다.",
                     executionResult.executionTimeMs(),
+                    executionResult.cost() != null ? executionResult.cost() : 0d,
                     executionResult.rowCount(),
                     submittedAt
             ));
@@ -115,6 +120,7 @@ public class ProblemQueryService {
                     false,
                     message,
                     0,
+                    0d,
                     0,
                     submittedAt
             ));
@@ -179,7 +185,7 @@ public class ProblemQueryService {
         }
     }
 
-    private QueryExecutionResult executeSelect(Connection connection, String sql, String problemId) throws SQLException {
+    private QueryExecutionResult executeSelect(Connection connection, String sql, String problemId, Double cost) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
             statement.execute(sql);
@@ -207,7 +213,7 @@ public class ProblemQueryService {
                     rows.add(row);
                 }
 
-                return QueryExecutionResult.select(problemId, columns, rows, rowCount);
+                return QueryExecutionResult.selectWithCost(problemId, columns, rows, rowCount, cost);
             }
         }
     }
@@ -227,7 +233,7 @@ public class ProblemQueryService {
                     planLines.add(resultSet.getString(1));
                 }
 
-                return QueryExecutionResult.plan(problemId, mode, planLines);
+                return QueryExecutionResult.planWithCost(problemId, mode, planLines, extractEstimatedCost(planLines));
             }
         }
     }
@@ -292,8 +298,9 @@ public class ProblemQueryService {
             connection.setAutoCommit(false);
             configureExecutionConnection(connection, workspaceHandle.schemaName());
 
+            Double estimatedCost = estimateQueryCost(connection, sql);
             long startTime = System.nanoTime();
-            QueryExecutionResult executionResult = executeSelect(connection, sql, problemId);
+            QueryExecutionResult executionResult = executeSelect(connection, sql, problemId, estimatedCost);
 
             connection.commit();
             problemWorkspaceService.markActivity(socketId);
@@ -362,6 +369,45 @@ public class ProblemQueryService {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
+    private Double estimateQueryCost(Connection connection, String sql) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+            statement.execute("EXPLAIN " + sql);
+
+            try (ResultSet resultSet = statement.getResultSet()) {
+                if (resultSet == null) {
+                    return null;
+                }
+
+                List<String> planLines = new ArrayList<>();
+                while (resultSet.next()) {
+                    planLines.add(resultSet.getString(1));
+                }
+
+                return extractEstimatedCost(planLines);
+            }
+        }
+    }
+
+    private Double extractEstimatedCost(List<String> planLines) {
+        for (String planLine : planLines) {
+            if (planLine == null || planLine.isBlank()) {
+                continue;
+            }
+
+            Matcher matcher = PLAN_TOTAL_COST_PATTERN.matcher(planLine);
+            if (matcher.find()) {
+                try {
+                    return Double.parseDouble(matcher.group(1));
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private String resolveSqlErrorMessage(SQLException exception) {
         return exception.getMessage() != null && !exception.getMessage().isBlank()
                 ? exception.getMessage()
@@ -388,26 +434,62 @@ public class ProblemQueryService {
                                        List<List<String>> rows,
                                        List<String> planLines,
                                        long rowCount,
-                                       long executionTimeMs) {
+                                       long executionTimeMs,
+                                       Double cost) {
 
         private static QueryExecutionResult select(String problemId,
                                                    List<String> columns,
                                                    List<List<String>> rows,
                                                    long rowCount) {
-            return new QueryExecutionResult(problemId, "select", "조회 결과를 반환했다.", columns, rows, List.of(), rowCount, 0);
+            return new QueryExecutionResult(problemId, "select", "조회 결과를 반환했다.", columns, rows, List.of(), rowCount, 0, null);
         }
 
         private static QueryExecutionResult plan(String problemId, String mode, List<String> planLines) {
-            return new QueryExecutionResult(problemId, mode, "실행 계획을 반환했다.", List.of(), List.of(), planLines, planLines.size(), 0);
+            return new QueryExecutionResult(problemId, mode, "실행 계획을 반환했다.", List.of(), List.of(), planLines, planLines.size(), 0, null);
+        }
+
+        private static QueryExecutionResult selectWithCost(String problemId,
+                                                           List<String> columns,
+                                                           List<List<String>> rows,
+                                                           long rowCount,
+                                                           Double cost) {
+            QueryExecutionResult executionResult = select(problemId, columns, rows, rowCount);
+            return new QueryExecutionResult(
+                    executionResult.problemId(),
+                    executionResult.mode(),
+                    executionResult.message(),
+                    executionResult.columns(),
+                    executionResult.rows(),
+                    executionResult.planLines(),
+                    executionResult.rowCount(),
+                    executionResult.executionTimeMs(),
+                    cost
+            );
+        }
+
+        private static QueryExecutionResult planWithCost(String problemId, String mode, List<String> planLines, Double cost) {
+            QueryExecutionResult executionResult = plan(problemId, mode, planLines);
+            return new QueryExecutionResult(
+                    executionResult.problemId(),
+                    executionResult.mode(),
+                    executionResult.message(),
+                    executionResult.columns(),
+                    executionResult.rows(),
+                    executionResult.planLines(),
+                    executionResult.rowCount(),
+                    executionResult.executionTimeMs(),
+                    cost
+            );
         }
 
         private static QueryExecutionResult command(String problemId, String message) {
-            return new QueryExecutionResult(problemId, "command", message, List.of(), List.of(), List.of(), 0, 0);
+            return new QueryExecutionResult(problemId, "command", message, List.of(), List.of(), List.of(), 0, 0, null);
         }
 
         private QueryExecutionResult withExecutionTimeMs(long executionTimeMs) {
-            return new QueryExecutionResult(problemId, mode, message, columns, rows, planLines, rowCount, executionTimeMs);
+            return new QueryExecutionResult(problemId, mode, message, columns, rows, planLines, rowCount, executionTimeMs, cost);
         }
+
     }
 
     public record ProblemSubmitResult(String problemId,

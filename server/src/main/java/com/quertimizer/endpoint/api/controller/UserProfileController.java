@@ -6,6 +6,7 @@ import com.quertimizer.endpoint.api.dto.response.UserProfileCommunityPostsRes;
 import com.quertimizer.endpoint.api.dto.response.UserProfileSolvedProblemsRes;
 import com.quertimizer.endpoint.api.dto.response.UserProfileSolvedRecordsRes;
 import com.quertimizer.endpoint.api.dto.response.UserProfileSummaryRes;
+import com.quertimizer.service.UserAccountService;
 import com.quertimizer.service.UserProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserProfileController {
 
     private final UserProfileService userProfileService;
+    private final UserAccountService userAccountService;
 
     @GetMapping("/profile/me")
     public ResponseEntity<UserProfileSummaryRes> getMyProfile(Authentication authentication) {
@@ -162,7 +164,7 @@ public class UserProfileController {
             return null;
         }
 
-        return authentication.getName();
+        return userAccountService.resolveCurrentUserId(authentication.getName());
     }
 
 }

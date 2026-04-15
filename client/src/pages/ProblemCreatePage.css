@@ -262,3 +262,42 @@
     bottom: 1rem;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .problem-create-toolbar-label,
+  .problem-create-placeholder-text {
+    color: var(--ink-subtle);
+  }
+
+  .problem-create-select,
+  .problem-create-source-textarea,
+  .problem-create-inline-textarea,
+  .problem-create-answer-textarea {
+    border-color: var(--line-strong);
+    background: var(--surface-muted);
+    color: var(--ink-strong);
+  }
+
+  .problem-create-title-input {
+    color: var(--ink-strong);
+    border-bottom-color: var(--line-soft);
+  }
+
+  .problem-create-title-input:focus {
+    border-bottom-color: var(--accent-border-strong);
+  }
+
+  .problem-create-table-chip {
+    border-color: var(--line-soft);
+    background: var(--surface-soft);
+    color: var(--ink-strong);
+  }
+
+  .problem-create-answer-preview {
+    color: var(--ink-strong);
+  }
+
+  .problem-create-error {
+    color: var(--danger-strong);
+  }
+}

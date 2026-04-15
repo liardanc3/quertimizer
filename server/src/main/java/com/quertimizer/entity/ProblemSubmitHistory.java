@@ -48,6 +48,9 @@ public class ProblemSubmitHistory {
     @Column(name = "execution_time_ms", nullable = false)
     private long executionTimeMs;
 
+    @Column(nullable = false)
+    private double cost;
+
     @Column(name = "row_count", nullable = false)
     private long rowCount;
 
@@ -61,6 +64,7 @@ public class ProblemSubmitHistory {
                                               boolean success,
                                               String message,
                                               long executionTimeMs,
+                                              double cost,
                                               long rowCount,
                                               LocalDateTime submittedAt) {
         return new ProblemSubmitHistory(
@@ -71,6 +75,7 @@ public class ProblemSubmitHistory {
                 success,
                 message,
                 executionTimeMs,
+                cost,
                 rowCount,
                 submittedAt
         );
@@ -83,6 +88,7 @@ public class ProblemSubmitHistory {
                                  boolean success,
                                  String message,
                                  long executionTimeMs,
+                                 double cost,
                                  long rowCount,
                                  LocalDateTime submittedAt) {
         this.problemId = problemId;
@@ -92,6 +98,7 @@ public class ProblemSubmitHistory {
         this.success = success;
         this.message = message;
         this.executionTimeMs = executionTimeMs;
+        this.cost = cost;
         this.rowCount = rowCount;
         this.submittedAt = submittedAt;
     }

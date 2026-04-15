@@ -1,6 +1,7 @@
 package com.quertimizer.endpoint.api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.entity.User;
 import com.quertimizer.endpoint.api.dto.request.AccountRecoveryCodeReq;
 import com.quertimizer.endpoint.api.dto.request.AccountRecoveryEmailReq;
 import com.quertimizer.endpoint.api.dto.request.DuplicateCheckEmailReq;
@@ -31,6 +32,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.mock.web.MockHttpSession;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -308,6 +310,8 @@ class UserAccountControllerTest {
 
                 when(userAccountService.login(any(LoginReq.class)))
                         .thenReturn(new UsernamePasswordAuthenticationToken("tester", null, List.of()));
+                when(userAccountService.findUser("tester"))
+                        .thenReturn(Optional.of(User.create("tester", "a".repeat(128), "tester@example.com")));
 
                 // when
                 ResultActions result = mockMvc.perform(post(LOGIN_URL)
@@ -315,7 +319,11 @@ class UserAccountControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk());
+                result.andExpect(status().isOk())
+                        .andExpect(jsonPath("$.authenticated").value(true))
+                        .andExpect(jsonPath("$.userId").value("tester"))
+                        .andExpect(jsonPath("$.defaultDbms").value("postgresql"))
+                        .andExpect(jsonPath("$.role").value("user"));
                 verify(userAccountService).login(any(LoginReq.class));
                 verify(sessionStore).saveContext(any(), any(), any());
                 verify(rememberMeServices).logout(any(), any(), any());
@@ -334,6 +342,8 @@ class UserAccountControllerTest {
 
                 when(userAccountService.login(any(LoginReq.class)))
                         .thenReturn(new UsernamePasswordAuthenticationToken("tester", null, List.of()));
+                when(userAccountService.findUser("tester"))
+                        .thenReturn(Optional.of(User.create("tester", "a".repeat(128), "tester@example.com")));
 
                 // when
                 ResultActions result = mockMvc.perform(post(LOGIN_URL)
@@ -341,7 +351,11 @@ class UserAccountControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk());
+                result.andExpect(status().isOk())
+                        .andExpect(jsonPath("$.authenticated").value(true))
+                        .andExpect(jsonPath("$.userId").value("tester"))
+                        .andExpect(jsonPath("$.defaultDbms").value("postgresql"))
+                        .andExpect(jsonPath("$.role").value("user"));
                 verify(userAccountService).login(any(LoginReq.class));
                 verify(sessionStore).saveContext(any(), any(), any());
                 verify(rememberMeServices).loginSuccess(any(), any(), any());
@@ -694,6 +708,8 @@ class UserAccountControllerTest {
             void okAndSaveSession() throws Exception {
                 // given
                 Authentication authentication = new UsernamePasswordAuthenticationToken("tester", null, List.of());
+                when(userAccountService.findUser("tester"))
+                        .thenReturn(Optional.of(User.create("tester", "a".repeat(128), "tester@example.com")));
 
                 // when
                 ResultActions result = mockMvc.perform(post(SESSION_ME_URL).principal(authentication));
@@ -701,7 +717,9 @@ class UserAccountControllerTest {
                 // then
                 result.andExpect(status().isOk())
                         .andExpect(jsonPath("$.authenticated").value(true))
-                        .andExpect(jsonPath("$.userId").value("tester"));
+                        .andExpect(jsonPath("$.userId").value("tester"))
+                        .andExpect(jsonPath("$.defaultDbms").value("postgresql"))
+                        .andExpect(jsonPath("$.role").value("user"));
                 verify(sessionStore).saveContext(any(), any(), any());
             }
         }

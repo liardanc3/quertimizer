@@ -134,6 +134,8 @@ class ProblemControllerTest {
                 .andExpect(jsonPath("$.pageSize").value(20))
                 .andExpect(jsonPath("$.totalCount").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.spreadRateMin").value(25.0))
+                .andExpect(jsonPath("$.spreadRateMax").value(25.0))
                 .andExpect(jsonPath("$.problems.length()").value(1))
                 .andExpect(jsonPath("$.problems[0].problemId").value("00001-00001"))
                 .andExpect(jsonPath("$.problems[0].title").value("3월 고객별 주문 건수와 총 주문 금액 조회"))
@@ -180,6 +182,8 @@ class ProblemControllerTest {
                 .andExpect(jsonPath("$.pageSize").value(20))
                 .andExpect(jsonPath("$.totalCount").value(21))
                 .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.spreadRateMin").value(0.0))
+                .andExpect(jsonPath("$.spreadRateMax").value(0.0))
                 .andExpect(jsonPath("$.problems.length()").value(1))
                 .andExpect(jsonPath("$.problems[0].problemId").value("00001-00021"));
     }

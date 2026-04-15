@@ -4,6 +4,7 @@ import com.quertimizer.endpoint.api.dto.request.AccountRecoveryCodeReq;
 import com.quertimizer.endpoint.api.dto.request.AccountRecoveryEmailReq;
 import com.quertimizer.endpoint.api.dto.request.LoginReq;
 import com.quertimizer.endpoint.api.dto.request.ResetPasswordReq;
+import com.quertimizer.endpoint.api.dto.request.SetupUserIdReq;
 import com.quertimizer.endpoint.api.dto.request.SignupReq;
 import com.quertimizer.endpoint.api.dto.response.FindUserIdRes;
 import com.quertimizer.entity.User;
@@ -14,16 +15,18 @@ import com.quertimizer.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +47,9 @@ import static com.quertimizer.constant.SignupFailReason.DUPLICATED_USER_ID;
 @Slf4j
 public class UserAccountService {
 
+    private static final String USER_NOT_FOUND_MESSAGE = "\uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uC0AC\uC6A9\uC790\uC785\uB2C8\uB2E4.";
+    private static final String USER_ID_ALREADY_CONFIGURED_MESSAGE = "\uC774\uBBF8 ID \uC124\uC815\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
@@ -55,53 +61,82 @@ public class UserAccountService {
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void deleteExpiredRecoveryCode() {
-
-        // 만료된 인증코드 삭제
         LocalDateTime now = LocalDateTime.now();
         codeExpiredAtStorage.entrySet().removeIf(entry -> entry.getValue().isBefore(now));
-
-        // 만료된 인증코드와 연결된 이메일 정보 삭제
         emailCodeStorage.entrySet().removeIf(entry -> !codeExpiredAtStorage.containsKey(entry.getValue()));
         verifiedFindPasswordCodeStorage.entrySet().removeIf(entry -> !codeExpiredAtStorage.containsKey(entry.getValue()));
     }
 
-    @Lock(prefix = LockKey.SIGNUP, key = "#p0.userId", timeout = 500)
+    @Lock(prefix = LockKey.SIGNUP, key = "#p0.email", timeout = 500)
     public Authentication signup(SignupReq request) {
+        String normalizedEmail = normalizeEmail(request.getEmail());
 
-        // userId, email 중복 검사
-        if (isDuplicatedUserId(request.getUserId())) {
-            throw new BusinessException(DUPLICATED_USER_ID, HttpStatus.CONFLICT);
-        }
-        if (isDuplicatedEmail(request.getEmail())) {
+        if (isDuplicatedEmail(normalizedEmail)) {
             throw new BusinessException(DUPLICATED_EMAIL, HttpStatus.CONFLICT);
         }
 
-        // 유저 생성 후 저장
-        User user = User.create(request.getUserId(), passwordEncoder.encode(request.getPassword()), request.getEmail());
-        userRepository.save(user);
-
-        // 회원가입 후 바로 로그인 처리
-        return login(new LoginReq(request.getUserId(), request.getPassword(), true));
+        userRepository.save(User.createPending(passwordEncoder.encode(request.getPassword()), normalizedEmail));
+        return login(new LoginReq(normalizedEmail, request.getPassword(), true));
     }
 
     public boolean isDuplicatedUserId(String userId) {
-        return userRepository.existsByUserId(userId);
+        return userRepository.existsByUserId(normalizeUserId(userId));
     }
 
     public boolean isDuplicatedEmail(String email) {
-        return userRepository.existsByEmail(email);
+        return userRepository.existsByEmailIgnoreCase(normalizeEmail(email));
     }
 
-    public Optional<User> findUser(String userId) {
-        return userRepository.findById(userId);
+    public Optional<User> findUserByEmail(String email) {
+        return userRepository.findByEmailIgnoreCase(normalizeEmail(email));
+    }
+
+    public Optional<User> findUserByUserId(String userId) {
+        return userRepository.findByUserId(normalizeUserId(userId));
+    }
+
+    public String resolveCurrentUserId(String authenticatedEmail) {
+        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
+            return null;
+        }
+
+        return findUserByEmail(authenticatedEmail)
+                .map(User::getUserId)
+                .filter(userId -> userId != null && !userId.isBlank())
+                .orElse(null);
+    }
+
+    public Optional<User> findAuthenticatedUser(String authenticatedEmail) {
+        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
+            return Optional.empty();
+        }
+
+        return findUserByEmail(authenticatedEmail);
+    }
+
+    @Lock(prefix = LockKey.SIGNUP, key = "#p0", timeout = 500)
+    public User configureUserId(String authenticatedEmail, SetupUserIdReq request) {
+        User user = findUserByEmail(authenticatedEmail)
+                .orElseThrow(() -> new BusinessException(USER_NOT_FOUND_MESSAGE, HttpStatus.NOT_FOUND));
+        String normalizedUserId = normalizeUserId(request.getUserId());
+
+        if (user.hasUserId()) {
+            throw new BusinessException(USER_ID_ALREADY_CONFIGURED_MESSAGE, HttpStatus.CONFLICT);
+        }
+        if (userRepository.existsByUserId(normalizedUserId)) {
+            throw new BusinessException(DUPLICATED_USER_ID, HttpStatus.CONFLICT);
+        }
+
+        user.configureUserId(normalizedUserId);
+        return user;
     }
 
     public Authentication login(LoginReq request) {
         try {
-            // 유저 인증
             return authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(
-                            request.getUserId(), request.getPassword()
+                            normalizeEmail(request.getEmail()),
+                            request.getPassword()
                     )
             );
         } catch (AuthenticationException exception) {
@@ -109,16 +144,27 @@ public class UserAccountService {
         }
     }
 
-    public void sendFindIdCode(AccountRecoveryEmailReq request) {
+    public Authentication loginWithOAuth2(String provider, Map<String, Object> attributes) {
+        User user = findOrCreateOAuth2User(provider, attributes);
 
-        // 이메일 존재 확인 후 인증코드 생성
-        User user = userRepository.findByEmail(request.getEmail())
+        return UsernamePasswordAuthenticationToken.authenticated(
+                new org.springframework.security.core.userdetails.User(
+                        user.getEmail(),
+                        user.getPassword(),
+                        AuthorityUtils.createAuthorityList("ROLE_" + user.getResolvedRole().name())
+                ),
+                user.getPassword(),
+                AuthorityUtils.createAuthorityList("ROLE_" + user.getResolvedRole().name())
+        );
+    }
+
+    public void sendFindIdCode(AccountRecoveryEmailReq request) {
+        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND));
-        String email = user.getEmail().toLowerCase();
-        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        String email = user.getEmail().toLowerCase(Locale.ROOT);
+        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
         String previousCode = emailCodeStorage.get(email);
 
-        // 같은 이메일 기존 인증코드 제거 후 최신 인증코드 저장
         if (previousCode != null) {
             codeExpiredAtStorage.remove(previousCode);
         }
@@ -126,16 +172,15 @@ public class UserAccountService {
         codeExpiredAtStorage.put(code, LocalDateTime.now().plusMinutes(5));
         verifiedFindPasswordCodeStorage.remove(email);
 
-        // 인증코드 메일 발송
         try {
             mailService.send(
                     user.getEmail(),
-                    "[quertimizer] 아이디 찾기 인증코드",
+                    "[quertimizer] \uC544\uC774\uB514 \uCC3E\uAE30 \uC778\uC99D\uCF54\uB4DC",
                     """
-                            quertimizer 아이디 찾기 인증코드입니다.
+                            quertimizer \uC544\uC774\uB514 \uCC3E\uAE30 \uC778\uC99D\uCF54\uB4DC\uC785\uB2C8\uB2E4.
 
-                            인증코드: %s
-                            유효시간: 5분
+                            \uC778\uC99D\uCF54\uB4DC: %s
+                            \uC720\uD6A8\uC2DC\uAC04: 5\uBD84
                             """.formatted(code)
             );
         } catch (RuntimeException exception) {
@@ -146,15 +191,12 @@ public class UserAccountService {
     }
 
     public FindUserIdRes findUserId(AccountRecoveryCodeReq request) {
-
-        // 이메일 검증 후 인증코드 조회
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND));
-        String email = request.getEmail().toLowerCase();
+        String email = normalizeEmail(request.getEmail());
         String savedCode = emailCodeStorage.get(email);
         LocalDateTime expiredAt = codeExpiredAtStorage.get(request.getCode());
 
-        // 인증코드 검증
         if (savedCode == null || !savedCode.equals(request.getCode()) || expiredAt == null) {
             throw new BusinessException(INVALID_VERIFICATION_CODE, HttpStatus.BAD_REQUEST);
         }
@@ -170,15 +212,12 @@ public class UserAccountService {
     }
 
     public void sendFindPasswordCode(AccountRecoveryEmailReq request) {
-
-        // 이메일 존재 확인 후 인증코드 생성
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND));
-        String email = user.getEmail().toLowerCase();
-        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        String email = user.getEmail().toLowerCase(Locale.ROOT);
+        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
         String previousCode = emailCodeStorage.get(email);
 
-        // 같은 이메일 기존 인증코드 제거 후 최신 인증코드 저장
         if (previousCode != null) {
             codeExpiredAtStorage.remove(previousCode);
         }
@@ -186,16 +225,15 @@ public class UserAccountService {
         codeExpiredAtStorage.put(code, LocalDateTime.now().plusMinutes(5));
         verifiedFindPasswordCodeStorage.remove(email);
 
-        // 인증코드 메일 발송
         try {
             mailService.send(
                     user.getEmail(),
-                    "[quertimizer] 비밀번호 찾기 인증코드",
+                    "[quertimizer] \uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30 \uC778\uC99D\uCF54\uB4DC",
                     """
-                            quertimizer 비밀번호 찾기 인증코드입니다.
+                            quertimizer \uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30 \uC778\uC99D\uCF54\uB4DC\uC785\uB2C8\uB2E4.
 
-                            인증코드: %s
-                            유효시간: 5분
+                            \uC778\uC99D\uCF54\uB4DC: %s
+                            \uC720\uD6A8\uC2DC\uAC04: 5\uBD84
                             """.formatted(code)
             );
         } catch (RuntimeException exception) {
@@ -206,15 +244,12 @@ public class UserAccountService {
     }
 
     public void verifyFindPasswordCode(AccountRecoveryCodeReq request) {
-
-        // 이메일 검증 후 인증코드 조회
-        userRepository.findByEmail(request.getEmail())
+        userRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND));
-        String email = request.getEmail().toLowerCase();
+        String email = normalizeEmail(request.getEmail());
         String savedCode = emailCodeStorage.get(email);
         LocalDateTime expiredAt = codeExpiredAtStorage.get(request.getCode());
 
-        // 인증코드 검증
         if (savedCode == null || !savedCode.equals(request.getCode()) || expiredAt == null) {
             throw new BusinessException(INVALID_VERIFICATION_CODE, HttpStatus.BAD_REQUEST);
         }
@@ -224,21 +259,17 @@ public class UserAccountService {
             throw new BusinessException(EXPIRED_VERIFICATION_CODE, HttpStatus.BAD_REQUEST);
         }
 
-        // 비밀번호 재설정 가능 상태 저장
         verifiedFindPasswordCodeStorage.put(email, request.getCode());
     }
 
     public void resetPassword(ResetPasswordReq request) {
-
-        // 이메일 검증 후 인증코드 조회
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND));
-        String email = request.getEmail().toLowerCase();
+        String email = normalizeEmail(request.getEmail());
         String savedCode = emailCodeStorage.get(email);
         LocalDateTime expiredAt = codeExpiredAtStorage.get(request.getCode());
         String verifiedCode = verifiedFindPasswordCodeStorage.get(email);
 
-        // 인증코드 검증 후 삭제
         if (savedCode == null || !savedCode.equals(request.getCode()) || expiredAt == null) {
             throw new BusinessException(INVALID_VERIFICATION_CODE, HttpStatus.BAD_REQUEST);
         }
@@ -255,8 +286,81 @@ public class UserAccountService {
         codeExpiredAtStorage.remove(request.getCode());
         verifiedFindPasswordCodeStorage.remove(email);
 
-        // 비밀번호 변경
         user.changePassword(passwordEncoder.encode(request.getPassword()));
     }
 
+    private User findOrCreateOAuth2User(String provider, Map<String, Object> attributes) {
+        String oauth2UserId = resolveOAuth2UserId(provider, attributes);
+        String resolvedEmail = resolveOAuth2Email(provider, attributes, oauth2UserId);
+
+        return userRepository.findById(resolvedEmail)
+                .orElseGet(() -> userRepository.save(
+                        User.createPending(
+                                passwordEncoder.encode(UUID.randomUUID().toString()),
+                                resolvedEmail
+                        )
+                ));
+    }
+
+    private String resolveOAuth2UserId(String provider, Map<String, Object> attributes) {
+        Object providerUserId = switch (provider) {
+            case "github" -> attributes.get("id");
+            case "google" -> attributes.get("sub");
+            case "kakao" -> attributes.get("id");
+            default -> null;
+        };
+        if (providerUserId == null) {
+            throw new BusinessException(INVALID_USER_ID_OR_PASSWORD, HttpStatus.UNAUTHORIZED);
+        }
+
+        String resolvedUserId = providerUserId.toString().trim();
+        if (resolvedUserId.isEmpty()) {
+            throw new BusinessException(INVALID_USER_ID_OR_PASSWORD, HttpStatus.UNAUTHORIZED);
+        }
+
+        return resolvedUserId;
+    }
+
+    private String resolveOAuth2Email(String provider, Map<String, Object> attributes, String oauth2UserId) {
+        String rawEmail = Optional.ofNullable(extractOAuth2Email(provider, attributes))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .orElse(null);
+
+        if (rawEmail != null) {
+            return rawEmail;
+        }
+
+        return "%s_%s@users.quertimizer.local".formatted(provider, oauth2UserId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractOAuth2Email(String provider, Map<String, Object> attributes) {
+        if ("kakao".equals(provider)) {
+            Object kakaoAccount = attributes.get("kakao_account");
+            if (kakaoAccount instanceof Map<?, ?> kakaoAccountMap) {
+                Object email = ((Map<String, Object>) kakaoAccountMap).get("email");
+                return email != null ? email.toString() : null;
+            }
+
+            return null;
+        }
+
+        Object email = attributes.get("email");
+        return email != null ? email.toString() : null;
+    }
+
+    private String normalizeEmail(String email) {
+        return Optional.ofNullable(email)
+                .map(String::trim)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .orElse("");
+    }
+
+    private String normalizeUserId(String userId) {
+        return Optional.ofNullable(userId)
+                .map(String::trim)
+                .orElse("");
+    }
 }

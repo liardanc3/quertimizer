@@ -13,22 +13,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SignupReq {
 
-    @NotBlank(message = "아이디를 입력해 주세요.")
-    @Pattern(
-            regexp = "^[A-Za-z0-9_-]{1,15}$",
-            message = "아이디는 영문, 숫자, '_', '-' 만 사용하며 최대 15자까지 입력할 수 있습니다."
-    )
-    private String userId;
-
-    // 앞단에서 SHA512(비밀번호) 전달받음
     @Pattern(regexp = "^[A-Fa-f0-9]{128}$")
-    @NotBlank(message = "비밀번호를 입력해 주세요.")
+    @NotBlank(message = "\uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.")
     private String password;
 
-    @NotBlank(message = "이메일을 입력해 주세요.")
+    @NotBlank(message = "\uC774\uBA54\uC77C\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.")
     @Pattern(
             regexp = "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
-            message = "올바른 이메일 형식으로 입력해 주세요."
+            message = "\uC62C\uBC14\uB978 \uC774\uBA54\uC77C \uD615\uC2DD\uC73C\uB85C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
     )
     private String email;
 }

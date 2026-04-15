@@ -7,6 +7,7 @@ import com.quertimizer.endpoint.api.dto.response.ProblemPageRes;
 import com.quertimizer.endpoint.api.dto.response.ProblemSetDetailRes;
 import com.quertimizer.endpoint.api.dto.response.ProblemSetSummaryRes;
 import com.quertimizer.service.ProblemService;
+import com.quertimizer.service.UserAccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,12 +27,16 @@ import java.util.List;
 public class ProblemController {
 
     private final ProblemService problemService;
+    private final UserAccountService userAccountService;
 
     @GetMapping("/problems")
     public ResponseEntity<ProblemPageRes> getProblems(@RequestParam(defaultValue = "1") int page,
                                                       @RequestParam(required = false) String query,
                                                       @RequestParam(defaultValue = "all") String solveState,
                                                       @RequestParam(defaultValue = "desc") String solvedCountSort,
+                                                      @RequestParam(defaultValue = "none") String spreadRateSort,
+                                                      @RequestParam(required = false) Double spreadRateMin,
+                                                      @RequestParam(required = false) Double spreadRateMax,
                                                       Authentication authentication) {
 
         // 현재 조회 조건 기준 문제 목록 페이지 반환
@@ -40,7 +45,10 @@ public class ProblemController {
                 query,
                 solveState,
                 resolveCurrentUserId(authentication),
-                solvedCountSort
+                solvedCountSort,
+                spreadRateSort,
+                spreadRateMin,
+                spreadRateMax
         ));
     }
 
@@ -79,7 +87,7 @@ public class ProblemController {
             return null;
         }
 
-        return authentication.getName();
+        return userAccountService.resolveCurrentUserId(authentication.getName());
     }
 
 }

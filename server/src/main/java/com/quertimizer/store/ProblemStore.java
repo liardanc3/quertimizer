@@ -76,14 +76,22 @@ public class ProblemStore {
                                        String searchKeyword,
                                        String solveState,
                                        String currentUserId,
-                                       boolean sortSolvedCountAscending) {
+                                       boolean sortSolvedCountAscending,
+                                       String spreadRateSort,
+                                       Double spreadRateMin,
+                                       Double spreadRateMax) {
 
         // 목록 필터링, 정렬에 필요한 데이터 메모리 구성
-        List<ProblemListEntry> filteredProblems = problemsById.values().stream()
+        List<ProblemListEntry> searchableProblems = problemsById.values().stream()
                 .map(problem -> createProblemListEntry(problem, currentUserId))
                 .filter(problemEntry -> matchesSearch(problemEntry, searchKeyword))
                 .filter(problemEntry -> matchesSolveState(problemEntry, solveState, currentUserId))
-                .sorted(createProblemComparator(sortSolvedCountAscending))
+                .toList();
+        SpreadRateBounds spreadRateBounds = createSpreadRateBounds(searchableProblems);
+        SpreadRateFilter spreadRateFilter = createSpreadRateFilter(spreadRateMin, spreadRateMax);
+        List<ProblemListEntry> filteredProblems = searchableProblems.stream()
+                .filter(problemEntry -> matchesSpreadRate(problemEntry, spreadRateFilter))
+                .sorted(createProblemComparator(sortSolvedCountAscending, spreadRateSort))
                 .toList();
 
         // 페이지 경계 계산
@@ -99,6 +107,8 @@ public class ProblemStore {
                 PROBLEM_PAGE_SIZE,
                 totalCount,
                 totalPages,
+                spreadRateBounds.min(),
+                spreadRateBounds.max(),
                 filteredProblems.subList(fromIndex, toIndex)
         );
     }
@@ -144,7 +154,8 @@ public class ProblemStore {
                 problem,
                 submittedHistories,
                 solvedUserCount,
-                solvedByCurrentUser
+                solvedByCurrentUser,
+                calculateSpreadRate(submittedHistories)
         );
     }
 
@@ -155,10 +166,7 @@ public class ProblemStore {
 
         String normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
         return problemEntry.problem().getProblemId().toLowerCase().contains(normalizedSearchKeyword)
-                || problemEntry.problem().getTitle().toLowerCase().contains(normalizedSearchKeyword)
-                || problemEntry.submittedHistories().stream()
-                .map(ProblemSolveHistory::getUserId)
-                .anyMatch(userId -> userId.toLowerCase().contains(normalizedSearchKeyword));
+                || problemEntry.problem().getTitle().toLowerCase().contains(normalizedSearchKeyword);
     }
 
     private boolean matchesSolveState(ProblemListEntry problemEntry, String solveState, String currentUserId) {
@@ -181,13 +189,75 @@ public class ProblemStore {
         return true;
     }
 
-    private Comparator<ProblemListEntry> createProblemComparator(boolean sortSolvedCountAscending) {
+    private boolean matchesSpreadRate(ProblemListEntry problemEntry, SpreadRateFilter spreadRateFilter) {
+        return problemEntry.spreadRate() >= spreadRateFilter.min()
+                && problemEntry.spreadRate() <= spreadRateFilter.max();
+    }
+
+    private Comparator<ProblemListEntry> createProblemComparator(boolean sortSolvedCountAscending, String spreadRateSort) {
         Comparator<ProblemListEntry> solvedCountComparator = Comparator.comparingInt(ProblemListEntry::solvedUserCount);
         if (!sortSolvedCountAscending) {
             solvedCountComparator = solvedCountComparator.reversed();
         }
 
+        if ("asc".equalsIgnoreCase(spreadRateSort)) {
+            return Comparator.comparingDouble(ProblemListEntry::spreadRate)
+                    .thenComparing(solvedCountComparator)
+                    .thenComparing(problemEntry -> problemEntry.problem().getProblemId());
+        }
+
+        if ("desc".equalsIgnoreCase(spreadRateSort)) {
+            return Comparator.comparingDouble(ProblemListEntry::spreadRate)
+                    .reversed()
+                    .thenComparing(solvedCountComparator)
+                    .thenComparing(problemEntry -> problemEntry.problem().getProblemId());
+        }
+
         return solvedCountComparator.thenComparing(problemEntry -> problemEntry.problem().getProblemId());
+    }
+
+    private SpreadRateBounds createSpreadRateBounds(List<ProblemListEntry> problemEntries) {
+        if (problemEntries.isEmpty()) {
+            return new SpreadRateBounds(0d, 0d);
+        }
+
+        return new SpreadRateBounds(
+                roundToOneDecimal(problemEntries.stream().mapToDouble(ProblemListEntry::spreadRate).min().orElse(0d)),
+                roundToOneDecimal(problemEntries.stream().mapToDouble(ProblemListEntry::spreadRate).max().orElse(0d))
+        );
+    }
+
+    private SpreadRateFilter createSpreadRateFilter(Double spreadRateMin, Double spreadRateMax) {
+        double min = spreadRateMin != null ? spreadRateMin : Double.NEGATIVE_INFINITY;
+        double max = spreadRateMax != null ? spreadRateMax : Double.POSITIVE_INFINITY;
+
+        if (min <= max) {
+            return new SpreadRateFilter(min, max);
+        }
+
+        return new SpreadRateFilter(max, min);
+    }
+
+    private double calculateSpreadRate(List<ProblemSolveHistory> submittedHistories) {
+        if (submittedHistories.isEmpty()) {
+            return 0d;
+        }
+
+        List<Long> executionTimes = submittedHistories.stream()
+                .map(ProblemSolveHistory::getExecutionTimeMs)
+                .sorted()
+                .toList();
+
+        double min = executionTimes.get(0);
+        int size = executionTimes.size();
+        double median = (executionTimes.get((size - 1) / 2) + executionTimes.get(size / 2)) / 2d;
+        long percentile90 = executionTimes.get(Math.max(0, (int) Math.floor(size * 0.9d) - 1));
+
+        return roundToOneDecimal(((percentile90 - min) / Math.max(Math.abs(median), 1d)) * 100d);
+    }
+
+    private double roundToOneDecimal(double value) {
+        return Math.round(value * 10d) / 10d;
     }
 
     private Map<String, List<ProblemSolveHistory>> createBestSubmittedHistoriesByProblemId(List<ProblemSolveHistory> histories) {
@@ -294,6 +364,7 @@ public class ProblemStore {
                 + measureString(resolveDbmsType(history).name())
                 + measureString(history.getSubmittedSql())
                 + Long.BYTES
+                + Double.BYTES
                 + Long.BYTES
                 + Long.BYTES
                 + measureString(history.getSubmittedAt().toString());
@@ -313,14 +384,23 @@ public class ProblemStore {
     public record ProblemListEntry(Problem problem,
                                    List<ProblemSolveHistory> submittedHistories,
                                    int solvedUserCount,
-                                   boolean solvedByCurrentUser) {
+                                   boolean solvedByCurrentUser,
+                                   double spreadRate) {
     }
 
     public record ProblemPage(int currentPage,
                               int pageSize,
                               int totalCount,
                               int totalPages,
+                              double spreadRateMin,
+                              double spreadRateMax,
                               List<ProblemListEntry> problems) {
+    }
+
+    private record SpreadRateBounds(double min, double max) {
+    }
+
+    private record SpreadRateFilter(double min, double max) {
     }
 
 }

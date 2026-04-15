@@ -10,7 +10,7 @@ import {
   navigate,
 } from '../../lib/navigation';
 import { logout as requestLogout } from '../../lib/authApi';
-import logoImage from '../../assets/logo.svg';
+import logoImage from '../../assets/logo.png';
 import { fetchVisibleMarqueeMessages, subscribeMarqueeChange } from '../../lib/marquee';
 import { useMockSession } from '../../lib/session';
 import { mockNotifications } from '../../mocks/notifications';

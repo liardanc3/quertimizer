@@ -80,6 +80,7 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
     !isResettingPassword;
   const overlayTitle = isFindUserIdMode ? '아이디 찾기' : '비밀번호 찾기';
   const guideLines = isFindUserIdMode ? findUserIdGuideLines : resetPasswordGuideLines;
+  const isResetPasswordStage = !isFindUserIdMode && isResetPasswordVerified;
   const emailHintMessage =
     normalizedEmail === ''
       ? '가입할 때 사용한 이메일을 입력해 주세요.'
@@ -199,8 +200,8 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
     onClose();
   }
 
-  function moveToLoginWithUserId() {
-    if (!recoveredUserId) {
+  function moveToLoginWithEmail() {
+    if (!recoveredUserId || normalizedEmail === '') {
       return;
     }
 
@@ -208,14 +209,17 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
       replace: true,
       state: {
         ...(window.history.state ?? {}),
-        prefillLoginId: recoveredUserId,
+        prefillLoginEmail: normalizedEmail,
         focusLoginPassword: true,
       },
     });
   }
 
   return (
-    <div className="signup-overlay-layout account-recovery-overlay" id="auth-form">
+    <div
+      className={`signup-overlay-layout account-recovery-overlay ${isResetPasswordStage ? 'is-reset-password-stage' : ''}`}
+      id="auth-form"
+    >
       <div className="signup-close-row" data-title={overlayTitle}>
         <button
           type="button"
@@ -322,8 +326,8 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
                 <button
                   type="button"
                   className="recovery-result-arrow-button"
-                  onClick={moveToLoginWithUserId}
-                  aria-label="아이디를 입력한 채 로그인 화면으로 이동"
+                  onClick={moveToLoginWithEmail}
+                  aria-label="이메일을 입력한 채 로그인 화면으로 이동"
                 >
                   →
                 </button>

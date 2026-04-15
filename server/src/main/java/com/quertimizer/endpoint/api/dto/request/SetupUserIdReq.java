@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 @AllArgsConstructor
-public class DuplicateCheckUserIdReq {
+public class SetupUserIdReq {
 
     @NotBlank(message = "\uC544\uC774\uB514\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.")
     @Pattern(

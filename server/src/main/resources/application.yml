@@ -1,6 +1,41 @@
 spring:
   application:
     name: quertimizer
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID:Ov23lihrOQDbFzmS1hFZ}
+            client-secret: ${GITHUB_CLIENT_SECRET:30106e9fe63a555a4434b89e334d3b4414dfb86d}
+            scope:
+              - read:user
+              - user:email
+            redirect-uri: "{baseUrl}/login/{registrationId}"
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:958362145725-nne67uebt6rip8dvgm5ihjq1akjphbjr.apps.googleusercontent.com}
+            client-secret: ${GOOGLE_CLIENT_SECRET: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}
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: "{baseUrl}/login/{registrationId}"
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID:e8e81749d209a51335f6ca91fcc29a13}
+            client-secret: ${KAKAO_CLIENT_SECRET:VaVZYdFS0gaJpmzW8fbRFUUOfFrUkk1l}
+            client-authentication-method: client_secret_post
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/{registrationId}"
+            scope:
+              - account_email
+            client-name: Kakao
+            provider: kakao
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
   mail:
     host: smtp.gmail.com
     port: 587
@@ -17,5 +52,6 @@ spring:
           charset: UTF-8
 
 app:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
   mail:
     from: liardanc3@gmail.com

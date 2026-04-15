@@ -93,6 +93,7 @@ public class AuthManageService {
 
     private AuthManageRoleGroupRes createRoleGroup(List<User> users, UserRole role) {
         List<AuthManageMemberRes> members = users.stream()
+                .filter(User::hasUserId)
                 .filter(user -> user.getResolvedRole() == role)
                 .map(AuthManageMemberRes::from)
                 .toList();
@@ -109,6 +110,7 @@ public class AuthManageService {
                 ));
 
         List<AuthManageProblemGeneratorMemberRes> members = users.stream()
+                .filter(User::hasUserId)
                 .filter(user -> user.getResolvedRole() == UserRole.PROBLEM_GENERATOR)
                 .map(user -> new AuthManageProblemGeneratorMemberRes(
                         user.getUserId(),
@@ -120,7 +122,7 @@ public class AuthManageService {
     }
 
     private User findUser(String userId) {
-        return userRepository.findById(userId)
+        return userRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND_MESSAGE, HttpStatus.NOT_FOUND));
     }
 

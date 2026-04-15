@@ -2,9 +2,11 @@ import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useMockSession } from '../../lib/session';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '../../types/domain';
+import './ProblemRuntimeChart.css';
 
 const TARGET_BUCKET_COUNT = 40;
 const MIN_VISUAL_BUCKET_COUNT = 12;
+const FLOATING_TOOLTIP_DELAY_MS = 250;
 const numberFormatter = new Intl.NumberFormat('ko-KR');
 
 type MarkerKey = 'fastest' | 'mine';
@@ -153,6 +155,10 @@ function hasAnyPlanElement(mask: number, indexes: number[]) {
 
 function formatMs(value: number) {
   return `${Math.round(value * 10) / 10}ms`;
+}
+
+function formatCostValue(value: number) {
+  return String(Math.round(value * 10) / 10);
 }
 
 function formatPercent(value: number) {
@@ -418,28 +424,22 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
   const availableDbms = useMemo(() => DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key)), [samples]);
   const defaultPlanSections = useMemo(() => PLAN_SECTION_OPTIONS.map((section) => section.key), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0]?.key ?? 'postgresql');
-  const isDbmsInitializedRef = useRef(false);
+  const hasUserSelectedDbmsRef = useRef(false);
   const [filterMatchMode, setFilterMatchMode] = useState<FilterMatchMode>('or');
   const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(defaultPlanSections);
   const [showPlanDetails, setShowPlanDetails] = useState(false);
   const [selectedBucketFilters, setSelectedBucketFilters] = useState<Record<RuntimeBucketFilterKey, BucketFilterValue[]>>(DEFAULT_BUCKET_FILTERS);
   const [selectedHintFilters, setSelectedHintFilters] = useState<HintFilterValue[]>(ALL_HINT_FILTERS);
   const [floatingTooltip, setFloatingTooltip] = useState<FloatingTooltipState | null>(null);
+  const floatingTooltipTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (availableDbms.length === 0) {
       return;
     }
 
-    if (!isDbmsInitializedRef.current) {
-      isDbmsInitializedRef.current = true;
-
-      if (defaultDbms && availableDbms.some((option) => option.key === defaultDbms)) {
-        setSelectedDbms(defaultDbms);
-        return;
-      }
-
-      setSelectedDbms(availableDbms[0].key);
+    if (!hasUserSelectedDbmsRef.current && defaultDbms && availableDbms.some((option) => option.key === defaultDbms) && selectedDbms !== defaultDbms) {
+      setSelectedDbms(defaultDbms);
       return;
     }
 
@@ -543,10 +543,10 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
   const lastAxisLabel = bucketModel ? String(Math.round(bucketModel.maxValue)) : '';
   const timeStatItems = timeSummary
     ? [
-        { id: 'spread', label: '속도 편차', value: formatPercent(timeSummary.spreadRate) },
-        { id: 'min', label: '최소 실행시간', value: formatMs(timeSummary.min) },
-        { id: 'avg', label: '평균 실행시간', value: formatMs(timeSummary.average) },
-        { id: 'median', label: '실행시간 중앙값', value: formatMs(timeSummary.median) },
+        { id: 'spread', label: `Cost \uD3B8\uCC28`, value: formatPercent(timeSummary.spreadRate) },
+        { id: 'min', label: `\uCD5C\uC18C Cost`, value: formatCostValue(timeSummary.min) },
+        { id: 'avg', label: `\uD3C9\uADE0 Cost`, value: formatCostValue(timeSummary.average) },
+        { id: 'median', label: `Cost \uC911\uC559\uAC12`, value: formatCostValue(timeSummary.median) },
       ]
     : [];
 
@@ -554,36 +554,48 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
     onSolvedCountChange(filteredSamples.length);
   }, [filteredSamples.length, onSolvedCountChange]);
 
-  function toggleFloatingTooltip(id: string, anchor: HTMLElement, text: string) {
-    const rect = anchor.getBoundingClientRect();
-    setFloatingTooltip((current) => (current?.id === id ? null : { id, text, x: rect.left + rect.width / 2, y: rect.top - 10 }));
+  function clearFloatingTooltipTimer() {
+    if (floatingTooltipTimerRef.current != null) {
+      window.clearTimeout(floatingTooltipTimerRef.current);
+      floatingTooltipTimerRef.current = null;
+    }
   }
+
+  function showFloatingTooltip(id: string, anchor: HTMLElement, text: string) {
+    const rect = anchor.getBoundingClientRect();
+    setFloatingTooltip({ id, text, x: rect.left + rect.width / 2, y: rect.top - 10 });
+  }
+
+  function scheduleFloatingTooltip(id: string, anchor: HTMLElement, text: string) {
+    clearFloatingTooltipTimer();
+    floatingTooltipTimerRef.current = window.setTimeout(() => {
+      showFloatingTooltip(id, anchor, text);
+      floatingTooltipTimerRef.current = null;
+    }, FLOATING_TOOLTIP_DELAY_MS);
+  }
+
+  function hideFloatingTooltip() {
+    clearFloatingTooltipTimer();
+    setFloatingTooltip(null);
+  }
+
+  useEffect(() => {
+    return () => {
+      clearFloatingTooltipTimer();
+    };
+  }, []);
 
   useEffect(() => {
     if (floatingTooltip == null) {
       return undefined;
     }
 
-    function hideFloatingTooltip() {
-      setFloatingTooltip(null);
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        hideFloatingTooltip();
-      }
-    }
-
-    window.addEventListener('mousedown', hideFloatingTooltip);
     window.addEventListener('resize', hideFloatingTooltip);
     window.addEventListener('scroll', hideFloatingTooltip, true);
-    window.addEventListener('keydown', handleEscape);
 
     return () => {
-      window.removeEventListener('mousedown', hideFloatingTooltip);
       window.removeEventListener('resize', hideFloatingTooltip);
       window.removeEventListener('scroll', hideFloatingTooltip, true);
-      window.removeEventListener('keydown', handleEscape);
     };
   }, [floatingTooltip]);
 
@@ -597,16 +609,17 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
         <div className="runtime-toolbar">
           <div className="runtime-toolbar-primary">
             <div className="runtime-filter-cluster" role="group" aria-label="DBMS 선택">
-              <div className="runtime-toolbar-group">
+              <div className="runtime-toolbar-group is-dbms">
                 {availableDbms.map((option) => (
                   <button
                     key={option.key}
                     type="button"
-                    className={`runtime-filter-button ${selectedDbms === option.key ? 'is-selected' : ''}`}
+                    className={`runtime-filter-button is-dbms ${selectedDbms === option.key ? 'is-selected' : ''}`}
                     aria-pressed={selectedDbms === option.key}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
+                      hasUserSelectedDbmsRef.current = true;
                       setSelectedDbms(option.key);
                     }}
                   >
@@ -617,12 +630,12 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
             </div>
 
             <div className="runtime-filter-cluster" role="group" aria-label="필터 조합 방식">
-              <div className="runtime-toolbar-group">
+              <div className="runtime-toolbar-group is-dbms">
                 {FILTER_MODE_OPTIONS.map((option) => (
                   <button
                     key={option.key}
                     type="button"
-                    className={`runtime-filter-button ${filterMatchMode === option.key ? 'is-selected' : ''}`}
+                    className={`runtime-filter-button is-dbms ${filterMatchMode === option.key ? 'is-selected' : ''}`}
                     aria-pressed={filterMatchMode === option.key}
                     onClick={(event) => {
                       event.preventDefault();
@@ -641,7 +654,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
               <div className="runtime-filter-group is-plan">
                 <button
                   type="button"
-                  className={`runtime-filter-button ${allPlanSectionsSelected ? 'is-selected' : ''}`}
+                  className={`runtime-filter-button is-plan-option ${allPlanSectionsSelected ? 'is-selected' : ''}`}
                   aria-pressed={allPlanSectionsSelected}
                   onClick={(event) => {
                     event.preventDefault();
@@ -654,12 +667,13 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
 
                 {PLAN_SECTION_OPTIONS.map((section) => {
                   const isSelected = normalizedSelectedPlanSections.includes(section.key);
+                  const isVisuallySelected = !allPlanSectionsSelected && isSelected;
 
                   return (
                     <button
                       key={section.key}
                       type="button"
-                      className={`runtime-filter-button ${isSelected ? 'is-selected' : ''}`}
+                      className={`runtime-filter-button is-plan-option ${isVisuallySelected ? 'is-selected' : ''}`}
                       aria-pressed={isSelected}
                       onClick={(event) => {
                         event.preventDefault();
@@ -720,13 +734,26 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                       <div className="runtime-subfilter-chip-grid">
                         {filter.options.map((option) => {
                           const tooltipId = `${filter.key}-${option}`;
+                          const isSelected = selectedValues.includes(option);
+                          const isVisuallySelected = !isAllSelected && isSelected;
 
                           return (
-                            <span key={option} className={`runtime-subfilter-option ${selectedValues.includes(option) ? 'is-selected' : ''}`}>
+                            <span
+                              key={option}
+                              className={`runtime-subfilter-option ${isVisuallySelected ? 'is-selected' : ''}`}
+                              onMouseEnter={(event) => {
+                                scheduleFloatingTooltip(
+                                  tooltipId,
+                                  event.currentTarget,
+                                  getBucketTooltipText(selectedDbms, filter.key, option)
+                                );
+                              }}
+                              onMouseLeave={hideFloatingTooltip}
+                            >
                               <button
                                 type="button"
                                 className="runtime-subfilter-button runtime-subfilter-button-plain"
-                                aria-pressed={selectedValues.includes(option)}
+                                aria-pressed={isSelected}
                                 onClick={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
@@ -739,19 +766,6 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                                 }}
                               >
                                 {formatBucketDisplayLabel(option)}
-                              </button>
-                              <button
-                                type="button"
-                                className={`runtime-subfilter-info-button ${floatingTooltip?.id === tooltipId ? 'is-open' : ''}`}
-                                aria-label={`${formatBucketDisplayLabel(option)} 설명 보기`}
-                                aria-expanded={floatingTooltip?.id === tooltipId}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  toggleFloatingTooltip(tooltipId, event.currentTarget, getBucketTooltipText(selectedDbms, filter.key, option));
-                                }}
-                              >
-                                ?
                               </button>
                             </span>
                           );
@@ -770,32 +784,37 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                     { key: 'ALL', label: '전체' },
                     { key: 'UNUSED', label: '미사용' },
                     { key: 'USED', label: '사용' },
-                  ].map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={`runtime-subfilter-button ${option.key === 'ALL' ? allHintFiltersSelected ? 'is-selected' : '' : selectedHintFilters.includes(option.key as HintFilterValue) ? 'is-selected' : ''}`}
-                      aria-pressed={option.key === 'ALL' ? allHintFiltersSelected : selectedHintFilters.includes(option.key as HintFilterValue)}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
+                  ].map((option) => {
+                    const isSelected = option.key === 'ALL' ? allHintFiltersSelected : selectedHintFilters.includes(option.key as HintFilterValue);
+                    const isVisuallySelected = option.key === 'ALL' ? allHintFiltersSelected : !allHintFiltersSelected && isSelected;
 
-                        if (option.key === 'ALL') {
-                          setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
-                          return;
-                        }
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`runtime-subfilter-button ${isVisuallySelected ? 'is-selected' : ''}`}
+                        aria-pressed={isSelected}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
 
-                        setSelectedHintFilters((current) => {
-                          const nextValues = current.includes(option.key as HintFilterValue)
-                            ? current.filter((value) => value !== option.key)
-                            : [...current, option.key as HintFilterValue];
-                          return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
-                        });
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                          if (option.key === 'ALL') {
+                            setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
+                            return;
+                          }
+
+                          setSelectedHintFilters((current) => {
+                            const nextValues = current.includes(option.key as HintFilterValue)
+                              ? current.filter((value) => value !== option.key)
+                              : [...current, option.key as HintFilterValue];
+                            return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
+                          });
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -874,7 +893,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
         )}
       </div>
 
-      <aside className="runtime-stats-panel" aria-label="실행 통계">
+      <aside className="runtime-stats-panel" aria-label={`Cost \uD1B5\uACC4`}>
         <div className="runtime-stat-grid is-compact">
           {timeStatItems.map((item) => (
             <div key={item.id} className="runtime-stat-item is-neutral">

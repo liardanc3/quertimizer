@@ -224,7 +224,8 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
                     executionResult.rows(),
                     executionResult.planLines(),
                     executionResult.rowCount(),
-                    executionResult.executionTimeMs()
+                    executionResult.executionTimeMs(),
+                    executionResult.cost()
             ));
         } catch (Exception exception) {
             try {

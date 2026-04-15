@@ -8,6 +8,7 @@ import com.quertimizer.endpoint.api.dto.response.CommunityPostPageRes;
 import com.quertimizer.endpoint.api.dto.response.CommunityReactionRes;
 import com.quertimizer.endpoint.api.dto.response.CommunityTagSuggestionRes;
 import com.quertimizer.service.CommunityService;
+import com.quertimizer.service.UserAccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,7 @@ import java.util.List;
 public class CommunityController {
 
     private final CommunityService communityService;
+    private final UserAccountService userAccountService;
 
     @GetMapping("/community/posts")
     public ResponseEntity<CommunityPostPageRes> getPosts(@RequestParam(defaultValue = "1") int page,
@@ -148,7 +150,7 @@ public class CommunityController {
             return null;
         }
 
-        return authentication.getName();
+        return userAccountService.resolveCurrentUserId(authentication.getName());
     }
 
 }

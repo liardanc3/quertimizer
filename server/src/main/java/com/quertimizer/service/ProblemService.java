@@ -36,7 +36,10 @@ public class ProblemService {
                                       String query,
                                       String solveState,
                                       String currentUserId,
-                                      String solvedCountSort) {
+                                      String solvedCountSort,
+                                      String spreadRateSort,
+                                      Double spreadRateMin,
+                                      Double spreadRateMax) {
 
         // 목록 조회 조건 반영 후 메모리 페이지 조회
         ProblemStore.ProblemPage problemPage = problemStore.findProblemPage(
@@ -44,7 +47,10 @@ public class ProblemService {
                 query,
                 solveState,
                 currentUserId,
-                "asc".equalsIgnoreCase(solvedCountSort)
+                "asc".equalsIgnoreCase(solvedCountSort),
+                spreadRateSort,
+                spreadRateMin,
+                spreadRateMax
         );
 
         // 목록 응답 DTO 변환
@@ -62,6 +68,8 @@ public class ProblemService {
                 problemPage.pageSize(),
                 problemPage.totalCount(),
                 problemPage.totalPages(),
+                problemPage.spreadRateMin(),
+                problemPage.spreadRateMax(),
                 problems
         );
     }

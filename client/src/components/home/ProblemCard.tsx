@@ -48,12 +48,12 @@ export default function ProblemCard({
                 onSelect(problem.id);
               }}
             >
-              <span className="problem-number">{`\uBB38\uC81C ${problemNumber}`}</span>
+              <span className="problem-number">{`문제 ${problemNumber}`}</span>
             </button>
 
             {showSolveState ? (
               <span className={`problem-solved-badge ${problem.isSolved ? 'is-solved' : 'is-unsolved'}`}>
-                {problem.isSolved ? '\uD574\uACB0' : '\uBBF8\uD574\uACB0'}
+                {problem.isSolved ? '해결' : '미해결'}
               </span>
             ) : null}
           </div>
@@ -72,7 +72,7 @@ export default function ProblemCard({
               </button>
             </div>
 
-            <div className="problem-card-actions" role="group" aria-label={`${problemNumber} \uD45C\uC2DC \uC635\uC158`}>
+            <div className="problem-card-actions" role="group" aria-label={`${problemNumber} 표시 옵션`}>
               <button
                 type="button"
                 className={`mini-toggle problem-card-action ${isStatsExpanded ? 'is-selected' : ''}`}
@@ -82,14 +82,14 @@ export default function ProblemCard({
                   setIsStatsExpanded((value) => !value);
                 }}
               >
-                {'\uD1B5\uACC4'}
+                {'통계'}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="problem-card-status" aria-label="\uBB38\uC81C \uD1B5\uACC4">
-          <p className="problem-solved-count">{`\uD480\uC774\uC790: ${activeSolvedCount}\uBA85`}</p>
+        <div className="problem-card-status" aria-label="문제 통계">
+          <p className="problem-solved-count">{`\uD47C \uC0AC\uB78C: ${activeSolvedCount}\uBA85`}</p>
         </div>
       </div>
 

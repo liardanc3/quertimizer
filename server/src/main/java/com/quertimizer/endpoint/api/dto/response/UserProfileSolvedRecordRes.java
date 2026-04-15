@@ -13,6 +13,7 @@ public class UserProfileSolvedRecordRes {
     private final String problemTitle;
     private final String dbms;
     private final long executionTimeMs;
+    private final double cost;
     private final LocalDateTime submittedAt;
 
 }

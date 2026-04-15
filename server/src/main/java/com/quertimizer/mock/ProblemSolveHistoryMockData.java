@@ -118,6 +118,7 @@ public class ProblemSolveHistoryMockData {
                 dbmsType,
                 QUERY,
                 executionTimeMs,
+                executionTimeMs,
                 0,
                 executionPlanElement,
                 submittedAt

@@ -21,14 +21,14 @@ import java.time.LocalDateTime;
 public class User {
 
     @Id
-    @Column(name = "user_id", nullable = false, length = 50)
+    @Column(nullable = false, unique = true, length = 255)
+    private String email;
+
+    @Column(name = "user_id", unique = true, length = 50)
     private String userId;
 
     @Column(nullable = false, length = 128)
     private String password;
-
-    @Column(nullable = false, unique = true, length = 255)
-    private String email;
 
     @Column(columnDefinition = "TEXT")
     private String bio;
@@ -64,9 +64,9 @@ public class User {
 
     public static User create(String userId, String doubleHashedPassword, String email) {
         return new User(
+                email,
                 userId,
                 doubleHashedPassword,
-                email,
                 "",
                 UserRole.USER,
                 DbmsType.POSTGRESQL,
@@ -78,6 +78,28 @@ public class User {
                 0L,
                 LocalDateTime.now()
         );
+    }
+
+    public static User createPending(String doubleHashedPassword, String email) {
+        return new User(
+                email,
+                null,
+                doubleHashedPassword,
+                "",
+                UserRole.USER,
+                DbmsType.POSTGRESQL,
+                false,
+                true,
+                true,
+                true,
+                0,
+                0L,
+                LocalDateTime.now()
+        );
+    }
+
+    public void configureUserId(String userId) {
+        this.userId = userId;
     }
 
     public void changePassword(String password) {
@@ -143,9 +165,13 @@ public class User {
         return solvedExecutionTimeSumMs != null ? solvedExecutionTimeSumMs : 0L;
     }
 
-    private User(String userId,
+    public boolean hasUserId() {
+        return userId != null && !userId.isBlank();
+    }
+
+    private User(String email,
+                 String userId,
                  String password,
-                 String email,
                  String bio,
                  UserRole role,
                  DbmsType defaultDbms,
@@ -156,9 +182,9 @@ public class User {
                  Integer solvedProblemCount,
                  Long solvedExecutionTimeSumMs,
                  LocalDateTime signupAt) {
+        this.email = email;
         this.userId = userId;
         this.password = password;
-        this.email = email;
         this.bio = bio;
         this.role = role;
         this.defaultDbms = defaultDbms;

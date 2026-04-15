@@ -1,6 +1,7 @@
 package com.quertimizer.endpoint.websocket.interceptor;
 
 import com.quertimizer.log.LogFormatter;
+import com.quertimizer.service.UserAccountService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class SessionHandshakeInterceptor implements HandshakeInterceptor {
 
     private final LogFormatter logFormatter;
+    private final UserAccountService userAccountService;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request,
@@ -36,7 +38,6 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
         log.info("{}", logFormatter.formatWebSocketLine(actor, "WebSocket handshake request", null));
         logLines(logFormatter.formatQueryStringLines(prefix, request.getURI().getQuery()));
 
-        // Servlet 요청이 아니면 인증 세션을 확인할 수 없어 연결 거부
         if (!(request instanceof ServletServerHttpRequest servletRequest)) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
@@ -51,12 +52,17 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
+        String resolvedUserId = userAccountService.resolveCurrentUserId(authentication.getName());
+        if (resolvedUserId == null || resolvedUserId.isBlank()) {
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+
         if (session == null) {
             session = httpServletRequest.getSession(true);
         }
 
-        // WebSocket 세션에서 사용할 userId와 HttpSession id 전달
-        attributes.put("userId", authentication.getName());
+        attributes.put("userId", resolvedUserId);
         attributes.put("sessionId", session.getId());
         return true;
     }
@@ -87,8 +93,6 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private Authentication resolveAuthentication(HttpServletRequest httpServletRequest, HttpSession session) {
-
-        // 세션에 저장된 SecurityContext에서 인증정보 우선 조회
         if (session != null) {
             Object context = session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
             if (context instanceof SecurityContext securityContext) {
@@ -115,5 +119,4 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
             log.info("{}", logLine);
         }
     }
-
 }

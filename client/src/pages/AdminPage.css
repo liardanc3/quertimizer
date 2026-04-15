@@ -580,6 +580,83 @@
   color: #b42318;
 }
 
+@media (prefers-color-scheme: dark) {
+  .admin-page-tab-row,
+  .admin-config-header,
+  .admin-auth-row,
+  .admin-auth-row-head {
+    border-color: var(--line-soft);
+  }
+
+  .admin-page-tab,
+  .admin-config-header,
+  .admin-config-field-label,
+  .admin-auth-row-head,
+  .admin-auth-empty,
+  .admin-auth-empty-text,
+  .admin-auth-permission-label,
+  .admin-auth-permission-helper,
+  .admin-marquee-label {
+    color: var(--ink-subtle);
+  }
+
+  .admin-page-tab:hover,
+  .admin-page-tab:focus-visible,
+  .admin-page-tab.is-selected,
+  .admin-auth-section-title,
+  .admin-auth-role-name,
+  .admin-auth-count,
+  .admin-auth-edit-card-title {
+    color: var(--ink-strong);
+  }
+
+  .admin-page-tab.is-selected {
+    border-bottom-color: #60a5fa;
+  }
+
+  .admin-config-input,
+  .admin-config-textarea,
+  .admin-auth-permission-input,
+  .admin-marquee-message-input,
+  .admin-marquee-inline-input {
+    border-color: var(--line-strong);
+    background: var(--surface-muted);
+    color: var(--ink-strong);
+  }
+
+  .admin-config-display,
+  .admin-auth-chip,
+  .admin-auth-edit-card-meta,
+  .admin-marquee-chip {
+    color: var(--ink-base);
+  }
+
+  .admin-auth-chip,
+  .admin-auth-edit-card,
+  .admin-marquee-table-row,
+  .admin-marquee-chip {
+    border-color: var(--line-soft);
+    background: var(--surface-soft);
+  }
+
+  .admin-auth-edit-card {
+    box-shadow: none;
+  }
+
+  .admin-config-feedback.is-error,
+  .admin-auth-feedback.is-error,
+  .admin-auth-row-feedback.is-error,
+  .admin-marquee-feedback.is-error,
+  .admin-config-delete-button {
+    color: var(--danger-strong);
+  }
+
+  .admin-auth-refresh-button,
+  .admin-marquee-refresh-button {
+    color: var(--ink-subtle);
+  }
+}
+
 .admin-marquee-empty {
   color: #64748b;
   font-size: 0.82rem;

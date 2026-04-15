@@ -549,3 +549,84 @@
     min-width: 640px;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .profile-page-avatar,
+  .profile-link-chip,
+  .profile-summary-card,
+  .profile-option-card,
+  .profile-records-shell,
+  .profile-record-filter-popover,
+  .profile-empty-state {
+    border-color: var(--line-soft);
+    background: var(--surface-soft);
+  }
+
+  .profile-page-avatar,
+  .profile-link-label,
+  .profile-record-icon-button.is-active {
+    color: var(--accent-ink);
+  }
+
+  .profile-name-line,
+  .profile-summary-value,
+  .profile-option-card strong,
+  .profile-record-problem-id {
+    color: var(--ink-strong);
+  }
+
+  .profile-bio-text,
+  .profile-option-card,
+  .profile-records-table tbody td,
+  .profile-record-filter-option,
+  .profile-record-dbms-text,
+  .profile-record-execution-time {
+    color: var(--ink-base);
+  }
+
+  .profile-feedback-text,
+  .profile-record-search-label,
+  .profile-records-table thead th,
+  .profile-record-icon-button,
+  .profile-record-title,
+  .profile-record-date,
+  .profile-empty-state {
+    color: var(--ink-subtle);
+  }
+
+  .profile-feedback-card.is-success {
+    border-color: rgba(34, 197, 94, 0.28);
+    background: var(--success-surface);
+  }
+
+  .profile-feedback-card.is-error {
+    border-color: rgba(239, 68, 68, 0.28);
+    background: var(--danger-surface);
+  }
+
+  .profile-link-chip:hover,
+  .profile-option-card:hover,
+  .profile-option-card.is-selected {
+    border-color: var(--accent-border-strong);
+    background: var(--accent-soft);
+  }
+
+  .profile-link-add-button,
+  .profile-record-icon-button {
+    border-color: var(--line-soft);
+    background: var(--surface);
+    color: var(--ink-subtle);
+  }
+
+  .profile-link-add-button:hover,
+  .profile-link-add-button:focus-visible {
+    border-color: var(--accent-border-strong);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+  }
+
+  .profile-records-table thead th,
+  .profile-records-table tbody td {
+    border-color: var(--line-soft);
+  }
+}

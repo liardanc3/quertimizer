@@ -1,0 +1,1224 @@
+.problem-runtime-shell {
+  --runtime-control-width: 86px;
+  --runtime-rail-width: 72px;
+  --runtime-stage-gap: 0.66rem;
+  --runtime-chart-trim: 1.15rem;
+  --runtime-plot-shift: 0.625rem;
+  --runtime-axis-space: 1.1rem;
+  --runtime-row-top-offset: 0.35rem;
+  --runtime-guide-top-offset: 2.03rem;
+  --runtime-arrow-width: 0.56rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) 432px;
+  align-items: start;
+  column-gap: 0.72rem;
+  row-gap: 0.7rem;
+}
+
+.problem-runtime-main {
+  display: grid;
+  gap: 0.46rem;
+  min-width: 0;
+  padding-left: 0;
+}
+
+.runtime-bar-slot.tooltip-anchor {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+}
+
+.runtime-plot {
+  position: relative;
+  padding-top: 0.1rem;
+}
+
+.runtime-marker-layer {
+  position: absolute;
+  inset: 0 0 0.75rem;
+  pointer-events: none;
+}
+
+.runtime-marker-line {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0;
+  width: 1.9rem;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.runtime-marker-line::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0.45rem;
+  width: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.runtime-marker-line::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 9px solid currentColor;
+}
+
+.runtime-marker-line.is-fastest {
+  color: #0f766e;
+}
+
+.runtime-marker-line.is-median {
+  color: #b45309;
+}
+
+.runtime-marker-line.is-mine {
+  color: #c2410c;
+}
+
+.runtime-marker-label {
+  position: absolute;
+  top: -1.3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.16rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.95);
+  color: inherit;
+  font-size: 0.67rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.runtime-axis {
+  position: relative;
+  display: grid;
+  align-items: flex-end;
+  width: calc(100% - var(--runtime-stage-gap));
+  margin-left: var(--runtime-stage-gap);
+  min-height: 1rem;
+}
+
+.runtime-axis-tick {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  overflow: visible;
+}
+
+.runtime-axis-label {
+  display: inline-flex;
+  color: #0f172a;
+  font-size: 0.69rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.runtime-axis-label.is-key {
+  color: #0f172a;
+}
+
+.runtime-axis-label.is-major {
+  color: #475569;
+}
+
+.runtime-axis-label.is-minor {
+  color: #64748b;
+}
+
+.runtime-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6rem;
+  border-radius: 1.1rem;
+  border: 1px dashed #d4deeb;
+  background: rgba(248, 250, 252, 0.92);
+  color: #334155;
+  text-align: center;
+  font-size: clamp(1rem, 1.5vw, 1.45rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.runtime-toolbar {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+}
+
+.runtime-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.runtime-toolbar-primary,
+.runtime-toolbar-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.44rem;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.runtime-toolbar-primary::-webkit-scrollbar,
+.runtime-toolbar-secondary::-webkit-scrollbar {
+  display: none;
+}
+
+.runtime-filter-cluster {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  flex: 0 0 auto;
+}
+
+.runtime-filter-cluster.is-wide {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  gap: 0.52rem;
+  padding: 0.08rem 0.46rem;
+  border: 1px solid #d7e2ef;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.runtime-filter-cluster-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.runtime-toolbar-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.runtime-toolbar-group.is-dbms {
+  gap: 0.52rem;
+  padding: 0.08rem 0.46rem;
+  border: 1px solid #d7e2ef;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.runtime-filter-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.runtime-filter-group.is-plan {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  top: 0.04rem;
+  gap: 0.52rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.runtime-filter-group.is-plan::-webkit-scrollbar {
+  display: none;
+}
+
+.runtime-detail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.18rem;
+  min-height: 1.18rem;
+  padding: 0;
+  margin-left: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.runtime-detail-toggle:hover {
+  color: #0f5db3;
+}
+
+.runtime-detail-toggle:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.runtime-subfilter-board {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.runtime-subfilter-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.52rem;
+  padding: 0.18rem 0.46rem;
+  border: 1px solid #d7e2ef;
+  border-radius: 0.95rem;
+  background: #fff;
+}
+
+.runtime-subfilter-label {
+  align-self: center;
+  color: #64748b;
+  font-size: 0.63rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.runtime-subfilter-options {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.52rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.runtime-subfilter-options::-webkit-scrollbar {
+  display: none;
+}
+
+.runtime-subfilter-options.is-bucket {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.52rem;
+  overflow: visible;
+}
+
+.runtime-subfilter-all-button {
+  align-self: center;
+}
+
+.runtime-subfilter-chip-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.52rem;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.runtime-subfilter-chip-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.runtime-subfilter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14rem;
+  flex: 0 0 auto;
+  min-height: 1.18rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.63rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.runtime-subfilter-option.is-selected {
+  color: #1565c0;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.runtime-subfilter-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.18rem;
+  padding: 0;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.63rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.runtime-subfilter-option .runtime-subfilter-button {
+  min-height: 1.18rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.runtime-subfilter-button.runtime-subfilter-button-plain:hover {
+  border-color: transparent;
+}
+
+.runtime-subfilter-button:hover {
+  border-color: transparent;
+  background: transparent;
+  color: #0f5db3;
+}
+
+.runtime-subfilter-button.is-selected {
+  border-color: transparent;
+  background: transparent;
+  color: #1565c0;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.runtime-subfilter-button:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.runtime-filter-button,
+.runtime-metric-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  padding: 0.12rem 0.54rem;
+  border-radius: 999px;
+  border: 1px solid var(--ui-toggle-border);
+  background: var(--ui-toggle-bg);
+  color: var(--ui-toggle-text);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.runtime-filter-button:hover,
+.runtime-metric-button:hover {
+  border-color: rgba(25, 118, 210, 0.28);
+  background: var(--ui-toggle-hover-bg);
+  color: #0f5db3;
+}
+
+.runtime-filter-button.is-selected,
+.runtime-metric-button.is-selected {
+  border-color: var(--ui-selection-border);
+  background: var(--ui-selection-bg);
+  color: var(--ui-selection-text);
+  box-shadow: var(--ui-selection-shadow);
+}
+
+.runtime-filter-button.is-dbms {
+  min-height: 1.18rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.63rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.runtime-filter-button.is-dbms:hover {
+  border-color: transparent;
+  background: transparent;
+  color: #0f5db3;
+}
+
+.runtime-filter-button.is-dbms.is-selected {
+  border-color: transparent;
+  background: transparent;
+  color: #1565c0;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.runtime-filter-cluster.is-wide .runtime-filter-button {
+  min-height: 1.18rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.63rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.runtime-filter-cluster.is-wide .runtime-filter-button:hover {
+  border-color: transparent;
+  background: transparent;
+  color: #0f5db3;
+}
+
+.runtime-filter-cluster.is-wide .runtime-filter-button.is-selected {
+  border-color: transparent;
+  background: transparent;
+  color: #1565c0;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.runtime-filter-button:focus-visible,
+.runtime-metric-button:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.runtime-plot-shell {
+  display: grid;
+  grid-template-columns: var(--runtime-rail-width) minmax(0, 1fr);
+  gap: 0.22rem;
+  align-items: stretch;
+}
+
+.runtime-marker-column,
+.runtime-guide-grid {
+  display: grid;
+  grid-template-rows: repeat(3, minmax(1.6rem, 1fr));
+  gap: 0.02rem;
+}
+
+.runtime-marker-column {
+  align-content: stretch;
+  padding-top: var(--runtime-guide-top-offset);
+  padding-bottom: var(--runtime-axis-space);
+  transform: translateX(var(--runtime-plot-shift));
+}
+
+.runtime-marker-column .runtime-guide-row {
+  justify-content: flex-end;
+}
+
+.runtime-chart-stage {
+  position: relative;
+  min-height: 8.55rem;
+  padding-top: var(--runtime-row-top-offset);
+  padding-right: var(--runtime-chart-trim);
+  transform: translateX(var(--runtime-plot-shift));
+}
+
+.runtime-guide-row {
+  display: flex;
+  align-items: center;
+  min-height: 1.26rem;
+  height: 1.26rem;
+}
+
+.runtime-marker-item {
+  position: relative;
+  z-index: 2;
+}
+
+.runtime-marker-item:hover,
+.runtime-marker-item:focus-within {
+  z-index: 20;
+}
+
+.runtime-marker-token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4rem;
+  min-height: 1.48rem;
+  padding: 0.12rem 0.48rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.98);
+  color: inherit;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+}
+
+.runtime-marker-item.is-fastest {
+  color: #dc2626;
+}
+
+.runtime-marker-item.is-median {
+  color: #6b7280;
+}
+
+.runtime-marker-item.is-mine {
+  color: #16a34a;
+}
+
+.runtime-marker-token.is-fastest {
+  background: #fef2f2;
+}
+
+.runtime-marker-token.is-median {
+  background: #f3f4f6;
+}
+
+.runtime-marker-token.is-mine {
+  background: #f0fdf4;
+}
+
+.runtime-connector-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--runtime-stage-gap) minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+}
+
+.runtime-connector-line.is-fastest {
+  color: #dc2626;
+}
+
+.runtime-connector-line.is-median {
+  color: #6b7280;
+}
+
+.runtime-connector-line.is-mine {
+  color: #16a34a;
+}
+
+.runtime-connector-gap,
+.runtime-connector-progress {
+  display: block;
+  height: 1.5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.runtime-connector-track {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.runtime-connector-progress {
+  position: relative;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.runtime-connector-progress::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: calc(-1 * var(--runtime-arrow-width));
+  transform: translateY(-50%);
+  width: var(--runtime-arrow-width);
+  height: var(--runtime-arrow-width);
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.runtime-marker-tooltip,
+.runtime-bar-tooltip {
+  z-index: 10;
+}
+
+.runtime-marker-tooltip {
+  bottom: calc(100% + 0.85rem);
+}
+
+.runtime-bar-slot:hover,
+.runtime-bar-slot:focus-within {
+  z-index: 6;
+}
+
+.runtime-guide-grid {
+  position: absolute;
+  inset: var(--runtime-guide-top-offset) var(--runtime-chart-trim) var(--runtime-axis-space) 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.runtime-bars {
+  display: grid;
+  align-items: end;
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+  height: 100%;
+  gap: 0;
+  width: calc(100% - var(--runtime-stage-gap));
+  margin-left: var(--runtime-stage-gap);
+  padding: 0.45rem 0 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.runtime-bar-slot {
+  position: relative;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  overflow: visible;
+  min-height: 100%;
+  height: 100%;
+  padding-bottom: var(--runtime-axis-space);
+  border-right: 1px solid rgba(233, 238, 244, 0.85);
+}
+
+.runtime-bar-slot.is-mine {
+  background: transparent;
+}
+
+.runtime-bar-slot::before {
+  display: none;
+}
+
+.runtime-bar {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border-radius: 0;
+  border: 0;
+  background: #dde4ec;
+  box-shadow: none;
+}
+
+.runtime-bar.is-mine {
+  background: #dde4ec;
+}
+
+.runtime-bar-tooltip {
+  bottom: calc(100% + 0.55rem);
+}
+
+.runtime-axis-inline {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.runtime-axis-footer {
+  display: grid;
+  grid-template-columns: var(--runtime-control-width) var(--runtime-rail-width) minmax(0, 1fr) auto;
+  align-items: flex-end;
+  gap: 0.32rem;
+}
+
+.runtime-axis-spacer {
+  min-width: 0;
+}
+
+.runtime-axis-unit {
+  color: #0f172a;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  padding-bottom: 0.08rem;
+}
+
+.runtime-stats-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.runtime-stat-grid {
+  display: grid;
+  width: 100%;
+  gap: 0.45rem;
+}
+
+.runtime-stat-grid.is-compact,
+.runtime-stat-grid.is-tuning {
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 0.39rem;
+}
+
+.runtime-stat-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  min-height: 1.94rem;
+  padding: 0.38rem 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  overflow: hidden;
+}
+
+.runtime-stat-grid > .runtime-stat-item:last-child {
+  border-bottom: 0;
+}
+
+.runtime-stat-copy {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.runtime-stat-item.is-open {
+  z-index: 12;
+}
+
+.runtime-stat-item.is-accent {
+  border-bottom-color: rgba(203, 213, 225, 0.9);
+  background: transparent;
+}
+
+.runtime-stat-item.is-success {
+  border-bottom-color: rgba(34, 197, 94, 0.22);
+  background: transparent;
+}
+
+.runtime-stat-item.is-warning {
+  border-bottom-color: rgba(245, 158, 11, 0.22);
+  background: transparent;
+}
+
+.runtime-stat-label {
+  color: #64748b;
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.runtime-stat-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.22rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.runtime-stat-detail {
+  color: #718198;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.runtime-stat-info-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.runtime-stat-info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.94rem;
+  height: 0.94rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.46);
+  background: rgba(255, 255, 255, 0.92);
+  color: #64748b;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06);
+}
+
+.runtime-stat-info-button:hover,
+.runtime-stat-info-button.is-open {
+  border-color: rgba(25, 118, 210, 0.24);
+  color: #0f5db3;
+  background: #fff;
+}
+
+.runtime-stat-info-button:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.runtime-stat-popover {
+  position: absolute;
+  right: -0.2rem;
+  bottom: calc(100% + 0.38rem);
+  width: min(13rem, calc(100vw - 2.5rem));
+  padding: 0.55rem 0.62rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.97);
+  color: #f8fafc;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.runtime-stat-popover::after {
+  content: '';
+  position: absolute;
+  right: 0.42rem;
+  top: 100%;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid rgba(15, 23, 42, 0.97);
+}
+
+.runtime-stat-value {
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+  padding-top: 0;
+}
+
+.runtime-floating-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 999;
+  width: min(18rem, calc(100vw - 2rem));
+  max-width: min(18rem, calc(100vw - 2rem));
+  padding: 0.55rem 0.62rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.97);
+  color: #f8fafc;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.runtime-floating-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid rgba(15, 23, 42, 0.97);
+}
+
+@media (max-width: 1480px) {
+  .problem-runtime-shell {
+    grid-template-columns: 1fr;
+    gap: 0.95rem;
+  }
+
+  .runtime-stats-panel {
+    width: 100%;
+  }
+
+  .runtime-subfilter-chip-grid {
+    flex-wrap: wrap;
+    overflow: visible;
+    row-gap: 0.3rem;
+  }
+}
+
+@media (max-width: 1360px) {
+  .runtime-toolbar-primary {
+    flex-wrap: wrap;
+    overflow: visible;
+    row-gap: 0.34rem;
+  }
+
+  .runtime-filter-cluster.is-wide {
+    flex: 1 0 100%;
+    width: 100%;
+  }
+}
+
+@media (max-width: 1180px) {
+  .problem-runtime-shell {
+    --runtime-control-width: 82px;
+    --runtime-rail-width: 70px;
+    --runtime-stage-gap: 0.74rem;
+    --runtime-chart-trim: 0.9rem;
+    --runtime-plot-shift: 0.48rem;
+    grid-template-columns: 1fr;
+    gap: 0.95rem;
+  }
+
+  .runtime-filter-cluster {
+    min-height: auto;
+    padding: 0;
+  }
+
+  .runtime-stats-panel {
+    width: 100%;
+  }
+
+  .runtime-filter-button,
+  .runtime-subfilter-button {
+    min-height: 1.54rem;
+    padding-inline: 0.5rem;
+    font-size: 0.66rem;
+  }
+
+  .runtime-stat-label,
+  .runtime-stat-detail,
+  .runtime-stat-value {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 960px) {
+  .problem-runtime-shell {
+    --runtime-control-width: 80px;
+    --runtime-rail-width: 70px;
+    --runtime-stage-gap: 0.82rem;
+    --runtime-chart-trim: 0.78rem;
+    --runtime-plot-shift: 0.42rem;
+    gap: 0.95rem;
+  }
+
+  .runtime-stat-grid.is-tuning {
+    gap: 0.48rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .problem-runtime-shell {
+    --runtime-control-width: 74px;
+    --runtime-rail-width: 66px;
+    --runtime-stage-gap: 0.72rem;
+    --runtime-chart-trim: 0.56rem;
+    --runtime-plot-shift: 0.22rem;
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-stats-panel {
+    display: grid;
+  }
+
+  .runtime-stat-grid.is-compact,
+  .runtime-stat-grid.is-tuning {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-plot {
+    padding-top: 0.1rem;
+  }
+
+  .runtime-bars {
+    gap: 0.12rem;
+    min-height: 5rem;
+  }
+
+  .runtime-filter-button {
+    min-height: 1.46rem;
+    padding-inline: 0.42rem;
+    font-size: 0.64rem;
+  }
+
+  .runtime-metric-button {
+    min-height: 1.62rem;
+    font-size: 0.6rem;
+  }
+
+  .runtime-marker-token {
+    min-width: 3.35rem;
+    min-height: 1.42rem;
+    padding: 0.12rem 0.38rem;
+    font-size: 0.6rem;
+  }
+
+  .runtime-filter-cluster {
+    min-height: auto;
+    padding: 0;
+    gap: 0.18rem;
+  }
+
+  .runtime-filter-cluster-label {
+    font-size: 0.6rem;
+    padding-inline: 0;
+  }
+
+  .runtime-subfilter-board {
+    padding: 0;
+  }
+
+  .runtime-subfilter-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 0.38rem;
+  }
+
+  .runtime-subfilter-label {
+    font-size: 0.62rem;
+  }
+
+  .runtime-subfilter-options {
+    gap: 0.22rem;
+  }
+
+  .runtime-empty-state {
+    min-height: 5rem;
+    font-size: 1rem;
+  }
+
+  .runtime-axis-label.is-minor:not(.is-key) {
+    display: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .runtime-axis-label,
+  .runtime-axis-label.is-key,
+  .runtime-stat-value,
+  .runtime-marker-label {
+    color: var(--ink-strong);
+  }
+
+  .runtime-axis-label.is-major,
+  .runtime-axis-label.is-minor,
+  .runtime-filter-cluster-label,
+  .runtime-subfilter-label,
+  .runtime-axis-unit,
+  .runtime-stat-label,
+  .runtime-stat-meta,
+  .runtime-stat-detail {
+    color: var(--ink-subtle);
+  }
+
+  .runtime-empty-state,
+  .runtime-toolbar-group.is-dbms,
+  .runtime-filter-group.is-plan,
+  .runtime-subfilter-board,
+  .runtime-subfilter-row,
+  .runtime-stats-panel,
+  .runtime-stat-item,
+  .runtime-stat-popover,
+  .runtime-floating-tooltip {
+    border-color: var(--line-soft);
+    background: var(--surface-soft);
+  }
+
+  .runtime-filter-button,
+  .runtime-metric-button,
+  .runtime-subfilter-button,
+  .runtime-detail-toggle {
+    color: var(--ink-soft);
+  }
+
+  .runtime-detail-toggle:hover,
+  .runtime-subfilter-button:hover,
+  .runtime-filter-button:hover,
+  .runtime-metric-button:hover,
+  .runtime-subfilter-button.is-selected,
+  .runtime-filter-button.is-selected,
+  .runtime-metric-button.is-selected {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+  }
+
+  .runtime-marker-label,
+  .runtime-bar-tooltip,
+  .runtime-marker-tooltip,
+  .runtime-stat-popover,
+  .runtime-floating-tooltip {
+    background: var(--surface-elevated);
+    color: var(--ink-strong);
+  }
+
+  .runtime-bar,
+  .runtime-bar.is-mine {
+    background: rgba(148, 163, 184, 0.56);
+  }
+
+  .runtime-guide-row,
+  .runtime-connector-track {
+    background: rgba(148, 163, 184, 0.18);
+  }
+}

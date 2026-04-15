@@ -5,15 +5,18 @@ function isLoopbackHostname(hostname: string) {
 }
 
 export interface LoginPayload {
-  userId: string;
+  email: string;
   password: string;
   rememberLogin: boolean;
 }
 
 export interface SignupPayload {
-  userId: string;
   password: string;
   email: string;
+}
+
+export interface SetupUserIdPayload {
+  userId: string;
 }
 
 export interface AccountRecoveryEmailPayload {
@@ -49,6 +52,7 @@ interface SessionMeResponse {
   userId?: string | null;
   defaultDbms?: string | null;
   role?: string | null;
+  userIdSetupRequired?: boolean | null;
 }
 
 export class SignupApiError extends Error {
@@ -101,6 +105,7 @@ export interface SessionMeResult {
   userId: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
+  userIdSetupRequired: boolean;
 }
 
 export function getApiBaseUrl() {
@@ -161,8 +166,8 @@ async function requestAuth(path: '/signup' | '/login', payload: LoginPayload | S
       },
       credentials: 'include',
       body: JSON.stringify({
-        userId: payload.userId,
         password: await sha512Hex(payload.password),
+        ...(path === '/login' && 'email' in payload ? { email: payload.email } : {}),
         ...(path === '/login' && 'rememberLogin' in payload ? { rememberLogin: payload.rememberLogin } : {}),
         ...(path === '/signup' && 'email' in payload ? { email: payload.email } : {}),
       }),
@@ -172,11 +177,28 @@ async function requestAuth(path: '/signup' | '/login', payload: LoginPayload | S
   }
 
   if (response.ok) {
-    return;
+    return response;
   }
 
   const reasons = await getErrorReasons(response, fallbackMessage);
   throw new AuthApiError(response.status, reasons, fallbackMessage);
+}
+
+function parseSessionMeResult(data: SessionMeResponse) {
+  return {
+    authenticated: data.authenticated === true,
+    userId: typeof data.userId === 'string' && data.userId.trim() !== '' ? data.userId : null,
+    defaultDbms: data.defaultDbms === 'oracle' ? 'oracle' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
+    role:
+      data.role === 'admin'
+        ? 'admin'
+        : data.role === 'user'
+          ? 'user'
+          : data.role === 'problem_generator'
+            ? 'problemGenerator'
+            : null,
+    userIdSetupRequired: data.userIdSetupRequired === true,
+  } satisfies SessionMeResult;
 }
 
 async function requestDuplicateCheck(
@@ -255,8 +277,68 @@ export async function signup(payload: SignupPayload) {
   }
 }
 
+export async function setupUserId(payload: SetupUserIdPayload) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/signup/user-id`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new SignupApiError(0, ['ID \uC124\uC815 \uC694\uCCAD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.']);
+  }
+
+  if (!response.ok) {
+    const reasons = await getErrorReasons(response, 'ID \uC124\uC815 \uC694\uCCAD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.');
+    throw new SignupApiError(response.status, reasons);
+  }
+
+  try {
+    const data = (await response.json()) as SessionMeResponse;
+    return parseSessionMeResult(data);
+  } catch {
+    throw new SignupApiError(response.status, ['ID \uC124\uC815 \uC751\uB2F5 \uCC98\uB9AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.']);
+  }
+}
+
 export async function login(payload: LoginPayload) {
-  await requestAuth('/login', payload, '로그인 요청에 실패했습니다.');
+  const response = await requestAuth('/login', payload, '로그인 요청에 실패했습니다.');
+
+  try {
+    const data = (await response.json()) as SessionMeResponse;
+    return parseSessionMeResult(data);
+  } catch {
+    throw new AuthApiError(response.status, ['로그인 응답 처리에 실패했습니다.'], '로그인 응답 처리에 실패했습니다.');
+  }
+}
+
+export function startGithubLogin() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.location.assign(`${getApiBaseUrl()}/oauth2/authorization/github`);
+}
+
+export function startGoogleLogin() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.location.assign(`${getApiBaseUrl()}/oauth2/authorization/google`);
+}
+
+export function startKakaoLogin() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.location.assign(`${getApiBaseUrl()}/oauth2/authorization/kakao`);
 }
 
 export async function logout() {
@@ -297,20 +379,7 @@ export async function fetchSessionMe() {
 
   try {
     const data = (await response.json()) as SessionMeResponse;
-
-    return {
-      authenticated: data.authenticated === true,
-      userId: typeof data.userId === 'string' && data.userId.trim() !== '' ? data.userId : null,
-      defaultDbms: data.defaultDbms === 'oracle' ? 'oracle' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
-      role:
-        data.role === 'admin'
-          ? 'admin'
-          : data.role === 'user'
-            ? 'user'
-            : data.role === 'problem_generator'
-              ? 'problemGenerator'
-              : null,
-    } satisfies SessionMeResult;
+    return parseSessionMeResult(data);
   } catch {
     throw new Error('세션 복원 확인에 실패했습니다.');
   }

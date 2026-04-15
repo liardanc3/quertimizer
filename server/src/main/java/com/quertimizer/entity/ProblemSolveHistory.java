@@ -42,6 +42,9 @@ public class ProblemSolveHistory {
     @Column(name = "execution_time_ms", nullable = false)
     private long executionTimeMs;
 
+    @Column(nullable = false)
+    private double cost;
+
     @Column(name = "scan_rows", nullable = false)
     private long scanRows;
 
@@ -56,6 +59,7 @@ public class ProblemSolveHistory {
                                              DbmsType dbmsType,
                                              String submittedSql,
                                              long executionTimeMs,
+                                             double cost,
                                              long scanRows,
                                              long executionPlanElement,
                                              LocalDateTime submittedAt) {
@@ -65,6 +69,7 @@ public class ProblemSolveHistory {
                 dbmsType,
                 submittedSql,
                 executionTimeMs,
+                cost,
                 scanRows,
                 executionPlanElement,
                 submittedAt
@@ -76,6 +81,7 @@ public class ProblemSolveHistory {
                                 DbmsType dbmsType,
                                 String submittedSql,
                                 long executionTimeMs,
+                                double cost,
                                 long scanRows,
                                 long executionPlanElement,
                                 LocalDateTime submittedAt) {
@@ -84,6 +90,7 @@ public class ProblemSolveHistory {
         this.dbmsType = dbmsType;
         this.submittedSql = submittedSql;
         this.executionTimeMs = executionTimeMs;
+        this.cost = cost;
         this.scanRows = scanRows;
         this.executionPlanElement = executionPlanElement;
         this.submittedAt = submittedAt;

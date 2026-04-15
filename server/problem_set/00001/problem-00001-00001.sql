@@ -197,6 +197,7 @@ INSERT INTO quertimizer.problem_solve_history (
     dbms_type,
     submitted_sql,
     execution_time_ms,
+    cost,
     scan_rows,
     execution_plan_element,
     submitted_at
@@ -227,6 +228,7 @@ ORDER BY
     c.customer_id ASC
     $postgresql_sql$,
     97,
+    97,
     0,
     536954882,
     TIMESTAMP '2026-04-05 21:10:00'
@@ -255,6 +257,7 @@ ORDER BY
     total_amount DESC,
     c.customer_id ASC
     $oracle_sql$,
+    121,
     121,
     0,
     8523780,

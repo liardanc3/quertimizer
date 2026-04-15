@@ -11,7 +11,8 @@ public record ProblemExecuteRes(String type,
                                 List<List<String>> rows,
                                 List<String> planLines,
                                 long rowCount,
-                                Long executionTimeMs) {
+                                Long executionTimeMs,
+                                Double cost) {
 
     public static ProblemExecuteRes connected(String userId) {
         return new ProblemExecuteRes(
@@ -24,6 +25,7 @@ public record ProblemExecuteRes(String type,
                 List.of(),
                 List.of(),
                 0,
+                null,
                 null
         );
     }
@@ -35,7 +37,8 @@ public record ProblemExecuteRes(String type,
                                                      List<List<String>> rows,
                                                      List<String> planLines,
                                                      long rowCount,
-                                                     long executionTimeMs) {
+                                                     long executionTimeMs,
+                                                     Double cost) {
         return new ProblemExecuteRes(
                 "problem.execute.result",
                 true,
@@ -46,7 +49,8 @@ public record ProblemExecuteRes(String type,
                 rows,
                 planLines,
                 rowCount,
-                executionTimeMs
+                executionTimeMs,
+                cost
         );
     }
 
@@ -61,6 +65,7 @@ public record ProblemExecuteRes(String type,
                 List.of(),
                 List.of(),
                 0,
+                null,
                 null
         );
     }
@@ -76,7 +81,8 @@ public record ProblemExecuteRes(String type,
                 List.of(),
                 List.of(),
                 0,
-                executionTimeMs
+                executionTimeMs,
+                null
         );
     }
 
@@ -91,6 +97,7 @@ public record ProblemExecuteRes(String type,
                 List.of(),
                 List.of(),
                 0,
+                null,
                 null
         );
     }
@@ -106,6 +113,7 @@ public record ProblemExecuteRes(String type,
                 List.of(),
                 List.of(),
                 0,
+                null,
                 null
         );
     }
@@ -121,6 +129,7 @@ public record ProblemExecuteRes(String type,
                 List.of(),
                 List.of(),
                 0,
+                null,
                 null
         );
     }

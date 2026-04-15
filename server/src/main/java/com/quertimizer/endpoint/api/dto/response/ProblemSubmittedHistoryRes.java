@@ -14,6 +14,7 @@ public class ProblemSubmittedHistoryRes {
     private final String userId;
     private final long executionPlanElement;
     private final long executionTimeMs;
+    private final double cost;
 
     public static ProblemSubmittedHistoryRes from(ProblemSolveHistory history) {
 
@@ -24,7 +25,8 @@ public class ProblemSubmittedHistoryRes {
                 dbmsType.getValue(),
                 history.getUserId(),
                 ExecutionPlanElementIndexes.normalize(dbmsType, history.getExecutionPlanElement()),
-                history.getExecutionTimeMs()
+                history.getExecutionTimeMs(),
+                history.getCost()
         );
     }
 

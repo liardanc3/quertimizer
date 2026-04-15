@@ -6,6 +6,7 @@ import com.quertimizer.endpoint.api.dto.request.DuplicateCheckEmailReq;
 import com.quertimizer.endpoint.api.dto.request.DuplicateCheckUserIdReq;
 import com.quertimizer.endpoint.api.dto.request.LoginReq;
 import com.quertimizer.endpoint.api.dto.request.ResetPasswordReq;
+import com.quertimizer.endpoint.api.dto.request.SetupUserIdReq;
 import com.quertimizer.endpoint.api.dto.request.SignupReq;
 import com.quertimizer.endpoint.api.dto.response.DuplicateCheckRes;
 import com.quertimizer.endpoint.api.dto.response.FindUserIdRes;
@@ -77,10 +78,21 @@ public class UserAccountController {
         return ResponseEntity.ok(DuplicateCheckRes.available());
     }
 
+    @PostMapping("/signup/user-id")
+    public ResponseEntity<SessionMeRes> setupUserId(@Valid @RequestBody SetupUserIdReq request,
+                                                    Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        userAccountService.configureUserId(authentication.getName(), request);
+        return ResponseEntity.ok(createAuthenticatedSessionResponse(authentication));
+    }
+
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@Valid @RequestBody LoginReq request,
-                                      HttpServletRequest httpRequest,
-                                      HttpServletResponse httpResponse) {
+    public ResponseEntity<SessionMeRes> login(@Valid @RequestBody LoginReq request,
+                                              HttpServletRequest httpRequest,
+                                              HttpServletResponse httpResponse) {
 
         // 로그인 처리, 인증정보 세션 저장
         Authentication authentication = userAccountService.login(request);
@@ -93,7 +105,7 @@ public class UserAccountController {
             rememberMeServices.logout(httpRequest, httpResponse, authentication);
         }
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(createAuthenticatedSessionResponse(authentication));
     }
 
     @PostMapping("/logout")
@@ -127,9 +139,7 @@ public class UserAccountController {
         // remember-me 복원 뒤 새 세션에 인증정보 재저장
         saveAuthenticationToSession(authentication, httpRequest, httpResponse);
 
-        return ResponseEntity.ok(userAccountService.findUser(authentication.getName())
-                .map(user -> SessionMeRes.authenticated(user.getUserId(), user.getResolvedDefaultDbms(), user.getResolvedRole().name().toLowerCase()))
-                .orElseGet(() -> SessionMeRes.authenticated(authentication.getName(), null, null)));
+        return ResponseEntity.ok(createAuthenticatedSessionResponse(authentication));
     }
 
     @PostMapping("/find-id/send-code")
@@ -181,6 +191,17 @@ public class UserAccountController {
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(authentication);
         securityContextRepository.saveContext(securityContext, httpRequest, httpResponse);
+    }
+
+    private SessionMeRes createAuthenticatedSessionResponse(Authentication authentication) {
+        return userAccountService.findAuthenticatedUser(authentication.getName())
+                .map(user -> SessionMeRes.authenticated(
+                        user.getUserId(),
+                        !user.hasUserId(),
+                        user.getResolvedDefaultDbms(),
+                        user.getResolvedRole()
+                ))
+                .orElseGet(() -> SessionMeRes.authenticated(null, true, null, (String) null));
     }
 
 }

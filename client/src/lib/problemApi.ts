@@ -20,6 +20,8 @@ interface ProblemPageResponse {
   pageSize?: number;
   totalCount?: number;
   totalPages?: number;
+  spreadRateMin?: number;
+  spreadRateMax?: number;
   problems?: ProblemListItemResponse[];
 }
 
@@ -104,6 +106,9 @@ export interface FetchProblemsParams {
   query: string;
   solveState: 'all' | 'solved' | 'unsolved' | 'none';
   solvedCountSort: 'asc' | 'desc';
+  spreadRateSort: 'none' | 'asc' | 'desc';
+  spreadRateMin?: number | null;
+  spreadRateMax?: number | null;
 }
 
 export interface ProblemPage {
@@ -111,6 +116,10 @@ export interface ProblemPage {
   pageSize: number;
   totalCount: number;
   totalPages: number;
+  spreadRateRange: {
+    min: number;
+    max: number;
+  };
   problems: ProblemSummary[];
 }
 
@@ -226,12 +235,24 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
     solvedCountSort: params.solvedCountSort,
   });
 
+  if (params.spreadRateSort !== 'none') {
+    searchParams.set('spreadRateSort', params.spreadRateSort);
+  }
+
   if (params.query.trim() !== '') {
     searchParams.set('query', params.query.trim());
   }
 
   if (params.solveState !== 'all') {
     searchParams.set('solveState', params.solveState);
+  }
+
+  if (typeof params.spreadRateMin === 'number') {
+    searchParams.set('spreadRateMin', String(params.spreadRateMin));
+  }
+
+  if (typeof params.spreadRateMax === 'number') {
+    searchParams.set('spreadRateMax', String(params.spreadRateMax));
   }
 
   try {
@@ -264,6 +285,10 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
       pageSize: data.pageSize,
       totalCount: data.totalCount,
       totalPages: data.totalPages,
+      spreadRateRange: {
+        min: typeof data.spreadRateMin === 'number' ? data.spreadRateMin : 0,
+        max: typeof data.spreadRateMax === 'number' ? data.spreadRateMax : 0,
+      },
       problems: data.problems
         .filter(
           (problem): problem is Required<Pick<ProblemListItemResponse, 'problemId' | 'title' | 'description'>> & ProblemListItemResponse =>

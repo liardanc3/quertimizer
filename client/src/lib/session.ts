@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { fetchSessionMe } from './authApi';
+import { fetchSessionMe, type SessionMeResult } from './authApi';
 import { disconnectSessionSocket } from './sessionSocket';
 
 const SESSION_AUTH_STORAGE_KEY = 'quertimizer.session-authenticated';
@@ -19,6 +19,7 @@ interface SessionSnapshot {
   userId: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
+  userIdSetupRequired: boolean;
 }
 
 let sessionSnapshot: SessionSnapshot = {
@@ -27,6 +28,7 @@ let sessionSnapshot: SessionSnapshot = {
   userId: null,
   defaultDbms: null,
   role: null,
+  userIdSetupRequired: false,
 };
 let sessionAlert: SessionAlert | null = null;
 let syncSessionPromise: Promise<boolean> | null = null;
@@ -75,6 +77,7 @@ function subscribe(callback: () => void) {
       userId: isAuthenticated ? sessionSnapshot.userId : null,
       defaultDbms: isAuthenticated ? sessionSnapshot.defaultDbms : null,
       role: isAuthenticated ? sessionSnapshot.role : null,
+      userIdSetupRequired: isAuthenticated ? sessionSnapshot.userIdSetupRequired : false,
     };
     callback();
   }
@@ -150,6 +153,24 @@ export function loginMock(rememberLogin = false) {
     userId: sessionSnapshot.userId,
     defaultDbms: sessionSnapshot.defaultDbms,
     role: sessionSnapshot.role,
+    userIdSetupRequired: sessionSnapshot.userIdSetupRequired,
+  });
+}
+
+export function applyAuthenticatedSession(session: SessionMeResult, rememberLogin = false) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  persistAuthentication(rememberLogin);
+  updateSessionAlert(null);
+  updateSessionSnapshot({
+    isAuthenticated: session.authenticated,
+    isReady: true,
+    userId: session.userId,
+    defaultDbms: session.defaultDbms,
+    role: session.role,
+    userIdSetupRequired: session.userIdSetupRequired,
   });
 }
 
@@ -175,6 +196,7 @@ export async function syncSession() {
           userId: null,
           defaultDbms: null,
           role: null,
+          userIdSetupRequired: false,
         });
         updateSessionAlert(null);
 
@@ -188,6 +210,7 @@ export async function syncSession() {
         userId: session.userId,
         defaultDbms: session.defaultDbms,
         role: session.role,
+        userIdSetupRequired: session.userIdSetupRequired,
       });
       return true;
     } catch {
@@ -218,16 +241,18 @@ export function logoutMock() {
     userId: null,
     defaultDbms: null,
     role: null,
+    userIdSetupRequired: false,
   });
 }
 
 export function useMockSession() {
-  const { isAuthenticated, isReady, userId, defaultDbms, role } = useSyncExternalStore(subscribe, getSnapshot, () => ({
+  const { isAuthenticated, isReady, userId, defaultDbms, role, userIdSetupRequired } = useSyncExternalStore(subscribe, getSnapshot, () => ({
     isAuthenticated: false,
     isReady: false,
     userId: null,
     defaultDbms: null,
     role: null,
+    userIdSetupRequired: false,
   }));
 
   return {
@@ -236,6 +261,7 @@ export function useMockSession() {
     userId,
     defaultDbms,
     role,
+    userIdSetupRequired,
     isAdmin: role === 'admin',
     isProblemGenerator: role === 'problemGenerator',
     login: loginMock,

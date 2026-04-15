@@ -12,25 +12,35 @@ export default function ProblemStatusFilter({
   onToggleUnsolved,
 }: ProblemStatusFilterProps) {
   return (
-    <div className="problem-control-group problem-status-group" role="group" aria-label="해결 상태 필터">
-      <span className="problem-control-label">상태</span>
-      <div className="problem-status-buttons">
-        <button
-          type="button"
-          className={`mini-toggle problem-status-button ${showSolved ? 'is-selected' : ''}`}
-          aria-pressed={showSolved}
-          onClick={onToggleSolved}
-        >
-          해결
-        </button>
-        <button
-          type="button"
-          className={`mini-toggle problem-status-button ${showUnsolved ? 'is-selected' : ''}`}
-          aria-pressed={showUnsolved}
-          onClick={onToggleUnsolved}
-        >
-          미해결
-        </button>
+    <div
+      className="problem-control-group problem-status-group"
+      role="group"
+      aria-label={'\uC0C1\uD0DC \uD544\uD130'}
+    >
+      <div className="problem-status-checks">
+        <label className="problem-status-check">
+          <input
+            type="checkbox"
+            checked={showSolved}
+            onChange={onToggleSolved}
+            className="problem-status-check-input"
+            aria-label={'\uD574\uACB0'}
+          />
+          <span className="problem-status-check-text">{'\uD574\uACB0'}</span>
+          <span className="problem-status-check-ui" aria-hidden="true" />
+        </label>
+
+        <label className="problem-status-check">
+          <input
+            type="checkbox"
+            checked={showUnsolved}
+            onChange={onToggleUnsolved}
+            className="problem-status-check-input"
+            aria-label={'\uBBF8\uD574\uACB0'}
+          />
+          <span className="problem-status-check-text">{'\uBBF8\uD574\uACB0'}</span>
+          <span className="problem-status-check-ui" aria-hidden="true" />
+        </label>
       </div>
     </div>
   );

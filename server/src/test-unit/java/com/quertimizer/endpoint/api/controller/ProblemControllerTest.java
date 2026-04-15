@@ -39,12 +39,14 @@ class ProblemControllerTest {
     @DisplayName("GET /problems : 200 OK + 페이지 응답 반환")
     void okAndReturnProblemPage() throws Exception {
         // given
-        when(problemService.getProblems(eq(1), isNull(), eq("all"), isNull(), eq("desc")))
+        when(problemService.getProblems(eq(1), isNull(), eq("all"), isNull(), eq("desc"), eq("none"), isNull(), isNull()))
                 .thenReturn(new ProblemPageRes(
                         1,
                         20,
                         1,
                         1,
+                        0.0,
+                        0.0,
                         List.of(
                                 new ProblemListItemRes(
                                         "00001-00001",
@@ -62,6 +64,8 @@ class ProblemControllerTest {
                 .andExpect(jsonPath("$.pageSize").value(20))
                 .andExpect(jsonPath("$.totalCount").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.spreadRateMin").value(0.0))
+                .andExpect(jsonPath("$.spreadRateMax").value(0.0))
                 .andExpect(jsonPath("$.problems[0].problemId").value("00001-00001"))
                 .andExpect(jsonPath("$.problems[0].title").value("3월 고객별 주문 건수와 총 주문 금액 조회"))
                 .andExpect(jsonPath("$.problems[0].submittedHistories[0].dbms").value("postgresql"));
