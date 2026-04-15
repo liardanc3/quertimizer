@@ -141,6 +141,10 @@ const BUCKET_PLAN_INDEXES_BY_DBMS: Record<DbmsType, BucketIndexMap> = {
   },
 };
 
+function SelectionCheckbox({ checked }: { checked: boolean }) {
+  return <span className={`runtime-check-indicator ${checked ? 'is-checked' : ''}`} aria-hidden="true" />;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -360,7 +364,7 @@ function buildMarkers(samples: RuntimeSample[]) {
 function renderMarkerTooltip(marker: RuntimeMarker, onSearchSelect: (value: string) => void) {
   return (
     <>
-      <span className="ui-tooltip-title">{formatMs(marker.value)}</span>
+      <span className="ui-tooltip-title">{formatCostValue(marker.value)}</span>
       {marker.userId ? (
         <button
           type="button"
@@ -649,12 +653,13 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
               </div>
             </div>
 
-            <div className="runtime-filter-cluster is-wide" role="group" aria-label="실행 계획 요소">
+            <div className={`runtime-plan-shell ${normalizedSelectedPlanSections.length > 0 && showPlanDetails ? 'is-open' : ''}`}>
+              <div className="runtime-filter-cluster is-wide" role="group" aria-label="실행 계획 요소">
               <span className="runtime-filter-cluster-label">실행 계획 요소</span>
               <div className="runtime-filter-group is-plan">
                 <button
                   type="button"
-                  className={`runtime-filter-button is-plan-option ${allPlanSectionsSelected ? 'is-selected' : ''}`}
+                  className={`runtime-filter-button is-plan-option runtime-check-button runtime-plan-all-button ${allPlanSectionsSelected ? 'is-selected' : ''}`}
                   aria-pressed={allPlanSectionsSelected}
                   onClick={(event) => {
                     event.preventDefault();
@@ -662,18 +667,18 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                     setSelectedPlanSections((current) => defaultPlanSections.every((sectionKey) => current.includes(sectionKey)) ? [] : defaultPlanSections);
                   }}
                 >
-                  전체
+                  <SelectionCheckbox checked={allPlanSectionsSelected} />
+                  <span className="runtime-check-label">전체</span>
                 </button>
 
                 {PLAN_SECTION_OPTIONS.map((section) => {
                   const isSelected = normalizedSelectedPlanSections.includes(section.key);
-                  const isVisuallySelected = !allPlanSectionsSelected && isSelected;
 
                   return (
                     <button
                       key={section.key}
                       type="button"
-                      className={`runtime-filter-button is-plan-option ${isVisuallySelected ? 'is-selected' : ''}`}
+                      className={`runtime-filter-button is-plan-option runtime-check-button ${isSelected ? 'is-selected' : ''}`}
                       aria-pressed={isSelected}
                       onClick={(event) => {
                         event.preventDefault();
@@ -684,7 +689,8 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                         });
                       }}
                     >
-                      {section.label}
+                      <SelectionCheckbox checked={isSelected} />
+                      <span className="runtime-check-label">{section.label}</span>
                     </button>
                   );
                 })}
@@ -702,12 +708,13 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
               >
                 {showPlanDetails ? '▴' : '▾'}
               </button>
+              </div>
             </div>
           </div>
         </div>
 
         {normalizedSelectedPlanSections.length > 0 && showPlanDetails ? (
-          <div className="runtime-subfilter-board" role="group" aria-label="실행 계획 요소 세부 선택">
+          <div className="runtime-subfilter-board runtime-plan-shell-panel" role="group" aria-label="실행 계획 요소 세부 선택">
             {availableBucketFilters
               .filter((filter) => normalizedSelectedPlanSections.includes(filter.key))
               .map((filter) => {
@@ -720,7 +727,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                     <div className="runtime-subfilter-options is-bucket">
                       <button
                         type="button"
-                        className={`runtime-subfilter-button runtime-subfilter-all-button ${isAllSelected ? 'is-selected' : ''}`}
+                        className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${isAllSelected ? 'is-selected' : ''}`}
                         aria-pressed={isAllSelected}
                         onClick={(event) => {
                           event.preventDefault();
@@ -728,19 +735,19 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                           setSelectedBucketFilters((current) => ({ ...current, [filter.key]: isAllSelected ? [] : [...filter.options] }));
                         }}
                       >
-                        전체
+                        <SelectionCheckbox checked={isAllSelected} />
+                        <span className="runtime-check-label">전체</span>
                       </button>
 
                       <div className="runtime-subfilter-chip-grid">
                         {filter.options.map((option) => {
                           const tooltipId = `${filter.key}-${option}`;
                           const isSelected = selectedValues.includes(option);
-                          const isVisuallySelected = !isAllSelected && isSelected;
 
                           return (
                             <span
                               key={option}
-                              className={`runtime-subfilter-option ${isVisuallySelected ? 'is-selected' : ''}`}
+                              className="runtime-subfilter-option"
                               onMouseEnter={(event) => {
                                 scheduleFloatingTooltip(
                                   tooltipId,
@@ -752,7 +759,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                             >
                               <button
                                 type="button"
-                                className="runtime-subfilter-button runtime-subfilter-button-plain"
+                                className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
                                 aria-pressed={isSelected}
                                 onClick={(event) => {
                                   event.preventDefault();
@@ -765,7 +772,8 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                                   });
                                 }}
                               >
-                                {formatBucketDisplayLabel(option)}
+                                <SelectionCheckbox checked={isSelected} />
+                                <span className="runtime-check-label">{formatBucketDisplayLabel(option)}</span>
                               </button>
                             </span>
                           );
@@ -779,42 +787,52 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
             {normalizedSelectedPlanSections.includes('hint') ? (
               <div className="runtime-subfilter-row">
                 <span className="runtime-subfilter-label">Hint</span>
-                <div className="runtime-subfilter-options">
-                  {[
-                    { key: 'ALL', label: '전체' },
-                    { key: 'UNUSED', label: '미사용' },
-                    { key: 'USED', label: '사용' },
-                  ].map((option) => {
-                    const isSelected = option.key === 'ALL' ? allHintFiltersSelected : selectedHintFilters.includes(option.key as HintFilterValue);
-                    const isVisuallySelected = option.key === 'ALL' ? allHintFiltersSelected : !allHintFiltersSelected && isSelected;
+                <div className="runtime-subfilter-options is-bucket">
+                  <button
+                    type="button"
+                    className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${allHintFiltersSelected ? 'is-selected' : ''}`}
+                    aria-pressed={allHintFiltersSelected}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
+                    }}
+                  >
+                    <SelectionCheckbox checked={allHintFiltersSelected} />
+                    <span className="runtime-check-label">전체</span>
+                  </button>
 
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        className={`runtime-subfilter-button ${isVisuallySelected ? 'is-selected' : ''}`}
-                        aria-pressed={isSelected}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
+                  <div className="runtime-subfilter-chip-grid">
+                    {[
+                      { key: 'UNUSED', label: '미사용' },
+                      { key: 'USED', label: '사용' },
+                    ].map((option) => {
+                      const isSelected = selectedHintFilters.includes(option.key as HintFilterValue);
 
-                          if (option.key === 'ALL') {
-                            setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
-                            return;
-                          }
-
-                          setSelectedHintFilters((current) => {
-                            const nextValues = current.includes(option.key as HintFilterValue)
-                              ? current.filter((value) => value !== option.key)
-                              : [...current, option.key as HintFilterValue];
-                            return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
-                          });
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
+                      return (
+                        <span key={option.key} className="runtime-subfilter-option">
+                          <button
+                            type="button"
+                            className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
+                            aria-pressed={isSelected}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setSelectedHintFilters((current) => {
+                                const nextValues = current.includes(option.key as HintFilterValue)
+                                  ? current.filter((value) => value !== option.key)
+                                  : [...current, option.key as HintFilterValue];
+                                return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
+                              });
+                            }}
+                          >
+                            <SelectionCheckbox checked={isSelected} />
+                            <span className="runtime-check-label">{option.label}</span>
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -878,7 +896,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
                       {axisLabel ? <span className="runtime-axis-inline">{axisLabel}</span> : null}
                       {bucket ? (
                         <span className="ui-tooltip runtime-bar-tooltip">
-                          <span className="ui-tooltip-title">{`${Math.round(bucket.startValue)}-${Math.round(bucket.startValue + bucketModel.bucketSize - 1)}ms`}</span>
+                          <span className="ui-tooltip-title">{`${Math.round(bucket.startValue)}-${Math.round(bucket.startValue + bucketModel.bucketSize - 1)}`}</span>
                           <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
                         </span>
                       ) : null}
@@ -894,33 +912,37 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
       </div>
 
       <aside className="runtime-stats-panel" aria-label={`Cost \uD1B5\uACC4`}>
-        <div className="runtime-stat-grid is-compact">
-          {timeStatItems.map((item) => (
-            <div key={item.id} className="runtime-stat-item is-neutral">
-              <span className="runtime-stat-copy">
-                <span className="runtime-stat-meta">
-                  <span className="runtime-stat-label">{item.label}</span>
-                </span>
-              </span>
-              <span className="runtime-stat-value">{item.value}</span>
-            </div>
-          ))}
-        </div>
-
-        {showPlanDetails && selectedRatioItems.length > 0 ? (
-          <div className="runtime-stat-grid is-tuning">
-            {selectedRatioItems.map((item) => (
+        <section className="runtime-stat-section">
+          <div className="runtime-stat-grid is-compact">
+            {timeStatItems.map((item) => (
               <div key={item.id} className="runtime-stat-item is-neutral">
                 <span className="runtime-stat-copy">
                   <span className="runtime-stat-meta">
                     <span className="runtime-stat-label">{item.label}</span>
-                    <span className="runtime-stat-detail">{item.detail}</span>
                   </span>
                 </span>
                 <span className="runtime-stat-value">{item.value}</span>
               </div>
             ))}
           </div>
+        </section>
+
+        {showPlanDetails && selectedRatioItems.length > 0 ? (
+          <section className="runtime-stat-section is-ratio">
+            <div className="runtime-stat-grid is-tuning">
+              {selectedRatioItems.map((item) => (
+                <div key={item.id} className="runtime-stat-item is-neutral">
+                  <span className="runtime-stat-copy">
+                    <span className="runtime-stat-meta">
+                      <span className="runtime-stat-label">{item.label}</span>
+                      <span className="runtime-stat-detail">{item.detail}</span>
+                    </span>
+                  </span>
+                  <span className="runtime-stat-value">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </section>
         ) : null}
       </aside>
 

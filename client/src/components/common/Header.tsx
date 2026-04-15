@@ -11,8 +11,13 @@ import {
 } from '../../lib/navigation';
 import { logout as requestLogout } from '../../lib/authApi';
 import logoImage from '../../assets/logo.png';
-import { fetchVisibleMarqueeMessages, subscribeMarqueeChange } from '../../lib/marquee';
 import { useMockSession } from '../../lib/session';
+import {
+  DEFAULT_NOTIFICATION_TEXT,
+  NOTIFICATION_UI_TEXT_KEY,
+  refreshCachedUiTexts,
+  useUiTextValue,
+} from '../../lib/uiText';
 import { mockNotifications } from '../../mocks/notifications';
 import './Header.css';
 
@@ -53,13 +58,12 @@ function formatNotificationTime(value: string) {
   return `${month}-${day} ${hours}:${minutes}`;
 }
 
-const HEADER_MARQUEE_MESSAGE = 'Quertimizer에 오신 것을 환영합니다.';
 export default function Header() {
-  const { isAuthenticated, isAdmin, role, logout } = useMockSession();
+  const { isAuthenticated, isAdmin, logout } = useMockSession();
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
-  const [marqueeMessage, setMarqueeMessage] = useState(HEADER_MARQUEE_MESSAGE);
+  const marqueeMessage = useUiTextValue(NOTIFICATION_UI_TEXT_KEY, DEFAULT_NOTIFICATION_TEXT);
   const [marqueeMetrics, setMarqueeMetrics] = useState<{
     startOffset: number;
     endOffset: number;
@@ -74,17 +78,17 @@ export default function Header() {
     ? 'ranking'
     : pathname.startsWith(GUIDE_PATH)
       ? 'guide'
-    : pathname.startsWith(ADMIN_PATH)
-      ? 'admin'
-      : pathname.startsWith(COMMUNITY_PATH)
-        ? 'community'
-        : pathname.startsWith(PROBLEMS_PATH)
-          ? 'problems'
-          : null;
+      : pathname.startsWith(ADMIN_PATH)
+        ? 'admin'
+        : pathname.startsWith(COMMUNITY_PATH)
+          ? 'community'
+          : pathname.startsWith(PROBLEMS_PATH)
+            ? 'problems'
+            : null;
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => notification.isUnread).length,
-    [notifications]
+    [notifications],
   );
   const isFloatingHeaderVisible = true;
 
@@ -119,39 +123,16 @@ export default function Header() {
   }, [isNotificationOpen]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadMarqueeMessage() {
-      try {
-        const messages = await fetchVisibleMarqueeMessages();
-
-        if (cancelled) {
-          return;
-        }
-
-        setMarqueeMessage(messages.length > 0 ? messages.join(' · ') : HEADER_MARQUEE_MESSAGE);
-      } catch {
-        if (!cancelled) {
-          setMarqueeMessage(HEADER_MARQUEE_MESSAGE);
-        }
-      }
-    }
-
-    void loadMarqueeMessage();
+    void refreshCachedUiTexts();
 
     const intervalId = window.setInterval(() => {
-      void loadMarqueeMessage();
+      void refreshCachedUiTexts();
     }, 30_000);
-    const unsubscribe = subscribeMarqueeChange(() => {
-      void loadMarqueeMessage();
-    });
 
     return () => {
-      cancelled = true;
       window.clearInterval(intervalId);
-      unsubscribe();
     };
-  }, [isAuthenticated, role]);
+  }, []);
 
   useEffect(() => {
     const marqueeShell = marqueeShellRef.current;
@@ -217,7 +198,7 @@ export default function Header() {
       currentNotifications.map((notification) => ({
         ...notification,
         isUnread: false,
-      }))
+      })),
     );
   }
 
@@ -229,8 +210,8 @@ export default function Header() {
               ...notification,
               isUnread: false,
             }
-          : notification
-      )
+          : notification,
+      ),
     );
 
     setIsNotificationOpen(false);
@@ -276,7 +257,7 @@ export default function Header() {
               type="button"
               className="brand-button"
               onClick={() => navigate(isAuthenticated ? PROBLEMS_PATH : '/')}
-              aria-label="quertimizer 홈으로 이동"
+              aria-label="Quertimizer 홈으로 이동"
             >
               <img className="brand-logo" src={logoImage} alt="quertimizer" />
             </button>
@@ -395,7 +376,11 @@ export default function Header() {
                   ) : null}
                 </div>
 
-                <button type="button" className="header-link-button profile-link-button" onClick={() => navigate(getProfilePath())}>
+                <button
+                  type="button"
+                  className="header-link-button profile-link-button"
+                  onClick={() => navigate(getProfilePath())}
+                >
                   프로필
                 </button>
                 <button

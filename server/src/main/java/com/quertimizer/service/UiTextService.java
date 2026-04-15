@@ -11,7 +11,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -21,6 +24,7 @@ import java.util.Optional;
 public class UiTextService {
 
     private static final String DEFAULT_LANGUAGE = "default";
+    private static final String NOTIFICATION_KEY = "NOTIFICATION";
     private static final String DUPLICATED_UI_TEXT_MESSAGE = "이미 존재하는 UI 텍스트다.";
     private static final String UI_TEXT_NOT_FOUND_MESSAGE = "존재하지 않는 UI 텍스트다.";
     private static final String VALUE_REQUIRED_MESSAGE = "값이 필요하다.";
@@ -30,8 +34,33 @@ public class UiTextService {
 
     private final UiTextRepository uiTextRepository;
 
+    public List<UiTextRes> getUiTexts(String language) {
+        String normalizedLanguage = normalizeLanguage(language);
+        Map<String, UiText> resolvedUiTexts = new LinkedHashMap<>();
+
+        uiTextRepository.findAllByOrderByIdKeyAscIdLanguageAsc().stream()
+                .filter(uiText ->
+                        normalizedLanguage.equals(uiText.getLanguage()) || DEFAULT_LANGUAGE.equals(uiText.getLanguage()))
+                .forEach(uiText -> {
+                    if (DEFAULT_LANGUAGE.equals(uiText.getLanguage())) {
+                        resolvedUiTexts.putIfAbsent(uiText.getKey(), uiText);
+                        return;
+                    }
+
+                    resolvedUiTexts.put(uiText.getKey(), uiText);
+                });
+
+        return resolvedUiTexts.values().stream()
+                .map(UiTextRes::from)
+                .toList();
+    }
+
     public List<UiTextRes> getAdminUiTexts() {
         return uiTextRepository.findAllByOrderByIdKeyAscIdLanguageAsc().stream()
+                .sorted(Comparator
+                        .comparing((UiText uiText) -> !NOTIFICATION_KEY.equals(uiText.getKey()))
+                        .thenComparing(UiText::getKey)
+                        .thenComparing(UiText::getLanguage))
                 .map(UiTextRes::from)
                 .toList();
     }

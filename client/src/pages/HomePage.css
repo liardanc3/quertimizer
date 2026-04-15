@@ -766,7 +766,7 @@
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.58rem;
   width: 100%;
   margin-top: 1rem;
 }
@@ -810,7 +810,10 @@
   color: #64748b;
   font-size: 0.78rem;
   font-weight: 700;
-  margin-left: 0.12rem;
+  min-width: 4rem;
+  letter-spacing: 0.02em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-page .problem-pagination-meta-button {
@@ -822,7 +825,7 @@
 }
 
 .home-page .problem-pagination-meta-input {
-  width: 3.4rem;
+  width: 4rem;
   min-height: 1.4rem;
   padding: 0 0.24rem;
   border: 1px solid #d7e2ef;
@@ -1159,12 +1162,27 @@ body.handle-setup-locked {
 }
 
 @media (prefers-color-scheme: dark) {
+  .home-page .home-problem-search-form .home-problem-search-field,
+  .home-page .home-problem-search-form .home-problem-search-input {
+    background: var(--surface-muted);
+    color: var(--ink-strong);
+  }
+
+  .home-page .home-problem-search-form .home-problem-search-input {
+    border-color: var(--line-strong);
+  }
+
+  .home-page .home-problem-search-form .home-problem-search-input::placeholder {
+    color: var(--ink-faint);
+  }
+
   .home-page .home-problem-search-form .home-problem-search-button,
   .home-page .problem-control-label,
   .home-page .problem-variance-value-separator,
   .home-page .problem-variance-value-unit,
   .home-page .problem-sort-toggle-button,
   .home-page .problem-status-check,
+  .home-page .problem-status-check-text,
   .home-page .problem-solved-count,
   .home-page .handle-setup-copy {
     color: var(--ink-subtle);
@@ -1189,6 +1207,7 @@ body.handle-setup-locked {
 
   .home-page .problem-sort-toggle-button:hover,
   .home-page .problem-sort-toggle-button.is-selected,
+  .home-page .problem-status-check-input:checked ~ .problem-status-check-text,
   .home-page .problem-number,
   .home-page .problem-title {
     color: var(--ink-strong);
@@ -1228,6 +1247,11 @@ body.handle-setup-locked {
     border-color: var(--line-soft);
     background: var(--surface-panel);
     box-shadow: none;
+  }
+
+  .home-page .problem-card-link-area:hover .problem-number,
+  .home-page .problem-card-link-area:hover .problem-title {
+    color: var(--accent-ink);
   }
 
   .home-page .handle-setup-backdrop {

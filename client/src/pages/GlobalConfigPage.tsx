@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { deleteUiText, fetchAdminUiTexts, updateUiText, type UiTextData } from '../lib/uiText';
+import { createUiText, deleteUiText, fetchAdminUiTexts, updateUiText, type UiTextData } from '../lib/uiText';
 
 interface EditableUiTextRow extends UiTextData {
+  rowId: string;
   originalKey: string;
   originalLanguage: string;
   originalValue: string;
   originalDescription: string;
+  isNew: boolean;
   isEditing: boolean;
   isSaving: boolean;
   errorMessage: string | null;
@@ -23,31 +25,62 @@ const ADMIN_CONFIG_COLUMN_WEIGHTS = [0.95, 3.7, 0.85, 3.3];
 const ADMIN_CONFIG_MINIMUM_WEIGHTS = [0.78, 2, 0.72, 1.85];
 const ADMIN_CONFIG_ACTIONS_WIDTH = 68;
 const ADMIN_CONFIG_COLUMN_GAP = 6;
+const NOTIFICATION_UI_TEXT_KEY = 'NOTIFICATION';
 
 function toEditableRow(uiText: UiTextData): EditableUiTextRow {
   return {
     ...uiText,
+    rowId: `${uiText.key}:${uiText.language}`,
     originalKey: uiText.key,
     originalLanguage: uiText.language,
     originalValue: uiText.value,
     originalDescription: uiText.description,
+    isNew: false,
     isEditing: false,
     isSaving: false,
     errorMessage: null,
   };
 }
 
+function createEditableRowId() {
+  return `new:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+}
+
+function createNewRow(existingKeys: string[]): EditableUiTextRow {
+  return {
+    rowId: createEditableRowId(),
+    key: existingKeys[0] ?? '',
+    value: '',
+    language: '',
+    description: '',
+    originalKey: '',
+    originalLanguage: '',
+    originalValue: '',
+    originalDescription: '',
+    isNew: true,
+    isEditing: true,
+    isSaving: false,
+    errorMessage: null,
+  };
+}
+
 function sortUiTextRows(rows: EditableUiTextRow[]) {
+  function getNotificationPriority(row: EditableUiTextRow) {
+    return row.key === NOTIFICATION_UI_TEXT_KEY ? 0 : 1;
+  }
+
   return [...rows].sort(
     (left, right) =>
+      Number(right.isNew) - Number(left.isNew) ||
+      getNotificationPriority(left) - getNotificationPriority(right) ||
       left.key.localeCompare(right.key) ||
       left.language.localeCompare(right.language) ||
       left.value.localeCompare(right.value),
   );
 }
 
-function isSameRow(row: EditableUiTextRow, key: string, language: string) {
-  return row.originalKey === key && row.originalLanguage === language;
+function isSameRow(row: EditableUiTextRow, rowId: string) {
+  return row.rowId === rowId;
 }
 
 function isDeletableLanguage(language: string) {
@@ -110,6 +143,21 @@ function DeleteIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        d="M10 4.75v10.5M4.75 10h10.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
       />
     </svg>
   );
@@ -244,10 +292,10 @@ export function GlobalConfigContent() {
     };
   }, [resizeState]);
 
-  function handleRowChange(originalKey: string, originalLanguage: string, field: UiTextField, value: string) {
+  function handleRowChange(rowId: string, field: UiTextField, value: string) {
     setUiTextRows((currentRows) =>
       currentRows.map((row) =>
-        isSameRow(row, originalKey, originalLanguage)
+        isSameRow(row, rowId)
           ? {
               ...row,
               [field]: value,
@@ -258,10 +306,28 @@ export function GlobalConfigContent() {
     );
   }
 
-  function handleStartEditing(originalKey: string, originalLanguage: string) {
+  function handleAddUiText() {
+    setUiTextRows((currentRows) => {
+      if (currentRows.some((row) => row.isNew)) {
+        return currentRows;
+      }
+
+      const existingKeys = Array.from(
+        new Set(currentRows.filter((row) => !row.isNew).map((row) => row.key)),
+      ).sort((left, right) => left.localeCompare(right));
+
+      if (existingKeys.length === 0) {
+        return currentRows;
+      }
+
+      return sortUiTextRows([createNewRow(existingKeys), ...currentRows]);
+    });
+  }
+
+  function handleStartEditing(rowId: string) {
     setUiTextRows((currentRows) =>
       currentRows.map((row) =>
-        isSameRow(row, originalKey, originalLanguage)
+        isSameRow(row, rowId)
           ? {
               ...row,
               isEditing: true,
@@ -272,10 +338,19 @@ export function GlobalConfigContent() {
     );
   }
 
-  function handleCancelEditing(originalKey: string, originalLanguage: string) {
-    setUiTextRows((currentRows) =>
-      currentRows.map((row) =>
-        isSameRow(row, originalKey, originalLanguage)
+  function handleCancelEditing(rowId: string) {
+    setUiTextRows((currentRows) => {
+      const targetRow = currentRows.find((row) => isSameRow(row, rowId));
+      if (!targetRow) {
+        return currentRows;
+      }
+
+      if (targetRow.isNew) {
+        return currentRows.filter((row) => !isSameRow(row, rowId));
+      }
+
+      return currentRows.map((row) =>
+        isSameRow(row, rowId)
           ? {
               ...row,
               key: row.originalKey,
@@ -287,19 +362,19 @@ export function GlobalConfigContent() {
               errorMessage: null,
             }
           : row,
-      ),
-    );
+      );
+    });
   }
 
-  async function handleUpdateUiText(originalKey: string, originalLanguage: string) {
-    const targetRow = uiTextRows.find((row) => isSameRow(row, originalKey, originalLanguage));
+  async function handleSaveUiText(rowId: string) {
+    const targetRow = uiTextRows.find((row) => isSameRow(row, rowId));
     if (!targetRow) {
       return;
     }
 
     setUiTextRows((currentRows) =>
       currentRows.map((row) =>
-        isSameRow(row, originalKey, originalLanguage)
+        isSameRow(row, rowId)
           ? {
               ...row,
               isEditing: true,
@@ -311,24 +386,31 @@ export function GlobalConfigContent() {
     );
 
     try {
-      const updatedUiText = await updateUiText(originalKey, originalLanguage, {
-        key: targetRow.key,
-        value: targetRow.value,
-        language: targetRow.language,
-        description: targetRow.description,
-      });
+      const nextUiText = targetRow.isNew
+        ? await createUiText({
+            key: targetRow.key,
+            value: targetRow.value,
+            language: targetRow.language,
+            description: targetRow.description,
+          })
+        : await updateUiText(targetRow.originalKey, targetRow.originalLanguage, {
+            key: targetRow.key,
+            value: targetRow.value,
+            language: targetRow.language,
+            description: targetRow.description,
+          });
 
       setUiTextRows((currentRows) =>
         sortUiTextRows(
           currentRows.map((row) =>
-            isSameRow(row, originalKey, originalLanguage) ? toEditableRow(updatedUiText) : row,
+            isSameRow(row, rowId) ? toEditableRow(nextUiText) : row,
           ),
         ),
       );
     } catch (error) {
       setUiTextRows((currentRows) =>
         currentRows.map((row) =>
-          isSameRow(row, originalKey, originalLanguage)
+          isSameRow(row, rowId)
             ? {
                 ...row,
                 isEditing: true,
@@ -341,10 +423,15 @@ export function GlobalConfigContent() {
     }
   }
 
-  async function handleDeleteUiText(originalKey: string, originalLanguage: string) {
+  async function handleDeleteUiText(rowId: string) {
+    const targetRow = uiTextRows.find((row) => isSameRow(row, rowId));
+    if (!targetRow) {
+      return;
+    }
+
     setUiTextRows((currentRows) =>
       currentRows.map((row) =>
-        isSameRow(row, originalKey, originalLanguage)
+        isSameRow(row, rowId)
           ? {
               ...row,
               isSaving: true,
@@ -355,15 +442,15 @@ export function GlobalConfigContent() {
     );
 
     try {
-      await deleteUiText(originalKey, originalLanguage);
+      await deleteUiText(targetRow.originalKey, targetRow.originalLanguage);
 
       setUiTextRows((currentRows) =>
-        currentRows.filter((row) => !isSameRow(row, originalKey, originalLanguage)),
+        currentRows.filter((row) => !isSameRow(row, rowId)),
       );
     } catch (error) {
       setUiTextRows((currentRows) =>
         currentRows.map((row) =>
-          isSameRow(row, originalKey, originalLanguage)
+          isSameRow(row, rowId)
             ? {
                 ...row,
                 isSaving: false,
@@ -379,6 +466,10 @@ export function GlobalConfigContent() {
     columnWidths.length === ADMIN_CONFIG_COLUMN_WEIGHTS.length
       ? columnWidths
       : resolveColumnWidths(0, ADMIN_CONFIG_COLUMN_WEIGHTS);
+  const availableKeys = Array.from(
+    new Set(uiTextRows.filter((row) => !row.isNew).map((row) => row.key)),
+  ).sort((left, right) => left.localeCompare(right));
+  const hasPendingNewRow = uiTextRows.some((row) => row.isNew);
   const columnTemplate = buildColumnTemplate(resolvedColumnWidths);
   const rowTemplate = `${columnTemplate} ${ADMIN_CONFIG_ACTIONS_WIDTH}px`;
   const rowGap = `${ADMIN_CONFIG_COLUMN_GAP}px`;
@@ -412,6 +503,18 @@ export function GlobalConfigContent() {
 
   return (
     <section className="admin-config-panel">
+      <div className="admin-config-toolbar">
+        <button
+          type="button"
+          className="btn text admin-config-icon-button admin-config-add-button"
+          onClick={handleAddUiText}
+          disabled={isLoading || hasPendingNewRow || availableKeys.length === 0}
+          aria-label="추가"
+          title="추가"
+        >
+          <PlusIcon />
+        </button>
+      </div>
 
       {loadErrorMessage ? <p className="admin-config-feedback is-error">{loadErrorMessage}</p> : null}
 
@@ -441,17 +544,23 @@ export function GlobalConfigContent() {
           </div>
 
           {uiTextRows.map((row) => (
-            <div key={`${row.originalKey}:${row.originalLanguage}`} className="admin-config-row" role="row">
+            <div key={row.rowId} className="admin-config-row" role="row">
               <div className="admin-config-row-grid" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
                 <div className="admin-config-field">
                   <span className="admin-config-field-label">key</span>
-                  {row.isEditing ? (
-                    <input
-                      className="text-field admin-config-input"
+                  {row.isNew ? (
+                    <select
+                      className="text-field admin-config-input admin-config-select"
                       value={row.key}
-                      onChange={(event) => handleRowChange(row.originalKey, row.originalLanguage, 'key', event.target.value)}
+                      onChange={(event) => handleRowChange(row.rowId, 'key', event.target.value)}
                       disabled={row.isSaving}
-                    />
+                    >
+                      {availableKeys.map((keyOption) => (
+                        <option key={keyOption} value={keyOption}>
+                          {keyOption}
+                        </option>
+                      ))}
+                    </select>
                   ) : (
                     <div className="admin-config-display">{row.key}</div>
                   )}
@@ -467,7 +576,7 @@ export function GlobalConfigContent() {
                       value={row.value}
                       onChange={(event) => {
                         resizeTextareaHeight(event.currentTarget);
-                        handleRowChange(row.originalKey, row.originalLanguage, 'value', event.currentTarget.value);
+                        handleRowChange(row.rowId, 'value', event.currentTarget.value);
                       }}
                       disabled={row.isSaving}
                     />
@@ -483,7 +592,7 @@ export function GlobalConfigContent() {
                     <input
                       className="text-field admin-config-input"
                       value={row.language}
-                      onChange={(event) => handleRowChange(row.originalKey, row.originalLanguage, 'language', event.target.value)}
+                      onChange={(event) => handleRowChange(row.rowId, 'language', event.target.value)}
                       disabled={row.isSaving}
                     />
                   ) : (
@@ -498,9 +607,7 @@ export function GlobalConfigContent() {
                     <input
                       className="text-field admin-config-input"
                       value={row.description}
-                      onChange={(event) =>
-                        handleRowChange(row.originalKey, row.originalLanguage, 'description', event.target.value)
-                      }
+                      onChange={(event) => handleRowChange(row.rowId, 'description', event.target.value)}
                       disabled={row.isSaving}
                     />
                   ) : (
@@ -514,7 +621,7 @@ export function GlobalConfigContent() {
                       <button
                         type="button"
                         className="btn text admin-config-icon-button"
-                        onClick={() => void handleUpdateUiText(row.originalKey, row.originalLanguage)}
+                        onClick={() => void handleSaveUiText(row.rowId)}
                         disabled={row.isSaving}
                         aria-label="저장"
                         title="저장"
@@ -524,7 +631,7 @@ export function GlobalConfigContent() {
                       <button
                         type="button"
                         className="btn text admin-config-icon-button"
-                        onClick={() => handleCancelEditing(row.originalKey, row.originalLanguage)}
+                        onClick={() => handleCancelEditing(row.rowId)}
                         disabled={row.isSaving}
                         aria-label="취소"
                         title="취소"
@@ -537,7 +644,7 @@ export function GlobalConfigContent() {
                       <button
                         type="button"
                         className="btn text admin-config-icon-button"
-                        onClick={() => handleStartEditing(row.originalKey, row.originalLanguage)}
+                        onClick={() => handleStartEditing(row.rowId)}
                         disabled={row.isSaving}
                         aria-label="수정"
                         title="수정"
@@ -548,7 +655,7 @@ export function GlobalConfigContent() {
                         <button
                           type="button"
                           className="btn text admin-config-icon-button admin-config-delete-button"
-                          onClick={() => void handleDeleteUiText(row.originalKey, row.originalLanguage)}
+                          onClick={() => void handleDeleteUiText(row.rowId)}
                           disabled={row.isSaving}
                           aria-label="삭제"
                           title="삭제"

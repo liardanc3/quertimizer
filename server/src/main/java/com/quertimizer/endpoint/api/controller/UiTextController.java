@@ -23,6 +23,13 @@ public class UiTextController {
 
     private final UiTextService uiTextService;
 
+    @GetMapping("/ui-texts")
+    public ResponseEntity<List<UiTextRes>> getUiTexts(@RequestParam(defaultValue = "default") String language) {
+
+        // UI 텍스트 전체 목록 조회
+        return ResponseEntity.ok(uiTextService.getUiTexts(language));
+    }
+
     @GetMapping("/ui-texts/{key}")
     public ResponseEntity<UiTextRes> getUiText(@PathVariable String key,
                                                @RequestParam(defaultValue = "default") String language) {

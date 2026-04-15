@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { getApiBaseUrl } from './authApi';
 
 interface UiTextResponse {
@@ -19,8 +19,26 @@ export interface UiTextData {
   description: string;
 }
 
+interface UiTextSnapshot {
+  language: string;
+  isReady: boolean;
+  items: Record<string, UiTextData>;
+}
+
 export const DEFAULT_SITE_TITLE = 'Quertimizer';
-const TITLE_UI_TEXT_KEY = 'TITLE';
+export const DEFAULT_NOTIFICATION_TEXT = 'Check out the latest updates from Quertimizer.';
+export const TITLE_UI_TEXT_KEY = 'TITLE';
+export const NOTIFICATION_UI_TEXT_KEY = 'NOTIFICATION';
+
+const DEFAULT_LANGUAGE = 'default';
+const UI_TEXT_CHANGE_EVENT = 'quertimizer:ui-text-change';
+
+let uiTextSnapshot: UiTextSnapshot = {
+  language: DEFAULT_LANGUAGE,
+  isReady: false,
+  items: {},
+};
+let preloadUiTextsPromise: Promise<void> | null = null;
 
 function isKoreanLocale(value: string) {
   const normalizedValue = value.toLowerCase().replace(/_/g, '-');
@@ -55,6 +73,42 @@ function toUiTextData(data: UiTextResponse): UiTextData {
   };
 }
 
+function emitUiTextChange() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new Event(UI_TEXT_CHANGE_EVENT));
+}
+
+function updateUiTextSnapshot(nextSnapshot: UiTextSnapshot) {
+  uiTextSnapshot = nextSnapshot;
+  emitUiTextChange();
+}
+
+function createUiTextMap(uiTexts: UiTextData[]) {
+  return uiTexts.reduce<Record<string, UiTextData>>((nextItems, uiText) => {
+    nextItems[uiText.key] = uiText;
+    return nextItems;
+  }, {});
+}
+
+function subscribeUiTexts(callback: () => void) {
+  if (typeof window === 'undefined') {
+    return () => undefined;
+  }
+
+  window.addEventListener(UI_TEXT_CHANGE_EVENT, callback);
+
+  return () => {
+    window.removeEventListener(UI_TEXT_CHANGE_EVENT, callback);
+  };
+}
+
+function getUiTextSnapshot() {
+  return uiTextSnapshot;
+}
+
 async function getErrorMessage(response: Response, fallbackMessage: string) {
   try {
     const data = (await response.json()) as ExceptionResponse;
@@ -68,9 +122,13 @@ async function getErrorMessage(response: Response, fallbackMessage: string) {
   return fallbackMessage;
 }
 
+function normalizeUiTextLanguage(language: string) {
+  return language.trim() !== '' ? language : DEFAULT_LANGUAGE;
+}
+
 export function resolveUiTextLanguage() {
   if (typeof navigator === 'undefined') {
-    return 'default';
+    return DEFAULT_LANGUAGE;
   }
 
   const localeCandidates = [
@@ -81,7 +139,37 @@ export function resolveUiTextLanguage() {
       : undefined,
   ].filter((value): value is string => typeof value === 'string' && value.trim() !== '');
 
-  return localeCandidates.some(isKoreanLocale) || isKoreanTimeZone() ? 'kr' : 'default';
+  return localeCandidates.some(isKoreanLocale) || isKoreanTimeZone() ? 'kr' : DEFAULT_LANGUAGE;
+}
+
+export async function fetchUiTexts(language: string): Promise<UiTextData[]> {
+  let response: Response;
+
+  const searchParams = new URLSearchParams({ language });
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/ui-texts?${searchParams.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error('Failed to fetch UI texts.');
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch UI texts.');
+  }
+
+  try {
+    const data = (await response.json()) as UiTextResponse[];
+    if (!Array.isArray(data)) {
+      throw new Error();
+    }
+
+    return data.map(toUiTextData);
+  } catch {
+    throw new Error('Failed to parse UI texts.');
+  }
 }
 
 export async function fetchUiText(key: string, language: string): Promise<UiTextData> {
@@ -109,6 +197,44 @@ export async function fetchUiText(key: string, language: string): Promise<UiText
   }
 }
 
+export async function preloadUiTexts(language = resolveUiTextLanguage(), force = false) {
+  const requestedLanguage = normalizeUiTextLanguage(language);
+  const currentItems = uiTextSnapshot.items;
+
+  if (!force && uiTextSnapshot.isReady && uiTextSnapshot.language === requestedLanguage) {
+    return;
+  }
+
+  if (!force && preloadUiTextsPromise != null && uiTextSnapshot.language === requestedLanguage) {
+    return preloadUiTextsPromise;
+  }
+
+  preloadUiTextsPromise = (async () => {
+    try {
+      const uiTexts = await fetchUiTexts(requestedLanguage);
+      updateUiTextSnapshot({
+        language: requestedLanguage,
+        isReady: true,
+        items: createUiTextMap(uiTexts),
+      });
+    } catch {
+      updateUiTextSnapshot({
+        language: requestedLanguage,
+        isReady: true,
+        items: force ? currentItems : {},
+      });
+    } finally {
+      preloadUiTextsPromise = null;
+    }
+  })();
+
+  return preloadUiTextsPromise;
+}
+
+export async function refreshCachedUiTexts(language = uiTextSnapshot.isReady ? uiTextSnapshot.language : resolveUiTextLanguage()) {
+  await preloadUiTexts(language, true);
+}
+
 export async function fetchAdminUiTexts(): Promise<UiTextData[]> {
   let response: Response;
 
@@ -118,11 +244,11 @@ export async function fetchAdminUiTexts(): Promise<UiTextData[]> {
       credentials: 'include',
     });
   } catch {
-    throw new Error('전역 상수 목록을 불러오지 못했다.');
+    throw new Error('Failed to fetch admin UI texts.');
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, '전역 상수 목록을 불러오지 못했다.'));
+    throw new Error(await getErrorMessage(response, 'Failed to fetch admin UI texts.'));
   }
 
   try {
@@ -133,7 +259,7 @@ export async function fetchAdminUiTexts(): Promise<UiTextData[]> {
 
     return data.map(toUiTextData);
   } catch {
-    throw new Error('전역 상수 목록 응답을 해석하지 못했다.');
+    throw new Error('Failed to parse admin UI texts.');
   }
 }
 
@@ -150,17 +276,19 @@ export async function createUiText(payload: UiTextData): Promise<UiTextData> {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error('전역 상수를 생성하지 못했다.');
+    throw new Error('Failed to create UI text.');
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, '전역 상수를 생성하지 못했다.'));
+    throw new Error(await getErrorMessage(response, 'Failed to create UI text.'));
   }
 
   try {
-    return toUiTextData((await response.json()) as UiTextResponse);
+    const nextUiText = toUiTextData((await response.json()) as UiTextResponse);
+    void refreshCachedUiTexts();
+    return nextUiText;
   } catch {
-    throw new Error('전역 상수 생성 응답을 해석하지 못했다.');
+    throw new Error('Failed to parse created UI text.');
   }
 }
 
@@ -177,17 +305,19 @@ export async function updateUiText(originalKey: string, originalLanguage: string
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error('전역 상수를 수정하지 못했다.');
+    throw new Error('Failed to update UI text.');
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, '전역 상수를 수정하지 못했다.'));
+    throw new Error(await getErrorMessage(response, 'Failed to update UI text.'));
   }
 
   try {
-    return toUiTextData((await response.json()) as UiTextResponse);
+    const nextUiText = toUiTextData((await response.json()) as UiTextResponse);
+    void refreshCachedUiTexts();
+    return nextUiText;
   } catch {
-    throw new Error('전역 상수 수정 응답을 해석하지 못했다.');
+    throw new Error('Failed to parse updated UI text.');
   }
 }
 
@@ -200,42 +330,33 @@ export async function deleteUiText(key: string, language: string): Promise<void>
       credentials: 'include',
     });
   } catch {
-    throw new Error('전역 상수를 삭제하지 못했다.');
+    throw new Error('Failed to delete UI text.');
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, '전역 상수를 삭제하지 못했다.'));
+    throw new Error(await getErrorMessage(response, 'Failed to delete UI text.'));
   }
+
+  void refreshCachedUiTexts();
+}
+
+export function useUiTextValue(key: string, fallbackValue: string) {
+  const snapshot = useSyncExternalStore(subscribeUiTexts, getUiTextSnapshot, () => ({
+    language: DEFAULT_LANGUAGE,
+    isReady: false,
+    items: {},
+  }));
+
+  useEffect(() => {
+    void preloadUiTexts();
+  }, []);
+
+  const uiText = snapshot.items[key];
+  return typeof uiText?.value === 'string' && uiText.value.trim() !== '' ? uiText.value : fallbackValue;
 }
 
 export function useHomeSiteTitle(overrideTitle?: string | null) {
-  const [siteTitle, setSiteTitle] = useState(DEFAULT_SITE_TITLE);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSiteTitle() {
-      try {
-        const uiText = await fetchUiText(TITLE_UI_TEXT_KEY, resolveUiTextLanguage());
-
-        if (cancelled) {
-          return;
-        }
-
-        setSiteTitle(uiText.value);
-      } catch {
-        if (!cancelled) {
-          setSiteTitle(DEFAULT_SITE_TITLE);
-        }
-      }
-    }
-
-    void loadSiteTitle();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const siteTitle = useUiTextValue(TITLE_UI_TEXT_KEY, DEFAULT_SITE_TITLE);
 
   useEffect(() => {
     document.title = overrideTitle && overrideTitle.trim() !== '' ? overrideTitle : siteTitle;

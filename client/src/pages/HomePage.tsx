@@ -397,29 +397,6 @@ export default function HomePage() {
               {'이전'}
             </button>
 
-            <div className="problem-page-numbers">
-              {Array.from({ length: problemPage.totalPages }, (_, index) => index + 1).map((page) => (
-                <button
-                  key={page}
-                  type="button"
-                  className={`mini-toggle problem-page-button ${page === problemPage.currentPage ? 'is-selected' : ''}`}
-                  aria-current={page === problemPage.currentPage ? 'page' : undefined}
-                  onClick={() => setRequestedPage(page)}
-                >
-                  {page}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.min(problemPage.totalPages, page + 1))}
-              disabled={problemPage.currentPage === problemPage.totalPages}
-            >
-              {'다음'}
-            </button>
-
             {isPageJumpEditing ? (
               <input
                 type="text"
@@ -456,9 +433,18 @@ export default function HomePage() {
                   setIsPageJumpEditing(true);
                 }}
               >
-                {problemPage.currentPage}/{problemPage.totalPages}
+                {`${problemPage.currentPage} / ${problemPage.totalPages}`}
               </button>
             )}
+
+            <button
+              type="button"
+              className="mini-toggle problem-page-button"
+              onClick={() => setRequestedPage((page) => Math.min(problemPage.totalPages, page + 1))}
+              disabled={problemPage.currentPage === problemPage.totalPages}
+            >
+              {'다음'}
+            </button>
           </div>
         ) : null}
       </section>

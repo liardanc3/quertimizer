@@ -2,11 +2,10 @@ import { useState } from 'react';
 import { useMockSession } from '../lib/session';
 import { AuthManageContent } from './AuthManagePage';
 import { GlobalConfigContent } from './GlobalConfigPage';
-import { MarqueeManageContent } from './MarqueeManagePage';
 import { ProblemCreateContent } from './ProblemCreatePage';
 import './AdminPage.css';
 
-type AdminTab = 'problemCreate' | 'globalConfig' | 'permissionManagement' | 'marqueeManagement';
+type AdminTab = 'problemCreate' | 'globalConfig' | 'permissionManagement';
 
 export default function AdminPage() {
   const { isReady, isAuthenticated, isAdmin } = useMockSession();
@@ -16,7 +15,7 @@ export default function AdminPage() {
     return (
       <div className="page-stack">
         <section className="panel-card">
-          <p className="content-text">관리자 화면을 준비 중이다.</p>
+          <p className="content-text">관리자 화면을 불러오는 중입니다.</p>
         </section>
       </div>
     );
@@ -26,7 +25,7 @@ export default function AdminPage() {
     return (
       <div className="page-stack">
         <section className="panel-card">
-          <p className="content-text">관리자만 접근할 수 있다.</p>
+          <p className="content-text">관리자만 접근할 수 있습니다.</p>
         </section>
       </div>
     );
@@ -63,15 +62,6 @@ export default function AdminPage() {
           >
             권한 관리
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedTab === 'marqueeManagement'}
-            className={`admin-page-tab ${selectedTab === 'marqueeManagement' ? 'is-selected' : ''}`}
-            onClick={() => setSelectedTab('marqueeManagement')}
-          >
-            전광판 관리
-          </button>
         </div>
       </div>
 
@@ -79,8 +69,6 @@ export default function AdminPage() {
         <ProblemCreateContent />
       ) : selectedTab === 'globalConfig' ? (
         <GlobalConfigContent />
-      ) : selectedTab === 'marqueeManagement' ? (
-        <MarqueeManageContent />
       ) : (
         <AuthManageContent />
       )}
