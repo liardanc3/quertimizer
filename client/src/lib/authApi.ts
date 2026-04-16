@@ -1,8 +1,18 @@
-const DEFAULT_API_BASE_URL = 'http://localhost:8080';
-
 function isLoopbackHostname(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1';
 }
+
+function normalizeApiBaseUrl(value: string) {
+  return value.replace(/\/+$/, '');
+}
+
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const API_BASE_URL =
+  configuredApiBaseUrl && configuredApiBaseUrl.length > 0
+    ? normalizeApiBaseUrl(configuredApiBaseUrl)
+    : typeof window !== 'undefined'
+      ? normalizeApiBaseUrl(window.location.origin)
+      : '';
 
 export interface LoginPayload {
   email: string;
@@ -109,21 +119,17 @@ export interface SessionMeResult {
 }
 
 export function getApiBaseUrl() {
-  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-  const baseUrl = configuredBaseUrl && configuredBaseUrl.length > 0 ? configuredBaseUrl : DEFAULT_API_BASE_URL;
-  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
-
-  if (typeof window === 'undefined') {
-    return normalizedBaseUrl;
+  if (typeof window === 'undefined' || API_BASE_URL === '') {
+    return API_BASE_URL;
   }
 
-  const url = new URL(normalizedBaseUrl);
+  const url = new URL(API_BASE_URL);
 
   if (isLoopbackHostname(url.hostname) && isLoopbackHostname(window.location.hostname)) {
     url.hostname = window.location.hostname;
   }
 
-  return url.toString().replace(/\/+$/, '');
+  return normalizeApiBaseUrl(url.toString());
 }
 
 async function sha512Hex(value: string) {

@@ -109,6 +109,14 @@ function getUiTextSnapshot() {
   return uiTextSnapshot;
 }
 
+function getServerUiTextSnapshot(): UiTextSnapshot {
+  return {
+    language: DEFAULT_LANGUAGE,
+    isReady: false,
+    items: {},
+  };
+}
+
 async function getErrorMessage(response: Response, fallbackMessage: string) {
   try {
     const data = (await response.json()) as ExceptionResponse;
@@ -341,11 +349,7 @@ export async function deleteUiText(key: string, language: string): Promise<void>
 }
 
 export function useUiTextValue(key: string, fallbackValue: string) {
-  const snapshot = useSyncExternalStore(subscribeUiTexts, getUiTextSnapshot, () => ({
-    language: DEFAULT_LANGUAGE,
-    isReady: false,
-    items: {},
-  }));
+  const snapshot = useSyncExternalStore(subscribeUiTexts, getUiTextSnapshot, getServerUiTextSnapshot);
 
   useEffect(() => {
     void preloadUiTexts();

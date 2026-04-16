@@ -1018,7 +1018,7 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
-  const executionPanelRef = useRef<HTMLElement | null>(null);
+  const executionPanelRef = useRef<HTMLDivElement | null>(null);
   const submitPanelRef = useRef<HTMLElement | null>(null);
   const { defaultDbms, isAuthenticated } = useMockSession();
   const fallbackProblem = createFallbackProblemDetail(problemId);

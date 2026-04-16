@@ -157,10 +157,6 @@ function hasAnyPlanElement(mask: number, indexes: number[]) {
   return indexes.some((index) => hasPlanElement(mask, index));
 }
 
-function formatMs(value: number) {
-  return `${Math.round(value * 10) / 10}ms`;
-}
-
 function formatCostValue(value: number) {
   return String(Math.round(value * 10) / 10);
 }
