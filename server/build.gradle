@@ -121,3 +121,18 @@ tasks.register('integrationTest', Test) {
 	shouldRunAfter tasks.named('unitTest')
 	useJUnitPlatform()
 }
+
+tasks.register("deployServer", Exec) {
+	workingDir rootDir
+	commandLine "bash", "${rootDir}/scripts/deploy-server.sh"
+}
+
+tasks.register("deployClient", Exec) {
+	workingDir rootDir
+	commandLine "bash", "${rootDir}/scripts/deploy-client.sh"
+}
+
+tasks.register("deployAll", Exec) {
+	workingDir rootDir
+	commandLine "bash", "${rootDir}/scripts/deploy-all.sh"
+}
