@@ -37,7 +37,7 @@
 .ranking-toolbar,
 .ranking-summary-strip {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.78rem;
 }
 
 .ranking-toolbar {
@@ -71,8 +71,8 @@
 .ranking-summary-card {
   display: grid;
   gap: 0.25rem;
-  padding: 0.85rem 0.95rem;
-  border-radius: 1rem;
+  padding: 0.78rem 0.88rem;
+  border-radius: 0.9rem;
   border: 1px solid #dbe5f1;
   background: transparent;
 }
@@ -92,9 +92,9 @@
 .ranking-row {
   grid-template-columns: 138px 72px minmax(220px, 1.55fr) repeat(2, minmax(140px, 1fr));
   gap: 0.5rem;
-  padding: 0.58rem 0.78rem;
+  padding: 0.52rem 0.74rem;
   border-radius: 0.9rem;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
 }
 
 .ranking-cell {
@@ -158,7 +158,7 @@
 .ranking-toolbar-line {
   display: grid;
   grid-template-columns: max-content max-content minmax(280px, 1fr);
-  gap: 0.85rem;
+  gap: 0.74rem;
   align-items: end;
 }
 

@@ -516,8 +516,38 @@ function renderTextBlock(lines: string[], emptyMessage: string) {
 function RefreshIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M16.2 9.1a6.2 6.2 0 1 1-1.6-4.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-      <path d="M12.8 3.2h2.8V6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+      <path
+        d="M15.9 7.75A6.15 6.15 0 0 0 5.75 4.85"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M5.7 2.3v3.15h3.15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M4.1 12.25A6.15 6.15 0 0 0 14.25 15.15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M14.3 17.7v-3.15H11.15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
     </svg>
   );
 }
@@ -798,20 +828,6 @@ export default function ProblemDetailContent({
     setCollapsedSections((current) => ({ ...current, [sectionKey]: !current[sectionKey] }));
   };
 
-  const renderSectionDivider = (sectionKey: keyof CollapsedSectionState) => (
-    <div className="solve-detail-section-divider">
-      <button
-        type="button"
-        className="solve-detail-section-divider-button"
-        aria-label={collapsedSections[sectionKey] ? '펼치기' : '접기'}
-        aria-expanded={!collapsedSections[sectionKey]}
-        onClick={() => toggleSection(sectionKey)}
-      >
-        <CollapseChevronIcon collapsed={collapsedSections[sectionKey]} />
-      </button>
-    </div>
-  );
-
   const resetGridLayout = (sectionKey: keyof typeof gridResetKeys) => {
     setGridResetKeys((current) => ({ ...current, [sectionKey]: current[sectionKey] + 1 }));
   };
@@ -906,7 +922,7 @@ export default function ProblemDetailContent({
             className="solve-detail-table-drag-handle"
             draggable
             aria-hidden="true"
-            title="드래그해서 순서 변경"
+            title="드래그해 순서 변경"
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >
@@ -940,6 +956,20 @@ export default function ProblemDetailContent({
 
       {!hiddenSections?.table ? (
       <section className={`solve-detail-section solve-detail-section-table ${sectionClassNames?.table ?? ''}`.trim()}>
+        <div className={`solve-detail-section-frame ${collapsedSections.table ? 'is-collapsed' : ''}`.trim()}>
+          <div className="solve-detail-section-rail">
+            <button
+              type="button"
+              className="solve-detail-section-divider-button"
+              aria-label={collapsedSections.table ? '펼치기' : '접기'}
+              aria-expanded={!collapsedSections.table}
+              onClick={() => toggleSection('table')}
+            >
+              <CollapseChevronIcon collapsed={collapsedSections.table} />
+            </button>
+            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+          </div>
+          <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">테이블 정보</h2>
@@ -947,13 +977,16 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">
             {sectionActions?.table}
-            <button type="button" className="solve-detail-section-action" aria-label="테이블 너비 초기화" onClick={() => resetGridLayout('table')}>
+            <button
+              type="button"
+              className="solve-detail-section-action"
+              aria-label="테이블 정보 레이아웃 초기화"
+              onClick={() => resetGridLayout('table')}
+            >
               <RefreshIcon />
             </button>
           </div>
         </div>
-        {renderSectionDivider('table')}
-
         {!collapsedSections.table ? (
           <div className="solve-detail-section-body">
             {tableBeforeContent}
@@ -1019,11 +1052,27 @@ export default function ProblemDetailContent({
             )}
           </div>
         ) : null}
+          </div>
+        </div>
       </section>
       ) : null}
 
       {!hiddenSections?.erd ? (
       <section className={`solve-detail-section solve-detail-section-erd ${sectionClassNames?.erd ?? ''}`.trim()}>
+        <div className={`solve-detail-section-frame is-erd ${collapsedSections.erd ? 'is-collapsed' : ''}`.trim()}>
+          <div className="solve-detail-section-rail">
+            <button
+              type="button"
+              className="solve-detail-section-divider-button"
+              aria-label={collapsedSections.erd ? '펼치기' : '접기'}
+              aria-expanded={!collapsedSections.erd}
+              onClick={() => toggleSection('erd')}
+            >
+              <CollapseChevronIcon collapsed={collapsedSections.erd} />
+            </button>
+            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+          </div>
+          <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">ERD</h2>
@@ -1031,13 +1080,11 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">
             {sectionActions?.erd}
-            <button type="button" className="solve-detail-section-action" aria-label="ERD 다시 맞춤" onClick={() => setErdResetKey((current) => current + 1)}>
+            <button type="button" className="solve-detail-section-action" aria-label="ERD 레이아웃 초기화" onClick={() => setErdResetKey((current) => current + 1)}>
               <RefreshIcon />
             </button>
           </div>
         </div>
-        {renderSectionDivider('erd')}
-
         {!collapsedSections.erd ? (
           <div className="solve-detail-section-body">
             {parsedDdl.tables.length > 0 ? (
@@ -1049,11 +1096,27 @@ export default function ProblemDetailContent({
             )}
           </div>
         ) : null}
+          </div>
+        </div>
       </section>
       ) : null}
 
       {!hiddenSections?.dataSample ? (
       <section className={`solve-detail-section solve-detail-section-data-sample ${sectionClassNames?.dataSample ?? ''}`.trim()}>
+        <div className={`solve-detail-section-frame ${collapsedSections.dataSample ? 'is-collapsed' : ''}`.trim()}>
+          <div className="solve-detail-section-rail">
+            <button
+              type="button"
+              className="solve-detail-section-divider-button"
+              aria-label={collapsedSections.dataSample ? '펼치기' : '접기'}
+              aria-expanded={!collapsedSections.dataSample}
+              onClick={() => toggleSection('dataSample')}
+            >
+              <CollapseChevronIcon collapsed={collapsedSections.dataSample} />
+            </button>
+            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+          </div>
+          <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">데이터 예시</h2>
@@ -1061,13 +1124,16 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">
             {sectionActions?.dataSample}
-            <button type="button" className="solve-detail-section-action" aria-label="데이터 예시 너비 초기화" onClick={() => resetGridLayout('dataSample')}>
+            <button
+              type="button"
+              className="solve-detail-section-action"
+              aria-label="데이터 예시 레이아웃 초기화"
+              onClick={() => resetGridLayout('dataSample')}
+            >
               <RefreshIcon />
             </button>
           </div>
         </div>
-        {renderSectionDivider('dataSample')}
-
         {!collapsedSections.dataSample ? (
           <div className="solve-detail-section-body">
             {dataSampleBeforeContent}
@@ -1127,11 +1193,27 @@ export default function ProblemDetailContent({
             )}
           </div>
         ) : null}
+          </div>
+        </div>
       </section>
       ) : null}
 
       {!hiddenSections?.condition ? (
       <section className={`solve-detail-section solve-detail-section-condition ${sectionClassNames?.condition ?? ''}`.trim()}>
+        <div className={`solve-detail-section-frame ${collapsedSections.condition ? 'is-collapsed' : ''}`.trim()}>
+          <div className="solve-detail-section-rail">
+            <button
+              type="button"
+              className="solve-detail-section-divider-button"
+              aria-label={collapsedSections.condition ? '펼치기' : '접기'}
+              aria-expanded={!collapsedSections.condition}
+              onClick={() => toggleSection('condition')}
+            >
+              <CollapseChevronIcon collapsed={collapsedSections.condition} />
+            </button>
+            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+          </div>
+          <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">조건</h2>
@@ -1139,17 +1221,32 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">{sectionActions?.condition}</div>
         </div>
-        {renderSectionDivider('condition')}
         {!collapsedSections.condition ? (
           <div className="solve-detail-section-body">
             {conditionContent ?? renderTextBlock(conditionLines, '조건 정보가 없다.')}
           </div>
         ) : null}
+          </div>
+        </div>
       </section>
       ) : null}
 
       {!hiddenSections?.output ? (
       <section className={`solve-detail-section solve-detail-section-output ${sectionClassNames?.output ?? ''}`.trim()}>
+        <div className={`solve-detail-section-frame ${collapsedSections.output ? 'is-collapsed' : ''}`.trim()}>
+          <div className="solve-detail-section-rail">
+            <button
+              type="button"
+              className="solve-detail-section-divider-button"
+              aria-label={collapsedSections.output ? '펼치기' : '접기'}
+              aria-expanded={!collapsedSections.output}
+              onClick={() => toggleSection('output')}
+            >
+              <CollapseChevronIcon collapsed={collapsedSections.output} />
+            </button>
+            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+          </div>
+          <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">출력</h2>
@@ -1157,17 +1254,32 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">{sectionActions?.output}</div>
         </div>
-        {renderSectionDivider('output')}
         {!collapsedSections.output ? (
           <div className="solve-detail-section-body">
             {outputContent ?? renderTextBlock(outputLines, '출력 정보가 없다.')}
           </div>
         ) : null}
+          </div>
+        </div>
       </section>
       ) : null}
 
       {!hiddenSections?.outputSample ? (
       <section className={`solve-detail-section solve-detail-section-output-sample ${sectionClassNames?.outputSample ?? ''}`.trim()}>
+        <div className={`solve-detail-section-frame ${collapsedSections.outputSample ? 'is-collapsed' : ''}`.trim()}>
+          <div className="solve-detail-section-rail">
+            <button
+              type="button"
+              className="solve-detail-section-divider-button"
+              aria-label={collapsedSections.outputSample ? '펼치기' : '접기'}
+              aria-expanded={!collapsedSections.outputSample}
+              onClick={() => toggleSection('outputSample')}
+            >
+              <CollapseChevronIcon collapsed={collapsedSections.outputSample} />
+            </button>
+            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+          </div>
+          <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
             <h2 className="solve-detail-section-title">출력 예시</h2>
@@ -1175,27 +1287,34 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">
             {sectionActions?.outputSample}
-            <button type="button" className="solve-detail-section-action" aria-label="출력 예시 너비 초기화" onClick={() => resetGridLayout('outputSample')}>
+            <button
+              type="button"
+              className="solve-detail-section-action"
+              aria-label="출력 예시 레이아웃 초기화"
+              onClick={() => resetGridLayout('outputSample')}
+            >
               <RefreshIcon />
             </button>
           </div>
         </div>
-        {renderSectionDivider('outputSample')}
-
         {!collapsedSections.outputSample ? (
           <div className="solve-detail-section-body">
             {outputSampleBeforeContent}
-            <ResizableGrid
-              columns={outputSampleColumns}
-              rows={outputSample.rows}
-              emptyMessage="표시할 출력 예시가 없다."
-              compact
-              resetKey={gridResetKeys.outputSample}
-            />
+            <div className="solve-detail-table-block solve-detail-output-example-block">
+              <ResizableGrid
+                columns={outputSampleColumns}
+                rows={outputSample.rows}
+                emptyMessage="표시할 출력 예시가 없다."
+                resetKey={gridResetKeys.outputSample}
+              />
+            </div>
           </div>
         ) : null}
+          </div>
+        </div>
       </section>
       ) : null}
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -149,8 +149,32 @@ function buildEdges(relations: ReactFlowDiagramRelation[]) {
 export default function ReactFlowDiagram({ tables, relations, className, resetKey = 0 }: ReactFlowDiagramProps) {
   const reactFlowRef = useRef<ReactFlowInstance<FlowNode, Edge> | null>(null);
   const diagramRef = useRef<HTMLDivElement | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false,
+  );
   const nodes = useMemo(() => buildNodes(tables), [tables]);
   const edges = useMemo(() => buildEdges(relations), [relations]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      setIsDarkMode(mediaQuery.matches);
+    };
+
+    handleChange();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
 
   const fitDiagram = useCallback(() => {
     if (!reactFlowRef.current || !diagramRef.current || nodes.length === 0) {
@@ -179,17 +203,18 @@ export default function ReactFlowDiagram({ tables, relations, className, resetKe
 
     const boundsWidth = Math.max(maxX - minX, 1);
     const boundsHeight = Math.max(maxY - minY, 1);
-    const horizontalPadding = 30;
+    const leftPadding = Math.max(14, Math.min(44, containerWidth * 0.08));
+    const rightPadding = 22;
     const verticalPadding = 30;
     const zoom = Math.max(
       0.12,
       Math.min(
         1.08,
-        (containerWidth - horizontalPadding * 2) / boundsWidth,
+        (containerWidth - leftPadding - rightPadding) / boundsWidth,
         (containerHeight - verticalPadding * 2) / boundsHeight,
       ),
     );
-    const x = (containerWidth - boundsWidth * zoom) / 2 - minX * zoom;
+    const x = leftPadding - minX * zoom;
     const y = (containerHeight - boundsHeight * zoom) / 2 - minY * zoom;
 
     requestAnimationFrame(() => {
@@ -245,7 +270,12 @@ export default function ReactFlowDiagram({ tables, relations, className, resetKe
         proOptions={{ hideAttribution: true }}
         className="solve-erd-reactflow"
       >
-        <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#e2e8f0" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={18}
+          size={1}
+          color={isDarkMode ? 'rgba(71, 85, 105, 0.5)' : '#dbe6f1'}
+        />
       </ReactFlow>
 
       <div className="solve-erd-zoom-controls">

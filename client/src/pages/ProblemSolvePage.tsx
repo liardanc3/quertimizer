@@ -206,6 +206,7 @@ const SQL_EDITOR_DEFAULT_FONT_SIZE = 13.5;
 const SQL_EDITOR_MIN_FONT_SIZE = 11;
 const SQL_EDITOR_MAX_FONT_SIZE = 24;
 const SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT = 4;
+const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 0.76;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -235,18 +236,12 @@ function formatGroupedNumber(value?: number) {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
-function formatExecutionSummary(executionResult: ProblemExecutionResult) {
-  const timeLabel = `${formatGroupedNumber(executionResult.executionTimeMs == null ? undefined : Math.round(executionResult.executionTimeMs))} ms`;
-
-  if (executionResult.mode === 'select') {
-    return `${timeLabel} ${formatGroupedNumber(executionResult.rowCount)} rows`;
+function formatExecutionMetricValue(value?: number) {
+  if (value == null) {
+    return '-';
   }
 
-  if (executionResult.mode === 'command') {
-    return `${timeLabel} ${executionResult.success ? 'done' : 'failed'}`;
-  }
-
-  return `${timeLabel} ${formatGroupedNumber(executionResult.rowCount)} lines`;
+  return formatGroupedNumber(Math.round(value));
 }
 
 function getExecutionResultPageCount(rowCount: number) {
@@ -786,8 +781,54 @@ function CollapseChevronIcon({ collapsed }: { collapsed: boolean }) {
 function RefreshIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M16.2 9.1a6.2 6.2 0 1 1-1.6-4.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-      <path d="M12.8 3.2h2.8V6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+      <path
+        d="M15.9 7.75A6.15 6.15 0 0 0 5.75 4.85"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M5.7 2.3v3.15h3.15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M4.1 12.25A6.15 6.15 0 0 0 14.25 15.15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M14.3 17.7v-3.15H11.15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
+function OpacityIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        d="M10 2.8c2 2.4 4.8 5.8 4.8 8.3A4.8 4.8 0 1 1 5.2 11C5.2 8.6 8 5.2 10 2.8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <path d="M10 4.6v11" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
     </svg>
   );
 }
@@ -977,6 +1018,8 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const executionPanelRef = useRef<HTMLElement | null>(null);
+  const submitPanelRef = useRef<HTMLElement | null>(null);
   const { defaultDbms, isAuthenticated } = useMockSession();
   const fallbackProblem = createFallbackProblemDetail(problemId);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
@@ -1010,6 +1053,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [floatingLayouts, setFloatingLayouts] = useState<FloatingPanelLayoutState>(() => createInitialFloatingLayouts());
   const [floatingMoveState, setFloatingMoveState] = useState<FloatingMoveState | null>(null);
   const [floatingResizeState, setFloatingResizeState] = useState<FloatingResizeState | null>(null);
+  const [editorFloatingOpacity, setEditorFloatingOpacity] = useState(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA);
   const problem = fallbackProblem;
   const availableDbms = getAvailableDbms(problem);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
@@ -1041,6 +1085,17 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     (panelKey) => panelVisibility[panelKey] && detachedPanels[panelKey] && !externalWindowPanels[panelKey],
   );
   const visibleExternalWindows = panelOrder.filter((panelKey) => panelVisibility[panelKey] && externalWindowPanels[panelKey]);
+  const focusPanelSection = (resolveElement: () => HTMLElement | null) => {
+    requestAnimationFrame(() => {
+      const element = resolveElement();
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      element.focus({ preventScroll: true });
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1075,6 +1130,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setExecutionResultPage(1);
     setIsExecuting(false);
     setSubmitMessage(null);
+    setEditorFloatingOpacity(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA);
     setSelectedDbms(resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
   }, [defaultDbms, problemId]);
 
@@ -1131,6 +1187,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           ...current,
           submit: true,
         }));
+        setDetachedPanels((current) => ({
+          ...current,
+          submit: false,
+        }));
+        setExternalWindowPanels((current) => ({
+          ...current,
+          submit: false,
+        }));
+        focusPanelSection(() => submitPanelRef.current);
         return;
       }
 
@@ -1149,6 +1214,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           ...current,
           editor: true,
         }));
+        if (!detachedPanels.editor) {
+          focusPanelSection(() => executionPanelRef.current);
+        }
       }
     });
 
@@ -1159,7 +1227,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         problemId,
       });
     };
-  }, [problemId]);
+  }, [detachedPanels.editor, problemId]);
 
   useEffect(() => {
     setExecutionResultPage(1);
@@ -1370,6 +1438,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const handleSubmit = () => {
     if (!isAuthenticated) {
       setSubmitMessage('로그인 후 제출할 수 있다.');
+      setCollapsedCards((current) => ({
+        ...current,
+        submit: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         submit: true,
@@ -1379,6 +1451,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (selectedDbms !== 'postgresql') {
       setSubmitMessage('제출은 PostgreSQL만 지원한다.');
+      setCollapsedCards((current) => ({
+        ...current,
+        submit: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         submit: true,
@@ -1388,6 +1464,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (sql.trim().length === 0) {
       setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setCollapsedCards((current) => ({
+        ...current,
+        submit: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         submit: true,
@@ -1395,12 +1475,30 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
+    if (detachedPanels.editor) {
+      setDetachedPanels((current) => ({
+        ...current,
+        editor: false,
+        submit: false,
+      }));
+      setExternalWindowPanels((current) => ({
+        ...current,
+        editor: false,
+        submit: false,
+      }));
+    }
+
     setIsSubmitting(true);
     setSubmitMessage('제출 중이다.');
+    setCollapsedCards((current) => ({
+      ...current,
+      submit: false,
+    }));
     setPanelVisibility((current) => ({
       ...current,
       submit: true,
     }));
+    focusPanelSection(() => submitPanelRef.current);
 
     void sendSessionSocketMessage({
       type: 'problem.submit',
@@ -1416,38 +1514,66 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const executeSql = async () => {
     if (!isAuthenticated) {
       setExecutionResult(createProblemExecutionError('로그인 후 문제를 실행할 수 있다.'));
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         editor: true,
       }));
+      if (!detachedPanels.editor) {
+        focusPanelSection(() => executionPanelRef.current);
+      }
       return;
     }
 
     if (selectedDbms !== 'postgresql') {
       setExecutionResult(createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.'));
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         editor: true,
       }));
+      if (!detachedPanels.editor) {
+        focusPanelSection(() => executionPanelRef.current);
+      }
       return;
     }
 
     if (sql.trim().length === 0) {
       setExecutionResult(createProblemExecutionError('실행할 SQL을 입력해야 한다.'));
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         editor: true,
       }));
+      if (!detachedPanels.editor) {
+        focusPanelSection(() => executionPanelRef.current);
+      }
       return;
     }
 
     try {
       setIsExecuting(true);
       setExecutionResult(null);
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         editor: true,
       }));
+      if (!detachedPanels.editor) {
+        focusPanelSection(() => executionPanelRef.current);
+      }
       await sendSessionSocketMessage({
         type: 'problem.execute',
         problemId,
@@ -1465,6 +1591,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         ...current,
         editor: true,
       }));
+      if (!detachedPanels.editor) {
+        focusPanelSection(() => executionPanelRef.current);
+      }
     }
   };
 
@@ -1635,7 +1764,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     const target = event.target as HTMLElement;
-    if (target.closest('button')) {
+    if (target.closest('button, input, label')) {
       return;
     }
 
@@ -1689,6 +1818,30 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     </div>
   );
 
+  const renderFloatingOpacityControl = () => {
+    const sliderValue = Math.round((1 - editorFloatingOpacity / FLOATING_EDITOR_BACKGROUND_MAX_ALPHA) * 100);
+
+    return (
+      <label className="solve-floating-opacity-control" aria-label="에디터 투명도 조절">
+        <span className="solve-floating-opacity-icon" aria-hidden="true">
+          <OpacityIcon />
+        </span>
+        <input
+          type="range"
+          className="solve-floating-opacity-slider"
+          min={0}
+          max={100}
+          step={1}
+          value={sliderValue}
+          onChange={(event) => {
+            const nextValue = Number(event.target.value);
+            setEditorFloatingOpacity(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA * (1 - nextValue / 100));
+          }}
+        />
+      </label>
+    );
+  };
+
   const renderPanelHeader = (panelKey: PanelKey, isFloating: boolean) => (
     <div
       className={`solve-pane-header solve-detail-section-header ${isFloating ? 'is-draggable' : ''}`}
@@ -1696,8 +1849,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     >
       <div className="solve-detail-section-title-row">
         <h2 className="solve-detail-section-title solve-pane-title">{panelLabels[panelKey]}</h2>
+        {isFloating && panelKey === 'editor' ? renderFloatingOpacityControl() : null}
+        {renderPanelActions(panelKey)}
       </div>
-      {renderPanelActions(panelKey)}
     </div>
   );
 
@@ -1708,44 +1862,127 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }));
   };
 
-  const renderCollapseDivider = (cardKey: keyof CollapsedCardState) => (
-    <div className="solve-card-collapse-divider">
+  const renderCollapseControl = (cardKey: keyof CollapsedCardState) => (
+    <div className="solve-detail-section-rail solve-pane-section-rail">
       <button
         type="button"
-        className="solve-card-collapse-button"
+        className="solve-detail-section-divider-button solve-pane-section-divider-button"
         aria-label={collapsedCards[cardKey] ? '펼치기' : '접기'}
         aria-expanded={!collapsedCards[cardKey]}
         onClick={() => toggleCardCollapse(cardKey)}
       >
         <CollapseChevronIcon collapsed={collapsedCards[cardKey]} />
       </button>
+      {!collapsedCards[cardKey] ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
     </div>
   );
 
+  const renderExecutionInlineRegion = () => {
+    if (!isExecuting && !executionResult) {
+      return null;
+    }
+
+    const shouldShowRefresh = executionResult?.mode === 'select' && !collapsedCards.execute;
+
+    return (
+      <div ref={executionPanelRef} tabIndex={-1} className={`solve-editor-inline-result ${collapsedCards.execute ? 'is-collapsed' : ''}`}>
+        <div className="solve-editor-inline-result-divider" aria-hidden="true" />
+        <div className="solve-editor-inline-result-header">
+          <button
+            type="button"
+            className="solve-detail-section-divider-button solve-pane-section-divider-button"
+            aria-label={collapsedCards.execute ? '펼치기' : '접기'}
+            aria-expanded={!collapsedCards.execute}
+            onClick={() => toggleCardCollapse('execute')}
+          >
+            <CollapseChevronIcon collapsed={collapsedCards.execute} />
+          </button>
+          <div className="solve-pane-summary-row">
+            {isExecuting ? (
+              <span className="solve-pane-summary-item is-pending">SQL 실행 중</span>
+            ) : executionResult ? (
+              <>
+                <span className="solve-pane-summary-item">
+                  <span className="solve-pane-summary-label">경과 시간</span>
+                  <strong className="solve-pane-summary-value">{formatExecutionMetricValue(executionResult.executionTimeMs)}</strong>
+                </span>
+                <span className="solve-pane-summary-item">
+                  <span className="solve-pane-summary-label">결과 Rows</span>
+                  <strong className="solve-pane-summary-value">{formatGroupedNumber(executionResult.rowCount)}</strong>
+                </span>
+              </>
+            ) : null}
+          </div>
+          <div className="solve-detail-section-header-actions">
+            {shouldShowRefresh ? (
+              <button
+                type="button"
+                className="solve-pane-action solve-pane-action-icon"
+                aria-label="실행 결과 너비 초기화"
+                onClick={() => setExecutionResultGridResetKey((current) => current + 1)}
+              >
+                <RefreshIcon />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {!collapsedCards.execute ? (
+          <div className="solve-editor-inline-result-body solve-pane-result-stack">
+            {isExecuting ? (
+              <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
+            ) : executionResult ? (
+              <>
+                {executionResult.message && shouldRenderExecutionMessage(executionResult.message) ? (
+                  <p className="solve-pane-result-message">{executionResult.message}</p>
+                ) : null}
+                {renderExecutionContent(
+                  executionResult,
+                  executionResultPage,
+                  setExecutionResultPage,
+                  executionResultPageInput,
+                  setExecutionResultPageInput,
+                  collapsedCards.resultTable,
+                  () =>
+                    setCollapsedCards((current) => ({
+                      ...current,
+                      resultTable: !current.resultTable,
+                    })),
+                  executionResultGridResetKey,
+                )}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderEditorPanel = (isFloating: boolean) => (
     <section className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane solve-pane-editor ${isFloating ? 'is-floating' : ''}`}>
-      {renderPanelHeader('editor', isFloating)}
-      {renderCollapseDivider('editor')}
+      <div className={`solve-detail-section-frame solve-pane-section-frame ${collapsedCards.editor ? 'is-collapsed' : ''} ${isFloating ? 'is-floating' : ''}`.trim()}>
+        {renderCollapseControl('editor')}
+        <div className="solve-detail-section-main solve-pane-section-main">
+          {renderPanelHeader('editor', isFloating)}
 
-      {!collapsedCards.editor ? (
-        <div className="solve-editor-stack">
-          <div className="solve-editor-surface">
-            <div className="solve-editor-surface-header">
-              <div className="solve-editor-surface-meta">
-                <span className="solve-editor-file">main.sql</span>
-                <span className="subtle-chip inverted">{getDbmsLabel(selectedDbms)}</span>
-              </div>
-              <div className="solve-editor-actions">
-                <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
-                  {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
-                </button>
-                <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
-                  {isSubmitting ? '제출 중' : '제출'}
-                </button>
-              </div>
-            </div>
+          {!collapsedCards.editor ? (
+            <div className="solve-editor-stack">
+              <div className="solve-editor-surface">
+                <div className="solve-editor-surface-header">
+                  <div className="solve-editor-surface-meta">
+                    <span className="solve-editor-file">{getDbmsLabel(selectedDbms)}</span>
+                  </div>
+                  <div className="solve-editor-actions">
+                    <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
+                      {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
+                    </button>
+                    <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
+                      {isSubmitting ? '제출 중' : '제출'}
+                    </button>
+                  </div>
+                </div>
 
-              <div className="solve-editor-surface-body">
+                <div className="solve-editor-surface-body">
                   <div className="solve-editor-zoom-controls" aria-label="에디터 글씨 크기 조절">
                     <button type="button" className="mini-toggle solve-editor-zoom-button" onClick={() => changeSqlEditorFontSize(1)}>
                       +
@@ -1768,139 +2005,97 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     onKeyUp={(event) => {
                       if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
                         return;
-                    }
+                      }
 
-                  refreshAutocompleteFromEditor();
-                }}
-                onKeyDown={handleEditorKeyDown}
-                onBlur={() => {
-                  window.setTimeout(() => {
-                    setAutocompleteState(null);
-                  }, 120);
-                }}
-                aria-label="에디터"
-                />
+                      refreshAutocompleteFromEditor();
+                    }}
+                    onKeyDown={handleEditorKeyDown}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        setAutocompleteState(null);
+                      }, 120);
+                    }}
+                    aria-label="에디터"
+                  />
 
-                {autocompleteState
-                  ? createPortal(
-                      <div
-                        className="solve-editor-autocomplete"
-                        style={{
-                          left: `${autocompleteState.left}px`,
-                          top: `${autocompleteState.top}px`,
-                          maxWidth: `${autocompleteState.maxWidth}px`,
-                          maxHeight: `${autocompleteState.maxHeight}px`,
-                        }}
-                        role="listbox"
-                        aria-label="SQL 자동완성"
-                      >
-                        {autocompleteState.items.map((item, index) => (
-                          <button
-                            key={`${item.kind}-${item.value}-${item.detail ?? ''}`}
-                            type="button"
-                            className={`solve-editor-autocomplete-item ${index === autocompleteState.selectedIndex ? 'is-selected' : ''}`}
-                            role="option"
-                            aria-selected={index === autocompleteState.selectedIndex}
-                            onMouseEnter={() =>
-                              setAutocompleteState((current) =>
-                                current == null
-                                  ? current
-                                  : {
-                                      ...current,
-                                      selectedIndex: index,
-                                    },
-                              )
-                            }
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              applyAutocompleteItem(item);
-                            }}
-                          >
-                            <span className={`solve-editor-autocomplete-kind is-${item.kind}`}>
-                              {item.kind === 'keyword' ? 'SQL' : item.kind === 'table' ? 'TABLE' : 'COLUMN'}
-                            </span>
-                            <span className="solve-editor-autocomplete-value">{item.value}</span>
-                            {item.detail ? <span className="solve-editor-autocomplete-detail">{item.detail}</span> : null}
-                          </button>
-                        ))}
-                      </div>,
-                      document.body,
-                    )
-                  : null}
+                  {autocompleteState
+                    ? createPortal(
+                        <div
+                          className="solve-editor-autocomplete"
+                          style={{
+                            left: `${autocompleteState.left}px`,
+                            top: `${autocompleteState.top}px`,
+                            maxWidth: `${autocompleteState.maxWidth}px`,
+                            maxHeight: `${autocompleteState.maxHeight}px`,
+                          }}
+                          role="listbox"
+                          aria-label="SQL 자동완성"
+                        >
+                          {autocompleteState.items.map((item, index) => (
+                            <button
+                              key={`${item.kind}-${item.value}-${item.detail ?? ''}`}
+                              type="button"
+                              className={`solve-editor-autocomplete-item ${index === autocompleteState.selectedIndex ? 'is-selected' : ''}`}
+                              role="option"
+                              aria-selected={index === autocompleteState.selectedIndex}
+                              onMouseEnter={() =>
+                                setAutocompleteState((current) =>
+                                  current == null
+                                    ? current
+                                    : {
+                                        ...current,
+                                        selectedIndex: index,
+                                      },
+                                )
+                              }
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                applyAutocompleteItem(item);
+                              }}
+                            >
+                              <span className={`solve-editor-autocomplete-kind is-${item.kind}`}>
+                                {item.kind === 'keyword' ? 'SQL' : item.kind === 'table' ? 'TABLE' : 'COLUMN'}
+                              </span>
+                              <span className="solve-editor-autocomplete-value">{item.value}</span>
+                              {item.detail ? <span className="solve-editor-autocomplete-detail">{item.detail}</span> : null}
+                            </button>
+                          ))}
+                        </div>,
+                        document.body,
+                      )
+                    : null}
+                </div>
+
+                {renderExecutionInlineRegion()}
+              </div>
             </div>
-          </div>
-
+          ) : null}
         </div>
-      ) : null}
-    </section>
-  );
-
-  const renderExecutionPanel = () => (
-    <section className="solve-surface-section solve-inline-result-block">
-      <div className="solve-pane-header solve-pane-header-inline solve-detail-section-header">
-        <div className="solve-detail-section-title-row">
-          <h2 className="solve-detail-section-title solve-pane-title">실행 결과</h2>
-        </div>
-        <button
-          type="button"
-          className="solve-detail-section-action"
-          aria-label="실행 결과 너비 초기화"
-          onClick={() => setExecutionResultGridResetKey((current) => current + 1)}
-          disabled={executionResult?.mode !== 'select'}
-        >
-          <RefreshIcon />
-        </button>
       </div>
-      {renderCollapseDivider('execute')}
-
-      {!collapsedCards.execute ? (
-        <div className="solve-pane-result-stack">
-          {isExecuting ? (
-            <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
-          ) : executionResult ? (
-            <>
-              <p className="solve-result-summary">{formatExecutionSummary(executionResult)}</p>
-
-              {executionResult.message && shouldRenderExecutionMessage(executionResult.message) ? (
-                <p className="solve-pane-result-message">{executionResult.message}</p>
-              ) : null}
-              {renderExecutionContent(
-                executionResult,
-                executionResultPage,
-                setExecutionResultPage,
-                executionResultPageInput,
-                setExecutionResultPageInput,
-                collapsedCards.resultTable,
-                () =>
-                  setCollapsedCards((current) => ({
-                    ...current,
-                    resultTable: !current.resultTable,
-                  })),
-                executionResultGridResetKey,
-              )}
-            </>
-          ) : (
-            <div className="solve-result-empty solve-result-empty-table">실행 결과가 아직 없다.</div>
-          )}
-        </div>
-      ) : null}
     </section>
   );
 
   const renderSubmitPanel = (isFloating: boolean) => (
-    <section className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane ${isFloating ? 'is-floating' : ''}`}>
-      {renderPanelHeader('submit', isFloating)}
-      {renderCollapseDivider('submit')}
-
-      {!collapsedCards.submit ? (
-        submitMessage ? (
-          <div className="solve-pane-result-stack">
-            <p className="solve-pane-result-message">{submitMessage}</p>
-          </div>
-        ) : (
-          <div className="solve-result-empty">제출 결과가 아직 없다.</div>
-        )
-      ) : null}
+    <section
+      ref={isFloating ? undefined : submitPanelRef}
+      tabIndex={isFloating ? undefined : -1}
+      className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane ${isFloating ? 'is-floating' : ''}`}
+    >
+      <div className={`solve-detail-section-frame solve-pane-section-frame ${collapsedCards.submit ? 'is-collapsed' : ''} ${isFloating ? 'is-floating' : ''}`.trim()}>
+        {renderCollapseControl('submit')}
+        <div className="solve-detail-section-main solve-pane-section-main">
+          {renderPanelHeader('submit', isFloating)}
+          {isFloating || !collapsedCards.submit ? (
+            submitMessage ? (
+              <div className="solve-pane-result-stack">
+                <p className="solve-pane-result-message">{submitMessage}</p>
+              </div>
+            ) : (
+              <div className="solve-result-empty">제출 결과 없음.</div>
+            )
+          ) : null}
+        </div>
+      </div>
     </section>
   );
 
@@ -1912,15 +2107,27 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     return renderSubmitPanel(isFloating);
   };
 
+  if (!problemLoadError && problemDetail == null) {
+    return (
+      <div className="page-stack solve-page-loading-state">
+        <section className="page-loading-shell" aria-label="Loading problem" aria-busy="true">
+          <span className="page-loading-spinner" aria-hidden="true" />
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack">
       <div className="solve-page-topbar solve-page-topbar-dbms">
-        <div className="solve-workspace-toolbar-group">
+        <div className="solve-dbms-tab-row" role="tablist" aria-label="DBMS 선택">
           {availableDbms.map((dbms) => (
             <button
               key={dbms}
               type="button"
-              className={`mini-toggle solve-dbms-button ${selectedDbms === dbms ? 'is-selected' : ''}`}
+              role="tab"
+              aria-selected={selectedDbms === dbms}
+              className={`solve-dbms-tab ${selectedDbms === dbms ? 'is-selected' : ''}`}
               onClick={() => setSelectedDbms(dbms)}
             >
               {getDbmsLabel(dbms)}
@@ -1931,37 +2138,44 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       <section className="solve-page-hero solve-surface-section">
         <div className="solve-page-hero-copy solve-page-hero-copy-wide">
-        <div className="solve-title-row">
-            <span className="solve-problem-number">문제 {displayProblemNumber}</span>
+          <div className="solve-title-row">
+            <span className="solve-problem-number">{`문제 ${displayProblemNumber}`}</span>
             <h1 className="solve-problem-title">{displayProblemTitle}</h1>
           </div>
 
           {problemLoadError ? <p className="content-text solve-problem-description">{problemLoadError}</p> : null}
-          {!problemLoadError && problemDetail == null ? (
-            <p className="content-text solve-problem-description">문제 상세를 불러오는 중..</p>
-          ) : null}
         </div>
         {problemDetail ? <ProblemDetailContent detail={problemDetail} selectedDbms={selectedDbms} /> : null}
       </section>
 
       {panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor ? renderEditorPanel(false) : null}
 
-      {renderExecutionPanel()}
-
       {panelVisibility.submit && !detachedPanels.submit && !externalWindowPanels.submit ? renderSubmitPanel(false) : null}
 
       {visibleFloatingPanels.map((panelKey) => (
         <div
           key={panelKey}
-          className="solve-floating-pane-shell"
+          className={`solve-floating-pane-shell is-${panelKey}`}
           style={{
             left: `${floatingLayouts[panelKey].left}px`,
             top: `${floatingLayouts[panelKey].top}px`,
             width: `${floatingLayouts[panelKey].width}px`,
             height: `${floatingLayouts[panelKey].height}px`,
-          }}
+            '--solve-floating-surface-alpha': panelKey === 'editor' ? String(editorFloatingOpacity) : '0.94',
+            '--solve-floating-inner-surface-alpha': panelKey === 'editor' ? String(editorFloatingOpacity) : '0.9',
+            '--solve-floating-border-alpha':
+              panelKey === 'editor'
+                ? String(Math.max(0.12, 0.54 * (editorFloatingOpacity / FLOATING_EDITOR_BACKGROUND_MAX_ALPHA)))
+                : '0.48',
+            '--solve-floating-shadow-alpha':
+              panelKey === 'editor'
+                ? String(Math.max(0.08, 0.22 * (editorFloatingOpacity / FLOATING_EDITOR_BACKGROUND_MAX_ALPHA)))
+                : '0.18',
+          } as any}
         >
-          {renderPanel(panelKey, true)}
+          <div className="solve-floating-pane-content">
+            {renderPanel(panelKey, true)}
+          </div>
           <button
             type="button"
             className="solve-floating-pane-resize"

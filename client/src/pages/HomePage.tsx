@@ -268,6 +268,17 @@ export default function HomePage() {
     setIsPageJumpEditing(false);
   }
 
+  if (isLoading) {
+    return (
+      <div className="page-stack home-page">
+        <section className="page-loading-shell" aria-label="Loading problems" aria-busy="true">
+          <span className="page-loading-spinner" aria-hidden="true" />
+        </section>
+        <HandleSetupGate />
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack home-page">
       <section className="panel-card compact problem-toolbar-card">
@@ -369,11 +380,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {isLoading ? (
-          <section className="problem-list is-empty">
-            <div className="problem-empty-state">{'문제 목록을 불러오는 중입니다.'}</div>
-          </section>
-        ) : loadFailed ? (
+        {loadFailed ? (
           <section className="problem-list is-empty">
             <div className="problem-empty-state">{'문제 목록을 불러오지 못했습니다.'}</div>
           </section>
@@ -386,7 +393,7 @@ export default function HomePage() {
           />
         )}
 
-        {!isLoading && !loadFailed && problemPage.totalCount > 0 ? (
+        {!loadFailed && problemPage.totalCount > 0 ? (
           <div className="problem-pagination" role="navigation" aria-label="문제 페이지">
             <button
               type="button"
