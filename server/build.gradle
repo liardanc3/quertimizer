@@ -5,8 +5,8 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = 'com'
-version = '0.0.1-SNAPSHOT'
+group = 'com.quertimizer'
+version = '0.1'
 
 java {
 	toolchain {
@@ -90,9 +90,12 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+
 	runtimeOnly 'org.postgresql:postgresql'
+
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'com.h2database:h2'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -122,17 +125,108 @@ tasks.register('integrationTest', Test) {
 	useJUnitPlatform()
 }
 
-tasks.register("deployServer", Exec) {
-	workingDir rootDir
-	commandLine "bash", "${rootDir}/scripts/deploy-server.sh"
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def npmCmd = isWindows ? 'npm.cmd' : 'npm'
+def deployTarget = 'quertimizer@server.quertimizer.com'
+
+ext {
+	remoteServerBase = '/home/quertimizer/apps/server'
+	remoteClientBase = '/home/quertimizer/apps/client'
+	remoteServiceName = 'quertimizer-server'
+	localClientDir = file('../client')
 }
 
-tasks.register("deployClient", Exec) {
-	workingDir rootDir
-	commandLine "bash", "${rootDir}/scripts/deploy-client.sh"
+def runCmd = { List<String> cmd, File wd = project.projectDir ->
+	println "> ${cmd.join(' ')}"
+	exec {
+		workingDir wd
+		commandLine cmd
+	}
 }
 
-tasks.register("deployAll", Exec) {
-	workingDir rootDir
-	commandLine "bash", "${rootDir}/scripts/deploy-all.sh"
+def newReleaseName = {
+	new Date().format('yyyy_MM_dd_HH_mm_ss')
+}
+
+tasks.register('deployServer') {
+	group = 'deployment'
+	dependsOn tasks.named('bootJar')
+
+	doLast {
+		def release = newReleaseName()
+		def jarFile = tasks.named('bootJar').get().archiveFile.get().asFile
+
+		if (!jarFile.exists()) {
+			throw new GradleException("bootJar 결과물이 없음: ${jarFile}")
+		}
+
+		runCmd([
+				'ssh',
+				deployTarget,
+				"mkdir -p ${remoteServerBase}/releases/${release}"
+		])
+
+		runCmd([
+				'scp',
+				jarFile.absolutePath,
+				"${deployTarget}:${remoteServerBase}/releases/${release}/app.jar"
+		])
+
+		runCmd([
+				'ssh',
+				deployTarget,
+				"ln -sfn ${remoteServerBase}/releases/${release} ${remoteServerBase}/current" +
+						" && sudo -n systemctl restart ${remoteServiceName}" +
+						" && sudo -n systemctl status ${remoteServiceName} --no-pager"
+		])
+	}
+}
+
+tasks.register('deployClient') {
+	group = 'deployment'
+
+	doLast {
+		def release = newReleaseName()
+		def distDir = new File(localClientDir, 'dist')
+
+		if (!localClientDir.exists()) {
+			throw new GradleException("client 디렉토리 없음: ${localClientDir}")
+		}
+
+		runCmd([npmCmd, 'run', 'build'], localClientDir)
+
+		if (!distDir.exists()) {
+			throw new GradleException("client build 결과물 없음: ${distDir}")
+		}
+
+		runCmd([
+				'ssh',
+				deployTarget,
+				"mkdir -p ${remoteClientBase}/releases/${release}"
+		])
+
+		runCmd([
+				'scp',
+				'-r',
+				new File(distDir, '.').absolutePath,
+				"${deployTarget}:${remoteClientBase}/releases/${release}/"
+		])
+
+		runCmd([
+				'ssh',
+				deployTarget,
+				"ln -sfn ${remoteClientBase}/releases/${release} ${remoteClientBase}/current" +
+						" && sudo -n nginx -t" +
+						" && sudo -n systemctl reload nginx"
+		])
+	}
+}
+
+tasks.register('deployAll') {
+	group = 'deployment'
+	dependsOn tasks.named('deployServer'), tasks.named('deployClient')
+}
+
+tasks.named('deployClient') {
+	mustRunAfter tasks.named('deployServer')
 }
