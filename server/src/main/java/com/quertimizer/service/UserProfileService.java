@@ -208,7 +208,7 @@ public class UserProfileService {
 
         // 문제별 최고 기록 기준 누적 통계 계산
         for (ProblemSolveHistory history : histories) {
-            fastestHistoryByProblemId.merge(history.getProblemId(), history, this::pickFasterHistory);
+            fastestHistoryByProblemId.merge(history.getProblemId(), history, this::pickBetterHistory);
         }
 
         int solvedProblemCount = fastestHistoryByProblemId.size();
@@ -234,7 +234,7 @@ public class UserProfileService {
                     resolveDbmsType(history)
             );
 
-            bestHistoryByKey.merge(historyKey, history, this::pickFasterHistory);
+            bestHistoryByKey.merge(historyKey, history, this::pickBetterHistory);
         }
 
         // 최신 순으로 프로필 기록 정렬
@@ -306,7 +306,15 @@ public class UserProfileService {
         return Optional.of(executionPercentile);
     }
 
-    private ProblemSolveHistory pickFasterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+    private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+        if (candidateHistory.getCost() < currentHistory.getCost()) {
+            return candidateHistory;
+        }
+
+        if (candidateHistory.getCost() > currentHistory.getCost()) {
+            return currentHistory;
+        }
+
         if (candidateHistory.getExecutionTimeMs() < currentHistory.getExecutionTimeMs()) {
             return candidateHistory;
         }

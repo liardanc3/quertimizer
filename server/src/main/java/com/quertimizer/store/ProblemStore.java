@@ -49,7 +49,7 @@ public class ProblemStore {
                 .sorted(Comparator.comparing(ProblemSet::getProblemSetId))
                 .toList();
 
-        // 문제별 사용자 DBMS 기준 최고 제출 추출
+        // 문제별 사용자 기준 최고 제출 추출
         Map<String, List<ProblemSolveHistory>> bestHistoriesByProblemId =
                 createBestSubmittedHistoriesByProblemId(problemSolveHistoryRepository.findAll());
 
@@ -69,7 +69,7 @@ public class ProblemStore {
             );
         }
 
-        log.info("ProblemStore 세팅 완료 : {} MB", formatLoadedDataSizeInMb());
+        log.info("ProblemStore 로딩 완료 : {} MB", formatLoadedDataSizeInMb());
     }
 
     public ProblemPage findProblemPage(int requestedPage,
@@ -81,7 +81,7 @@ public class ProblemStore {
                                        Double spreadRateMin,
                                        Double spreadRateMax) {
 
-        // 목록 필터링, 정렬에 필요한 데이터 메모리 구성
+        // 목록 필터와 정렬에 필요한 데이터 메모리 구성
         List<ProblemListEntry> searchableProblems = problemsById.values().stream()
                 .map(problem -> createProblemListEntry(problem, currentUserId))
                 .filter(problemEntry -> matchesSearch(problemEntry, searchKeyword))
@@ -243,15 +243,15 @@ public class ProblemStore {
             return 0d;
         }
 
-        List<Long> executionTimes = submittedHistories.stream()
-                .map(ProblemSolveHistory::getExecutionTimeMs)
+        List<Double> costs = submittedHistories.stream()
+                .map(ProblemSolveHistory::getCost)
                 .sorted()
                 .toList();
 
-        double min = executionTimes.get(0);
-        int size = executionTimes.size();
-        double median = (executionTimes.get((size - 1) / 2) + executionTimes.get(size / 2)) / 2d;
-        long percentile90 = executionTimes.get(Math.max(0, (int) Math.floor(size * 0.9d) - 1));
+        double min = costs.get(0);
+        int size = costs.size();
+        double median = (costs.get((size - 1) / 2) + costs.get(size / 2)) / 2d;
+        double percentile90 = costs.get(Math.max(0, (int) Math.floor(size * 0.9d) - 1));
 
         return roundToOneDecimal(((percentile90 - min) / Math.max(Math.abs(median), 1d)) * 100d);
     }
@@ -263,18 +263,15 @@ public class ProblemStore {
     private Map<String, List<ProblemSolveHistory>> createBestSubmittedHistoriesByProblemId(List<ProblemSolveHistory> histories) {
         Map<ProblemSubmittedHistoryKey, ProblemSolveHistory> bestHistoryByKey = new HashMap<>();
 
-        // 문제별 사용자 DBMS 기준 최고 제출 선별
+        // 문제별 사용자 기준 최고 제출 집계
         for (ProblemSolveHistory history : histories) {
             ProblemSubmittedHistoryKey historyKey = new ProblemSubmittedHistoryKey(
                     history.getProblemId(),
-                    history.getUserId(),
-                    resolveDbmsType(history)
+                    history.getUserId()
             );
 
-            bestHistoryByKey.merge(historyKey, history, this::pickFasterHistory);
+            bestHistoryByKey.merge(historyKey, history, this::pickBetterHistory);
         }
-
-        // 문제별 제출 목록 재구성
         Map<String, List<ProblemSolveHistory>> submittedHistoriesByProblemId = new HashMap<>();
         for (ProblemSolveHistory history : bestHistoryByKey.values()) {
             submittedHistoriesByProblemId.computeIfAbsent(history.getProblemId(), key -> new ArrayList<>())
@@ -285,7 +282,7 @@ public class ProblemStore {
         submittedHistoriesByProblemId.replaceAll((problemId, problemHistories) ->
                 problemHistories.stream()
                         .sorted(
-                                Comparator.comparing(this::resolveDbmsType)
+                                Comparator.comparingDouble(ProblemSolveHistory::getCost)
                                         .thenComparingLong(ProblemSolveHistory::getExecutionTimeMs)
                                         .thenComparing(ProblemSolveHistory::getUserId)
                         )
@@ -294,7 +291,15 @@ public class ProblemStore {
         return submittedHistoriesByProblemId;
     }
 
-    private ProblemSolveHistory pickFasterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+    private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+        if (candidateHistory.getCost() < currentHistory.getCost()) {
+            return candidateHistory;
+        }
+
+        if (candidateHistory.getCost() > currentHistory.getCost()) {
+            return currentHistory;
+        }
+
         if (candidateHistory.getExecutionTimeMs() < currentHistory.getExecutionTimeMs()) {
             return candidateHistory;
         }
@@ -358,8 +363,7 @@ public class ProblemStore {
     }
 
     private long measureProblemSolveHistory(ProblemSolveHistory history) {
-        return Long.BYTES
-                + measureString(history.getProblemId())
+        return measureString(history.getProblemId())
                 + measureString(history.getUserId())
                 + measureString(resolveDbmsType(history).name())
                 + measureString(history.getSubmittedSql())
@@ -378,7 +382,7 @@ public class ProblemStore {
         return value.getBytes(StandardCharsets.UTF_8).length;
     }
 
-    private record ProblemSubmittedHistoryKey(String problemId, String userId, DbmsType dbmsType) {
+    private record ProblemSubmittedHistoryKey(String problemId, String userId) {
     }
 
     public record ProblemListEntry(Problem problem,
@@ -404,3 +408,4 @@ public class ProblemStore {
     }
 
 }
+

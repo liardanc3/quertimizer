@@ -142,7 +142,7 @@ function FilterIcon({ isActive }: { isActive: boolean }) {
 
 function EmptyProfileState() {
   return (
-    <div className="page-stack">
+    <div className="page-stack profile-page">
       <section className="panel-card">
         <p className="panel-meta">프로필</p>
         <h1 className="page-title">조회할 프로필이 없다.</h1>
@@ -154,7 +154,7 @@ function EmptyProfileState() {
 
 function LoadingState() {
   return (
-    <div className="page-stack">
+    <div className="page-stack profile-page">
       <section className="panel-card">
         <p className="panel-meta">프로필</p>
         <h1 className="page-title">프로필을 불러오는 중...</h1>
@@ -165,7 +165,7 @@ function LoadingState() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div className="page-stack">
+    <div className="page-stack profile-page">
       <section className="panel-card">
         <p className="panel-meta">프로필</p>
         <h1 className="page-title">프로필을 불러오지 못했다.</h1>
@@ -400,7 +400,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack profile-page">
       <section className="panel-card profile-hero-card">
         <div className="profile-hero-layout profile-hero-layout-simple">
           <div className="profile-hero-copy">

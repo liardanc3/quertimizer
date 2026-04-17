@@ -94,7 +94,7 @@ public class RankService {
             }
 
             UserSolvedHistoryKey historyKey = new UserSolvedHistoryKey(history.getUserId(), history.getProblemId());
-            bestHistoryByKey.merge(historyKey, history, this::pickFasterHistory);
+            bestHistoryByKey.merge(historyKey, history, this::pickBetterHistory);
         }
 
         return bestHistoryByKey.values().stream().toList();
@@ -294,7 +294,15 @@ public class RankService {
                 .thenComparing(RankMetrics::userId);
     }
 
-    private ProblemSolveHistory pickFasterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+    private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+        if (candidateHistory.getCost() < currentHistory.getCost()) {
+            return candidateHistory;
+        }
+
+        if (candidateHistory.getCost() > currentHistory.getCost()) {
+            return currentHistory;
+        }
+
         if (candidateHistory.getExecutionTimeMs() < currentHistory.getExecutionTimeMs()) {
             return candidateHistory;
         }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import CommunityPostList from '../components/community/CommunityPostList';
 import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
 import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
+import './CommunityPage.css';
 
 type CommunitySortKey = 'relevance' | 'latest' | 'oldest' | 'views' | 'likes' | 'comments';
 

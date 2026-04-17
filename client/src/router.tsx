@@ -171,14 +171,18 @@ export default function AppRouter() {
       return;
     }
 
-    if (window.location.pathname === PROBLEMS_PATH) {
+    if (window.location.pathname === PROBLEMS_PATH || route.type === 'problem') {
       return;
     }
 
     navigate(PROBLEMS_PATH, { replace: true });
-  }, [pathname, shouldRequireUserIdSetup]);
+  }, [pathname, route.type, shouldRequireUserIdSetup]);
 
   if (shouldRequireUserIdSetup) {
+    if (route.type === 'problem') {
+      return <ProblemSolvePage key={route.problemId} problemId={route.problemId} />;
+    }
+
     return <HomePage />;
   }
 

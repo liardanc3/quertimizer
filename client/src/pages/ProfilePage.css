@@ -630,3 +630,77 @@
     border-color: var(--line-soft);
   }
 }
+
+.profile-page {
+  gap: 0.82rem;
+}
+
+.profile-page > .panel-card {
+  border-radius: 1rem;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-page .profile-hero-meta-row,
+.profile-page .profile-hero-actions,
+.profile-page .profile-link-list {
+  gap: 0.56rem;
+}
+
+.profile-page .profile-link-chip,
+.profile-page .profile-summary-card,
+.profile-page .profile-option-card,
+.profile-page .profile-records-shell,
+.profile-page .profile-empty-state {
+  border-color: var(--line-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-page .profile-name-line,
+.profile-page .profile-summary-value,
+.profile-page .profile-option-card strong,
+.profile-page .profile-record-problem-id {
+  color: var(--ink-strong);
+}
+
+.profile-page .profile-bio-text,
+.profile-page .profile-link-value,
+.profile-page .profile-option-card span,
+.profile-page .profile-records-table tbody td,
+.profile-page .profile-record-dbms-text,
+.profile-page .profile-record-execution-time {
+  color: var(--ink-base);
+}
+
+.profile-page .profile-link-label,
+.profile-page .profile-record-search-label,
+.profile-page .profile-record-title,
+.profile-page .profile-record-date,
+.profile-page .profile-empty-state {
+  color: var(--ink-soft);
+}
+
+.profile-page .profile-link-add-button,
+.profile-page .profile-record-icon-button,
+.profile-page .profile-record-filter-popover {
+  border-color: var(--line-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-page .profile-records-table thead th,
+.profile-page .profile-records-table tbody td {
+  border-color: var(--line-soft);
+}
+
+.profile-page .profile-feedback-card.is-success {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: var(--success-surface);
+}
+
+.profile-page .profile-feedback-card.is-error {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: var(--danger-surface);
+}

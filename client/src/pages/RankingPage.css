@@ -449,3 +449,80 @@
     border-bottom-color: var(--line-soft);
   }
 }
+
+.ranking-page {
+  gap: 0.82rem;
+}
+
+.ranking-page > .panel-card {
+  border-radius: 1rem;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.ranking-page .ranking-toolbar {
+  gap: 0.72rem;
+}
+
+.ranking-page .ranking-control-label {
+  color: var(--ink-soft);
+}
+
+.ranking-page .segmented {
+  border-color: var(--line-soft);
+  background: transparent;
+}
+
+.ranking-page .ranking-search-shell {
+  padding: 0 0.22rem 0 0.32rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.78rem;
+  background: transparent;
+}
+
+.ranking-page .ranking-search-input {
+  color: var(--ink-strong);
+}
+
+.ranking-page .ranking-search-button {
+  color: var(--ink-soft);
+}
+
+.ranking-page .ranking-table {
+  margin-top: 0.72rem;
+}
+
+.ranking-page .ranking-row {
+  border-color: var(--line-soft);
+  background: transparent;
+  color: var(--ink-base);
+  box-shadow: none;
+}
+
+.ranking-page .ranking-row.is-highlight {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.ranking-page .ranking-rank-badge,
+.ranking-page .ranking-change-badge,
+.ranking-page .ranking-tooltip-button {
+  border-color: var(--line-soft);
+  background: transparent;
+  color: var(--ink-base);
+}
+
+.ranking-page .ranking-rank-badge.is-top,
+.ranking-page .ranking-profile-trigger strong,
+.ranking-page .ranking-search-button:hover {
+  color: var(--accent-ink);
+}
+
+.ranking-page .ranking-change-badge.is-up {
+  color: var(--success-strong);
+}
+
+.ranking-page .ranking-change-badge.is-down {
+  color: var(--danger-strong);
+}

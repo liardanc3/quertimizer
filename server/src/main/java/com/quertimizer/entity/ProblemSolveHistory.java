@@ -5,9 +5,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,19 +15,17 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "problem_solve_history")
+@IdClass(ProblemSolveHistoryId.class)
+@Table(name = "problem_top_solve_history")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProblemSolveHistory {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "history_id", nullable = false)
-    private Long historyId;
-
     @Column(name = "problem_id", nullable = false, length = 11)
     private String problemId;
 
+    @Id
     @Column(name = "user_id", nullable = false, length = 50)
     private String userId;
 

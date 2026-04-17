@@ -10,6 +10,7 @@ import {
 } from '../lib/communityApi';
 import { COMMUNITY_PATH, getCommunityPostEditPath, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
 import { useMockSession } from '../lib/session';
+import './CommunityPage.css';
 
 interface CommunityDetailPageProps {
   postId: string;
@@ -285,7 +286,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
   if (isLoading) {
     return (
-      <div className="page-stack">
+      <div className="page-stack community-detail-page">
         <section className="panel-card community-detail-card">
           <h1 className="community-detail-title">게시글을 불러오는 중이다.</h1>
         </section>
@@ -295,7 +296,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
   if (!post) {
     return (
-      <div className="page-stack">
+      <div className="page-stack community-detail-page">
         <section className="panel-card community-detail-card">
           <h1 className="community-detail-title">게시글을 찾을 수 없다.</h1>
           <p className="muted-text">{errorMessage ?? '삭제되었거나 잘못된 경로다.'}</p>
@@ -305,7 +306,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack community-detail-page">
       <section className="panel-card community-detail-card">
         <div className="community-detail-topbar">
           <div className="community-detail-topbar-actions">

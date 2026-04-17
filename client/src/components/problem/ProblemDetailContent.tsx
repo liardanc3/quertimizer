@@ -515,38 +515,38 @@ function renderTextBlock(lines: string[], emptyMessage: string) {
 
 function RefreshIcon() {
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
       <path
-        d="M15.9 7.75A6.15 6.15 0 0 0 5.75 4.85"
+        d="M12.85 6.1A4.95 4.95 0 0 0 4.7 3.8"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
       <path
-        d="M5.7 2.3v3.15h3.15"
+        d="M4.65 1.95v2.7h2.7"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
       <path
-        d="M4.1 12.25A6.15 6.15 0 0 0 14.25 15.15"
+        d="M3.15 9.9A4.95 4.95 0 0 0 11.3 12.2"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
       <path
-        d="M14.3 17.7v-3.15H11.15"
+        d="M11.35 14.05v-2.7h-2.7"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
     </svg>
   );
@@ -967,7 +967,7 @@ export default function ProblemDetailContent({
             >
               <CollapseChevronIcon collapsed={collapsedSections.table} />
             </button>
-            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+            {!collapsedSections.table ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
           </div>
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
@@ -979,7 +979,7 @@ export default function ProblemDetailContent({
             {sectionActions?.table}
             <button
               type="button"
-              className="solve-detail-section-action"
+              className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
               aria-label="테이블 정보 레이아웃 초기화"
               onClick={() => resetGridLayout('table')}
             >
@@ -1070,7 +1070,7 @@ export default function ProblemDetailContent({
             >
               <CollapseChevronIcon collapsed={collapsedSections.erd} />
             </button>
-            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+            {!collapsedSections.erd ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
           </div>
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
@@ -1080,7 +1080,7 @@ export default function ProblemDetailContent({
           </div>
           <div className="solve-detail-section-header-actions">
             {sectionActions?.erd}
-            <button type="button" className="solve-detail-section-action" aria-label="ERD 레이아웃 초기화" onClick={() => setErdResetKey((current) => current + 1)}>
+            <button type="button" className="solve-detail-section-action solve-pane-action solve-pane-action-icon" aria-label="ERD 레이아웃 초기화" onClick={() => setErdResetKey((current) => current + 1)}>
               <RefreshIcon />
             </button>
           </div>
@@ -1088,7 +1088,7 @@ export default function ProblemDetailContent({
         {!collapsedSections.erd ? (
           <div className="solve-detail-section-body">
             {parsedDdl.tables.length > 0 ? (
-              <div className="solve-erd-frame solve-detail-erd-frame">
+              <div key={`erd-frame-${erdResetKey}`} className="solve-erd-frame solve-detail-erd-frame">
                 <ReactFlowDiagram tables={parsedDdl.tables} relations={parsedDdl.relations} className="solve-erd-diagram" resetKey={erdResetKey} />
               </div>
             ) : (
@@ -1114,7 +1114,7 @@ export default function ProblemDetailContent({
             >
               <CollapseChevronIcon collapsed={collapsedSections.dataSample} />
             </button>
-            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+            {!collapsedSections.dataSample ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
           </div>
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
@@ -1126,7 +1126,7 @@ export default function ProblemDetailContent({
             {sectionActions?.dataSample}
             <button
               type="button"
-              className="solve-detail-section-action"
+              className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
               aria-label="데이터 예시 레이아웃 초기화"
               onClick={() => resetGridLayout('dataSample')}
             >
@@ -1211,7 +1211,7 @@ export default function ProblemDetailContent({
             >
               <CollapseChevronIcon collapsed={collapsedSections.condition} />
             </button>
-            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+            {!collapsedSections.condition ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
           </div>
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
@@ -1244,7 +1244,7 @@ export default function ProblemDetailContent({
             >
               <CollapseChevronIcon collapsed={collapsedSections.output} />
             </button>
-            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+            {!collapsedSections.output ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
           </div>
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
@@ -1277,7 +1277,7 @@ export default function ProblemDetailContent({
             >
               <CollapseChevronIcon collapsed={collapsedSections.outputSample} />
             </button>
-            <span className="solve-detail-section-rail-line" aria-hidden="true" />
+            {!collapsedSections.outputSample ? <span className="solve-detail-section-rail-line" aria-hidden="true" /> : null}
           </div>
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
@@ -1289,7 +1289,7 @@ export default function ProblemDetailContent({
             {sectionActions?.outputSample}
             <button
               type="button"
-              className="solve-detail-section-action"
+              className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
               aria-label="출력 예시 레이아웃 초기화"
               onClick={() => resetGridLayout('outputSample')}
             >

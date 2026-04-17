@@ -130,7 +130,7 @@ export default function RankingPage() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack ranking-page">
       <section className="panel-card">
         <div className="ranking-toolbar">
           <div className="ranking-toolbar-line">

@@ -1,0 +1,234 @@
+.community-page,
+.community-detail-page,
+.community-write-root {
+  gap: 0.82rem;
+}
+
+.community-page > .panel-card,
+.community-detail-page > .panel-card,
+.community-write-root > .panel-card {
+  border-radius: 1rem;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.community-page .community-search-panel,
+.community-page .community-list-panel,
+.community-detail-page .community-detail-card,
+.community-detail-page .community-comments-card,
+.community-write-root .community-write-page {
+  padding: 0.96rem 1rem;
+}
+
+.community-page .community-search-form,
+.community-page .community-list-toolbar,
+.community-detail-page .community-detail-header,
+.community-write-root .community-write-layout,
+.community-write-root .community-write-main {
+  gap: 0.78rem;
+}
+
+.community-page .community-list-meta,
+.community-detail-page .community-detail-meta,
+.community-detail-page .community-detail-actions,
+.community-write-root .community-write-header,
+.community-write-root .community-draft-strip {
+  gap: 0.62rem;
+}
+
+.community-page .community-search-input,
+.community-page .community-sort-select,
+.community-detail-page .community-comment-textarea,
+.community-write-root .community-tag-input-field,
+.community-write-root .community-editor-body {
+  border: 1px solid var(--line-soft);
+  border-radius: 0.8rem;
+  background: transparent;
+  color: var(--ink-strong);
+  box-shadow: none;
+}
+
+.community-page .community-search-input::placeholder,
+.community-detail-page .community-comment-textarea::placeholder,
+.community-write-root .community-tag-input-field::placeholder {
+  color: var(--ink-faint);
+}
+
+.community-page .community-sort-select-wrap {
+  position: relative;
+}
+
+.community-page .community-sort-select {
+  min-height: 1.86rem;
+  padding: 0 2rem 0 0.72rem;
+  appearance: none;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.community-page .community-sort-select-wrap::after {
+  content: 'v';
+  position: absolute;
+  right: 0.72rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  pointer-events: none;
+}
+
+.community-page .community-search-button,
+.community-page .community-write-button,
+.community-detail-page .community-like-button,
+.community-detail-page .community-detail-menu-button,
+.community-write-root .community-tag-submit-button,
+.community-write-root .community-editor-tool {
+  border-radius: 0.78rem;
+}
+
+.community-page .community-post-card,
+.community-page .community-sidebar-card,
+.community-page .community-search-summary-card,
+.community-page .community-tag-suggestion,
+.community-page .community-popular-tag-card,
+.community-detail-page .community-detail-menu-panel,
+.community-detail-page .community-comment-compose,
+.community-detail-page .community-comment-empty,
+.community-write-root .community-draft-strip,
+.community-write-root .community-editor-shell,
+.community-write-root .community-tag-related-box {
+  border: 1px solid var(--line-soft);
+  border-radius: 1rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.community-page .community-post-title,
+.community-detail-page .community-detail-title,
+.community-write-root .page-title {
+  color: var(--ink-strong);
+  letter-spacing: -0.02em;
+}
+
+.community-page .community-post-excerpt,
+.community-page .community-tag-suggestion-copy span,
+.community-page .community-stat-note,
+.community-detail-page .community-detail-lead,
+.community-detail-page .community-feedback-text,
+.community-write-root .muted-text,
+.community-write-root .community-draft-copy span {
+  color: var(--ink-soft);
+}
+
+.community-page .community-category-badge.is-discussion,
+.community-page .community-post-stat,
+.community-detail-page .community-like-button,
+.community-detail-page .community-detail-tag,
+.community-write-root .community-selected-tag,
+.community-write-root .community-tag-related-item {
+  border-color: var(--line-soft);
+  background: transparent;
+  color: var(--ink-base);
+}
+
+.community-page .community-post-stat span,
+.community-page .community-post-author-row span,
+.community-detail-page .community-detail-meta span,
+.community-write-root .community-tag-related-caption,
+.community-write-root .hint-text {
+  color: var(--ink-subtle);
+}
+
+.community-detail-page .community-detail-topbar,
+.community-detail-page .community-detail-topbar-actions,
+.community-write-root .community-detail-topbar {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.community-detail-page .community-detail-menu-panel {
+  padding: 0.38rem;
+}
+
+.community-detail-page .community-detail-menu-item {
+  border-radius: 0.72rem;
+  color: var(--ink-base);
+}
+
+.community-detail-page .community-detail-menu-item:hover,
+.community-detail-page .community-detail-menu-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.community-detail-page .community-content-body,
+.community-detail-page .community-comment-list,
+.community-write-root .community-editor-shell,
+.community-write-root .community-write-actions {
+  gap: 0.82rem;
+}
+
+.community-detail-page .community-comment-compose {
+  padding: 0.92rem 0.96rem;
+}
+
+.community-write-root .community-editor-shell {
+  padding: 0.55rem;
+}
+
+.community-write-root .community-editor-toolbar {
+  gap: 0.42rem;
+}
+
+.community-write-root .community-editor-tool {
+  min-height: 1.8rem;
+  min-width: 1.8rem;
+  padding: 0;
+}
+
+.community-write-root .community-editor-body {
+  min-height: 18rem;
+  padding: 0.88rem 0.96rem;
+}
+
+.community-write-root .community-write-actions .btn,
+.community-detail-page .community-comment-compose-actions .btn {
+  min-height: 2.1rem;
+  border-radius: 0.78rem;
+}
+
+.community-write-root .community-draft-copy strong,
+.community-write-root .community-tag-related-title,
+.community-detail-page .community-feedback-text {
+  color: var(--ink-strong);
+}
+
+@media (prefers-color-scheme: dark) {
+  .community-page .community-search-panel,
+  .community-page .community-list-panel,
+  .community-detail-page .community-detail-card,
+  .community-detail-page .community-comments-card,
+  .community-write-root .community-write-page,
+  .community-page .community-post-card,
+  .community-page .community-sidebar-card,
+  .community-page .community-search-summary-card,
+  .community-page .community-tag-suggestion,
+  .community-page .community-popular-tag-card,
+  .community-detail-page .community-detail-menu-panel,
+  .community-detail-page .community-comment-compose,
+  .community-detail-page .community-comment-empty,
+  .community-write-root .community-draft-strip,
+  .community-write-root .community-editor-shell,
+  .community-write-root .community-tag-related-box {
+    background: var(--surface-muted);
+  }
+
+  .community-page .community-search-input,
+  .community-page .community-sort-select,
+  .community-detail-page .community-comment-textarea,
+  .community-write-root .community-tag-input-field,
+  .community-write-root .community-editor-body {
+    background: var(--surface);
+  }
+}

@@ -71,6 +71,24 @@ function clearLandingQuery() {
   window.history.replaceState(window.history.state ?? {}, '', nextUrl);
 }
 
+function consumeSolvePageAuthReturnPath() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const storedValue = window.sessionStorage.getItem('quertimizer.solve-auth-return');
+  if (!storedValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue = JSON.parse(storedValue) as { path?: string };
+    return typeof parsedValue.path === 'string' && parsedValue.path.trim() !== '' ? parsedValue.path : null;
+  } catch {
+    return null;
+  }
+}
+
 function GithubMarkIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -246,7 +264,22 @@ export default function PublicHomePage() {
     let isDisposed = false;
 
     async function handleSocialLoginState() {
+      const isPopupWindow = window.opener != null && !window.opener.closed;
+
       if (socialLoginError != null) {
+        if (isPopupWindow) {
+          window.opener.postMessage(
+            {
+              type: 'quertimizer-social-login-error',
+              provider: socialLoginError,
+            },
+            window.location.origin,
+          );
+          clearLandingQuery();
+          window.close();
+          return;
+        }
+
         if (!isDisposed) {
           setLoginErrorReasons([getSocialLoginErrorMessage(socialLoginError)]);
         }
@@ -255,12 +288,25 @@ export default function PublicHomePage() {
       }
 
       try {
+        if (isPopupWindow) {
+          window.opener.postMessage(
+            {
+              type: 'quertimizer-social-login-success',
+              provider: socialLoginSuccess,
+            },
+            window.location.origin,
+          );
+          clearLandingQuery();
+          window.close();
+          return;
+        }
+
         const session = await fetchSessionMe();
         if (isDisposed) {
           return;
         }
 
-        await handleAuthenticatedUser(session);
+        await handleAuthenticatedUser(session, false, { useSolveReturnPath: true });
       } catch {
         if (!isDisposed) {
           setLoginErrorReasons([getSocialLoginErrorMessage(socialLoginSuccess)]);
@@ -352,14 +398,19 @@ export default function PublicHomePage() {
     }
   }
 
-  async function handleAuthenticatedUser(session: SessionMeResult, shouldRememberLogin = false) {
+  async function handleAuthenticatedUser(
+    session: SessionMeResult,
+    shouldRememberLogin = false,
+    options: { useSolveReturnPath?: boolean } = {},
+  ) {
     await completeAuthentication(session, shouldRememberLogin);
 
     if (!session.authenticated) {
       return;
     }
 
-    navigate(DEFAULT_PROBLEM_PATH);
+    const solveReturnPath = options.useSolveReturnPath ? consumeSolvePageAuthReturnPath() : null;
+    navigate(solveReturnPath ?? DEFAULT_PROBLEM_PATH);
   }
 
   async function handleLogin() {

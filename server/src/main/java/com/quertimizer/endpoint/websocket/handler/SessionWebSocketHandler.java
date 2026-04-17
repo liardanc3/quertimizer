@@ -3,6 +3,7 @@ package com.quertimizer.endpoint.websocket.handler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.constant.DbmsType;
 import com.quertimizer.endpoint.websocket.dto.ProblemExecuteRes;
+import com.quertimizer.endpoint.websocket.dto.ProblemSubmitProgressRes;
 import com.quertimizer.endpoint.websocket.dto.ProblemSocketReq;
 import com.quertimizer.log.LogFormatter;
 import com.quertimizer.service.ProblemQueryService;
@@ -68,6 +69,8 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
             switch (request.type()) {
                 case "problem.execute" -> handleProblemExecute(session, request);
+                case "problem.execute.page" -> handleProblemExecutePage(session, request);
+                case "problem.execute.stop" -> handleProblemExecuteStop(session, request);
                 case "problem.submit" -> handleProblemSubmit(session, request);
                 case "problem.leave" -> handleProblemLeave(session, request);
                 default -> {
@@ -119,11 +122,20 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         problemExecutingExecutor.execute(() -> executeProblemQuery(session, request, authenticatedUserId));
     }
 
+    private void handleProblemExecutePage(WebSocketSession session, ProblemSocketReq request) throws Exception {
+        String authenticatedUserId = resolveAuthenticatedUserId(session);
+        problemExecutingExecutor.execute(() -> executeProblemQueryPage(session, request, authenticatedUserId));
+    }
+
     private void handleProblemSubmit(WebSocketSession session, ProblemSocketReq request) throws Exception {
         String authenticatedUserId = resolveAuthenticatedUserId(session);
 
         // SQL 제출도 동일한 실행 쓰레드에서 비동기 처리
         problemExecutingExecutor.execute(() -> submitProblemQuery(session, request, authenticatedUserId));
+    }
+
+    private void handleProblemExecuteStop(WebSocketSession session, ProblemSocketReq request) {
+        problemQueryService.cancelInteractiveExecution(session.getId());
     }
 
     private void handleProblemLeave(WebSocketSession session, ProblemSocketReq request) throws Exception {
@@ -213,7 +225,9 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
                     session.getId(),
                     request.problemId(),
                     request.sql(),
-                    resolveDbmsType(request.dbms())
+                    resolveDbmsType(request.dbms()),
+                    request.page(),
+                    request.pageSize()
             );
 
             sendObjectMessage(session, ProblemExecuteRes.executionSuccess(
@@ -224,6 +238,8 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
                     executionResult.rows(),
                     executionResult.planLines(),
                     executionResult.rowCount(),
+                    executionResult.currentPage(),
+                    executionResult.pageSize(),
                     executionResult.executionTimeMs(),
                     executionResult.cost()
             ));
@@ -236,6 +252,40 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    private void executeProblemQueryPage(WebSocketSession session, ProblemSocketReq request, String authenticatedUserId) {
+        try {
+            ProblemQueryService.QueryExecutionResult executionResult = problemQueryService.executeInteractiveSql(
+                    authenticatedUserId,
+                    session.getId(),
+                    request.problemId(),
+                    request.sql(),
+                    resolveDbmsType(request.dbms()),
+                    request.page(),
+                    request.pageSize()
+            );
+
+            sendObjectMessage(session, ProblemExecuteRes.executionSuccess(
+                    executionResult.problemId(),
+                    executionResult.mode(),
+                    executionResult.message(),
+                    executionResult.columns(),
+                    executionResult.rows(),
+                    executionResult.planLines(),
+                    executionResult.rowCount(),
+                    executionResult.currentPage(),
+                    executionResult.pageSize(),
+                    executionResult.executionTimeMs(),
+                    executionResult.cost()
+            ));
+        } catch (Exception exception) {
+            try {
+                sendObjectMessage(session, ProblemExecuteRes.error(resolveErrorMessage(exception)));
+            } catch (Exception sendException) {
+                log.warn("문제 실행 페이지 응답 전송에 실패했다.", sendException);
+            }
+        }
+    }
+
     private void submitProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedUserId) {
         try {
             ProblemQueryService.ProblemSubmitResult submitResult = problemQueryService.submitProblemSql(
@@ -243,7 +293,8 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
                     session.getId(),
                     request.problemId(),
                     request.sql(),
-                    resolveDbmsType(request.dbms())
+                    resolveDbmsType(request.dbms()),
+                    progress -> sendProblemSubmitProgressMessage(session, progress)
             );
 
             sendObjectMessage(session, submitResult.success()
@@ -262,6 +313,20 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
             } catch (Exception sendException) {
                 log.warn("문제 제출 실패 응답 전송에 실패했다.", sendException);
             }
+        }
+    }
+
+    private void sendProblemSubmitProgressMessage(WebSocketSession session, ProblemQueryService.ProblemSubmitProgress progress) {
+        try {
+            sendObjectMessage(session, ProblemSubmitProgressRes.of(
+                    progress.problemId(),
+                    progress.stepKey(),
+                    progress.status(),
+                    progress.message(),
+                    progress.detailLines()
+            ));
+        } catch (Exception exception) {
+            log.warn("제출 진행 상태 응답 전송에 실패했다.", exception);
         }
     }
 

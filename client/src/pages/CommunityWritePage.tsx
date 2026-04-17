@@ -21,6 +21,7 @@ import {
   type CommunityTagSuggestion,
 } from '../lib/communityApi';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
+import './CommunityPage.css';
 
 interface CommunityWritePageProps {
   postId?: string;
@@ -223,7 +224,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
 
   if (isLoading) {
     return (
-      <div className="page-stack">
+      <div className="page-stack community-write-root">
         <section className="panel-card community-detail-card">
           <p className="panel-meta">커뮤니티</p>
           <h1 className="page-title">글 정보를 불러오는 중이다.</h1>
@@ -234,7 +235,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
 
   if (postId && notFound) {
     return (
-      <div className="page-stack">
+      <div className="page-stack community-write-root">
         <section className="panel-card community-detail-card">
           <button type="button" className="btn ghost community-back-button" onClick={() => navigate(COMMUNITY_PATH)}>
             뒤로가기
@@ -466,7 +467,7 @@ export default function CommunityWritePage({ postId }: CommunityWritePageProps) 
   const pageChip = postId ? '글 수정' : '글쓰기';
 
   return (
-    <div className="page-stack">
+    <div className="page-stack community-write-root">
       <section className="panel-card community-write-page">
         <input
           ref={imageInputRef}

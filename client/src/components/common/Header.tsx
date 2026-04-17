@@ -225,7 +225,6 @@ export default function Header() {
     }
 
     logout();
-    navigate('/', { replace: true });
   }
 
   const marqueeTrackStyle =

@@ -1,7 +1,26 @@
 ﻿import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
+import type { FormEvent } from 'react';
+import { Fragment } from 'react';
+import './ProblemSolvePage.css';
+import './PublicHomePage.css';
+import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import { fetchProblemDetail, type ProblemDetailData } from '../lib/problemApi';
+import {
+  AuthApiError,
+  RecoveryApiError,
+  SignupApiError,
+  checkDuplicateEmail,
+  fetchSessionMe,
+  getApiBaseUrl,
+  login,
+  resetPassword,
+  sendPasswordResetCode,
+  signup,
+  verifyPasswordResetCode,
+} from '../lib/authApi';
+import { completeAuthentication } from '../lib/authSession';
 import {
   SessionSocketError,
   sendSessionSocketMessage,
@@ -9,13 +28,17 @@ import {
   subscribeSessionSocketMessages,
   type SessionSocketMessage,
 } from '../lib/sessionSocket';
-import { useMockSession } from '../lib/session';
+import { syncSession, useMockSession } from '../lib/session';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import type { DbmsType, ProblemDetail } from '../types/domain';
+import logoImage from '../assets/logo.png';
 
 interface ProblemSolvePageProps {
   problemId: string;
 }
+
+type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
+type SolveAuthSocialProvider = 'google' | 'github' | 'kakao';
 
 type PanelKey = 'editor' | 'submit';
 
@@ -49,10 +72,15 @@ interface FloatingMoveState {
   startTop: number;
 }
 
+type FloatingResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
 interface FloatingResizeState {
   panelKey: PanelKey;
+  direction: FloatingResizeDirection;
   startX: number;
   startY: number;
+  startLeft: number;
+  startTop: number;
   startWidth: number;
   startHeight: number;
 }
@@ -74,7 +102,6 @@ interface CollapsedCardState {
   editor: boolean;
   execute: boolean;
   submit: boolean;
-  resultTable: boolean;
 }
 
 type ProblemExecutionMode = 'select' | 'explain' | 'explain_analyze' | 'command';
@@ -88,6 +115,8 @@ interface ProblemExecutionResult {
   rows: string[][];
   planLines: string[];
   rowCount: number;
+  currentPage?: number;
+  pageSize?: number;
   executionTimeMs?: number;
 }
 
@@ -100,7 +129,26 @@ interface ProblemSocketMessage extends SessionSocketMessage {
   rows?: string[][];
   planLines?: string[];
   rowCount?: number;
+  currentPage?: number | null;
+  pageSize?: number | null;
   executionTimeMs?: number | null;
+}
+
+type ProblemSubmitStepStatus = 'running' | 'success' | 'incorrect' | 'error';
+
+interface ProblemSubmitProgressMessage extends SessionSocketMessage {
+  problemId?: string | null;
+  stepKey?: string | null;
+  status?: ProblemSubmitStepStatus | null;
+  message?: string | null;
+  detailLines?: string[] | null;
+}
+
+interface ProblemSubmitProgressStep {
+  stepKey: string;
+  status: ProblemSubmitStepStatus;
+  message: string;
+  detailLines: string[];
 }
 
 type SqlAutocompleteKind = 'keyword' | 'table' | 'column';
@@ -109,6 +157,36 @@ interface SqlAutocompleteItem {
   value: string;
   kind: SqlAutocompleteKind;
   detail?: string;
+}
+
+type SqlExecutionPickerOptionKind = 'statement' | 'all';
+
+interface SqlStatementSegment {
+  sql: string;
+  start: number;
+  end: number;
+  preview: string;
+}
+
+interface SqlExecutionPickerOption {
+  key: string;
+  kind: SqlExecutionPickerOptionKind;
+  label: string;
+  preview: string;
+  start: number;
+  end: number;
+  segments: SqlStatementSegment[];
+}
+
+interface SqlExecutionPickerState {
+  options: SqlExecutionPickerOption[];
+  selectedIndex: number;
+  selectionStart: number;
+  selectionEnd: number;
+  left: number;
+  top: number;
+  maxWidth: number;
+  maxHeight: number;
 }
 
 interface GridColumn {
@@ -140,6 +218,35 @@ interface SqlAutocompleteAnchor {
   maxHeight: number;
 }
 
+type SqlHighlightKind =
+  | 'keyword'
+  | 'explain-keyword'
+  | 'table'
+  | 'column'
+  | 'string'
+  | 'number'
+  | 'comment'
+  | 'function'
+  | 'operator'
+  | 'identifier';
+
+interface SqlHighlightToken {
+  text: string;
+  kind: SqlHighlightKind | null;
+}
+
+type ExecutionStatementStatus = 'idle' | 'running' | 'success' | 'error';
+
+interface ExecutionStatementRun {
+  key: string;
+  sql: string;
+  preview: string;
+  start: number;
+  end: number;
+  status: ExecutionStatementStatus;
+  result: ProblemExecutionResult | null;
+}
+
 const panelOrder: PanelKey[] = ['editor', 'submit'];
 
 const panelLabels: Record<PanelKey, string> = {
@@ -156,6 +263,16 @@ const panelMinHeights: Record<PanelKey, number> = {
   editor: 320,
   submit: 260,
 };
+
+const SOLVE_PAGE_AUTH_RETURN_STORAGE_KEY = 'quertimizer.solve-auth-return';
+const PASSWORD_RESET_CODE_PATTERN = /^[A-Z0-9]{6}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.';
+const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 사용 가능 여부를 확인하는 중입니다.';
+const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
+const SIGNUP_EMAIL_DUPLICATED_MESSAGE = '이미 사용 중인 이메일입니다.';
+const SIGNUP_PASSWORD_HINT = '특수문자를 포함해 8자 이상 입력해 주세요.';
+const SIGNUP_PASSWORD_CONFIRM_HINT = '비밀번호를 다시 입력해 주세요.';
 
 const SQL_AUTOCOMPLETE_KEYWORDS = [
   'SELECT',
@@ -197,16 +314,109 @@ const SQL_AUTOCOMPLETE_KEYWORDS = [
   'UNION',
   'EXPLAIN',
   'EXPLAIN ANALYZE',
+  'EXPLAIN ANALYSE',
   'CREATE INDEX',
   'DROP INDEX',
 ];
+const SQL_HIGHLIGHT_KEYWORDS = new Set([
+  'SELECT',
+  'FROM',
+  'WHERE',
+  'GROUP',
+  'BY',
+  'ORDER',
+  'HAVING',
+  'LIMIT',
+  'OFFSET',
+  'JOIN',
+  'INNER',
+  'LEFT',
+  'RIGHT',
+  'FULL',
+  'OUTER',
+  'ON',
+  'AS',
+  'AND',
+  'OR',
+  'NOT',
+  'IN',
+  'EXISTS',
+  'BETWEEN',
+  'LIKE',
+  'IS',
+  'NULL',
+  'COUNT',
+  'SUM',
+  'AVG',
+  'MIN',
+  'MAX',
+  'DISTINCT',
+  'CASE',
+  'WHEN',
+  'THEN',
+  'ELSE',
+  'END',
+  'WITH',
+  'UNION',
+  'ALL',
+  'EXPLAIN',
+  'ANALYZE',
+  'ANALYSE',
+  'CREATE',
+  'TEMP',
+  'TABLE',
+  'INSERT',
+  'INTO',
+  'VALUES',
+  'UPDATE',
+  'SET',
+  'DELETE',
+  'INDEX',
+  'DROP',
+  'ALTER',
+  'ADD',
+  'PRIMARY',
+  'KEY',
+  'FOREIGN',
+  'REFERENCES',
+  'UNIQUE',
+  'CHECK',
+  'DEFAULT',
+  'PUBLIC',
+  'INTEGER',
+  'VARCHAR',
+  'TEXT',
+  'TIMESTAMP',
+  'DATE',
+  'BOOLEAN',
+  'DECIMAL',
+  'NUMERIC',
+  'BIGINT',
+  'SMALLINT',
+  'TRUE',
+  'FALSE',
+]);
+const SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS = new Set([
+  'FROM',
+  'JOIN',
+  'INTO',
+  'UPDATE',
+  'TABLE',
+  'INDEX',
+  'ON',
+]);
 const SQL_EDITOR_INDENT = '    ';
 const SQL_EDITOR_MIN_HEIGHT = 256;
 const SQL_EDITOR_DEFAULT_FONT_SIZE = 13.5;
 const SQL_EDITOR_MIN_FONT_SIZE = 11;
 const SQL_EDITOR_MAX_FONT_SIZE = 24;
 const SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT = 4;
-const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 0.76;
+const FLOATING_EDITOR_BACKGROUND_MIN_ALPHA = 0.12;
+const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 1;
+const SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO = 1.7;
+const SQL_EDITOR_INLINE_PADDING_TOP_REM = 1.08;
+const SQL_EDITOR_FLOATING_PADDING_TOP_REM = 1.34;
+const SUBMIT_STEP_ORDER = ['submit', 'answer', 'cost', 'plan'] as const;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -241,7 +451,7 @@ function formatExecutionMetricValue(value?: number) {
     return '-';
   }
 
-  return formatGroupedNumber(Math.round(value));
+  return `${formatGroupedNumber(Math.round(value))} ms`;
 }
 
 function getExecutionResultPageCount(rowCount: number) {
@@ -257,6 +467,35 @@ function toProblemSequence(problemId: string) {
 
 function buildColumnTemplate(columnWidths: number[]) {
   return columnWidths.map((width) => `${width}px`).join(' ');
+}
+
+function resolveWheelScrollableElement(startTarget: EventTarget | null, boundaryElement: HTMLElement, deltaY: number) {
+  let currentElement = startTarget instanceof HTMLElement ? startTarget : null;
+
+  while (currentElement) {
+    const computedStyle = window.getComputedStyle(currentElement);
+    const canScrollY =
+      /(auto|scroll|overlay)/.test(computedStyle.overflowY) &&
+      currentElement.scrollHeight > currentElement.clientHeight + 1;
+
+    if (canScrollY) {
+      const maxScrollTop = currentElement.scrollHeight - currentElement.clientHeight;
+      const canScrollFurther =
+        deltaY < 0 ? currentElement.scrollTop > 0 : deltaY > 0 ? currentElement.scrollTop < maxScrollTop : false;
+
+      if (canScrollFurther || currentElement === boundaryElement) {
+        return currentElement;
+      }
+    }
+
+    if (currentElement === boundaryElement) {
+      break;
+    }
+
+    currentElement = currentElement.parentElement;
+  }
+
+  return null;
 }
 
 function resolveColumnWidths(containerWidth: number, columnCount: number, initialWeights?: number[]) {
@@ -291,18 +530,26 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
 }
 
 function createInitialFloatingLayouts(): FloatingPanelLayoutState {
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1440;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
+  const editorWidth = 760;
+  const editorHeight = 620;
+  const submitWidth = 400;
+  const submitHeight = 330;
+  const viewportPadding = 24;
+
   return {
     editor: {
-      left: 24,
-      top: 118,
-      width: 760,
-      height: 620,
+      left: Math.max(viewportPadding, viewportWidth - editorWidth - viewportPadding),
+      top: Math.max(86, viewportHeight - editorHeight - viewportPadding - 56),
+      width: editorWidth,
+      height: editorHeight,
     },
     submit: {
-      left: 840,
-      top: 500,
-      width: 400,
-      height: 330,
+      left: Math.max(viewportPadding, viewportWidth - submitWidth - viewportPadding),
+      top: Math.max(180, viewportHeight - submitHeight - viewportPadding),
+      width: submitWidth,
+      height: submitHeight,
     },
   };
 }
@@ -327,8 +574,86 @@ function createProblemExecutionError(message: string): ProblemExecutionResult {
   };
 }
 
-function shouldRenderExecutionMessage(message: string) {
-  return !['조회 결과를 반환했다.', '실행 계획을 반환했다.'].includes(message.trim());
+function hasRequiredPasswordFormat(value: string) {
+  return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
+}
+
+function sanitizeVerificationCode(value: string) {
+  return value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+}
+
+function isAuthenticationRequiredMessage(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return message.includes('로그인 후') || message.includes('인증') || message.includes('세션');
+}
+
+function getSolveAuthSocialLoginErrorMessage(provider: SolveAuthSocialProvider | 'oauth2' | null) {
+  switch (provider) {
+    case 'google':
+      return 'Google 로그인에 실패했습니다.';
+    case 'github':
+      return 'Github 로그인에 실패했습니다.';
+    case 'kakao':
+      return 'Kakao 로그인에 실패했습니다.';
+    default:
+      return '소셜 로그인에 실패했습니다.';
+  }
+}
+
+function saveSolvePageAuthReturn(problemId: string, sql: string, selectedDbms: DbmsType) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.setItem(
+    SOLVE_PAGE_AUTH_RETURN_STORAGE_KEY,
+    JSON.stringify({
+      problemId,
+      path: window.location.pathname + window.location.hash,
+      sql,
+      selectedDbms,
+    }),
+  );
+}
+
+function consumeSolvePageAuthReturn(problemId: string) {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const storedValue = window.sessionStorage.getItem(SOLVE_PAGE_AUTH_RETURN_STORAGE_KEY);
+  if (!storedValue) {
+    return null;
+  }
+
+  window.sessionStorage.removeItem(SOLVE_PAGE_AUTH_RETURN_STORAGE_KEY);
+
+  try {
+    const parsedValue = JSON.parse(storedValue) as {
+      problemId?: string;
+      path?: string;
+      sql?: string;
+      selectedDbms?: DbmsType;
+    };
+
+    if (parsedValue.problemId !== problemId) {
+      return null;
+    }
+
+    return {
+      path: typeof parsedValue.path === 'string' ? parsedValue.path : null,
+      sql: typeof parsedValue.sql === 'string' ? parsedValue.sql : '',
+      selectedDbms:
+        parsedValue.selectedDbms === 'oracle' || parsedValue.selectedDbms === 'postgresql'
+          ? parsedValue.selectedDbms
+          : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function resolveProblemDdl(detail: ProblemDetailData | null, dbms: DbmsType) {
@@ -453,6 +778,393 @@ function createAutocompleteSuggestions(items: SqlAutocompleteItem[], typedToken:
       .slice(0, 6);
 }
 
+function createSqlStatementPreview(sql: string, maxLength = 60) {
+  const collapsedSql = sql.replace(/\s+/g, ' ').trim();
+
+  if (collapsedSql.length <= maxLength) {
+    return collapsedSql;
+  }
+
+  return `${collapsedSql.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function createExecutionStatementRunKey(start: number, end: number) {
+  return `${start}:${end}`;
+}
+
+function createExecutionStatementRuns(
+  segments: SqlStatementSegment[],
+  initiallyRunningIndex: number | null = null,
+): ExecutionStatementRun[] {
+  return segments.map((segment, index) => ({
+    key: createExecutionStatementRunKey(segment.start, segment.end),
+    sql: segment.sql,
+    preview: segment.preview,
+    start: segment.start,
+    end: segment.end,
+    status: initiallyRunningIndex === index ? 'running' : 'idle',
+    result: null,
+  }));
+}
+
+function createSingleExecutionStatementRun(sql: string, result: ProblemExecutionResult): ExecutionStatementRun {
+  const normalizedSql = sql.trim();
+  const preview = createSqlStatementPreview(normalizedSql === '' ? 'SQL' : normalizedSql);
+
+  return {
+    key: createExecutionStatementRunKey(0, Math.max(sql.length, 0)),
+    sql,
+    preview,
+    start: 0,
+    end: Math.max(sql.length, 0),
+    status: result.success ? 'success' : 'error',
+    result,
+  };
+}
+
+function parseSqlStatements(value: string): SqlStatementSegment[] {
+  const statements: SqlStatementSegment[] = [];
+  let statementStart = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  const pushStatement = (statementEnd: number) => {
+    const rawStatement = value.slice(statementStart, statementEnd);
+    const firstContentOffset = rawStatement.search(/\S/);
+
+    if (firstContentOffset === -1) {
+      statementStart = statementEnd;
+      return;
+    }
+
+    const lastContentOffset = rawStatement.length - rawStatement.trimEnd().length;
+    const start = statementStart + firstContentOffset;
+    const end = statementEnd - lastContentOffset;
+    const normalizedSql = value
+      .slice(start, end)
+      .trim()
+      .replace(/;+\s*$/, '')
+      .trim();
+
+    if (normalizedSql.length > 0) {
+      statements.push({
+        sql: normalizedSql,
+        start,
+        end,
+        preview: createSqlStatementPreview(normalizedSql),
+      });
+    }
+
+    statementStart = statementEnd;
+  };
+
+  for (let index = 0; index < value.length; index += 1) {
+    const currentChar = value[index];
+    const nextChar = value[index + 1];
+
+    if (inLineComment) {
+      if (currentChar === '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (currentChar === '*' && nextChar === '/') {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (currentChar === "'" && nextChar === "'") {
+        index += 1;
+        continue;
+      }
+
+      if (currentChar === "'") {
+        inSingleQuote = false;
+      }
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (currentChar === '"' && nextChar === '"') {
+        index += 1;
+        continue;
+      }
+
+      if (currentChar === '"') {
+        inDoubleQuote = false;
+      }
+      continue;
+    }
+
+    if (currentChar === '-' && nextChar === '-') {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (currentChar === '/' && nextChar === '*') {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (currentChar === "'") {
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (currentChar === '"') {
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (currentChar === ';') {
+      pushStatement(index + 1);
+    }
+  }
+
+  pushStatement(value.length);
+  return statements;
+}
+
+function isElementVisibleInViewport(element: HTMLElement | null) {
+  if (element == null) {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+
+  return rect.bottom > 0 && rect.right > 0 && rect.top < viewportHeight && rect.left < viewportWidth;
+}
+
+function hasBlankLineBoundary(value: string, leftEnd: number, rightStart: number) {
+  const betweenText = value.slice(leftEnd, rightStart);
+  return /\n\s*\n/.test(betweenText);
+}
+
+function resolveLooseSqlStatementGroup(
+  value: string,
+  statements: SqlStatementSegment[],
+  targetStatement: SqlStatementSegment,
+) {
+  const targetIndex = statements.findIndex(
+    (statement) => statement.start === targetStatement.start && statement.end === targetStatement.end,
+  );
+  if (targetIndex === -1) {
+    return [targetStatement];
+  }
+
+  let groupStartIndex = targetIndex;
+  let groupEndIndex = targetIndex;
+
+  while (
+    groupStartIndex > 0 &&
+    !hasBlankLineBoundary(value, statements[groupStartIndex - 1].end, statements[groupStartIndex].start)
+  ) {
+    groupStartIndex -= 1;
+  }
+
+  while (
+    groupEndIndex < statements.length - 1 &&
+    !hasBlankLineBoundary(value, statements[groupEndIndex].end, statements[groupEndIndex + 1].start)
+  ) {
+    groupEndIndex += 1;
+  }
+
+  return statements.slice(groupStartIndex, groupEndIndex + 1);
+}
+
+function resolveNearestSqlStatement(statements: SqlStatementSegment[], caretIndex: number) {
+  return statements.reduce((bestMatch, statement) => {
+    const statementDistance =
+      caretIndex < statement.start ? statement.start - caretIndex : caretIndex > statement.end ? caretIndex - statement.end : 0;
+
+    if (bestMatch == null) {
+      return { statement, distance: statementDistance };
+    }
+
+    if (statementDistance < bestMatch.distance) {
+      return { statement, distance: statementDistance };
+    }
+
+    return bestMatch;
+  }, null as { statement: SqlStatementSegment; distance: number } | null)?.statement ?? null;
+}
+
+function createExecutionPickerOptions(value: string, caretIndex: number): SqlExecutionPickerOption[] {
+  const statements = parseSqlStatements(value);
+
+  if (statements.length <= 1) {
+    return [];
+  }
+
+  const nearestStatement = resolveNearestSqlStatement(statements, caretIndex);
+  if (nearestStatement == null) {
+    return [];
+  }
+
+  const firstStatement = statements[0];
+  const lastStatement = statements[statements.length - 1];
+  const looseStatementGroup = resolveLooseSqlStatementGroup(value, statements, nearestStatement);
+  const wholeSql = statements.map((statement) => statement.sql).join(';\n');
+  const optionCandidates: SqlExecutionPickerOption[] = [
+    {
+      key: 'current-statement',
+      kind: 'statement',
+      label: '현재 구문 실행',
+      preview: nearestStatement.preview,
+      start: nearestStatement.start,
+      end: nearestStatement.end,
+      segments: [nearestStatement],
+    },
+    {
+      key: 'loose-statement-group',
+      kind: 'statement',
+      label: '인접 구문 실행',
+      preview: createSqlStatementPreview(looseStatementGroup.map((statement) => statement.sql).join(';\n')),
+      start: looseStatementGroup[0].start,
+      end: looseStatementGroup[looseStatementGroup.length - 1].end,
+      segments: looseStatementGroup,
+    },
+    {
+      key: 'all-statements',
+      kind: 'all',
+      label: '전체 실행',
+      preview: createSqlStatementPreview(wholeSql),
+      start: firstStatement.start,
+      end: lastStatement.end,
+      segments: statements,
+    },
+  ];
+
+  return optionCandidates.filter(
+    (option, optionIndex, source) =>
+      source.findIndex((candidate) => candidate.start === option.start && candidate.end === option.end) === optionIndex,
+  );
+}
+
+function tokenizeSqlLine(line: string, tableNames: Set<string>, columnNames: Set<string>) {
+  const tokens: SqlHighlightToken[] = [];
+  const tokenPattern =
+    /--.*$|'(?:''|[^'])*'|"(?:["]|[^"])*"|[A-Za-z_][A-Za-z0-9_$]*|\d+(?:\.\d+)?|<=|>=|<>|!=|==|[=<>+\-*/%]+|[(),.;]|\s+|./g;
+  const lineTokens = Array.from(line.matchAll(tokenPattern), (match) => match[0]);
+  let expectTable = false;
+
+  for (let index = 0; index < lineTokens.length; index += 1) {
+    const token = lineTokens[index];
+
+    if (/^\s+$/.test(token)) {
+      tokens.push({ text: token, kind: null });
+      continue;
+    }
+
+    if (token.startsWith('--')) {
+      tokens.push({ text: token, kind: 'comment' });
+      break;
+    }
+
+    if (/^'(?:''|[^'])*'$/.test(token) || /^"(?:["]|[^"])*"$/.test(token)) {
+      tokens.push({ text: token, kind: 'string' });
+      expectTable = false;
+      continue;
+    }
+
+    if (/^\d+(?:\.\d+)?$/.test(token)) {
+      tokens.push({ text: token, kind: 'number' });
+      continue;
+    }
+
+    if (/^[(),.;]$/.test(token) || /^[=<>+\-*/%]+$/.test(token)) {
+      tokens.push({ text: token, kind: 'operator' });
+      if (token !== ',') {
+        expectTable = false;
+      }
+      continue;
+    }
+
+    if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(token)) {
+      const upperToken = token.toUpperCase();
+      const normalizedToken = token.toLowerCase();
+      const previousMeaningfulToken = [...lineTokens.slice(0, index)].reverse().find((candidate) => !/^\s+$/.test(candidate));
+      const nextMeaningfulToken = lineTokens.slice(index + 1).find((candidate) => !/^\s+$/.test(candidate));
+
+      if (SQL_HIGHLIGHT_KEYWORDS.has(upperToken)) {
+        tokens.push({
+          text: token,
+          kind: upperToken === 'EXPLAIN' || upperToken === 'ANALYZE' ? 'explain-keyword' : 'keyword',
+        });
+        expectTable = SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS.has(upperToken);
+        continue;
+      }
+
+      if (previousMeaningfulToken === '.') {
+        tokens.push({ text: token, kind: 'column' });
+        expectTable = false;
+        continue;
+      }
+
+      if (expectTable || tableNames.has(normalizedToken)) {
+        tokens.push({ text: token, kind: 'table' });
+        expectTable = false;
+        continue;
+      }
+
+      if (columnNames.has(normalizedToken)) {
+        tokens.push({ text: token, kind: 'column' });
+        expectTable = false;
+        continue;
+      }
+
+      if (nextMeaningfulToken === '(') {
+        tokens.push({ text: token, kind: 'function' });
+        expectTable = false;
+        continue;
+      }
+
+      tokens.push({ text: token, kind: 'identifier' });
+      expectTable = false;
+      continue;
+    }
+
+    tokens.push({ text: token, kind: null });
+  }
+
+  return tokens;
+}
+
+function renderHighlightedSql(sql: string, tableNames: Set<string>, columnNames: Set<string>) {
+  const normalizedSql = sql.replace(/\r\n/g, '\n');
+  const lines = normalizedSql.split('\n');
+
+  return lines.map((line, lineIndex) => {
+    const lineTokens = tokenizeSqlLine(line, tableNames, columnNames);
+
+    return (
+      <Fragment key={`line-${lineIndex}`}>
+        {lineTokens.map((token, tokenIndex) =>
+          token.kind == null ? (
+            <Fragment key={`token-${lineIndex}-${tokenIndex}`}>{token.text}</Fragment>
+          ) : (
+            <span key={`token-${lineIndex}-${tokenIndex}`} className={`solve-sql-token is-${token.kind}`}>
+              {token.text}
+            </span>
+          ),
+        )}
+        {lineIndex < lines.length - 1 ? '\n' : null}
+      </Fragment>
+    );
+  });
+}
+
 function indentSqlEditorValue(value: string, selectionStart: number, selectionEnd: number) {
   if (selectionStart === selectionEnd) {
     const nextSql = `${value.slice(0, selectionStart)}${SQL_EDITOR_INDENT}${value.slice(selectionEnd)}`;
@@ -481,9 +1193,11 @@ function indentSqlEditorValue(value: string, selectionStart: number, selectionEn
 }
 
 function measureAutocompleteAnchor(textarea: HTMLTextAreaElement, value: string, caretIndex: number, suggestionCount: number): SqlAutocompleteAnchor {
-  const computedStyle = window.getComputedStyle(textarea);
-  const mirror = document.createElement('div');
-  const mirrorHost = textarea.parentElement ?? document.body;
+  const ownerDocument = textarea.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView ?? window;
+  const computedStyle = ownerWindow.getComputedStyle(textarea);
+  const mirror = ownerDocument.createElement('div');
+  const mirrorHost = textarea.parentElement ?? ownerDocument.body;
   const textareaRect = textarea.getBoundingClientRect();
   const mirrorStyleProperties = [
     'box-sizing',
@@ -524,7 +1238,7 @@ function measureAutocompleteAnchor(textarea: HTMLTextAreaElement, value: string,
 
   mirror.textContent = value.slice(0, caretIndex);
 
-  const caretMarker = document.createElement('span');
+  const caretMarker = ownerDocument.createElement('span');
   caretMarker.textContent = value.slice(caretIndex, caretIndex + 1) || ' ';
   mirror.appendChild(caretMarker);
   mirrorHost.appendChild(mirror);
@@ -534,7 +1248,11 @@ function measureAutocompleteAnchor(textarea: HTMLTextAreaElement, value: string,
   const availableWidth = Math.max(160, textarea.clientWidth - editorPadding * 2);
   const maxWidth = Math.min(448, availableWidth);
   const caretLeft = caretMarker.offsetLeft - textarea.scrollLeft;
-  const left = clamp(textareaRect.left + caretLeft, editorPadding, Math.max(editorPadding, window.innerWidth - maxWidth - editorPadding));
+  const left = clamp(
+    textareaRect.left + caretLeft,
+    editorPadding,
+    Math.max(editorPadding, ownerWindow.innerWidth - maxWidth - editorPadding),
+  );
   const caretTop = caretMarker.offsetTop - textarea.scrollTop;
   const caretBottom = caretTop + lineHeight;
   const panelMaxHeight = 184;
@@ -550,7 +1268,7 @@ function measureAutocompleteAnchor(textarea: HTMLTextAreaElement, value: string,
     Math.min(
       exceedsEditor ? availableBelow + overflowAllowance : desiredPopupHeight,
       desiredPopupHeight,
-      Math.max(56, window.innerHeight - (textareaRect.top + belowTop) - editorPadding),
+      Math.max(56, ownerWindow.innerHeight - (textareaRect.top + belowTop) - editorPadding),
     ),
   );
   const top = textareaRect.top + belowTop;
@@ -565,6 +1283,83 @@ function measureAutocompleteAnchor(textarea: HTMLTextAreaElement, value: string,
   };
 }
 
+function measureStatementStartOffsets(textarea: HTMLTextAreaElement, value: string, offsets: number[]) {
+  if (offsets.length === 0) {
+    return new Map<number, number>();
+  }
+
+  const ownerDocument = textarea.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView ?? window;
+  const computedStyle = ownerWindow.getComputedStyle(textarea);
+  const mirror = ownerDocument.createElement('div');
+  const mirrorHost = textarea.parentElement ?? ownerDocument.body;
+  const uniqueOffsets = [...new Set(offsets)].sort((left, right) => left - right);
+  const markerElements = new Map<number, HTMLSpanElement>();
+  const mirrorStyleProperties = [
+    'box-sizing',
+    'padding-top',
+    'padding-right',
+    'padding-bottom',
+    'padding-left',
+    'border-top-width',
+    'border-right-width',
+    'border-bottom-width',
+    'border-left-width',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'letter-spacing',
+    'line-height',
+    'text-transform',
+    'text-indent',
+    'tab-size',
+  ];
+
+  mirrorStyleProperties.forEach((property) => {
+    mirror.style.setProperty(property, computedStyle.getPropertyValue(property));
+  });
+
+  mirror.style.position = 'absolute';
+  mirror.style.visibility = 'hidden';
+  mirror.style.pointerEvents = 'none';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.wordBreak = 'break-word';
+  mirror.style.overflowWrap = 'anywhere';
+  mirror.style.left = '0';
+  mirror.style.top = '0';
+  mirror.style.width = `${textarea.clientWidth}px`;
+  mirror.style.minHeight = `${textarea.clientHeight}px`;
+  mirror.style.overflow = 'hidden';
+
+  let currentOffset = 0;
+  uniqueOffsets.forEach((offset) => {
+    mirror.appendChild(ownerDocument.createTextNode(value.slice(currentOffset, offset)));
+    const marker = ownerDocument.createElement('span');
+    marker.textContent = '\u200b';
+    marker.style.display = 'inline-block';
+    marker.style.width = '0';
+    marker.style.height = '1em';
+    marker.style.padding = '0';
+    marker.style.margin = '0';
+    marker.style.verticalAlign = 'top';
+    markerElements.set(offset, marker);
+    mirror.appendChild(marker);
+    currentOffset = offset;
+  });
+  mirror.appendChild(ownerDocument.createTextNode(value.slice(currentOffset)));
+
+  mirrorHost.appendChild(mirror);
+
+  const measuredOffsets = new Map<number, number>();
+  uniqueOffsets.forEach((offset) => {
+    measuredOffsets.set(offset, markerElements.get(offset)?.offsetTop ?? 0);
+  });
+
+  mirrorHost.removeChild(mirror);
+  return measuredOffsets;
+}
+
 function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecutionResult {
   return {
     success: message.success ?? false,
@@ -574,23 +1369,91 @@ function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecuti
     rows: message.rows ?? [],
     planLines: message.planLines ?? [],
     rowCount: message.rowCount ?? 0,
+    currentPage: message.currentPage ?? undefined,
+    pageSize: message.pageSize ?? undefined,
     executionTimeMs: message.executionTimeMs ?? undefined,
   };
+}
+
+function createSubmitProgressStep(
+  stepKey: string,
+  status: ProblemSubmitStepStatus,
+  message: string,
+  detailLines: string[] = [],
+): ProblemSubmitProgressStep {
+  return {
+    stepKey,
+    status,
+    message,
+    detailLines,
+  };
+}
+
+function upsertSubmitProgressStep(
+  currentSteps: ProblemSubmitProgressStep[],
+  nextStep: ProblemSubmitProgressStep,
+): ProblemSubmitProgressStep[] {
+  const existingIndex = currentSteps.findIndex((step) => step.stepKey === nextStep.stepKey);
+  if (existingIndex >= 0) {
+    const nextSteps = [...currentSteps];
+    nextSteps[existingIndex] = nextStep;
+    return nextSteps;
+  }
+
+  const nextSteps = [...currentSteps, nextStep];
+  const orderedKeys = new Map(SUBMIT_STEP_ORDER.map((stepKey, index) => [stepKey, index]));
+
+  return nextSteps.sort((left, right) => {
+    const leftIndex = orderedKeys.get(left.stepKey) ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = orderedKeys.get(right.stepKey) ?? Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+}
+
+function renderSubmitProgressMark(status: ProblemSubmitStepStatus) {
+  if (status === 'success') {
+    return (
+      <span className="solve-submit-progress-mark is-success" aria-hidden="true">
+        ✓
+      </span>
+    );
+  }
+
+  if (status === 'incorrect' || status === 'error') {
+    return (
+      <span className="solve-submit-progress-mark is-error" aria-hidden="true">
+        ✕
+      </span>
+    );
+  }
+
+  return (
+    <span className="solve-submit-progress-mark is-running" aria-hidden="true">
+      …
+    </span>
+  );
 }
 
 function renderResultTable(
   columns: string[],
   rows: string[][],
   emptyMessage: string,
+  executionTimeMs: number | undefined,
+  rowCount: number,
   currentPage: number,
+  pageSize: number,
   onPageChange: (page: number) => void,
   pageInput: string,
   onPageInputChange: (value: string) => void,
-  collapsed: boolean,
-  onToggleCollapse: () => void,
+  isPageJumpEditing: boolean,
+  isPageLoading: boolean,
+  onStartPageJumpEditing: () => void,
+  onApplyPageJump: () => void,
+  onCancelPageJump: () => void,
   resetKey: number,
+  onResetWidths: () => void,
 ) {
-  if (rows.length === 0) {
+  if (rowCount === 0) {
     return <div className="solve-result-empty solve-result-empty-table">{emptyMessage}</div>;
   }
 
@@ -599,81 +1462,93 @@ function renderResultTable(
       ? columns
       : Array.from({ length: rows.reduce((maxCount, row) => Math.max(maxCount, row.length), 0) }, (_, index) => `컬럼 ${index + 1}`);
 
-  const totalPages = getExecutionResultPageCount(rows.length);
+  const totalPages = Math.max(1, Math.ceil(rowCount / pageSize));
   const normalizedPage = clamp(currentPage, 1, totalPages);
-  const pageRows = rows.slice(
-    (normalizedPage - 1) * EXECUTION_RESULT_PAGE_SIZE,
-    normalizedPage * EXECUTION_RESULT_PAGE_SIZE,
-  );
+  const pageRows = rows;
   const gridColumns = columnLabels.map((columnLabel) => ({ key: columnLabel, label: columnLabel }));
   const gridRows = pageRows.map((row) => columnLabels.map((_, columnIndex) => formatCellValue(row[columnIndex])));
 
   return (
     <div className="solve-result-table-block">
       <div className="solve-detail-table-block solve-result-table-shell">
-        <div className="solve-detail-table-block-header">
-          <div className="solve-detail-table-block-actions">
-            <button type="button" className="solve-detail-table-toggle" aria-expanded={!collapsed} onClick={onToggleCollapse}>
-              <span className={`solve-detail-table-toggle-icon ${collapsed ? '' : 'is-open'}`}>{'>'}</span>
+        <div className="solve-result-table-header">
+          <div className="solve-result-table-summary">
+            <span className="solve-result-table-summary-item">
+              <span className="solve-result-table-summary-label">경과 시간</span>
+              <span className="solve-result-table-summary-value">{formatExecutionMetricValue(executionTimeMs)}</span>
+            </span>
+            <span className="solve-result-table-summary-item">
+              <span className="solve-result-table-summary-label">결과 Rows</span>
+              <span className="solve-result-table-summary-value">{formatGroupedNumber(rowCount)}</span>
+            </span>
+            <button
+              type="button"
+              className="solve-pane-action solve-pane-action-icon solve-pane-summary-refresh"
+              aria-label="실행 결과 너비 초기화"
+              onClick={onResetWidths}
+            >
+              <RefreshIcon />
             </button>
           </div>
-
-          <div className="solve-detail-table-block-copy">
-            <p className="solve-detail-table-name solve-result-table-name">Result</p>
-          </div>
         </div>
+        <ExecutionResultGrid columns={gridColumns} rows={gridRows} emptyMessage={emptyMessage} resetKey={resetKey} />
+        {totalPages > 1 ? (
+          <div className="solve-result-pagination">
+            <button
+              type="button"
+              className="mini-toggle solve-result-pagination-button"
+              onClick={() => onPageChange(normalizedPage - 1)}
+              disabled={normalizedPage === 1 || isPageLoading}
+            >
+              이전
+            </button>
 
-        {!collapsed ? <ExecutionResultGrid columns={gridColumns} rows={gridRows} emptyMessage={emptyMessage} resetKey={resetKey} /> : null}
+            {isPageJumpEditing ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                className="text-field solve-result-pagination-input"
+                aria-label="이동할 페이지 입력"
+                value={pageInput}
+                onChange={(event) => onPageInputChange(event.target.value.replace(/\D+/g, ''))}
+                onBlur={onApplyPageJump}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    onApplyPageJump();
+                    return;
+                  }
+
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    onCancelPageJump();
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                className="solve-result-pagination-label solve-result-pagination-meta-button"
+                aria-label="이동할 페이지 입력 열기"
+                disabled={isPageLoading}
+                onClick={onStartPageJumpEditing}
+              >
+                {`${normalizedPage} / ${totalPages}`}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="mini-toggle solve-result-pagination-button"
+              onClick={() => onPageChange(normalizedPage + 1)}
+              disabled={normalizedPage === totalPages || isPageLoading}
+            >
+              다음
+            </button>
+          </div>
+        ) : null}
       </div>
-
-      {!collapsed && totalPages > 1 ? (
-        <div className="solve-result-pagination">
-          <button
-            type="button"
-            className="mini-toggle solve-result-pagination-button"
-            onClick={() => onPageChange(normalizedPage - 1)}
-            disabled={normalizedPage === 1}
-          >
-            이전
-          </button>
-          <span className="solve-result-pagination-label">
-            {normalizedPage} / {totalPages}
-          </span>
-          <form
-            className="solve-result-pagination-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const parsedPage = Number.parseInt(pageInput, 10);
-              if (Number.isNaN(parsedPage)) {
-                onPageInputChange(String(normalizedPage));
-                return;
-              }
-
-              onPageChange(clamp(parsedPage, 1, totalPages));
-            }}
-          >
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              className="text-field solve-result-pagination-input"
-              value={pageInput}
-              onChange={(event) => onPageInputChange(event.target.value)}
-            />
-            <button type="submit" className="mini-toggle solve-result-pagination-button">
-              이동
-            </button>
-          </form>
-          <button
-            type="button"
-            className="mini-toggle solve-result-pagination-button"
-            onClick={() => onPageChange(normalizedPage + 1)}
-            disabled={normalizedPage === totalPages}
-          >
-            다음
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -681,15 +1556,20 @@ function renderResultTable(
 function renderExecutionContent(
   executionResult: ProblemExecutionResult,
   currentPage: number,
+  pageSize: number,
   onPageChange: (page: number) => void,
   pageInput: string,
   onPageInputChange: (value: string) => void,
-  collapsed: boolean,
-  onToggleCollapse: () => void,
+  isPageJumpEditing: boolean,
+  isPageLoading: boolean,
+  onStartPageJumpEditing: () => void,
+  onApplyPageJump: () => void,
+  onCancelPageJump: () => void,
   resetKey: number,
+  onResetWidths: () => void,
 ) {
   if (!executionResult.success) {
-    return null;
+    return <p className="solve-pane-result-message is-error">{executionResult.message ?? '실행에 실패했다.'}</p>;
   }
 
   if (executionResult.mode === 'select') {
@@ -697,13 +1577,20 @@ function renderExecutionContent(
       executionResult.columns,
       executionResult.rows,
       '표시할 실행 결과가 없다.',
+      executionResult.executionTimeMs,
+      executionResult.rowCount,
       currentPage,
+      pageSize,
       onPageChange,
       pageInput,
       onPageInputChange,
-      collapsed,
-      onToggleCollapse,
+      isPageJumpEditing,
+      isPageLoading,
+      onStartPageJumpEditing,
+      onApplyPageJump,
+      onCancelPageJump,
       resetKey,
+      onResetWidths,
     );
   }
 
@@ -719,7 +1606,1003 @@ function renderExecutionContent(
     );
   }
 
-  return null;
+  if (executionResult.mode === 'command') {
+    return executionResult.message.trim() !== '' ? <p className="solve-pane-result-message">{executionResult.message}</p> : null;
+  }
+
+  return executionResult.message.trim() !== '' ? <p className="solve-pane-result-message">{executionResult.message}</p> : null;
+}
+
+function ExecutionStatementResultItem({
+  item,
+  isBlinking,
+  onStatusIndicatorClick,
+  registerResultItemRef,
+  onRequestPage,
+}: {
+  item: ExecutionStatementRun;
+  isBlinking: boolean;
+  onStatusIndicatorClick: () => void;
+  registerResultItemRef: (key: string, element: HTMLDivElement | null) => void;
+  onRequestPage: (item: ExecutionStatementRun, page: number) => Promise<void>;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [currentPage, setCurrentPage] = useState(item.result?.currentPage ?? 1);
+  const [pageInput, setPageInput] = useState('1');
+  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
+  const [gridResetKey, setGridResetKey] = useState(0);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const executionItemRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setCollapsed(false);
+    setCurrentPage(item.result?.currentPage ?? 1);
+    setPageInput(String(item.result?.currentPage ?? 1));
+    setIsPageJumpEditing(false);
+    setGridResetKey(0);
+    setIsPageLoading(false);
+  }, [item.key, item.status, item.result?.mode, item.result?.rowCount, item.result?.message, item.result?.currentPage]);
+
+  useEffect(() => {
+    registerResultItemRef(item.key, executionItemRef.current);
+
+    return () => {
+      registerResultItemRef(item.key, null);
+    };
+  }, [item.key, registerResultItemRef]);
+
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
+
+  const executionResult = item.result;
+  const showErrorSummary = item.status === 'error' || (executionResult != null && !executionResult.success);
+  const executionResultTotalPages =
+    executionResult != null && executionResult.success && executionResult.mode === 'select'
+      ? getExecutionResultPageCount(executionResult.rowCount)
+      : 1;
+  const resolvedPageSize = executionResult?.pageSize ?? EXECUTION_RESULT_PAGE_SIZE;
+  const previewLabel = item.sql.replace(/\s+/g, ' ').trim() || 'SQL';
+  const titleToneClass =
+    item.status === 'running'
+      ? 'is-pending'
+      : showErrorSummary
+        ? 'is-error'
+        : executionResult != null
+          ? 'is-success'
+          : 'is-pending';
+  const resultToneClass =
+    item.status === 'running'
+      ? 'is-pending'
+      : showErrorSummary
+        ? 'is-error'
+        : executionResult != null
+          ? 'is-success'
+          : 'is-pending';
+  const requestPage = async (nextPage: number) => {
+    if (executionResult == null || !executionResult.success || executionResult.mode !== 'select' || isPageLoading) {
+      return;
+    }
+
+    const normalizedPage = clamp(nextPage, 1, executionResultTotalPages);
+    if (normalizedPage === currentPage) {
+      return;
+    }
+
+    setIsPageLoading(true);
+    try {
+      await onRequestPage(item, normalizedPage);
+      setCurrentPage(normalizedPage);
+    } finally {
+      setIsPageLoading(false);
+    }
+  };
+
+  const applyPageJump = () => {
+    const parsedPage = Number.parseInt(pageInput, 10);
+    if (Number.isNaN(parsedPage)) {
+      setPageInput(String(currentPage));
+      setIsPageJumpEditing(false);
+      return;
+    }
+
+    const nextPage = clamp(parsedPage, 1, executionResultTotalPages);
+    void requestPage(nextPage);
+    setIsPageJumpEditing(false);
+  };
+  const cancelPageJump = () => {
+    setPageInput(String(currentPage));
+    setIsPageJumpEditing(false);
+  };
+
+  return (
+    <div
+      ref={executionItemRef}
+      className={`solve-editor-inline-result-group ${collapsed ? 'is-collapsed' : ''} ${resultToneClass}`.trim()}
+    >
+      <div className="solve-editor-inline-result-header">
+        <button
+          type="button"
+          className="solve-detail-section-divider-button solve-pane-section-divider-button"
+          aria-label={collapsed ? '펼치기' : '접기'}
+          aria-expanded={!collapsed}
+          onClick={() => setCollapsed((current) => !current)}
+        >
+          <CollapseChevronIcon collapsed={collapsed} />
+        </button>
+        <div className="solve-pane-summary-row">
+          <button
+            type="button"
+            className={`solve-pane-summary-status-button ${titleToneClass} ${isBlinking ? 'is-blinking' : ''}`.trim()}
+            aria-label="실행 결과 위치로 이동"
+            onClick={onStatusIndicatorClick}
+          >
+            {item.status === 'running' ? (
+              <span className="solve-editor-statement-spinner" />
+            ) : showErrorSummary ? (
+              '✕'
+            ) : executionResult ? (
+              '✓'
+            ) : (
+              '•'
+            )}
+          </button>
+          <span className={`solve-pane-summary-statement-title ${titleToneClass}`.trim()}>{previewLabel}</span>
+        </div>
+      </div>
+
+      {!collapsed ? (
+        <div className="solve-editor-inline-result-body solve-pane-result-stack">
+          {item.status === 'running' ? (
+            <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
+          ) : executionResult ? (
+            renderExecutionContent(
+              executionResult,
+              currentPage,
+              resolvedPageSize,
+              requestPage,
+              pageInput,
+              setPageInput,
+              isPageJumpEditing,
+              isPageLoading,
+              () => {
+                setPageInput(String(currentPage));
+                setIsPageJumpEditing(true);
+              },
+              applyPageJump,
+              cancelPageJump,
+              gridResetKey,
+              () => setGridResetKey((current) => current + 1),
+            )
+          ) : (
+            <div className="solve-result-empty solve-result-empty-table">실행 대기 중</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SolvePageAuthOverlay({
+  mode,
+  onClose,
+  onOpenSignup,
+  onOpenResetPassword,
+  onReturnToLogin,
+  onAuthenticated,
+  problemId,
+  sql,
+  selectedDbms,
+}: {
+  mode: SolveAuthOverlayMode;
+  onClose: () => void;
+  onOpenSignup: () => void;
+  onOpenResetPassword: () => void;
+  onReturnToLogin: () => void;
+  onAuthenticated: () => void;
+  problemId: string;
+  sql: string;
+  selectedDbms: DbmsType;
+}) {
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [rememberLogin, setRememberLogin] = useState(false);
+  const [loginErrors, setLoginErrors] = useState<string[]>([]);
+  const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+  const [isSocialLoginSubmitting, setIsSocialLoginSubmitting] = useState(false);
+
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
+  const [signupErrors, setSignupErrors] = useState<string[]>([]);
+  const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
+  const [signupEmailCheckStatus, setSignupEmailCheckStatus] = useState<'idle' | 'checking' | 'available' | 'duplicated'>('idle');
+  const [signupEmailCheckReason, setSignupEmailCheckReason] = useState<string | null>(null);
+  const [signupEmailLastCheckedValue, setSignupEmailLastCheckedValue] = useState('');
+  const signupEmailCheckSequenceRef = useRef(0);
+
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [isSendingResetCode, setIsSendingResetCode] = useState(false);
+  const [isVerifyingResetCode, setIsVerifyingResetCode] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isResetCodeSent, setIsResetCodeSent] = useState(false);
+  const [isResetCodeVerified, setIsResetCodeVerified] = useState(false);
+  const [resetStatusMessage, setResetStatusMessage] = useState<string | null>(null);
+  const [resetErrors, setResetErrors] = useState<string[]>([]);
+  const socialLoginPopupPollIdRef = useRef<number | null>(null);
+
+  const normalizedLoginEmail = loginEmail.trim();
+  const normalizedSignupEmail = signupEmail.trim();
+  const normalizedResetEmail = resetEmail.trim();
+  const normalizedResetCode = resetCode.trim().toUpperCase();
+  const isLoginReady = normalizedLoginEmail !== '' && loginPassword.trim() !== '';
+  const isSignupEmailValid = EMAIL_PATTERN.test(normalizedSignupEmail);
+  const isSignupPasswordValid = hasRequiredPasswordFormat(signupPassword);
+  const isSignupPasswordConfirmValid = signupPasswordConfirm !== '' && signupPasswordConfirm === signupPassword;
+  const isSignupReady =
+    isSignupEmailValid &&
+    isSignupPasswordValid &&
+    isSignupPasswordConfirmValid &&
+    signupEmailCheckStatus !== 'checking';
+  const isResetEmailValid = EMAIL_PATTERN.test(normalizedResetEmail);
+  const isResetCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedResetCode);
+  const isResetPasswordValid = hasRequiredPasswordFormat(newPassword);
+  const isResetPasswordConfirmValid = newPasswordConfirm !== '' && newPasswordConfirm === newPassword;
+  const signupEmailHintMessage =
+    normalizedSignupEmail === ''
+      ? SIGNUP_EMAIL_HINT
+      : !isSignupEmailValid
+        ? SIGNUP_EMAIL_HINT
+        : signupEmailCheckStatus === 'checking'
+          ? SIGNUP_EMAIL_CHECKING_MESSAGE
+          : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'
+            ? (signupEmailCheckReason ?? SIGNUP_EMAIL_DUPLICATED_MESSAGE)
+            : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available'
+              ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
+              : SIGNUP_EMAIL_HINT;
+  const hasSignupEmailError =
+    normalizedSignupEmail !== '' &&
+    (!isSignupEmailValid || (signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'));
+  const hasSignupEmailSuccess =
+    normalizedSignupEmail !== '' &&
+    !hasSignupEmailError &&
+    signupEmailLastCheckedValue === normalizedSignupEmail &&
+    signupEmailCheckStatus === 'available';
+
+  useEffect(() => {
+    return () => {
+      if (socialLoginPopupPollIdRef.current != null) {
+        window.clearInterval(socialLoginPopupPollIdRef.current);
+      }
+    };
+  }, []);
+
+  const startSocialLogin = (provider: SolveAuthSocialProvider) => {
+    if (typeof window === 'undefined' || isSocialLoginSubmitting) {
+      return;
+    }
+
+    if (socialLoginPopupPollIdRef.current != null) {
+      window.clearInterval(socialLoginPopupPollIdRef.current);
+      socialLoginPopupPollIdRef.current = null;
+    }
+
+    saveSolvePageAuthReturn(problemId, sql, selectedDbms);
+    setLoginErrors([]);
+    setIsSocialLoginSubmitting(true);
+
+    const popupWidth = 520;
+    const popupHeight = 760;
+    const popupLeft = Math.max(0, Math.round(window.screenX + (window.outerWidth - popupWidth) / 2));
+    const popupTop = Math.max(0, Math.round(window.screenY + (window.outerHeight - popupHeight) / 2));
+    const popup = window.open(
+      `${getApiBaseUrl()}/oauth2/authorization/${provider}`,
+      `quertimizer-social-login-${provider}`,
+      `popup=yes,width=${popupWidth},height=${popupHeight},left=${popupLeft},top=${popupTop},resizable=yes,scrollbars=yes`,
+    );
+
+    if (!popup) {
+      setIsSocialLoginSubmitting(false);
+      setLoginErrors(['팝업이 차단되어 소셜 로그인을 진행할 수 없습니다.']);
+      return;
+    }
+
+    popup.focus();
+    let isChecking = false;
+
+    let removeMessageListener = () => {};
+
+    const stopPolling = () => {
+      if (socialLoginPopupPollIdRef.current != null) {
+        window.clearInterval(socialLoginPopupPollIdRef.current);
+        socialLoginPopupPollIdRef.current = null;
+      }
+      removeMessageListener();
+      setIsSocialLoginSubmitting(false);
+    };
+
+    const handlePopupMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data == null || typeof event.data !== 'object') {
+        return;
+      }
+
+      const message = event.data as { type?: string; provider?: SolveAuthSocialProvider | 'oauth2' | null };
+      if (message.type !== 'quertimizer-social-login-success' && message.type !== 'quertimizer-social-login-error') {
+        return;
+      }
+
+      void (async () => {
+        if (message.type === 'quertimizer-social-login-error') {
+          popup.close();
+          stopPolling();
+          setLoginErrors([getSolveAuthSocialLoginErrorMessage(message.provider ?? null)]);
+          return;
+        }
+
+        try {
+          const session = await fetchSessionMe();
+          if (!session.authenticated) {
+            return;
+          }
+
+          await completeAuthentication(session, false);
+          popup.close();
+          stopPolling();
+          onAuthenticated();
+        } catch {
+        }
+      })();
+    };
+
+    window.addEventListener('message', handlePopupMessage);
+    removeMessageListener = () => {
+      window.removeEventListener('message', handlePopupMessage);
+      removeMessageListener = () => {};
+    };
+
+    const pollPopupState = async () => {
+      if (isChecking) {
+        return;
+      }
+
+      isChecking = true;
+
+      try {
+        if (popup.closed) {
+          stopPolling();
+          return;
+        }
+
+        try {
+          const popupUrl = new URL(popup.location.href);
+          if (popupUrl.origin === window.location.origin) {
+            const socialLoginError = popupUrl.searchParams.get('socialLoginError') as SolveAuthSocialProvider | 'oauth2' | null;
+            if (socialLoginError != null) {
+              popup.close();
+              stopPolling();
+              setLoginErrors([getSolveAuthSocialLoginErrorMessage(socialLoginError)]);
+              return;
+            }
+          }
+        } catch {
+        }
+
+        const session = await fetchSessionMe();
+        if (!session.authenticated) {
+          return;
+        }
+
+        await completeAuthentication(session, false);
+        popup.close();
+        stopPolling();
+        onAuthenticated();
+      } catch {
+      } finally {
+        isChecking = false;
+      }
+    };
+
+    socialLoginPopupPollIdRef.current = window.setInterval(() => {
+      void pollPopupState();
+    }, 500);
+    void pollPopupState();
+  };
+
+  const resetSignupEmailCheck = () => {
+    setSignupEmailCheckStatus('idle');
+    setSignupEmailCheckReason(null);
+    setSignupEmailLastCheckedValue('');
+  };
+
+  const applySignupErrorReasons = (reasons: string[]) => {
+    const nextErrors: string[] = [];
+
+    for (const reason of reasons) {
+      if (reason.includes('이메일') && (reason.includes('중복') || reason.includes('사용 중'))) {
+        setSignupEmailCheckStatus('duplicated');
+        setSignupEmailCheckReason(reason);
+        setSignupEmailLastCheckedValue(normalizedSignupEmail);
+        continue;
+      }
+
+      nextErrors.push(reason);
+    }
+
+    setSignupErrors(nextErrors);
+  };
+
+  const checkSignupEmailDuplication = async () => {
+    if (normalizedSignupEmail === '') {
+      resetSignupEmailCheck();
+      return false;
+    }
+
+    if (!isSignupEmailValid) {
+      resetSignupEmailCheck();
+      return false;
+    }
+
+    if (signupEmailLastCheckedValue === normalizedSignupEmail) {
+      return signupEmailCheckStatus === 'available';
+    }
+
+    const requestSequence = signupEmailCheckSequenceRef.current + 1;
+    signupEmailCheckSequenceRef.current = requestSequence;
+    setSignupEmailCheckStatus('checking');
+    setSignupEmailCheckReason(null);
+    setSignupErrors([]);
+
+    try {
+      const result = await checkDuplicateEmail(normalizedSignupEmail);
+
+      if (requestSequence !== signupEmailCheckSequenceRef.current) {
+        return false;
+      }
+
+      setSignupEmailCheckStatus(result.available ? 'available' : 'duplicated');
+      setSignupEmailCheckReason(result.reason);
+      setSignupEmailLastCheckedValue(normalizedSignupEmail);
+      return result.available;
+    } catch (error) {
+      if (requestSequence !== signupEmailCheckSequenceRef.current) {
+        return false;
+      }
+
+      setSignupEmailCheckStatus('idle');
+      setSignupEmailLastCheckedValue(normalizedSignupEmail);
+
+      if (error instanceof SignupApiError) {
+        setSignupErrors(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '이메일 중복 확인 중 오류가 발생했습니다.']);
+      return false;
+    }
+  };
+
+  const handleLoginSubmit = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
+    if (!isLoginReady) {
+      return;
+    }
+
+    try {
+      setIsLoginSubmitting(true);
+      setLoginErrors([]);
+      saveSolvePageAuthReturn(problemId, sql, selectedDbms);
+
+      const session = await login({
+        email: normalizedLoginEmail,
+        password: loginPassword,
+        rememberLogin,
+      });
+
+      await completeAuthentication(session, rememberLogin);
+      if (!session.authenticated) {
+        setLoginErrors(['로그인에 실패했습니다.']);
+        return;
+      }
+
+      onAuthenticated();
+    } catch (error) {
+      if (error instanceof AuthApiError) {
+        setLoginErrors(error.reasons);
+        return;
+      }
+
+      setLoginErrors([error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.']);
+    } finally {
+      setIsLoginSubmitting(false);
+    }
+  };
+
+  const handleSignupSubmit = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
+    if (!isSignupReady) {
+      return;
+    }
+
+    try {
+      setIsSignupSubmitting(true);
+      setSignupErrors([]);
+      saveSolvePageAuthReturn(problemId, sql, selectedDbms);
+
+      const isEmailAvailable = await checkSignupEmailDuplication();
+      if (!isEmailAvailable) {
+        return;
+      }
+
+      await signup({
+        email: normalizedSignupEmail,
+        password: signupPassword,
+      });
+
+      const session = await fetchSessionMe();
+      await completeAuthentication(session, false);
+
+      if (!session.authenticated) {
+        setSignupErrors(['회원가입 후 세션을 확인하지 못했습니다.']);
+        return;
+      }
+
+      onAuthenticated();
+    } catch (error) {
+      if (error instanceof SignupApiError || error instanceof AuthApiError) {
+        applySignupErrorReasons(error.reasons);
+        return;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+    } finally {
+      setIsSignupSubmitting(false);
+    }
+  };
+
+  const handleSendResetCode = async () => {
+    if (!isResetEmailValid || isSendingResetCode) {
+      return;
+    }
+
+    try {
+      setIsSendingResetCode(true);
+      setResetErrors([]);
+      setResetStatusMessage(null);
+      await sendPasswordResetCode({ email: normalizedResetEmail });
+      setIsResetCodeSent(true);
+      setIsResetCodeVerified(false);
+      setResetStatusMessage('인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+    } catch (error) {
+      if (error instanceof RecoveryApiError) {
+        setResetErrors(error.reasons);
+        return;
+      }
+
+      setResetErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+    } finally {
+      setIsSendingResetCode(false);
+    }
+  };
+
+  const handleVerifyResetCode = async () => {
+    if (!isResetEmailValid || !isResetCodeValid || !isResetCodeSent || isVerifyingResetCode) {
+      return;
+    }
+
+    try {
+      setIsVerifyingResetCode(true);
+      setResetErrors([]);
+      setResetStatusMessage(null);
+      await verifyPasswordResetCode({
+        email: normalizedResetEmail,
+        code: normalizedResetCode,
+      });
+      setIsResetCodeVerified(true);
+      setResetStatusMessage('인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+    } catch (error) {
+      if (error instanceof RecoveryApiError) {
+        setResetErrors(error.reasons);
+        return;
+      }
+
+      setResetErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+    } finally {
+      setIsVerifyingResetCode(false);
+    }
+  };
+
+  const handleResetPassword = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
+    if (!isResetCodeVerified || !isResetPasswordValid || !isResetPasswordConfirmValid || isResettingPassword) {
+      return;
+    }
+
+    try {
+      setIsResettingPassword(true);
+      setResetErrors([]);
+      setResetStatusMessage(null);
+      await resetPassword({
+        email: normalizedResetEmail,
+        code: normalizedResetCode,
+        password: newPassword,
+      });
+      setResetStatusMessage('비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setTimeout(() => {
+        onReturnToLogin();
+      }, 300);
+    } catch (error) {
+      if (error instanceof RecoveryApiError) {
+        setResetErrors(error.reasons);
+        return;
+      }
+
+      setResetErrors([error instanceof Error ? error.message : '비밀번호 변경 중 오류가 발생했습니다.']);
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const overlayTitle = mode === 'signup' ? '이메일로 가입하기' : mode === 'reset-password' ? '비밀번호 찾기' : '로그인';
+  const overlayDescription =
+    mode === 'signup'
+      ? '입력 중인 SQL은 유지됩니다. 가입 후 이어서 실행할 수 있습니다.'
+      : mode === 'reset-password'
+        ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
+        : '입력 중인 SQL은 유지됩니다. 로그인 후 이어서 실행할 수 있습니다.';
+
+  return (
+    <div className="solve-auth-overlay" role="presentation">
+      <div className="solve-auth-overlay-backdrop" />
+      <section className="solve-auth-modal" role="dialog" aria-modal="true" aria-label={overlayTitle}>
+        <button type="button" className="solve-auth-modal-close" aria-label="인증 팝업 닫기" onClick={onClose}>
+          <CloseIcon />
+        </button>
+        <div className="solve-auth-modal-header is-centered">
+          <div className="solve-auth-modal-copy">
+            <h2 className="solve-auth-modal-title">{overlayTitle}</h2>
+            <p className="solve-auth-modal-description">{overlayDescription}</p>
+          </div>
+        </div>
+
+        {mode === 'login' ? (
+          <div className="solve-auth-landing-body">
+            <div className="minimal-auth-form solve-auth-modal-login-form">
+              <div className="landing-auth-layout">
+                <form className="landing-login-panel" aria-label="로그인 입력" onSubmit={(event) => void handleLoginSubmit(event)}>
+                  <div className="field-stack">
+                    <label className="field-label" htmlFor="solve-auth-email">
+                      이메일
+                    </label>
+                    <input
+                      id="solve-auth-email"
+                      type="email"
+                      className="text-field"
+                      autoComplete="email"
+                      value={loginEmail}
+                      onChange={(event) => {
+                        setLoginEmail(event.target.value);
+                        setLoginErrors([]);
+                      }}
+                      placeholder="이메일을 입력해 주세요."
+                    />
+                  </div>
+
+                  <div className="field-stack">
+                    <label className="field-label" htmlFor="solve-auth-password">
+                      비밀번호
+                    </label>
+                    <input
+                      id="solve-auth-password"
+                      type="password"
+                      className="text-field"
+                      autoComplete="current-password"
+                      value={loginPassword}
+                      onChange={(event) => {
+                        setLoginPassword(event.target.value);
+                        setLoginErrors([]);
+                      }}
+                      placeholder="비밀번호를 입력해 주세요."
+                    />
+                  </div>
+
+                  {loginErrors.length > 0 ? (
+                    <div className="signup-feedback-box" role="alert" aria-live="polite">
+                      {loginErrors.map((reason) => (
+                        <p key={reason} className="signup-feedback-message">
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <label className="login-remember-row">
+                    <input
+                      type="checkbox"
+                      className="login-remember-checkbox"
+                      checked={rememberLogin}
+                      onChange={(event) => setRememberLogin(event.target.checked)}
+                    />
+                    <span className="login-remember-label">로그인 유지</span>
+                  </label>
+
+                  <div className="auth-actions minimal">
+                    <button
+                      type="submit"
+                      className="btn primary landing-login-submit"
+                      disabled={!isLoginReady || isLoginSubmitting}
+                    >
+                      {isLoginSubmitting ? '로그인 중' : '로그인'}
+                    </button>
+                  </div>
+
+                  <button type="button" className="btn text landing-password-reset-link" onClick={onOpenResetPassword}>
+                    비밀번호를 잊으셨나요?
+                  </button>
+                </form>
+
+                <div className="landing-auth-divider" aria-hidden="true">
+                  <span className="landing-auth-divider-line" />
+                  <img className="landing-auth-divider-mark" src={logoImage} alt="" />
+                  <span className="landing-auth-divider-line" />
+                </div>
+
+                <aside className="landing-access-panel" aria-label="계정 지원">
+                  <div className="landing-access-group landing-access-group-social">
+                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <GoogleMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">Google로 계속하기</span>
+                    </button>
+
+                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <GithubMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">Github로 계속하기</span>
+                    </button>
+
+                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <KakaoMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">Kakao로 계속하기</span>
+                    </button>
+                  </div>
+
+                  <div className="landing-access-group landing-access-group-support">
+                    <button type="button" className="landing-access-card is-social is-email" onClick={onOpenSignup}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <EmailMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">이메일로 계속하기</span>
+                    </button>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        ) : mode === 'signup' ? (
+          <form className="solve-auth-signup-form" onSubmit={(event) => void handleSignupSubmit(event)}>
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-signup-email">
+                이메일
+              </label>
+              <input
+                id="solve-signup-email"
+                type="email"
+                className="text-field"
+                autoComplete="email"
+                value={signupEmail}
+                onChange={(event) => {
+                  setSignupEmail(event.target.value);
+                  setSignupErrors([]);
+                  resetSignupEmailCheck();
+                }}
+                onBlur={() => {
+                  void checkSignupEmailDuplication();
+                }}
+                placeholder="이메일을 입력해 주세요."
+                aria-invalid={hasSignupEmailError}
+              />
+              <p className={`solve-auth-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
+                {signupEmailHintMessage}
+              </p>
+            </div>
+
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-signup-password">
+                비밀번호
+              </label>
+              <input
+                id="solve-signup-password"
+                type="password"
+                className="text-field"
+                autoComplete="new-password"
+                value={signupPassword}
+                onChange={(event) => {
+                  setSignupPassword(event.target.value);
+                  setSignupErrors([]);
+                }}
+                placeholder="비밀번호를 입력해 주세요."
+                aria-invalid={signupPassword.length > 0 && !isSignupPasswordValid}
+              />
+              <p className={`solve-auth-field-hint ${signupPassword.length > 0 && !isSignupPasswordValid ? 'is-error' : signupPassword.length > 0 ? 'is-success' : ''}`}>
+                {SIGNUP_PASSWORD_HINT}
+              </p>
+            </div>
+
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-signup-password-confirm">
+                비밀번호 확인
+              </label>
+              <input
+                id="solve-signup-password-confirm"
+                type="password"
+                className="text-field"
+                autoComplete="new-password"
+                value={signupPasswordConfirm}
+                onChange={(event) => {
+                  setSignupPasswordConfirm(event.target.value);
+                  setSignupErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void handleSignupSubmit();
+                }}
+                placeholder="비밀번호를 다시 입력해 주세요."
+                aria-invalid={signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid}
+              />
+              <p className={`solve-auth-field-hint ${signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid ? 'is-error' : signupPasswordConfirm.length > 0 ? 'is-success' : ''}`}>
+                {SIGNUP_PASSWORD_CONFIRM_HINT}
+              </p>
+            </div>
+
+            {signupErrors.length > 0 ? (
+              <div className="solve-auth-feedback is-error" role="alert">
+                {signupErrors.map((reason) => (
+                  <p key={reason}>{reason}</p>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="solve-auth-signup-actions">
+              <button type="submit" className="btn primary" disabled={!isSignupReady || isSignupSubmitting}>
+                {isSignupSubmitting ? '가입 중' : '가입하기'}
+              </button>
+              <button type="button" className="solve-auth-reset-link" onClick={onReturnToLogin}>
+                로그인으로 돌아가기
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form className="solve-auth-reset-form" onSubmit={(event) => void handleResetPassword(event)}>
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-reset-email">
+                이메일
+              </label>
+              <div className="solve-auth-inline-row">
+                <input
+                  id="solve-reset-email"
+                  type="email"
+                  className="text-field"
+                  autoComplete="email"
+                  value={resetEmail}
+                  onChange={(event) => {
+                    setResetEmail(event.target.value);
+                    setResetErrors([]);
+                    setResetStatusMessage(null);
+                  }}
+                  placeholder="가입한 이메일을 입력해 주세요."
+                />
+                <button type="button" className="btn secondary" onClick={handleSendResetCode} disabled={!isResetEmailValid || isSendingResetCode}>
+                  {isSendingResetCode ? '전송 중' : '코드 전송'}
+                </button>
+              </div>
+            </div>
+
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-reset-code">
+                인증 코드
+              </label>
+              <div className="solve-auth-inline-row">
+                <input
+                  id="solve-reset-code"
+                  type="text"
+                  className="text-field"
+                  value={resetCode}
+                  onChange={(event) => {
+                    setResetCode(sanitizeVerificationCode(event.target.value));
+                    setResetErrors([]);
+                    setResetStatusMessage(null);
+                  }}
+                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                />
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={handleVerifyResetCode}
+                  disabled={!isResetCodeSent || !isResetCodeValid || isVerifyingResetCode}
+                >
+                  {isVerifyingResetCode ? '확인 중' : '코드 확인'}
+                </button>
+              </div>
+            </div>
+
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-reset-password">
+                새 비밀번호
+              </label>
+              <input
+                id="solve-reset-password"
+                type="password"
+                className="text-field"
+                value={newPassword}
+                onChange={(event) => {
+                  setNewPassword(event.target.value);
+                  setResetErrors([]);
+                }}
+                placeholder="특수문자를 포함해 8자 이상 입력해 주세요."
+                disabled={!isResetCodeVerified}
+              />
+            </div>
+
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-reset-password-confirm">
+                새 비밀번호 확인
+              </label>
+              <input
+                id="solve-reset-password-confirm"
+                type="password"
+                className="text-field"
+                value={newPasswordConfirm}
+                onChange={(event) => {
+                  setNewPasswordConfirm(event.target.value);
+                  setResetErrors([]);
+                }}
+                placeholder="비밀번호를 다시 입력해 주세요."
+                disabled={!isResetCodeVerified}
+              />
+            </div>
+
+            {resetStatusMessage ? <p className="solve-auth-feedback is-info">{resetStatusMessage}</p> : null}
+            {resetErrors.length > 0 ? (
+              <div className="solve-auth-feedback is-error" role="alert">
+                {resetErrors.map((reason) => (
+                  <p key={reason}>{reason}</p>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="solve-auth-reset-actions">
+              <button
+                type="submit"
+                className="btn primary"
+                disabled={!isResetCodeVerified || !isResetPasswordValid || !isResetPasswordConfirmValid || isResettingPassword}
+              >
+                {isResettingPassword ? '변경 중' : '비밀번호 변경'}
+              </button>
+              <button type="button" className="solve-auth-reset-link" onClick={onReturnToLogin}>
+                로그인으로 돌아가기
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
 }
 
 function copyDocumentStyles(targetDocument: Document) {
@@ -763,6 +2646,63 @@ function CloseIcon() {
   );
 }
 
+function GithubMarkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M12 1.5a10.5 10.5 0 0 0-3.32 20.46c.53.1.72-.23.72-.51v-1.78c-2.93.64-3.55-1.24-3.55-1.24-.48-1.22-1.18-1.55-1.18-1.55-.96-.66.07-.64.07-.64 1.06.08 1.62 1.09 1.62 1.09.95 1.62 2.48 1.15 3.08.88.09-.68.37-1.15.67-1.42-2.34-.27-4.8-1.17-4.8-5.22 0-1.15.41-2.1 1.08-2.84-.11-.27-.47-1.38.1-2.88 0 0 .89-.28 2.91 1.08a10.02 10.02 0 0 1 5.3 0c2.02-1.36 2.91-1.08 2.91-1.08.57 1.5.21 2.61.1 2.88.67.74 1.08 1.69 1.08 2.84 0 4.06-2.46 4.94-4.81 5.21.38.33.72.98.72 1.98v2.93c0 .28.19.62.73.51A10.5 10.5 0 0 0 12 1.5Z"
+      />
+    </svg>
+  );
+}
+
+function GoogleMarkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="#4285F4"
+        d="M23.52 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h6.47a5.54 5.54 0 0 1-2.4 3.63v3.02h3.88c2.27-2.08 3.57-5.15 3.57-8.68Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.88-3.02c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.72-4.95H1.27v3.12A12 12 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.28 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.38-2.28V6.6H1.27a12 12 0 0 0 0 10.8l4.01-3.12Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.77c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.95 1.19 15.23 0 12 0A12 12 0 0 0 1.27 6.6l4.01 3.12c.94-2.84 3.59-4.95 6.72-4.95Z"
+      />
+    </svg>
+  );
+}
+
+function KakaoMarkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="11" fill="#FEE500" />
+      <path
+        fill="#3B2727"
+        d="M12.1 6.15c-4.02 0-7.28 2.52-7.28 5.63 0 1.84 1.13 3.48 2.88 4.5l-.78 2.55 3.14-2.08c.65.14 1.33.22 2.04.22 4.02 0 7.28-2.52 7.28-5.62 0-3.11-3.26-5.2-7.28-5.2Z"
+      />
+    </svg>
+  );
+}
+
+function EmailMarkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M3.75 6.25A2.25 2.25 0 0 1 6 4h12a2.25 2.25 0 0 1 2.25 2.25v11.5A2.25 2.25 0 0 1 18 20H6a2.25 2.25 0 0 1-2.25-2.25V6.25Zm1.5.3v.2l6.42 4.67a.56.56 0 0 0 .66 0l6.42-4.67v-.2A.75.75 0 0 0 18 5.8H6a.75.75 0 0 0-.75.75Zm13.5 1.92-5.54 4.03a2.06 2.06 0 0 1-2.42 0L5.25 8.47v9.28c0 .41.34.75.75.75h12c.41 0 .75-.34.75-.75V8.47Z"
+      />
+    </svg>
+  );
+}
+
 function CollapseChevronIcon({ collapsed }: { collapsed: boolean }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -780,38 +2720,38 @@ function CollapseChevronIcon({ collapsed }: { collapsed: boolean }) {
 
 function RefreshIcon() {
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
       <path
-        d="M15.9 7.75A6.15 6.15 0 0 0 5.75 4.85"
+        d="M12.85 6.1A4.95 4.95 0 0 0 4.7 3.8"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
       <path
-        d="M5.7 2.3v3.15h3.15"
+        d="M4.65 1.95v2.7h2.7"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
       <path
-        d="M4.1 12.25A6.15 6.15 0 0 0 14.25 15.15"
+        d="M3.15 9.9A4.95 4.95 0 0 0 11.3 12.2"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
       <path
-        d="M14.3 17.7v-3.15H11.15"
+        d="M11.35 14.05v-2.7h-2.7"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.75"
+        strokeWidth="1.9"
       />
     </svg>
   );
@@ -973,10 +2913,15 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
     externalWindowRef.current = openedWindow;
     copyDocumentStyles(openedWindow.document);
     openedWindow.document.title = title;
+    openedWindow.document.documentElement.style.height = '100%';
     openedWindow.document.body.innerHTML = '';
     openedWindow.document.body.className = document.body.className;
     openedWindow.document.body.style.margin = '0';
-    openedWindow.document.body.style.background = '#eef3f9';
+    openedWindow.document.body.style.height = '100%';
+    openedWindow.document.body.style.background =
+      getComputedStyle(document.documentElement).getPropertyValue('--bg-body').trim() ||
+      getComputedStyle(document.body).backgroundColor ||
+      '#eef3f9';
     openedWindow.document.body.style.overflow = 'hidden';
 
     const container = openedWindow.document.createElement('div');
@@ -1019,28 +2964,32 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
+  const executionResultItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const submitPanelRef = useRef<HTMLElement | null>(null);
+  const executionResponseResolverRef = useRef<((result: ProblemExecutionResult) => void) | null>(null);
+  const executionStopRequestedRef = useRef(false);
+  const ignoredExecutionResponseCountRef = useRef(0);
   const { defaultDbms, isAuthenticated } = useMockSession();
+  const previousAuthenticationStateRef = useRef(isAuthenticated);
   const fallbackProblem = createFallbackProblemDetail(problemId);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
-  const [executionResult, setExecutionResult] = useState<ProblemExecutionResult | null>(null);
-  const [executionResultPage, setExecutionResultPage] = useState(1);
-  const [executionResultPageInput, setExecutionResultPageInput] = useState('1');
+  const [executionRuns, setExecutionRuns] = useState<ExecutionStatementRun[]>([]);
+  const [blinkingExecutionRunKeys, setBlinkingExecutionRunKeys] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitProgressSteps, setSubmitProgressSteps] = useState<ProblemSubmitProgressStep[]>([]);
   const [autocompleteState, setAutocompleteState] = useState<SqlAutocompleteState | null>(null);
+  const [executionPickerState, setExecutionPickerState] = useState<SqlExecutionPickerState | null>(null);
   const [collapsedCards, setCollapsedCards] = useState<CollapsedCardState>({
     editor: false,
     execute: false,
     submit: false,
-    resultTable: false,
   });
-  const [executionResultGridResetKey, setExecutionResultGridResetKey] = useState(0);
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibilityState>({
     editor: true,
-    submit: true,
+    submit: false,
   });
   const [detachedPanels, setDetachedPanels] = useState<PanelDetachState>({
     editor: false,
@@ -1054,15 +3003,51 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [floatingMoveState, setFloatingMoveState] = useState<FloatingMoveState | null>(null);
   const [floatingResizeState, setFloatingResizeState] = useState<FloatingResizeState | null>(null);
   const [editorFloatingOpacity, setEditorFloatingOpacity] = useState(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA);
+  const [authOverlayMode, setAuthOverlayMode] = useState<SolveAuthOverlayMode | null>(null);
   const problem = fallbackProblem;
   const availableDbms = getAvailableDbms(problem);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
     resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null)
   );
-  const [sql, setSql] = useState(problem.starterSql);
+  const [sql, setSql] = useState('');
   const [sqlEditorFontSize, setSqlEditorFontSize] = useState(SQL_EDITOR_DEFAULT_FONT_SIZE);
+  const getPanelTitle = (panelKey: PanelKey) =>
+    panelKey === 'editor' ? `${getDbmsLabel(selectedDbms)} 에디터` : panelLabels[panelKey];
   const selectedDdl = useMemo(() => resolveProblemDdl(problemDetail, selectedDbms), [problemDetail, selectedDbms]);
   const ddlAutocompleteItems = useMemo(() => extractAutocompleteItemsFromDdl(selectedDdl), [selectedDdl]);
+  const sqlHighlightTableNames = useMemo(
+    () => new Set(ddlAutocompleteItems.filter((item) => item.kind === 'table').map((item) => item.value.toLowerCase())),
+    [ddlAutocompleteItems],
+  );
+  const sqlHighlightColumnNames = useMemo(
+    () => new Set(ddlAutocompleteItems.filter((item) => item.kind === 'column').map((item) => item.value.toLowerCase())),
+    [ddlAutocompleteItems],
+  );
+  const highlightedSql = useMemo(
+    () => renderHighlightedSql(sql, sqlHighlightTableNames, sqlHighlightColumnNames),
+    [sql, sqlHighlightColumnNames, sqlHighlightTableNames],
+  );
+  const executionStatementMarkerRuns = useMemo(() => {
+    const currentStatementSegments = parseSqlStatements(sql);
+    const remainingRuns = executionRuns.filter((run) => run.status !== 'idle');
+
+    return currentStatementSegments.flatMap((segment) => {
+      const matchedRunIndex = remainingRuns.findIndex((run) => run.sql === segment.sql);
+      if (matchedRunIndex < 0) {
+        return [];
+      }
+
+      const [matchedRun] = remainingRuns.splice(matchedRunIndex, 1);
+      return [
+        {
+          key: matchedRun.key,
+          status: matchedRun.status,
+          startOffset: segment.start,
+          isBlinking: blinkingExecutionRunKeys.includes(matchedRun.key),
+        },
+      ];
+    });
+  }, [blinkingExecutionRunKeys, executionRuns, sql]);
   const autocompleteItems = useMemo(
     () => [
       ...SQL_AUTOCOMPLETE_KEYWORDS.map(
@@ -1076,15 +3061,21 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     ],
     [ddlAutocompleteItems],
   );
+  const editorPortalTarget = sqlEditorRef.current?.ownerDocument?.body ?? document.body;
 
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
     problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중..'));
 
+  const shouldRenderPanel = (panelKey: PanelKey) =>
+    panelKey === 'editor' || submitMessage != null || submitProgressSteps.length > 0;
   const visibleFloatingPanels = panelOrder.filter(
-    (panelKey) => panelVisibility[panelKey] && detachedPanels[panelKey] && !externalWindowPanels[panelKey],
+    (panelKey) =>
+      shouldRenderPanel(panelKey) && panelVisibility[panelKey] && detachedPanels[panelKey] && !externalWindowPanels[panelKey],
   );
-  const visibleExternalWindows = panelOrder.filter((panelKey) => panelVisibility[panelKey] && externalWindowPanels[panelKey]);
+  const visibleExternalWindows = panelOrder.filter(
+    (panelKey) => shouldRenderPanel(panelKey) && panelVisibility[panelKey] && externalWindowPanels[panelKey],
+  );
   const focusPanelSection = (resolveElement: () => HTMLElement | null) => {
     requestAnimationFrame(() => {
       const element = resolveElement();
@@ -1094,6 +3085,79 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       element.focus({ preventScroll: true });
+    });
+  };
+
+  const restoreEditorSelection = (selectionStart: number, selectionEnd: number) => {
+    requestAnimationFrame(() => {
+      if (!sqlEditorRef.current) {
+        return;
+      }
+
+      sqlEditorRef.current.focus();
+      sqlEditorRef.current.setSelectionRange(selectionStart, selectionEnd);
+    });
+  };
+
+  const registerExecutionResultItemRef = (key: string, element: HTMLDivElement | null) => {
+    executionResultItemRefs.current[key] = element;
+  };
+
+  const acknowledgeExecutionRun = (runKey: string) => {
+    setBlinkingExecutionRunKeys((current) => current.filter((key) => key !== runKey));
+  };
+
+  const focusExecutionRun = (runKey: string) => {
+    acknowledgeExecutionRun(runKey);
+    requestAnimationFrame(() => {
+      const targetElement = executionResultItemRefs.current[runKey];
+      if (!targetElement) {
+        return;
+      }
+
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
+
+  const updateExecutionRunBlinking = (runKey: string) => {
+    requestAnimationFrame(() => {
+      if (isElementVisibleInViewport(executionPanelRef.current)) {
+        setBlinkingExecutionRunKeys((current) => current.filter((key) => key !== runKey));
+        return;
+      }
+
+      setBlinkingExecutionRunKeys((current) => (current.includes(runKey) ? current : [...current, runKey]));
+    });
+  };
+
+  const openAuthOverlay = (mode: SolveAuthOverlayMode = 'login') => {
+    setIsExecuting(false);
+    setIsSubmitting(false);
+    setAuthOverlayMode(mode);
+  };
+
+  const closeAuthOverlay = () => {
+    setAuthOverlayMode(null);
+  };
+
+  const handleAuthenticatedInOverlay = () => {
+    const restoredAuthReturn = consumeSolvePageAuthReturn(problemId);
+    if (restoredAuthReturn?.sql != null) {
+      setSql(restoredAuthReturn.sql);
+    }
+    if (restoredAuthReturn?.selectedDbms != null) {
+      setSelectedDbms(restoredAuthReturn.selectedDbms);
+    }
+    setAuthOverlayMode(null);
+  };
+
+  const closeExecutionPicker = (restoreSelection: boolean) => {
+    setExecutionPickerState((current) => {
+      if (current != null && restoreSelection) {
+        restoreEditorSelection(current.selectionStart, current.selectionEnd);
+      }
+
+      return null;
     });
   };
 
@@ -1125,13 +3189,36 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }, [problemId]);
 
   useEffect(() => {
-    setSql(fallbackProblem.starterSql);
-    setExecutionResult(null);
-    setExecutionResultPage(1);
+    const restoredAuthReturn = consumeSolvePageAuthReturn(problemId);
+
+    setSql('');
+    setExecutionRuns([]);
+    setBlinkingExecutionRunKeys([]);
     setIsExecuting(false);
     setSubmitMessage(null);
+    setSubmitProgressSteps([]);
+    setExecutionPickerState(null);
+    setPanelVisibility((current) => ({
+      ...current,
+      submit: false,
+    }));
+    setDetachedPanels((current) => ({
+      ...current,
+      submit: false,
+    }));
+    setExternalWindowPanels((current) => ({
+      ...current,
+      submit: false,
+    }));
     setEditorFloatingOpacity(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA);
-    setSelectedDbms(resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
+    setSelectedDbms(
+      restoredAuthReturn?.selectedDbms != null
+        ? restoredAuthReturn.selectedDbms
+        : resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null),
+    );
+    if (restoredAuthReturn?.sql) {
+      setSql(restoredAuthReturn.sql);
+    }
   }, [defaultDbms, problemId]);
 
   useEffect(() => {
@@ -1145,12 +3232,35 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }, [collapsedCards.editor, sql, sqlEditorFontSize]);
 
   useEffect(() => {
+    const wasAuthenticated = previousAuthenticationStateRef.current;
+
+    if (wasAuthenticated && !isAuthenticated && (sql.trim() !== '' || executionRuns.length > 0 || submitProgressSteps.length > 0 || submitMessage != null)) {
+      openAuthOverlay('login');
+    }
+
+    previousAuthenticationStateRef.current = isAuthenticated;
+  }, [executionRuns.length, isAuthenticated, sql, submitMessage, submitProgressSteps.length]);
+
+  useEffect(() => {
     if (autocompleteState == null || !sqlEditorRef.current) {
       return;
     }
 
     updateAutocompleteState(sqlEditorRef.current.value, sqlEditorRef.current.selectionStart ?? sqlEditorRef.current.value.length);
   }, [autocompleteState != null, sqlEditorFontSize]);
+
+  useEffect(() => {
+    if (executionPickerState == null || !sqlEditorRef.current) {
+      return;
+    }
+
+    const selectedOption = executionPickerState.options[executionPickerState.selectedIndex];
+    if (!selectedOption) {
+      return;
+    }
+
+    restoreEditorSelection(selectedOption.start, selectedOption.end);
+  }, [executionPickerState]);
 
   useEffect(() => {
     if (autocompleteState == null) {
@@ -1176,9 +3286,47 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         return;
       }
 
+      if (message.type === 'problem.submit.progress') {
+        const progressMessage = message as ProblemSubmitProgressMessage;
+        if (progressMessage.problemId !== problemId || !progressMessage.stepKey || !progressMessage.status || !progressMessage.message) {
+          return;
+        }
+
+        setSubmitMessage(null);
+        setSubmitProgressSteps((current) =>
+          upsertSubmitProgressStep(
+            current,
+            createSubmitProgressStep(
+              progressMessage.stepKey,
+              progressMessage.status,
+              progressMessage.message,
+              Array.isArray(progressMessage.detailLines) ? progressMessage.detailLines : [],
+            ),
+          ),
+        );
+        setCollapsedCards((current) => ({
+          ...current,
+          submit: false,
+        }));
+        setPanelVisibility((current) => ({
+          ...current,
+          submit: true,
+        }));
+        return;
+      }
+
       if (message.type === 'problem.submit.result') {
+        const nextSubmitMessage = (message as ProblemSocketMessage).message ?? '제출을 기록하지 못했다.';
+        if (isAuthenticationRequiredMessage(nextSubmitMessage)) {
+          setIsSubmitting(false);
+          setSubmitProgressSteps([]);
+          setSubmitMessage(null);
+          openAuthOverlay('login');
+          return;
+        }
+
         setIsSubmitting(false);
-        setSubmitMessage((message as ProblemSocketMessage).message ?? '제출을 기록하지 못했다.');
+        setSubmitMessage(nextSubmitMessage);
         setCollapsedCards((current) => ({
           ...current,
           submit: false,
@@ -1200,12 +3348,31 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       if (message.type === 'problem.execute.result' || message.type === 'error') {
-        setIsExecuting(false);
-        setExecutionResult(
+        const nextExecutionResult =
           message.type === 'error'
             ? createProblemExecutionError(((message as ProblemSocketMessage).message ?? '문제 실행에 실패했다.'))
-            : toProblemExecutionResult(message as ProblemSocketMessage)
-        );
+            : toProblemExecutionResult(message as ProblemSocketMessage);
+
+        if (executionResponseResolverRef.current) {
+          const resolveExecution = executionResponseResolverRef.current;
+          executionResponseResolverRef.current = null;
+          resolveExecution(nextExecutionResult);
+          return;
+        }
+
+        if (ignoredExecutionResponseCountRef.current > 0) {
+          ignoredExecutionResponseCountRef.current -= 1;
+          return;
+        }
+
+        if (isAuthenticationRequiredMessage(nextExecutionResult.message)) {
+          openAuthOverlay('login');
+          return;
+        }
+
+        setIsExecuting(false);
+        const nextRun = createSingleExecutionStatementRun(sql, nextExecutionResult);
+        setExecutionRuns([nextRun]);
         setCollapsedCards((current) => ({
           ...current,
           execute: false,
@@ -1214,9 +3381,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           ...current,
           editor: true,
         }));
-        if (!detachedPanels.editor) {
-          focusPanelSection(() => executionPanelRef.current);
-        }
+        updateExecutionRunBlinking(nextRun.key);
       }
     });
 
@@ -1227,24 +3392,16 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         problemId,
       });
     };
-  }, [detachedPanels.editor, problemId]);
-
-  useEffect(() => {
-    setExecutionResultPage(1);
-    setExecutionResultPageInput('1');
-    setCollapsedCards((current) => ({
-      ...current,
-      resultTable: false,
-    }));
-  }, [executionResult]);
-
-  useEffect(() => {
-    setExecutionResultPageInput(String(executionResultPage));
-  }, [executionResultPage]);
+  }, [problemId]);
 
   useEffect(() => {
     setIsSubmitting(false);
     setSubmitMessage(null);
+    setSubmitProgressSteps([]);
+    setPanelVisibility((current) => ({
+      ...current,
+      submit: false,
+    }));
   }, [problemId]);
 
   useEffect(() => {
@@ -1310,23 +3467,58 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     const handleMove = (event: MouseEvent) => {
-      const currentLayout = floatingLayouts[floatingResizeState.panelKey];
       const viewportPadding = 12;
-      const nextWidth = clamp(
-        floatingResizeState.startWidth + (event.clientX - floatingResizeState.startX),
-        panelMinWidths[floatingResizeState.panelKey],
-        window.innerWidth - currentLayout.left - viewportPadding,
-      );
-      const nextHeight = clamp(
-        floatingResizeState.startHeight + (event.clientY - floatingResizeState.startY),
-        panelMinHeights[floatingResizeState.panelKey],
-        window.innerHeight - currentLayout.top - viewportPadding,
-      );
+      const minWidth = panelMinWidths[floatingResizeState.panelKey];
+      const minHeight = panelMinHeights[floatingResizeState.panelKey];
+      const deltaX = event.clientX - floatingResizeState.startX;
+      const deltaY = event.clientY - floatingResizeState.startY;
+      let nextLeft = floatingResizeState.startLeft;
+      let nextTop = floatingResizeState.startTop;
+      let nextWidth = floatingResizeState.startWidth;
+      let nextHeight = floatingResizeState.startHeight;
+
+      if (floatingResizeState.direction.includes('e')) {
+        nextWidth = clamp(
+          floatingResizeState.startWidth + deltaX,
+          minWidth,
+          window.innerWidth - floatingResizeState.startLeft - viewportPadding,
+        );
+      }
+
+      if (floatingResizeState.direction.includes('s')) {
+        nextHeight = clamp(
+          floatingResizeState.startHeight + deltaY,
+          minHeight,
+          window.innerHeight - floatingResizeState.startTop - viewportPadding,
+        );
+      }
+
+      if (floatingResizeState.direction.includes('w')) {
+        const nextRight = floatingResizeState.startLeft + floatingResizeState.startWidth;
+        nextLeft = clamp(
+          floatingResizeState.startLeft + deltaX,
+          viewportPadding,
+          nextRight - minWidth,
+        );
+        nextWidth = clamp(nextRight - nextLeft, minWidth, window.innerWidth - nextLeft - viewportPadding);
+      }
+
+      if (floatingResizeState.direction.includes('n')) {
+        const nextBottom = floatingResizeState.startTop + floatingResizeState.startHeight;
+        nextTop = clamp(
+          floatingResizeState.startTop + deltaY,
+          viewportPadding,
+          nextBottom - minHeight,
+        );
+        nextHeight = clamp(nextBottom - nextTop, minHeight, window.innerHeight - nextTop - viewportPadding);
+      }
 
       setFloatingLayouts((current) => ({
         ...current,
         [floatingResizeState.panelKey]: {
           ...current[floatingResizeState.panelKey],
+          left: nextLeft,
+          top: nextTop,
           width: nextWidth,
           height: nextHeight,
         },
@@ -1344,7 +3536,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [floatingLayouts, floatingResizeState]);
+  }, [floatingResizeState]);
 
   useEffect(() => {
     setAutocompleteState(null);
@@ -1402,6 +3594,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
+    if (executionPickerState != null) {
+      setExecutionPickerState(null);
+    }
+
     updateAutocompleteState(sqlEditorRef.current.value, sqlEditorRef.current.selectionStart ?? sqlEditorRef.current.value.length);
   };
 
@@ -1427,6 +3623,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const handleEditorChange = (nextSql: string, caretIndex: number) => {
+    if (executionPickerState != null) {
+      setExecutionPickerState(null);
+    }
+
     setSql(nextSql);
     updateAutocompleteState(nextSql, caretIndex);
   };
@@ -1435,21 +3635,16 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setSqlEditorFontSize((current) => clamp(current + delta, SQL_EDITOR_MIN_FONT_SIZE, SQL_EDITOR_MAX_FONT_SIZE));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isAuthenticated) {
-      setSubmitMessage('로그인 후 제출할 수 있다.');
-      setCollapsedCards((current) => ({
-        ...current,
-        submit: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        submit: true,
-      }));
+      setSubmitProgressSteps([]);
+      setSubmitMessage(null);
+      openAuthOverlay('login');
       return;
     }
 
     if (selectedDbms !== 'postgresql') {
+      setSubmitProgressSteps([]);
       setSubmitMessage('제출은 PostgreSQL만 지원한다.');
       setCollapsedCards((current) => ({
         ...current,
@@ -1463,6 +3658,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     if (sql.trim().length === 0) {
+      setSubmitProgressSteps([]);
       setSubmitMessage('제출할 SQL을 입력해야 한다.');
       setCollapsedCards((current) => ({
         ...current,
@@ -1489,7 +3685,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     setIsSubmitting(true);
-    setSubmitMessage('제출 중이다.');
+    setSubmitMessage(null);
+    setSubmitProgressSteps([createSubmitProgressStep('submit', 'running', 'SQL 제출 중')]);
     setCollapsedCards((current) => ({
       ...current,
       submit: false,
@@ -1500,104 +3697,404 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }));
     focusPanelSection(() => submitPanelRef.current);
 
-    void sendSessionSocketMessage({
-      type: 'problem.submit',
-      problemId,
-      sql,
-      dbms: selectedDbms,
-    }).catch((error) => {
-      setIsSubmitting(false);
-      setSubmitMessage(error instanceof SessionSocketError ? error.message : '제출 연결에 실패했다.');
-    });
-  };
-
-  const executeSql = async () => {
-    if (!isAuthenticated) {
-      setExecutionResult(createProblemExecutionError('로그인 후 문제를 실행할 수 있다.'));
-      setCollapsedCards((current) => ({
-        ...current,
-        execute: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        editor: true,
-      }));
-      if (!detachedPanels.editor) {
-        focusPanelSection(() => executionPanelRef.current);
-      }
-      return;
-    }
-
-    if (selectedDbms !== 'postgresql') {
-      setExecutionResult(createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.'));
-      setCollapsedCards((current) => ({
-        ...current,
-        execute: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        editor: true,
-      }));
-      if (!detachedPanels.editor) {
-        focusPanelSection(() => executionPanelRef.current);
-      }
-      return;
-    }
-
-    if (sql.trim().length === 0) {
-      setExecutionResult(createProblemExecutionError('실행할 SQL을 입력해야 한다.'));
-      setCollapsedCards((current) => ({
-        ...current,
-        execute: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        editor: true,
-      }));
-      if (!detachedPanels.editor) {
-        focusPanelSection(() => executionPanelRef.current);
-      }
-      return;
-    }
-
     try {
-      setIsExecuting(true);
-      setExecutionResult(null);
-      setCollapsedCards((current) => ({
-        ...current,
-        execute: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        editor: true,
-      }));
-      if (!detachedPanels.editor) {
-        focusPanelSection(() => executionPanelRef.current);
-      }
       await sendSessionSocketMessage({
-        type: 'problem.execute',
+        type: 'problem.submit',
         problemId,
         sql,
         dbms: selectedDbms,
       });
     } catch (error) {
-      setIsExecuting(false);
-      setExecutionResult(
-        createProblemExecutionError(
-          error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.'
-        )
+      setIsSubmitting(false);
+      setSubmitProgressSteps([]);
+
+      const isSessionValid = await syncSession();
+      if (!isSessionValid) {
+        openAuthOverlay('login');
+        return;
+      }
+
+      setSubmitMessage(error instanceof SessionSocketError ? error.message : '제출 연결에 실패했다.');
+    }
+  };
+
+  const requestExecutionResult = async (statementSql: string, page = 1) =>
+    new Promise<ProblemExecutionResult>(async (resolve, reject) => {
+      executionResponseResolverRef.current = resolve;
+
+      try {
+        await sendSessionSocketMessage({
+          type: page === 1 ? 'problem.execute' : 'problem.execute.page',
+          problemId,
+          sql: statementSql,
+          dbms: selectedDbms,
+          page,
+          pageSize: EXECUTION_RESULT_PAGE_SIZE,
+        });
+      } catch (error) {
+        executionResponseResolverRef.current = null;
+        reject(error);
+      }
+    });
+
+  const requestExecutionResultPage = async (item: ExecutionStatementRun, page: number) => {
+    try {
+      const nextResult = await requestExecutionResult(item.sql, page);
+
+      if (isAuthenticationRequiredMessage(nextResult.message)) {
+        openAuthOverlay('login');
+        return;
+      }
+
+      setExecutionRuns((current) =>
+        current.map((run) =>
+          run.key === item.key
+            ? {
+                ...run,
+                status: nextResult.success ? 'success' : 'error',
+                result: nextResult,
+              }
+            : run,
+        ),
       );
+    } catch (error) {
+      const isSessionValid = await syncSession();
+      if (!isSessionValid) {
+        openAuthOverlay('login');
+        return;
+      }
+
+      setExecutionRuns((current) =>
+        current.map((run) =>
+          run.key === item.key
+            ? {
+                ...run,
+                status: 'error',
+                result: createProblemExecutionError(error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.'),
+              }
+            : run,
+        ),
+      );
+    }
+  };
+
+  const runExecutionStatements = async (statementSegments: SqlStatementSegment[]) => {
+    try {
+      executionStopRequestedRef.current = false;
+      setIsExecuting(true);
+      setExecutionRuns(createExecutionStatementRuns(statementSegments, 0));
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
       setPanelVisibility((current) => ({
         ...current,
         editor: true,
       }));
-      if (!detachedPanels.editor) {
-        focusPanelSection(() => executionPanelRef.current);
+
+      for (const [statementIndex, statementSegment] of statementSegments.entries()) {
+        const nextResult = await requestExecutionResult(statementSegment.sql);
+        if (executionStopRequestedRef.current) {
+          break;
+        }
+
+        if (isAuthenticationRequiredMessage(nextResult.message)) {
+          setExecutionRuns((current) =>
+            current.map((run) =>
+              run.status === 'running'
+                ? {
+                    ...run,
+                    status: 'idle',
+                    result: null,
+                  }
+                : run,
+            ),
+          );
+          openAuthOverlay('login');
+          break;
+        }
+        const shouldContinue = !executionStopRequestedRef.current;
+        const completedRunKey = createExecutionStatementRunKey(statementSegment.start, statementSegment.end);
+
+        setExecutionRuns((current) =>
+          current.map((run, runIndex) => {
+            if (runIndex === statementIndex) {
+              return {
+                ...run,
+                status: nextResult.success ? 'success' : 'error',
+                result: nextResult,
+              };
+            }
+
+            if (runIndex === statementIndex + 1 && shouldContinue) {
+              return {
+                ...run,
+                status: 'running',
+              };
+            }
+
+            return run;
+          }),
+        );
+        updateExecutionRunBlinking(completedRunKey);
+
+        if (!shouldContinue) {
+          break;
+        }
       }
+    } catch (error) {
+      const isSessionValid = await syncSession();
+      if (!isSessionValid) {
+        setExecutionRuns((current) =>
+          current.map((run) =>
+            run.status === 'running'
+              ? {
+                  ...run,
+                  status: 'idle',
+                  result: null,
+                }
+              : run,
+          ),
+        );
+        openAuthOverlay('login');
+        return;
+      }
+
+      const nextErrorResult = createProblemExecutionError(error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.');
+      let erroredRunKey: string | null = null;
+
+      setExecutionRuns((current) => {
+        if (current.length === 0) {
+          const nextRun = createSingleExecutionStatementRun(sql, nextErrorResult);
+          erroredRunKey = nextRun.key;
+          return [nextRun];
+        }
+
+        const runningIndex = current.findIndex((run) => run.status === 'running');
+        if (runningIndex === -1) {
+          return current;
+        }
+
+        erroredRunKey = current[runningIndex]?.key ?? null;
+
+        return current.map((run, runIndex) =>
+          runIndex === runningIndex
+            ? {
+                ...run,
+                status: 'error',
+                result: nextErrorResult,
+              }
+            : run,
+        );
+      });
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      if (erroredRunKey) {
+        updateExecutionRunBlinking(erroredRunKey);
+      }
+    } finally {
+      executionStopRequestedRef.current = false;
+      executionResponseResolverRef.current = null;
+      setIsExecuting(false);
+    }
+  };
+
+  const openExecutionPicker = (caretIndex: number) => {
+    if (!sqlEditorRef.current) {
+      return false;
+    }
+
+    const options = createExecutionPickerOptions(sql, caretIndex);
+    if (options.length === 0) {
+      return false;
+    }
+
+    const anchor = measureAutocompleteAnchor(sqlEditorRef.current, sql, caretIndex, options.length);
+    if (anchor.maxHeight < 40) {
+      return false;
+    }
+
+    setAutocompleteState(null);
+    setExecutionPickerState({
+      options,
+      selectedIndex: 0,
+      selectionStart: sqlEditorRef.current.selectionStart ?? caretIndex,
+      selectionEnd: sqlEditorRef.current.selectionEnd ?? caretIndex,
+      left: anchor.left,
+      top: anchor.top,
+      maxWidth: Math.max(anchor.maxWidth, 320),
+      maxHeight: anchor.maxHeight,
+    });
+    return true;
+  };
+
+  const confirmExecutionPickerSelection = () => {
+    if (executionPickerState == null) {
+      return;
+    }
+
+    const selectedOption = executionPickerState.options[executionPickerState.selectedIndex];
+    if (!selectedOption) {
+      return;
+    }
+
+    closeExecutionPicker(true);
+    void runExecutionStatements(selectedOption.segments);
+  };
+
+  const confirmExecutionPickerOption = (option: SqlExecutionPickerOption) => {
+    closeExecutionPicker(true);
+    void runExecutionStatements(option.segments);
+  };
+
+  const executeSql = async () => {
+    if (executionPickerState != null) {
+      confirmExecutionPickerSelection();
+      return;
+    }
+
+    if (!isAuthenticated) {
+      openAuthOverlay('login');
+      return;
+    }
+
+    if (selectedDbms !== 'postgresql') {
+      setExecutionRuns([
+        createSingleExecutionStatementRun(sql, createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.')),
+      ]);
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      return;
+    }
+
+    if (sql.trim().length === 0) {
+      setExecutionRuns([createSingleExecutionStatementRun(sql, createProblemExecutionError('실행할 SQL을 입력해야 한다.'))]);
+      setCollapsedCards((current) => ({
+        ...current,
+        execute: false,
+      }));
+      setPanelVisibility((current) => ({
+        ...current,
+        editor: true,
+      }));
+      return;
+    }
+
+    const caretIndex = sqlEditorRef.current?.selectionStart ?? sql.length;
+    if (openExecutionPicker(caretIndex)) {
+      return;
+    }
+
+    const executableSegments = parseSqlStatements(sql);
+    if (executableSegments.length === 0) {
+      setExecutionRuns([createSingleExecutionStatementRun(sql, createProblemExecutionError('실행할 SQL을 입력해야 한다.'))]);
+      return;
+    }
+
+    await runExecutionStatements(executableSegments);
+  };
+
+  const handleStopExecution = () => {
+    if (!isExecuting) {
+      return;
+    }
+
+    executionStopRequestedRef.current = true;
+    ignoredExecutionResponseCountRef.current += 1;
+    const resolveExecution = executionResponseResolverRef.current;
+    executionResponseResolverRef.current = null;
+    setIsExecuting(false);
+    setExecutionRuns((current) =>
+      current.map((run) =>
+        run.status === 'running'
+          ? {
+              ...run,
+              status: 'idle',
+              result: null,
+            }
+          : run,
+      ),
+    );
+    resolveExecution?.(createProblemExecutionError('중지됨'));
+    void sendSessionSocketMessage({
+      type: 'problem.execute.stop',
+      problemId,
+      dbms: selectedDbms,
+    }).catch(() => {
+    });
+  };
+
+  const handleFloatingPaneWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    const scrollableElement = resolveWheelScrollableElement(event.target, event.currentTarget, event.deltaY);
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (scrollableElement) {
+      scrollableElement.scrollTop += event.deltaY;
+      scrollableElement.scrollLeft += event.deltaX;
     }
   };
 
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'Enter') {
+      event.preventDefault();
+      setAutocompleteState(null);
+      if (executionPickerState != null) {
+        closeExecutionPicker(false);
+      }
+      void handleSubmit();
+      return;
+    }
+
+    if (executionPickerState != null) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setExecutionPickerState((current) =>
+          current == null
+            ? current
+            : {
+                ...current,
+                selectedIndex: (current.selectedIndex + 1) % current.options.length,
+              },
+        );
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setExecutionPickerState((current) =>
+          current == null
+            ? current
+            : {
+                ...current,
+                selectedIndex: (current.selectedIndex - 1 + current.options.length) % current.options.length,
+              },
+        );
+        return;
+      }
+
+      if (event.key === 'Tab' || event.key === 'Enter' || ((event.ctrlKey || event.metaKey) && event.key === 'Enter')) {
+        event.preventDefault();
+        confirmExecutionPickerSelection();
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeExecutionPicker(true);
+        return;
+      }
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
       setAutocompleteState(null);
@@ -1778,23 +4275,32 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     });
   };
 
-  const startFloatingResize = (panelKey: PanelKey, event: ReactMouseEvent<HTMLButtonElement>) => {
+  const startFloatingResize = (
+    panelKey: PanelKey,
+    direction: FloatingResizeDirection,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
     event.preventDefault();
+    event.stopPropagation();
     setFloatingResizeState({
       panelKey,
+      direction,
       startX: event.clientX,
       startY: event.clientY,
+      startLeft: floatingLayouts[panelKey].left,
+      startTop: floatingLayouts[panelKey].top,
       startWidth: floatingLayouts[panelKey].width,
       startHeight: floatingLayouts[panelKey].height,
     });
   };
 
-  const renderPanelActions = (panelKey: PanelKey) => (
+  const renderPanelActions = (panelKey: PanelKey) =>
+    panelKey === 'submit' ? null : (
     <div className="solve-pane-actions">
       <button
         type="button"
         className={`mini-toggle solve-pane-action solve-pane-action-icon ${externalWindowPanels[panelKey] ? 'is-selected' : ''}`}
-        aria-label={externalWindowPanels[panelKey] ? `Restore ${panelLabels[panelKey]} from external window` : `Open ${panelLabels[panelKey]} in external window`}
+        aria-label={externalWindowPanels[panelKey] ? `Restore ${getPanelTitle(panelKey)} from external window` : `Open ${getPanelTitle(panelKey)} in external window`}
         onClick={() => togglePanelExternalWindow(panelKey)}
       >
         <ExternalWindowIcon />
@@ -1802,7 +4308,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className={`mini-toggle solve-pane-action solve-pane-action-icon ${detachedPanels[panelKey] ? 'is-selected' : ''}`}
-        aria-label={detachedPanels[panelKey] ? `Restore ${panelLabels[panelKey]} from PIP` : `Open ${panelLabels[panelKey]} in PIP`}
+        aria-label={detachedPanels[panelKey] ? `Restore ${getPanelTitle(panelKey)} from PIP` : `Open ${getPanelTitle(panelKey)} in PIP`}
         onClick={() => togglePanelDetach(panelKey)}
       >
         <PipIcon />
@@ -1810,16 +4316,17 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className="mini-toggle solve-pane-action solve-pane-action-icon"
-        aria-label={`Close ${panelLabels[panelKey]}`}
+        aria-label={`Close ${getPanelTitle(panelKey)}`}
         onClick={() => togglePanelVisibility(panelKey)}
       >
         <CloseIcon />
       </button>
     </div>
-  );
+    );
 
   const renderFloatingOpacityControl = () => {
-    const sliderValue = Math.round((1 - editorFloatingOpacity / FLOATING_EDITOR_BACKGROUND_MAX_ALPHA) * 100);
+    const sliderRange = FLOATING_EDITOR_BACKGROUND_MAX_ALPHA - FLOATING_EDITOR_BACKGROUND_MIN_ALPHA;
+    const sliderValue = Math.round(((editorFloatingOpacity - FLOATING_EDITOR_BACKGROUND_MIN_ALPHA) / sliderRange) * 100);
 
     return (
       <label className="solve-floating-opacity-control" aria-label="에디터 투명도 조절">
@@ -1835,7 +4342,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           value={sliderValue}
           onChange={(event) => {
             const nextValue = Number(event.target.value);
-            setEditorFloatingOpacity(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA * (1 - nextValue / 100));
+            setEditorFloatingOpacity(FLOATING_EDITOR_BACKGROUND_MIN_ALPHA + sliderRange * (nextValue / 100));
           }}
         />
       </label>
@@ -1848,7 +4355,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       onMouseDown={isFloating ? (event) => startFloatingMove(panelKey, event) : undefined}
     >
       <div className="solve-detail-section-title-row">
-        <h2 className="solve-detail-section-title solve-pane-title">{panelLabels[panelKey]}</h2>
+        <h2 className="solve-detail-section-title solve-pane-title">{getPanelTitle(panelKey)}</h2>
         {isFloating && panelKey === 'editor' ? renderFloatingOpacityControl() : null}
         {renderPanelActions(panelKey)}
       </div>
@@ -1877,146 +4384,192 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     </div>
   );
 
-  const renderExecutionInlineRegion = () => {
-    if (!isExecuting && !executionResult) {
+  const visibleExecutionRuns = executionRuns.filter((run) => run.status === 'success' || run.status === 'error');
+
+  const renderExecutionInlineRegion = (isFloating: boolean) => {
+    if (visibleExecutionRuns.length === 0) {
       return null;
     }
 
-    const shouldShowRefresh = executionResult?.mode === 'select' && !collapsedCards.execute;
-
     return (
-      <div ref={executionPanelRef} tabIndex={-1} className={`solve-editor-inline-result ${collapsedCards.execute ? 'is-collapsed' : ''}`}>
+      <div
+        ref={executionPanelRef}
+        tabIndex={-1}
+        className={`solve-editor-inline-result ${collapsedCards.execute ? 'is-collapsed' : ''} ${isFloating ? 'is-floating' : ''} ${visibleExecutionRuns.length > 0 ? 'has-results' : ''}`.trim()}
+      >
         <div className="solve-editor-inline-result-divider" aria-hidden="true" />
-        <div className="solve-editor-inline-result-header">
-          <button
-            type="button"
-            className="solve-detail-section-divider-button solve-pane-section-divider-button"
-            aria-label={collapsedCards.execute ? '펼치기' : '접기'}
-            aria-expanded={!collapsedCards.execute}
-            onClick={() => toggleCardCollapse('execute')}
-          >
-            <CollapseChevronIcon collapsed={collapsedCards.execute} />
-          </button>
-          <div className="solve-pane-summary-row">
-            {isExecuting ? (
-              <span className="solve-pane-summary-item is-pending">SQL 실행 중</span>
-            ) : executionResult ? (
-              <>
-                <span className="solve-pane-summary-item">
-                  <span className="solve-pane-summary-label">경과 시간</span>
-                  <strong className="solve-pane-summary-value">{formatExecutionMetricValue(executionResult.executionTimeMs)}</strong>
-                </span>
-                <span className="solve-pane-summary-item">
-                  <span className="solve-pane-summary-label">결과 Rows</span>
-                  <strong className="solve-pane-summary-value">{formatGroupedNumber(executionResult.rowCount)}</strong>
-                </span>
-              </>
-            ) : null}
-          </div>
-          <div className="solve-detail-section-header-actions">
-            {shouldShowRefresh ? (
-              <button
-                type="button"
-                className="solve-pane-action solve-pane-action-icon"
-                aria-label="실행 결과 너비 초기화"
-                onClick={() => setExecutionResultGridResetKey((current) => current + 1)}
-              >
-                <RefreshIcon />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
         {!collapsedCards.execute ? (
-          <div className="solve-editor-inline-result-body solve-pane-result-stack">
-            {isExecuting ? (
-              <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
-            ) : executionResult ? (
-              <>
-                {executionResult.message && shouldRenderExecutionMessage(executionResult.message) ? (
-                  <p className="solve-pane-result-message">{executionResult.message}</p>
-                ) : null}
-                {renderExecutionContent(
-                  executionResult,
-                  executionResultPage,
-                  setExecutionResultPage,
-                  executionResultPageInput,
-                  setExecutionResultPageInput,
-                  collapsedCards.resultTable,
-                  () =>
-                    setCollapsedCards((current) => ({
-                      ...current,
-                      resultTable: !current.resultTable,
-                    })),
-                  executionResultGridResetKey,
-                )}
-              </>
-            ) : null}
+          <div className={`solve-editor-inline-result-body solve-pane-result-stack ${visibleExecutionRuns.length > 0 ? 'has-results' : ''}`.trim()}>
+            {visibleExecutionRuns.map((run) => (
+              <ExecutionStatementResultItem
+                key={run.key}
+                item={run}
+                isBlinking={blinkingExecutionRunKeys.includes(run.key)}
+                onStatusIndicatorClick={() => focusExecutionRun(run.key)}
+                registerResultItemRef={registerExecutionResultItemRef}
+                onRequestPage={requestExecutionResultPage}
+              />
+            ))}
           </div>
         ) : null}
       </div>
     );
   };
 
-  const renderEditorPanel = (isFloating: boolean) => (
+  const renderEditorPanel = (isFloating: boolean) => {
+    const editorOwnerWindow = sqlEditorRef.current?.ownerDocument.defaultView ?? (typeof window !== 'undefined' ? window : null);
+    const editorDocumentElement =
+      sqlEditorRef.current?.ownerDocument.documentElement ?? (typeof document !== 'undefined' ? document.documentElement : null);
+    const rootFontSize =
+      editorOwnerWindow != null && editorDocumentElement != null
+        ? Number.parseFloat(editorOwnerWindow.getComputedStyle(editorDocumentElement).fontSize) || 16
+        : 16;
+    const editorComputedStyle =
+      editorOwnerWindow != null && sqlEditorRef.current != null ? editorOwnerWindow.getComputedStyle(sqlEditorRef.current) : null;
+    const lineHeight =
+      editorComputedStyle != null
+        ? Number.parseFloat(editorComputedStyle.lineHeight) || sqlEditorFontSize * SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO
+        : sqlEditorFontSize * SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO;
+    const topOffset =
+      editorComputedStyle != null
+        ? Number.parseFloat(editorComputedStyle.paddingTop) || 0
+        : (isFloating ? SQL_EDITOR_FLOATING_PADDING_TOP_REM : SQL_EDITOR_INLINE_PADDING_TOP_REM) * rootFontSize;
+    const paddingLeft =
+      editorComputedStyle != null ? Number.parseFloat(editorComputedStyle.paddingLeft) || 0 : 0;
+    const markerSlotWidth = Math.max(sqlEditorFontSize + rootFontSize * 0.42, rootFontSize * 1.18);
+    const markerPaddingRight = Math.max(rootFontSize * 0.22, sqlEditorFontSize * 0.24);
+    const markerLeft = -Math.max(rootFontSize * 0.4, markerSlotWidth - paddingLeft + rootFontSize * 0.18);
+    const measuredStatementOffsets =
+      sqlEditorRef.current != null
+        ? measureStatementStartOffsets(
+            sqlEditorRef.current,
+            sql,
+            executionStatementMarkerRuns.map((marker) => marker.startOffset),
+          )
+        : new Map<number, number>();
+    const executionStatementMarkers = executionStatementMarkerRuns.map((marker) => ({
+      ...marker,
+      left: markerLeft,
+      top: topOffset + (measuredStatementOffsets.get(marker.startOffset) ?? 0),
+      width: markerSlotWidth,
+      height: lineHeight,
+      paddingRight: markerPaddingRight,
+    }));
+
+    return (
     <section className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane solve-pane-editor ${isFloating ? 'is-floating' : ''}`}>
       <div className={`solve-detail-section-frame solve-pane-section-frame ${collapsedCards.editor ? 'is-collapsed' : ''} ${isFloating ? 'is-floating' : ''}`.trim()}>
-        {renderCollapseControl('editor')}
+        {!isFloating ? renderCollapseControl('editor') : null}
         <div className="solve-detail-section-main solve-pane-section-main">
           {renderPanelHeader('editor', isFloating)}
 
           {!collapsedCards.editor ? (
             <div className="solve-editor-stack">
-              <div className="solve-editor-surface">
-                <div className="solve-editor-surface-header">
-                  <div className="solve-editor-surface-meta">
-                    <span className="solve-editor-file">{getDbmsLabel(selectedDbms)}</span>
-                  </div>
-                  <div className="solve-editor-actions">
-                    <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
-                      {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
-                    </button>
-                    <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
-                      {isSubmitting ? '제출 중' : '제출'}
-                    </button>
-                  </div>
+              <div className="solve-editor-toolbar-row">
+                <div className="solve-editor-zoom-controls" aria-label="에디터 글씨 크기 조절">
+                  <button type="button" className="mini-toggle solve-editor-zoom-button is-increase" onClick={() => changeSqlEditorFontSize(1)}>
+                    +
+                  </button>
+                  <button type="button" className="mini-toggle solve-editor-zoom-button is-decrease" onClick={() => changeSqlEditorFontSize(-1)}>
+                    -
+                  </button>
                 </div>
+                <div className="solve-editor-actions">
+                  <button
+                    type="button"
+                    className="mini-toggle solve-editor-zoom-button is-stop"
+                    onClick={handleStopExecution}
+                    disabled={!isExecuting}
+                  >
+                    중지
+                  </button>
+                  <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
+                    {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
+                  </button>
+                  <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
+                    {isSubmitting ? '제출 중' : '제출 (Ctrl + Shift + Enter)'}
+                  </button>
+                </div>
+              </div>
+              <div className="solve-editor-surface">
+                <div
+                  className={`solve-editor-surface-body ${isFloating && executionRuns.length > 0 ? 'has-inline-result' : ''}`.trim()}
+                >
+                  <div className="solve-editor-code-layer">
+                    {executionStatementMarkers.length > 0 ? (
+                      <div className="solve-editor-statement-status-layer" aria-hidden="true">
+                        {executionStatementMarkers.map((marker) => (
+                          <button
+                            type="button"
+                            key={marker.key}
+                            className={`solve-editor-statement-status is-${marker.status} ${marker.isBlinking ? 'is-blinking' : ''}`.trim()}
+                            style={{
+                              left: `${marker.left}px`,
+                              top: `${marker.top}px`,
+                              width: `${marker.width}px`,
+                              height: `${marker.height}px`,
+                              paddingRight: `${marker.paddingRight}px`,
+                              fontSize: `${sqlEditorFontSize}px`,
+                            }}
+                            aria-label="실행 결과 위치로 이동"
+                            onClick={() => focusExecutionRun(marker.key)}
+                          >
+                            {marker.status === 'success' ? (
+                              '✓'
+                            ) : marker.status === 'error' ? (
+                              '✕'
+                            ) : marker.status === 'running' ? (
+                              <span className="solve-editor-statement-spinner" />
+                            ) : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <pre
+                      aria-hidden="true"
+                      className={`solve-sql-highlight ${sql.length === 0 ? 'is-empty' : ''}`}
+                      style={{ fontSize: `${sqlEditorFontSize}px` }}
+                    >
+                      {sql.length === 0 ? (
+                        <span className="solve-sql-highlight-placeholder">이곳에 SQL을 작성하세요.</span>
+                      ) : (
+                        highlightedSql
+                      )}
+                    </pre>
+                    <textarea
+                      ref={sqlEditorRef}
+                      className={`solve-sql-editor ${sql.length === 0 ? 'is-empty' : 'has-content'}`}
+                      spellCheck={false}
+                      placeholder="이곳에 SQL을 작성하세요."
+                      style={{ fontSize: `${sqlEditorFontSize}px` }}
+                      value={sql}
+                      onChange={(event) => handleEditorChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
+                      onClick={refreshAutocompleteFromEditor}
+                      onScroll={refreshAutocompleteFromEditor}
+                      onWheel={handleEditorWheel}
+                      onKeyUp={(event) => {
+                        if (executionPickerState != null) {
+                          return;
+                        }
 
-                <div className="solve-editor-surface-body">
-                  <div className="solve-editor-zoom-controls" aria-label="에디터 글씨 크기 조절">
-                    <button type="button" className="mini-toggle solve-editor-zoom-button" onClick={() => changeSqlEditorFontSize(1)}>
-                      +
-                    </button>
-                    <button type="button" className="mini-toggle solve-editor-zoom-button" onClick={() => changeSqlEditorFontSize(-1)}>
-                      -
-                    </button>
+                        if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                          return;
+                        }
+
+                        refreshAutocompleteFromEditor();
+                      }}
+                      onKeyDown={handleEditorKeyDown}
+                      onBlur={() => {
+                        window.setTimeout(() => {
+                          setAutocompleteState(null);
+                          if (executionPickerState != null) {
+                            closeExecutionPicker(false);
+                          }
+                        }, 120);
+                      }}
+                      aria-label="에디터"
+                    />
                   </div>
-
-                  <textarea
-                    ref={sqlEditorRef}
-                    className="solve-sql-editor"
-                    spellCheck={false}
-                    style={{ fontSize: `${sqlEditorFontSize}px` }}
-                    value={sql}
-                    onChange={(event) => handleEditorChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
-                    onClick={refreshAutocompleteFromEditor}
-                    onScroll={refreshAutocompleteFromEditor}
-                    onWheel={handleEditorWheel}
-                    onKeyUp={(event) => {
-                      if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-                        return;
-                      }
-
-                      refreshAutocompleteFromEditor();
-                    }}
-                    onKeyDown={handleEditorKeyDown}
-                    onBlur={() => {
-                      window.setTimeout(() => {
-                        setAutocompleteState(null);
-                      }, 120);
-                    }}
-                    aria-label="에디터"
-                  />
 
                   {autocompleteState
                     ? createPortal(
@@ -2061,19 +4614,63 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                             </button>
                           ))}
                         </div>,
-                        document.body,
+                        editorPortalTarget,
+                      )
+                    : null}
+                  {executionPickerState
+                    ? createPortal(
+                        <div
+                          className="solve-editor-autocomplete solve-editor-statement-picker"
+                          style={{
+                            left: `${executionPickerState.left}px`,
+                            top: `${executionPickerState.top}px`,
+                            maxWidth: `${executionPickerState.maxWidth}px`,
+                            maxHeight: `${executionPickerState.maxHeight}px`,
+                          }}
+                          role="listbox"
+                          aria-label="SQL 실행 구문 선택"
+                        >
+                          {executionPickerState.options.map((option, index) => (
+                            <button
+                              key={option.key}
+                              type="button"
+                              className={`solve-editor-autocomplete-item ${index === executionPickerState.selectedIndex ? 'is-selected' : ''}`}
+                              role="option"
+                              aria-selected={index === executionPickerState.selectedIndex}
+                              onMouseEnter={() =>
+                                setExecutionPickerState((current) =>
+                                  current == null
+                                    ? current
+                                    : {
+                                        ...current,
+                                        selectedIndex: index,
+                                      },
+                                )
+                              }
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                confirmExecutionPickerOption(option);
+                              }}
+                            >
+                              <span className="solve-editor-autocomplete-value">{option.preview}</span>
+                              <span className="solve-editor-autocomplete-detail">{option.label}</span>
+                            </button>
+                          ))}
+                        </div>,
+                        editorPortalTarget,
                       )
                     : null}
                 </div>
 
-                {renderExecutionInlineRegion()}
+                {renderExecutionInlineRegion(isFloating)}
               </div>
             </div>
           ) : null}
         </div>
       </div>
     </section>
-  );
+    );
+  };
 
   const renderSubmitPanel = (isFloating: boolean) => (
     <section
@@ -2086,7 +4683,27 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         <div className="solve-detail-section-main solve-pane-section-main">
           {renderPanelHeader('submit', isFloating)}
           {isFloating || !collapsedCards.submit ? (
-            submitMessage ? (
+            submitProgressSteps.length > 0 ? (
+              <div className="solve-submit-progress-list">
+                {submitProgressSteps.map((step) => (
+                  <div key={step.stepKey} className={`solve-submit-progress-item is-${step.status}`}>
+                    <div className="solve-submit-progress-header">
+                      {renderSubmitProgressMark(step.status)}
+                      <p className="solve-submit-progress-message">{step.message}</p>
+                    </div>
+                    {step.detailLines.length > 0 ? (
+                      <div className="solve-submit-progress-details">
+                        {step.detailLines.map((detailLine) => (
+                          <p key={`${step.stepKey}-${detailLine}`} className="solve-submit-progress-detail">
+                            {detailLine}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : submitMessage ? (
               <div className="solve-pane-result-stack">
                 <p className="solve-pane-result-message">{submitMessage}</p>
               </div>
@@ -2118,7 +4735,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack solve-page">
       <div className="solve-page-topbar solve-page-topbar-dbms">
         <div className="solve-dbms-tab-row" role="tablist" aria-label="DBMS 선택">
           {availableDbms.map((dbms) => (
@@ -2150,12 +4767,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       {panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor ? renderEditorPanel(false) : null}
 
-      {panelVisibility.submit && !detachedPanels.submit && !externalWindowPanels.submit ? renderSubmitPanel(false) : null}
+      {(submitMessage != null || submitProgressSteps.length > 0) && panelVisibility.submit && !detachedPanels.submit && !externalWindowPanels.submit
+        ? renderSubmitPanel(false)
+        : null}
 
       {visibleFloatingPanels.map((panelKey) => (
         <div
           key={panelKey}
           className={`solve-floating-pane-shell is-${panelKey}`}
+          onWheelCapture={handleFloatingPaneWheel}
           style={{
             left: `${floatingLayouts[panelKey].left}px`,
             top: `${floatingLayouts[panelKey].top}px`,
@@ -2176,14 +4796,17 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           <div className="solve-floating-pane-content">
             {renderPanel(panelKey, true)}
           </div>
-          <button
-            type="button"
-            className="solve-floating-pane-resize"
-            aria-label={`${panelLabels[panelKey]} 크기 조절`}
-            onMouseDown={(event) => startFloatingResize(panelKey, event)}
-          >
-            <span aria-hidden="true" />
-          </button>
+          {(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const).map((direction) => (
+            <button
+              key={`${panelKey}-${direction}`}
+              type="button"
+              className={`solve-floating-pane-resize is-${direction}`}
+              aria-label={`${getPanelTitle(panelKey)} 크기 조절`}
+              onMouseDown={(event) => startFloatingResize(panelKey, direction, event)}
+            >
+              <span aria-hidden="true" />
+            </button>
+          ))}
         </div>
       ))}
 
@@ -2191,7 +4814,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         <PanelExternalWindow
           key={`external-${panelKey}`}
           panelKey={panelKey}
-          title={`Quertimizer - ${panelLabels[panelKey]}`}
+          title={`Quertimizer - ${getPanelTitle(panelKey)}`}
           layout={floatingLayouts[panelKey]}
           onClose={() =>
             setExternalWindowPanels((current) => ({
@@ -2200,9 +4823,25 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             }))
           }
         >
-          <div className="solve-external-window-root-inner">{renderPanel(panelKey, false)}</div>
+          <div className={`solve-external-window-root-inner is-${panelKey}-panel`}>{renderPanel(panelKey, false)}</div>
         </PanelExternalWindow>
       ))}
+
+      <HandleSetupGate />
+
+      {authOverlayMode ? (
+        <SolvePageAuthOverlay
+          mode={authOverlayMode}
+          onClose={closeAuthOverlay}
+          onOpenSignup={() => setAuthOverlayMode('signup')}
+          onOpenResetPassword={() => setAuthOverlayMode('reset-password')}
+          onReturnToLogin={() => setAuthOverlayMode('login')}
+          onAuthenticated={handleAuthenticatedInOverlay}
+          problemId={problemId}
+          sql={sql}
+          selectedDbms={selectedDbms}
+        />
+      ) : null}
     </div>
   );
 }
