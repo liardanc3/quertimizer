@@ -7,20 +7,35 @@ public record ProblemSubmitProgressRes(String type,
                                        String stepKey,
                                        String status,
                                        String message,
-                                       List<String> detailLines) {
+                                       List<String> detailLines,
+                                       String statementKey,
+                                       Integer statementIndex,
+                                       String statementSql,
+                                       String statementMode,
+                                       Boolean statementReference) {
 
     public static ProblemSubmitProgressRes of(String problemId,
                                               String stepKey,
                                               String status,
                                               String message,
-                                              List<String> detailLines) {
+                                              List<String> detailLines,
+                                              String statementKey,
+                                              Integer statementIndex,
+                                              String statementSql,
+                                              String statementMode,
+                                              Boolean statementReference) {
         return new ProblemSubmitProgressRes(
                 "problem.submit.progress",
                 problemId,
                 stepKey,
                 status,
                 message,
-                detailLines != null ? detailLines : List.of()
+                detailLines != null ? detailLines : List.of(),
+                statementKey,
+                statementIndex,
+                statementSql,
+                statementMode,
+                statementReference
         );
     }
 }

@@ -10,6 +10,12 @@
   gap: 0.22rem;
 }
 
+.solve-page,
+.solve-floating-pane-shell,
+.solve-external-window-root-inner {
+  --solve-editor-status-gutter: 0.28rem;
+}
+
 .solve-floating-pane-shell .solve-floating-pane-content {
   height: 100%;
   padding: 0.96rem;
@@ -19,12 +25,82 @@
 
 .solve-editor-autocomplete {
   z-index: 2147483647 !important;
-  background: var(--solve-editor-autocomplete-bg) !important;
-  background-color: var(--solve-editor-autocomplete-bg) !important;
+  position: fixed !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
   background-image: none !important;
   backdrop-filter: none !important;
+  background-clip: padding-box;
+  border-color: #dbe6f2 !important;
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.22) !important;
   opacity: 1;
   isolation: isolate;
+  contain: paint;
+}
+
+.solve-editor-autocomplete,
+.solve-editor-statement-picker {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+.solve-editor-autocomplete-item {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.solve-editor-autocomplete-item.is-selected,
+.solve-editor-autocomplete-item:hover {
+  background-color: #e8f0ff;
+}
+
+.solve-editor-autocomplete-value {
+  color: #0f172a;
+}
+
+.solve-editor-autocomplete-detail {
+  color: #64748b;
+}
+
+.solve-page .solve-sql-selection-fill,
+.solve-floating-pane-shell .solve-sql-selection-fill,
+.solve-external-window-root-inner .solve-sql-selection-fill {
+  background: rgba(37, 99, 235, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  .solve-editor-autocomplete,
+  .solve-editor-statement-picker {
+    background: #0b1322 !important;
+    background-color: #0b1322 !important;
+    border-color: rgba(148, 163, 184, 0.24) !important;
+    box-shadow: 0 18px 30px rgba(2, 6, 23, 0.5) !important;
+  }
+
+  .solve-editor-autocomplete-item {
+    background-color: #0b1322;
+    color: #f8fafc;
+  }
+
+  .solve-editor-autocomplete-item.is-selected,
+  .solve-editor-autocomplete-item:hover {
+    background-color: #14213a;
+  }
+
+  .solve-editor-autocomplete-value {
+    color: #f8fafc;
+  }
+
+  .solve-editor-autocomplete-detail {
+    color: #94a3b8;
+  }
+
+  .solve-page .solve-sql-selection-fill,
+  .solve-floating-pane-shell .solve-sql-selection-fill,
+  .solve-external-window-root-inner .solve-sql-selection-fill {
+    background: rgba(96, 165, 250, 0.24);
+  }
 }
 
 .solve-external-window-root,
@@ -33,14 +109,24 @@
   height: 100%;
 }
 
+.solve-external-window-root {
+  overflow: hidden;
+}
+
 .solve-external-window-root-inner {
   display: grid;
   box-sizing: border-box;
   padding: 0.96rem;
   background: var(--bg-body);
+  overflow: hidden;
 }
 
-.solve-external-window-root-inner.is-editor-panel {
+.solve-external-window-root-inner > .solve-surface-section.solve-pane {
+  margin-top: 0;
+}
+
+.solve-external-window-root-inner.is-editor-panel,
+.solve-external-window-root-inner.is-submit-panel {
   height: 100%;
   padding: 0.96rem;
   overflow: auto;
@@ -89,8 +175,8 @@
   grid-template-rows: max-content max-content;
   height: auto;
   min-height: 0;
-  padding: 0.72rem 1.08rem 1.08rem;
-  row-gap: 0;
+  padding: 0.22rem 0.28rem 0.3rem;
+  row-gap: 0.72rem;
   align-content: start;
 }
 
@@ -101,7 +187,7 @@
 .solve-external-window-root-inner.is-editor-panel .solve-editor-code-layer {
   height: auto;
   min-height: 0;
-  margin-bottom: 1.08rem;
+  margin-bottom: 0;
   align-self: start;
   overflow: visible;
 }
@@ -111,7 +197,7 @@
   align-self: stretch;
   margin-top: 0;
   min-height: 0;
-  padding: 0 0.88rem 0.96rem;
+  padding: 0 0.38rem 0.92rem;
   width: 100%;
 }
 
@@ -144,7 +230,28 @@
 
 .solve-external-window-root-inner.is-editor-panel .solve-editor-inline-result-divider {
   display: block;
-  margin-bottom: 0.72rem;
+  margin-bottom: 0;
+}
+
+.solve-page .solve-detail-content {
+  gap: 0.46rem;
+}
+
+.solve-page .solve-detail-section {
+  padding-bottom: 0.41rem;
+}
+
+.solve-page .solve-detail-section-after-content {
+  order: 8;
+}
+
+.solve-page .solve-detail-section-after-content > .solve-surface-section.solve-pane {
+  margin-top: 0;
+}
+
+.solve-page .solve-pane-editor .solve-pane-section-main,
+.solve-external-window-root-inner .solve-pane-editor .solve-pane-section-main {
+  gap: 0.56rem;
 }
 
 .solve-page .solve-editor-surface-body,
@@ -184,7 +291,10 @@
   padding-top: 1.08rem;
   padding-right: 1.2rem;
   padding-bottom: 1.08rem;
-  padding-left: 1.06rem;
+  padding-left: calc(1.06rem + var(--solve-editor-status-gutter));
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .solve-floating-pane-shell .solve-sql-editor,
@@ -192,31 +302,22 @@
   padding-top: 1.42rem;
   padding-right: 1.78rem;
   padding-bottom: 1.42rem;
-  padding-left: 3.62rem;
+  padding-left: calc(1.06rem + var(--solve-editor-status-gutter));
 }
 
 .solve-floating-pane-shell.is-editor .solve-sql-editor,
 .solve-floating-pane-shell.is-editor .solve-sql-highlight {
-  padding-left: 1.06rem;
+  padding-top: 0.7rem;
+  padding-left: calc(0.38rem + var(--solve-editor-status-gutter));
   padding-right: 1.42rem;
 }
 
 .solve-external-window-root-inner.is-editor-panel .solve-sql-editor,
 .solve-external-window-root-inner.is-editor-panel .solve-sql-highlight {
-  padding-top: 1.18rem;
+  padding-top: 0.7rem;
   padding-right: 1.18rem;
   padding-bottom: 1.18rem;
-  padding-left: 1.06rem;
-}
-
-.solve-page .solve-editor-statement-status,
-.solve-floating-pane-shell .solve-editor-statement-status,
-.solve-external-window-root-inner .solve-editor-statement-status {
-  left: 0.18rem;
-}
-
-.solve-floating-pane-shell .solve-editor-statement-status {
-  left: -0.56rem;
+  padding-left: calc(0.38rem + var(--solve-editor-status-gutter));
 }
 
 .solve-page .solve-pane-action,
@@ -438,6 +539,7 @@
 .solve-floating-pane-shell .solve-editor-statement-status-layer,
 .solve-external-window-root-inner .solve-editor-statement-status-layer {
   pointer-events: none;
+  overflow: visible;
 }
 
 .solve-page .solve-editor-statement-status,
@@ -451,30 +553,19 @@
   pointer-events: auto;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   min-width: 0;
   min-height: 0;
+  border-radius: 0.4rem;
   transform: none;
 }
 
-.solve-page .solve-editor-statement-status.is-blinking,
-.solve-floating-pane-shell .solve-editor-statement-status.is-blinking,
-.solve-external-window-root-inner .solve-editor-statement-status.is-blinking,
-.solve-page .solve-pane-summary-status-button.is-blinking,
-.solve-floating-pane-shell .solve-pane-summary-status-button.is-blinking,
-.solve-external-window-root-inner .solve-pane-summary-status-button.is-blinking {
-  animation: solve-execution-status-blink 0.96s ease-in-out infinite;
-}
-
-@keyframes solve-execution-status-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.26;
-  }
+.solve-page .solve-editor-statement-status svg,
+.solve-floating-pane-shell .solve-editor-statement-status svg,
+.solve-external-window-root-inner .solve-editor-statement-status svg {
+  width: 0.94em;
+  height: 0.94em;
+  display: block;
 }
 
 .solve-page .solve-result-table-shell,
@@ -482,6 +573,10 @@
 .solve-external-window-root-inner .solve-result-table-shell {
   display: grid;
   gap: 0.62rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .solve-page .solve-result-table-header,
@@ -527,10 +622,88 @@
   font-weight: 600;
 }
 
+.solve-page .solve-result-table-summary-item.is-rows .solve-result-table-summary-value,
+.solve-floating-pane-shell .solve-result-table-summary-item.is-rows .solve-result-table-summary-value,
+.solve-external-window-root-inner .solve-result-table-summary-item.is-rows .solve-result-table-summary-value {
+  color: #334155;
+  font-weight: 700;
+}
+
 .solve-page .solve-result-table-header .solve-pane-summary-refresh,
 .solve-floating-pane-shell .solve-result-table-header .solve-pane-summary-refresh,
 .solve-external-window-root-inner .solve-result-table-header .solve-pane-summary-refresh {
   margin-left: 0.08rem;
+}
+
+.solve-page .solve-result-table-grid-shell,
+.solve-floating-pane-shell .solve-result-table-grid-shell,
+.solve-external-window-root-inner .solve-result-table-grid-shell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 0.92rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
+.solve-page .solve-result-table-grid-content,
+.solve-floating-pane-shell .solve-result-table-grid-content,
+.solve-external-window-root-inner .solve-result-table-grid-content {
+  min-width: max-content;
+  transition: filter 0.18s ease, opacity 0.18s ease;
+}
+
+.solve-page .solve-result-grid-table,
+.solve-floating-pane-shell .solve-result-grid-table,
+.solve-external-window-root-inner .solve-result-grid-table {
+  min-width: max-content;
+  overflow: visible;
+}
+
+.solve-page .solve-result-table-grid-shell.is-loading .solve-result-table-grid-content,
+.solve-floating-pane-shell .solve-result-table-grid-shell.is-loading .solve-result-table-grid-content,
+.solve-external-window-root-inner .solve-result-table-grid-shell.is-loading .solve-result-table-grid-content {
+  filter: blur(2px);
+  opacity: 0.46;
+  pointer-events: none;
+  user-select: none;
+}
+
+.solve-page .solve-result-table-grid-overlay,
+.solve-floating-pane-shell .solve-result-table-grid-overlay,
+.solve-external-window-root-inner .solve-result-table-grid-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 0.38rem;
+  border-radius: inherit;
+  background: rgba(248, 250, 252, 0.6);
+  backdrop-filter: blur(1.4px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.solve-page .solve-result-table-grid-spinner,
+.solve-floating-pane-shell .solve-result-table-grid-spinner,
+.solve-external-window-root-inner .solve-result-table-grid-spinner {
+  width: 1.16rem;
+  height: 1.16rem;
+  border: 0.14rem solid rgba(37, 99, 235, 0.32);
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: solve-statement-spinner-rotate 0.75s linear infinite;
+}
+
+.solve-page .solve-result-table-grid-overlay-label,
+.solve-floating-pane-shell .solve-result-table-grid-overlay-label,
+.solve-external-window-root-inner .solve-result-table-grid-overlay-label {
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .solve-page .solve-editor-inline-result-group.is-success .solve-detail-table-block,
@@ -681,13 +854,78 @@
   outline: none;
 }
 
+.solve-page .solve-submit-panel-stack,
+.solve-floating-pane-shell .solve-submit-panel-stack,
+.solve-external-window-root-inner .solve-submit-panel-stack {
+  display: grid;
+  gap: 0.82rem;
+}
+
+.solve-page .solve-submit-progress-list,
+.solve-floating-pane-shell .solve-submit-progress-list,
+.solve-external-window-root-inner .solve-submit-progress-list {
+  display: grid;
+  gap: 0.84rem;
+}
+
+.solve-page .solve-submit-progress-item .solve-pane-summary-status-button,
+.solve-floating-pane-shell .solve-submit-progress-item .solve-pane-summary-status-button,
+.solve-external-window-root-inner .solve-submit-progress-item .solve-pane-summary-status-button {
+  cursor: default;
+}
+
+.solve-page .solve-submit-progress-item .solve-editor-statement-spinner,
+.solve-floating-pane-shell .solve-submit-progress-item .solve-editor-statement-spinner,
+.solve-external-window-root-inner .solve-submit-progress-item .solve-editor-statement-spinner {
+  width: 0.82em;
+  height: 0.82em;
+}
+
+.solve-page .solve-submit-statement-list,
+.solve-floating-pane-shell .solve-submit-statement-list,
+.solve-external-window-root-inner .solve-submit-statement-list {
+  display: grid;
+  gap: 0.84rem;
+}
+
+.solve-page .solve-submit-statement-item .solve-pane-summary-status-button,
+.solve-floating-pane-shell .solve-submit-statement-item .solve-pane-summary-status-button,
+.solve-external-window-root-inner .solve-submit-statement-item .solve-pane-summary-status-button {
+  cursor: default;
+}
+
+.solve-page .solve-submit-statement-mark .solve-editor-statement-spinner,
+.solve-floating-pane-shell .solve-submit-statement-mark .solve-editor-statement-spinner,
+.solve-external-window-root-inner .solve-submit-statement-mark .solve-editor-statement-spinner {
+  width: 0.82em;
+  height: 0.82em;
+}
+
+.solve-page .solve-submit-statement-chip,
+.solve-floating-pane-shell .solve-submit-statement-chip,
+.solve-external-window-root-inner .solve-submit-statement-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-height: 1.1rem;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  border-radius: 999px;
+  background: rgba(219, 234, 254, 0.62);
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .solve-floating-pane-shell.is-editor .solve-editor-surface-body {
   display: grid;
   grid-template-rows: max-content max-content;
   height: auto;
   min-height: 0;
-  padding: 0.72rem 1.08rem 1.08rem;
-  row-gap: 0;
+  padding: 0.22rem 0.28rem 0.3rem;
+  row-gap: 0.72rem;
   align-content: start;
 }
 
@@ -736,6 +974,11 @@
   height: auto;
 }
 
+.solve-floating-pane-shell.is-editor .solve-editor-toolbar-row,
+.solve-external-window-root-inner.is-editor-panel .solve-editor-toolbar-row {
+  margin-top: 0;
+}
+
 .solve-floating-pane-shell.is-editor .solve-editor-surface-body.has-inline-result {
   overflow: visible;
 }
@@ -743,7 +986,7 @@
 .solve-floating-pane-shell.is-editor .solve-editor-code-layer {
   height: auto;
   min-height: 0;
-  margin-bottom: 1.08rem;
+  margin-bottom: 0;
   align-self: start;
 }
 
@@ -752,7 +995,7 @@
   align-self: stretch;
   margin-top: 0;
   min-height: 0;
-  padding: 0 0.88rem 0.96rem;
+  padding: 0 0.38rem 0.92rem;
   width: 100%;
 }
 
@@ -788,7 +1031,7 @@
 
 .solve-floating-pane-shell.is-editor .solve-editor-inline-result-divider {
   display: block;
-  margin-bottom: 0.72rem;
+  margin-bottom: 0;
 }
 
 .solve-floating-pane-shell.is-editor .solve-result-table-header,
@@ -1452,6 +1695,12 @@ body.handle-setup-locked {
     color: #cbd5e1;
   }
 
+  .solve-page .solve-result-table-summary-item.is-rows .solve-result-table-summary-value,
+  .solve-floating-pane-shell .solve-result-table-summary-item.is-rows .solve-result-table-summary-value,
+  .solve-external-window-root-inner .solve-result-table-summary-item.is-rows .solve-result-table-summary-value {
+    color: #e2e8f0;
+  }
+
   .solve-page .solve-editor-inline-result-group.is-success .solve-detail-table-block,
   .solve-page .solve-editor-inline-result-group.is-success .solve-plan-block,
   .solve-page .solve-editor-inline-result-group.is-success .solve-pane-result-message,
@@ -1499,6 +1748,34 @@ body.handle-setup-locked {
   .solve-external-window-root-inner .solve-editor-inline-result-group.is-error .solve-pane-result-message {
     background: rgba(15, 23, 42, 0.78);
   }
+
+  .solve-page .solve-result-table-grid-overlay,
+  .solve-floating-pane-shell .solve-result-table-grid-overlay,
+  .solve-external-window-root-inner .solve-result-table-grid-overlay {
+    background: rgba(15, 23, 42, 0.58);
+  }
+
+  .solve-page .solve-result-table-grid-spinner,
+  .solve-floating-pane-shell .solve-result-table-grid-spinner,
+  .solve-external-window-root-inner .solve-result-table-grid-spinner {
+    border-color: rgba(191, 219, 254, 0.4);
+    border-right-color: transparent;
+  }
+
+  .solve-page .solve-result-table-grid-overlay-label,
+  .solve-floating-pane-shell .solve-result-table-grid-overlay-label,
+  .solve-external-window-root-inner .solve-result-table-grid-overlay-label {
+    color: #e2e8f0;
+  }
+
+  .solve-page .solve-submit-statement-chip,
+  .solve-floating-pane-shell .solve-submit-statement-chip,
+  .solve-external-window-root-inner .solve-submit-statement-chip {
+    border-color: rgba(147, 197, 253, 0.28);
+    background: rgba(30, 41, 59, 0.92);
+    color: #bfdbfe;
+  }
+
 
   .solve-auth-overlay-backdrop {
     background: rgba(2, 6, 23, 0.2);

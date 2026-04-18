@@ -1,4 +1,4 @@
-﻿package com.quertimizer.service;
+package com.quertimizer.service;
 
 import com.quertimizer.constant.DbmsType;
 import com.quertimizer.constant.PostgreSqlExecutionPlanElementIndex;
@@ -49,6 +49,8 @@ public class ProblemQueryService {
             Pattern.compile("^CREATE\\s+(UNIQUE\\s+)?INDEX\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern DROP_INDEX_PATTERN =
             Pattern.compile("^DROP\\s+INDEX\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ALTER_INDEX_PATTERN =
+            Pattern.compile("^ALTER\\s+INDEX\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXPLAIN_ANALYZE_PATTERN =
             Pattern.compile("^EXPLAIN\\s+(\\([^)]*ANALYZE[^)]*\\)|ANALYZE\\b)", Pattern.CASE_INSENSITIVE);
     private static final Pattern OTHER_WORKSPACE_PATTERN =
@@ -136,20 +138,85 @@ public class ProblemQueryService {
         String submittedSql = normalizeSubmittedSql(sql);
 
         try {
-            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "submit", "SQL 제출 중"));
-            QueryExecutionResult submissionResult = executeSubmittedSqlWithRetry(
-                    userId,
-                    socketId,
-                    submittedProblemId,
-                    submittedSql,
-                    dbmsType,
-                    progressListener
-            );
-            progressListener.accept(ProblemSubmitProgress.success(submittedProblemId, "submit", "SQL 제출 완료"));
+            List<SubmittedStatement> submittedStatements = parseSubmittedStatements(submittedSql);
+            SubmittedStatement referenceStatement = resolveReferenceStatement(submittedStatements);
+            List<SubmittedStatement> ddlStatements = resolveDdlStatements(submittedStatements);
 
-            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "answer", "정답 확인 중"));
+            for (SubmittedStatement statement : submittedStatements) {
+                validateSqlStatement(statement.sql(), userId);
+            }
+
+            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "validate", "SQL 오류 검사 중"));
+            try {
+                validateSubmittedSqlWithRetry(
+                        userId,
+                        socketId,
+                        submittedProblemId,
+                        referenceStatement.sql(),
+                        dbmsType,
+                        progressListener
+                );
+            } catch (Exception exception) {
+                String message = resolveProblemSubmitErrorMessage(exception);
+                progressListener.accept(ProblemSubmitProgress.error(
+                        submittedProblemId,
+                        "validate",
+                        "SQL 오류 검사 실패",
+                        List.of(message)
+                ));
+                saveProblemSubmitHistory(
+                        submittedProblemId,
+                        userId,
+                        dbmsType,
+                        submittedSql,
+                        false,
+                        message,
+                        0,
+                        null,
+                        0,
+                        submittedAt
+                );
+                return ProblemSubmitResult.failure(submittedProblemId, message);
+            }
+            progressListener.accept(ProblemSubmitProgress.success(submittedProblemId, "validate", "SQL 오류 검사 성공"));
+
+            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "answer", "출력 데이터 검사 중"));
+            SubmittedExecutionContext submittedExecutionContext;
+            try {
+                submittedExecutionContext = executeSubmittedSqlWithRetry(
+                        userId,
+                        socketId,
+                        submittedProblemId,
+                        submittedStatements,
+                        dbmsType,
+                        progressListener
+                );
+            } catch (Exception exception) {
+                String message = resolveProblemSubmitErrorMessage(exception);
+                progressListener.accept(ProblemSubmitProgress.error(
+                        submittedProblemId,
+                        "answer",
+                        "출력 데이터 검사 실패",
+                        List.of(message)
+                ));
+                saveProblemSubmitHistory(
+                        submittedProblemId,
+                        userId,
+                        dbmsType,
+                        submittedSql,
+                        false,
+                        message,
+                        0,
+                        null,
+                        0,
+                        submittedAt
+                );
+                return ProblemSubmitResult.failure(submittedProblemId, message);
+            }
+
+            QueryExecutionResult submissionResult = submittedExecutionContext.referenceResult();
             if (!isCorrectAnswer(submittedProblemId, submissionResult.rows())) {
-                progressListener.accept(ProblemSubmitProgress.incorrect(submittedProblemId, "answer", "오답"));
+                progressListener.accept(ProblemSubmitProgress.incorrect(submittedProblemId, "answer", "출력 데이터 오답"));
                 saveProblemSubmitHistory(
                         submittedProblemId,
                         userId,
@@ -165,30 +232,107 @@ public class ProblemQueryService {
                 return ProblemSubmitResult.failure(submittedProblemId, "오답");
             }
 
-            progressListener.accept(ProblemSubmitProgress.success(submittedProblemId, "answer", "정답"));
-            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "cost", "Cost 확인 중"));
-            QueryExecutionResult explainAnalyzeResult = executeExplainAnalyzeWithRetry(
-                    userId,
-                    socketId,
-                    submittedProblemId,
-                    submittedSql,
-                    dbmsType,
-                    progressListener
-            );
-            progressListener.accept(ProblemSubmitProgress.success(
-                    submittedProblemId,
-                    "cost",
-                    "Cost " + formatCost(explainAnalyzeResult.cost())
-            ));
+            progressListener.accept(ProblemSubmitProgress.success(submittedProblemId, "answer", "출력 데이터 정답"));
+            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "ddl", "인덱스 변경 반영 중"));
+            try {
+                List<String> ddlDetailLines = executeSubmittedDdlWithRetry(
+                        userId,
+                        socketId,
+                        submittedProblemId,
+                        ddlStatements,
+                        dbmsType,
+                        progressListener
+                );
+                progressListener.accept(ProblemSubmitProgress.success(
+                        submittedProblemId,
+                        "ddl",
+                        ddlDetailLines.isEmpty() ? "인덱스 변경내용 없음" : "인덱스 변경 반영 완료",
+                        ddlDetailLines
+                ));
+            } catch (SubmittedDdlExecutionException exception) {
+                progressListener.accept(ProblemSubmitProgress.error(
+                        submittedProblemId,
+                        "ddl",
+                        "인덱스 변경 반영 실패",
+                        exception.detailLines()
+                ));
+                saveProblemSubmitHistory(
+                        submittedProblemId,
+                        userId,
+                        dbmsType,
+                        submittedSql,
+                        false,
+                        exception.getMessage(),
+                        submissionResult.executionTimeMs(),
+                        null,
+                        submissionResult.rowCount(),
+                        submittedAt
+                );
+                return ProblemSubmitResult.failure(submittedProblemId, exception.getMessage());
+            } catch (Exception exception) {
+                String message = resolveProblemSubmitErrorMessage(exception);
+                progressListener.accept(ProblemSubmitProgress.error(
+                        submittedProblemId,
+                        "ddl",
+                        "인덱스 변경 반영 실패",
+                        List.of(message)
+                ));
+                saveProblemSubmitHistory(
+                        submittedProblemId,
+                        userId,
+                        dbmsType,
+                        submittedSql,
+                        false,
+                        message,
+                        submissionResult.executionTimeMs(),
+                        null,
+                        submissionResult.rowCount(),
+                        submittedAt
+                );
+                return ProblemSubmitResult.failure(submittedProblemId, message);
+            }
 
-            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "plan", "실행계획요소 확인 중"));
-            PlanAnalysisResult planAnalysisResult = analyzePostgreSqlPlan(explainAnalyzeResult.planLines(), submittedSql);
-            progressListener.accept(ProblemSubmitProgress.success(
-                    submittedProblemId,
-                    "plan",
-                    "실행계획요소 확인 완료",
-                    planAnalysisResult.summaryLines()
-            ));
+            progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "plan", "실행계획 분석 중"));
+            QueryExecutionResult explainAnalyzeResult;
+            PlanAnalysisResult planAnalysisResult;
+            try {
+                explainAnalyzeResult = executeExplainAnalyzeWithRetry(
+                        userId,
+                        socketId,
+                        submittedProblemId,
+                        submittedExecutionContext.referenceSql(),
+                        dbmsType,
+                        progressListener
+                );
+                planAnalysisResult = analyzePostgreSqlPlan(explainAnalyzeResult.planLines(), submittedExecutionContext.referenceSql());
+                progressListener.accept(ProblemSubmitProgress.success(
+                        submittedProblemId,
+                        "plan",
+                        "실행계획 분석 성공",
+                        buildPlanProgressDetailLines(explainAnalyzeResult, planAnalysisResult)
+                ));
+            } catch (Exception exception) {
+                String message = resolveProblemSubmitErrorMessage(exception);
+                progressListener.accept(ProblemSubmitProgress.error(
+                        submittedProblemId,
+                        "plan",
+                        "실행계획 분석 실패",
+                        List.of(message)
+                ));
+                saveProblemSubmitHistory(
+                        submittedProblemId,
+                        userId,
+                        dbmsType,
+                        submittedSql,
+                        false,
+                        message,
+                        submissionResult.executionTimeMs(),
+                        null,
+                        submissionResult.rowCount(),
+                        submittedAt
+                );
+                return ProblemSubmitResult.failure(submittedProblemId, message);
+            }
 
             saveProblemSubmitHistory(
                     submittedProblemId,
@@ -214,11 +358,20 @@ public class ProblemQueryService {
                     submittedAt
             );
 
-            return ProblemSubmitResult.success(submittedProblemId, "정답");
+            return ProblemSubmitResult.success(
+                    submittedProblemId,
+                    "정답",
+                    resolveSubmittedExecutionTimeMs(submissionResult, explainAnalyzeResult)
+            );
         } catch (Exception exception) {
             String message = resolveProblemSubmitErrorMessage(exception);
 
-            progressListener.accept(ProblemSubmitProgress.error(submittedProblemId, "submit", message));
+            progressListener.accept(ProblemSubmitProgress.error(
+                    submittedProblemId,
+                    "validate",
+                    "SQL 오류 검사 실패",
+                    List.of(message)
+            ));
             saveProblemSubmitHistory(
                     submittedProblemId,
                     userId,
@@ -235,7 +388,35 @@ public class ProblemQueryService {
             return ProblemSubmitResult.failure(submittedProblemId, message);
         }
     }
+
+    public void cancelInteractiveExecution(String socketId) {
+        Statement activeStatement = activeStatements.remove(socketId);
+        if (activeStatement == null) {
+            return;
+        }
+
+        try {
+            activeStatement.cancel();
+        } catch (SQLException ignored) {
+        }
+
+        try {
+            activeStatement.close();
+        } catch (SQLException ignored) {
+        }
+    }
+
     private void validateSql(String sql, String userId) {
+        validateSqlText(sql);
+
+        if (MULTI_STATEMENT_PATTERN.matcher(sql).find()) {
+            throw new IllegalArgumentException("한 번에 하나의 SQL만 실행할 수 있다.");
+        }
+
+        validateSqlStatement(sql, userId);
+    }
+
+    private void validateSqlText(String sql) {
         if (sql.isBlank()) {
             throw new IllegalArgumentException("실행할 SQL을 입력해라.");
         }
@@ -243,11 +424,10 @@ public class ProblemQueryService {
         if (sql.length() > MAX_SQL_LENGTH) {
             throw new IllegalArgumentException("SQL 길이 제한을 초과했다.");
         }
+    }
 
-        if (MULTI_STATEMENT_PATTERN.matcher(sql).find()) {
-            throw new IllegalArgumentException("한 번에 하나의 SQL만 실행할 수 있다.");
-        }
-
+    private void validateSqlStatement(String sql, String userId) {
+        validateSqlText(sql);
         String normalizedSql = normalizeSql(sql);
         validateForbiddenKeyword(normalizedSql, "ALTER SYSTEM", "ALTER SYSTEM은 사용할 수 없다.");
         validateForbiddenKeyword(normalizedSql, "COPY", "COPY는 사용할 수 없다.");
@@ -473,7 +653,9 @@ public class ProblemQueryService {
             return ExecutionMode.EXPLAIN;
         }
 
-        if (CREATE_INDEX_PATTERN.matcher(normalizedSql).find() || DROP_INDEX_PATTERN.matcher(normalizedSql).find()) {
+        if (CREATE_INDEX_PATTERN.matcher(normalizedSql).find()
+                || DROP_INDEX_PATTERN.matcher(normalizedSql).find()
+                || ALTER_INDEX_PATTERN.matcher(normalizedSql).find()) {
             return ExecutionMode.INDEX_COMMAND;
         }
 
@@ -489,31 +671,85 @@ public class ProblemQueryService {
             return ExecutionMode.SELECT;
         }
 
-        throw new IllegalArgumentException("SELECT, EXPLAIN, EXPLAIN ANALYZE, CREATE INDEX, DROP INDEX만 실행할 수 있다.");
+        throw new IllegalArgumentException("SELECT, EXPLAIN, EXPLAIN ANALYZE, CREATE INDEX, DROP INDEX, ALTER INDEX만 실행할 수 있다.");
     }
-    private QueryExecutionResult executeSubmittedSqlWithRetry(String userId,
-                                                              String socketId,
-                                                              String problemId,
-                                                              String sql,
-                                                              DbmsType dbmsType,
-                                                              Consumer<ProblemSubmitProgress> progressListener) {
+
+    private void validateSubmittedSqlWithRetry(String userId,
+                                               String socketId,
+                                               String problemId,
+                                               String sql,
+                                               DbmsType dbmsType,
+                                               Consumer<ProblemSubmitProgress> progressListener) {
         RuntimeException lastException = null;
 
         for (int attempt = 1; attempt <= CONNECTION_RETRY_COUNT; attempt++) {
             try {
-                return executeSubmittedSqlOnce(userId, socketId, problemId, sql, dbmsType);
+                validateSubmittedSqlOnce(userId, socketId, problemId, sql, dbmsType);
+                return;
             } catch (RuntimeException exception) {
                 lastException = exception;
                 if (!isRetriableConnectionError(exception) || attempt == CONNECTION_RETRY_COUNT) {
                     throw exception;
                 }
 
-                progressListener.accept(ProblemSubmitProgress.running(problemId, "submit", "DB 커넥션 연결 오류. 2초 후 재시도"));
+                progressListener.accept(ProblemSubmitProgress.running(problemId, "validate", "DB 커넥션 연결 오류. 2초 후 재시도"));
                 sleepForRetryDelay();
             }
         }
 
-        throw lastException != null ? lastException : new IllegalStateException("제출 SQL 실행에 실패했다.");
+        throw lastException != null ? lastException : new IllegalStateException("SQL 오류 검사에 실패했다.");
+    }
+
+    private SubmittedExecutionContext executeSubmittedSqlWithRetry(String userId,
+                                                                  String socketId,
+                                                                  String problemId,
+                                                                  List<SubmittedStatement> statements,
+                                                                  DbmsType dbmsType,
+                                                                  Consumer<ProblemSubmitProgress> progressListener) {
+        RuntimeException lastException = null;
+
+        for (int attempt = 1; attempt <= CONNECTION_RETRY_COUNT; attempt++) {
+            try {
+                return executeSubmittedSqlOnce(userId, socketId, problemId, statements, dbmsType);
+            } catch (RuntimeException exception) {
+                lastException = exception;
+                if (!isRetriableConnectionError(exception) || attempt == CONNECTION_RETRY_COUNT) {
+                    throw exception;
+                }
+
+                progressListener.accept(ProblemSubmitProgress.running(problemId, "answer", "DB 커넥션 연결 오류. 2초 후 재시도"));
+                sleepForRetryDelay();
+            }
+        }
+
+        throw lastException != null ? lastException : new IllegalStateException("출력 데이터 검사에 실패했다.");
+    }
+
+    private List<String> executeSubmittedDdlWithRetry(String userId,
+                                                      String socketId,
+                                                      String problemId,
+                                                      List<SubmittedStatement> ddlStatements,
+                                                      DbmsType dbmsType,
+                                                      Consumer<ProblemSubmitProgress> progressListener) {
+        RuntimeException lastException = null;
+
+        for (int attempt = 1; attempt <= CONNECTION_RETRY_COUNT; attempt++) {
+            try {
+                return executeSubmittedDdlOnce(userId, socketId, problemId, ddlStatements, dbmsType);
+            } catch (SubmittedDdlExecutionException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                lastException = exception;
+                if (!isRetriableConnectionError(exception) || attempt == CONNECTION_RETRY_COUNT) {
+                    throw exception;
+                }
+
+                progressListener.accept(ProblemSubmitProgress.running(problemId, "ddl", "DB 커넥션 연결 오류. 2초 후 재시도"));
+                sleepForRetryDelay();
+            }
+        }
+
+        throw lastException != null ? lastException : new IllegalStateException("인덱스 변경 반영에 실패했다.");
     }
 
     private QueryExecutionResult executeExplainAnalyzeWithRetry(String userId,
@@ -533,25 +769,22 @@ public class ProblemQueryService {
                     throw exception;
                 }
 
-                progressListener.accept(ProblemSubmitProgress.running(problemId, "cost", "DB 커넥션 연결 오류. 2초 후 재시도"));
+                progressListener.accept(ProblemSubmitProgress.running(problemId, "plan", "DB 커넥션 연결 오류. 2초 후 재시도"));
                 sleepForRetryDelay();
             }
         }
 
-        throw lastException != null ? lastException : new IllegalStateException("실행 계획 확인에 실패했다.");
+        throw lastException != null ? lastException : new IllegalStateException("실행계획 분석에 실패했다.");
     }
 
-    private QueryExecutionResult executeSubmittedSqlOnce(String userId,
-                                                         String socketId,
-                                                         String problemId,
-                                                         String sql,
-                                                         DbmsType dbmsType) {
+    private void validateSubmittedSqlOnce(String userId,
+                                          String socketId,
+                                          String problemId,
+                                          String sql,
+                                          DbmsType dbmsType) {
         if (dbmsType != DbmsType.POSTGRESQL) {
             throw new IllegalArgumentException("제출은 PostgreSQL만 지원한다.");
         }
-
-        validateSql(sql, userId);
-        validateSubmittedSql(sql);
 
         ProblemWorkspaceService.WorkspaceHandle workspaceHandle =
                 problemWorkspaceService.prepareWorkspace(userId, problemId, socketId);
@@ -560,14 +793,91 @@ public class ProblemQueryService {
             connection.setAutoCommit(false);
             configureExecutionConnection(connection, workspaceHandle.schemaName());
 
-            Double estimatedCost = estimateQueryCost(socketId, connection, sql);
+            String preparedStatementName = "qt_submit_validate_" + System.nanoTime();
+            Statement statement = createTrackedStatement(socketId, connection);
+            try (statement) {
+                statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                statement.execute("PREPARE " + preparedStatementName + " AS " + sql);
+                statement.execute("DEALLOCATE " + preparedStatementName);
+            } finally {
+                clearTrackedStatement(socketId, statement);
+            }
+
+            connection.commit();
+            problemWorkspaceService.markActivity(socketId);
+        } catch (SQLException exception) {
+            throw new IllegalStateException(resolveSqlErrorMessage(exception), exception);
+        }
+    }
+
+    private SubmittedExecutionContext executeSubmittedSqlOnce(String userId,
+                                                              String socketId,
+                                                              String problemId,
+                                                              List<SubmittedStatement> statements,
+                                                              DbmsType dbmsType) {
+        if (dbmsType != DbmsType.POSTGRESQL) {
+            throw new IllegalArgumentException("제출은 PostgreSQL만 지원한다.");
+        }
+
+        SubmittedStatement referenceStatement = resolveReferenceStatement(statements);
+        ProblemWorkspaceService.WorkspaceHandle workspaceHandle =
+                problemWorkspaceService.prepareWorkspace(userId, problemId, socketId);
+
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            configureExecutionConnection(connection, workspaceHandle.schemaName());
+
             long startTime = System.nanoTime();
-            QueryExecutionResult executionResult = executeSelectAll(socketId, connection, sql, problemId, estimatedCost);
+            QueryExecutionResult referenceResult = executeSelectAll(socketId, connection, referenceStatement.sql(), problemId, null)
+                    .withExecutionTimeMs(Duration.ofNanos(System.nanoTime() - startTime).toMillis());
 
             connection.commit();
             problemWorkspaceService.markActivity(socketId);
 
-            return executionResult.withExecutionTimeMs(Duration.ofNanos(System.nanoTime() - startTime).toMillis());
+            return new SubmittedExecutionContext(referenceResult, referenceStatement.sql());
+        } catch (SQLException exception) {
+            throw new IllegalStateException(resolveSqlErrorMessage(exception), exception);
+        }
+    }
+
+    private List<String> executeSubmittedDdlOnce(String userId,
+                                                 String socketId,
+                                                 String problemId,
+                                                 List<SubmittedStatement> ddlStatements,
+                                                 DbmsType dbmsType) {
+        if (dbmsType != DbmsType.POSTGRESQL) {
+            throw new IllegalArgumentException("제출은 PostgreSQL만 지원한다.");
+        }
+
+        if (ddlStatements.isEmpty()) {
+            return List.of();
+        }
+
+        ProblemWorkspaceService.WorkspaceHandle workspaceHandle =
+                problemWorkspaceService.prepareWorkspace(userId, problemId, socketId);
+
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            configureExecutionConnection(connection, workspaceHandle.schemaName());
+
+            List<String> detailLines = new ArrayList<>();
+            for (SubmittedStatement ddlStatement : ddlStatements) {
+                try {
+                    executeIndexCommand(socketId, connection, ddlStatement.sql(), problemId);
+                    detailLines.add("✓ " + buildSubmittedDdlPreview(ddlStatement.sql()));
+                } catch (SQLException | RuntimeException exception) {
+                    String message = exception instanceof SQLException sqlException
+                            ? resolveSqlErrorMessage(sqlException)
+                            : resolveProblemSubmitErrorMessage(exception);
+                    throw new SubmittedDdlExecutionException(message, List.of(message), exception);
+                }
+            }
+
+            connection.commit();
+            problemWorkspaceService.markActivity(socketId);
+            return List.copyOf(detailLines);
+        } catch (SubmittedDdlExecutionException exception) {
+            throw exception;
         } catch (SQLException exception) {
             throw new IllegalStateException(resolveSqlErrorMessage(exception), exception);
         }
@@ -605,20 +915,6 @@ public class ProblemQueryService {
         }
     }
 
-    private void validateSubmittedSql(String sql) {
-        String normalizedSql = normalizeSql(sql);
-
-        if (normalizedSql.startsWith("SELECT ")) {
-            return;
-        }
-
-        if (normalizedSql.startsWith("WITH ") && !WRITE_CTE_PATTERN.matcher(normalizedSql).find()) {
-            return;
-        }
-
-        throw new IllegalArgumentException("제출은 SELECT만 지원한다.");
-    }
-
     private void validateForbiddenKeyword(String normalizedSql, String keyword, String message) {
         if (normalizedSql.contains(keyword)) {
             throw new IllegalArgumentException(message);
@@ -635,6 +931,200 @@ public class ProblemQueryService {
 
     private String normalizeSubmittedSql(String sql) {
         return sql != null ? trimTrailingSemicolon(sql) : "";
+    }
+
+    private List<SubmittedStatement> parseSubmittedStatements(String sql) {
+        validateSqlText(sql);
+
+        List<String> normalizedStatements = splitSqlStatements(sql);
+        List<SubmittedStatement> statements = new ArrayList<>();
+        int referenceStatementIndex = -1;
+
+        for (String statementSql : normalizedStatements) {
+            ExecutionMode executionMode = resolveSubmitExecutionMode(statementSql);
+            int statementIndex = statements.size();
+            if (executionMode == ExecutionMode.SELECT) {
+                if (referenceStatementIndex >= 0) {
+                    throw new IllegalArgumentException("제출은 SELECT 1개만 가능하다.");
+                }
+                referenceStatementIndex = statementIndex;
+            } else if (referenceStatementIndex >= 0) {
+                throw new IllegalArgumentException("제출에서는 SELECT 아래 구문을 함께 보낼 수 없다.");
+            }
+
+            statements.add(new SubmittedStatement(
+                    createSubmittedStatementKey(statementIndex),
+                    statementIndex,
+                    statementSql,
+                    executionMode,
+                    false
+            ));
+        }
+
+        if (statements.isEmpty()) {
+            throw new IllegalArgumentException("제출할 SQL을 입력해라.");
+        }
+
+        if (referenceStatementIndex < 0) {
+            throw new IllegalArgumentException("제출에는 최소 한 개의 SELECT가 필요하다.");
+        }
+
+        List<SubmittedStatement> resolvedStatements = new ArrayList<>();
+        for (SubmittedStatement statement : statements) {
+            resolvedStatements.add(new SubmittedStatement(
+                    statement.key(),
+                    statement.index(),
+                    statement.sql(),
+                    statement.mode(),
+                    statement.index() == referenceStatementIndex
+            ));
+        }
+
+        return resolvedStatements;
+    }
+
+    private List<String> splitSqlStatements(String sql) {
+        List<String> statements = new ArrayList<>();
+        int statementStart = 0;
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean inLineComment = false;
+        boolean inBlockComment = false;
+
+        for (int index = 0; index < sql.length(); index++) {
+            char currentChar = sql.charAt(index);
+            char nextChar = index + 1 < sql.length() ? sql.charAt(index + 1) : '\0';
+
+            if (inLineComment) {
+                if (currentChar == '\n') {
+                    inLineComment = false;
+                }
+                continue;
+            }
+
+            if (inBlockComment) {
+                if (currentChar == '*' && nextChar == '/') {
+                    inBlockComment = false;
+                    index++;
+                }
+                continue;
+            }
+
+            if (inSingleQuote) {
+                if (currentChar == '\'' && nextChar == '\'') {
+                    index++;
+                    continue;
+                }
+
+                if (currentChar == '\'') {
+                    inSingleQuote = false;
+                }
+                continue;
+            }
+
+            if (inDoubleQuote) {
+                if (currentChar == '"' && nextChar == '"') {
+                    index++;
+                    continue;
+                }
+
+                if (currentChar == '"') {
+                    inDoubleQuote = false;
+                }
+                continue;
+            }
+
+            if (currentChar == '-' && nextChar == '-') {
+                inLineComment = true;
+                index++;
+                continue;
+            }
+
+            if (currentChar == '/' && nextChar == '*') {
+                inBlockComment = true;
+                index++;
+                continue;
+            }
+
+            if (currentChar == '\'') {
+                inSingleQuote = true;
+                continue;
+            }
+
+            if (currentChar == '"') {
+                inDoubleQuote = true;
+                continue;
+            }
+
+            if (currentChar == ';') {
+                collectSqlStatement(sql, statementStart, index + 1, statements);
+                statementStart = index + 1;
+            }
+        }
+
+        collectSqlStatement(sql, statementStart, sql.length(), statements);
+        return statements;
+    }
+
+    private SubmittedStatement resolveReferenceStatement(List<SubmittedStatement> statements) {
+        for (SubmittedStatement statement : statements) {
+            if (statement.referenceSelect()) {
+                return statement;
+            }
+        }
+
+        throw new IllegalArgumentException("제출 기준 SELECT를 찾을 수 없다.");
+    }
+
+    private List<SubmittedStatement> resolveDdlStatements(List<SubmittedStatement> statements) {
+        List<SubmittedStatement> ddlStatements = new ArrayList<>();
+        for (SubmittedStatement statement : statements) {
+            if (statement.mode() == ExecutionMode.INDEX_COMMAND) {
+                ddlStatements.add(statement);
+            }
+        }
+
+        return List.copyOf(ddlStatements);
+    }
+
+    private void collectSqlStatement(String sql, int statementStart, int statementEnd, List<String> statements) {
+        String rawStatement = sql.substring(statementStart, statementEnd);
+        int firstContentOffset = findFirstContentOffset(rawStatement);
+        if (firstContentOffset < 0) {
+            return;
+        }
+
+        int trailingWhitespaceLength = rawStatement.length() - rawStatement.stripTrailing().length();
+        String normalizedStatement = trimTrailingSemicolon(
+                sql.substring(statementStart + firstContentOffset, statementEnd - trailingWhitespaceLength)
+        ).trim();
+
+        if (!normalizedStatement.isBlank()) {
+            statements.add(normalizedStatement);
+        }
+    }
+
+    private int findFirstContentOffset(String sql) {
+        for (int index = 0; index < sql.length(); index++) {
+            if (!Character.isWhitespace(sql.charAt(index))) {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private ExecutionMode resolveSubmitExecutionMode(String sql) {
+        ExecutionMode executionMode = resolveExecutionMode(sql);
+        if (executionMode == ExecutionMode.EXPLAIN || executionMode == ExecutionMode.EXPLAIN_ANALYZE) {
+            throw new IllegalArgumentException("제출은 SELECT 1개와 INDEX DDL만 지원한다.");
+        }
+
+        return executionMode;
+    }
+
+    private String createSubmittedStatementKey(int statementIndex) {
+        return "submit-statement-" + statementIndex;
     }
 
     private String normalizeSql(String sql) {
@@ -755,3 +1245,692 @@ public class ProblemQueryService {
                 submittedAt
         ));
     }
+
+    private void saveProblemTopHistory(String problemId,
+                                       String userId,
+                                       DbmsType dbmsType,
+                                       String submittedSql,
+                                       long executionTimeMs,
+                                       Double cost,
+                                       long scanRows,
+                                       long executionPlanElement,
+                                       LocalDateTime submittedAt) {
+        if (cost == null) {
+            return;
+        }
+
+        Optional<ProblemSolveHistory> currentTopHistory =
+                problemSolveHistoryRepository.findById(new ProblemSolveHistoryId(problemId, userId));
+
+        if (currentTopHistory.isPresent()
+                && !isBetterProblemTopHistory(currentTopHistory.get(), cost, executionTimeMs, submittedAt)) {
+            return;
+        }
+
+        problemSolveHistoryRepository.save(ProblemSolveHistory.create(
+                problemId,
+                userId,
+                dbmsType,
+                submittedSql,
+                executionTimeMs,
+                cost,
+                scanRows,
+                executionPlanElement,
+                submittedAt
+        ));
+        problemStore.loadProblems();
+    }
+
+    private boolean isBetterProblemTopHistory(ProblemSolveHistory currentHistory,
+                                              double candidateCost,
+                                              long candidateExecutionTimeMs,
+                                              LocalDateTime candidateSubmittedAt) {
+        if (candidateCost < currentHistory.getCost()) {
+            return true;
+        }
+
+        if (candidateCost > currentHistory.getCost()) {
+            return false;
+        }
+
+        if (candidateExecutionTimeMs < currentHistory.getExecutionTimeMs()) {
+            return true;
+        }
+
+        if (candidateExecutionTimeMs > currentHistory.getExecutionTimeMs()) {
+            return false;
+        }
+
+        return candidateSubmittedAt.isBefore(currentHistory.getSubmittedAt());
+    }
+
+    private long resolveSubmittedExecutionTimeMs(QueryExecutionResult submissionResult,
+                                                 QueryExecutionResult explainAnalyzeResult) {
+        if (submissionResult.executionTimeMs() > 0) {
+            return submissionResult.executionTimeMs();
+        }
+
+        return Math.max(explainAnalyzeResult.executionTimeMs(), 0L);
+    }
+
+    private String formatCost(Double cost) {
+        return cost == null ? "-" : "%.1f".formatted(cost);
+    }
+
+    private List<String> buildPlanProgressDetailLines(QueryExecutionResult explainAnalyzeResult,
+                                                      PlanAnalysisResult planAnalysisResult) {
+        List<String> detailLines = new ArrayList<>();
+        detailLines.add("Cost · " + formatCost(explainAnalyzeResult.cost()));
+        detailLines.addAll(resolvePlanElementDetailLines(planAnalysisResult.executionPlanElement()));
+
+        if (detailLines.size() == 1) {
+            for (String summaryLine : planAnalysisResult.summaryLines()) {
+                detailLines.add("✓ " + summaryLine);
+            }
+        }
+
+        return List.copyOf(detailLines);
+    }
+
+    private List<String> resolvePlanElementDetailLines(long executionPlanElement) {
+        LinkedHashSet<String> detailLines = new LinkedHashSet<>();
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                PostgreSqlExecutionPlanElementIndex.FULL_SCAN,
+                PostgreSqlExecutionPlanElementIndex.SEQ_SCAN
+        )) {
+            detailLines.add("✓ Scan · Full Scan");
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                PostgreSqlExecutionPlanElementIndex.INDEX_SCAN,
+                PostgreSqlExecutionPlanElementIndex.INDEX_ONLY_SCAN
+        )) {
+            detailLines.add("✓ Scan · Index Scan");
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                PostgreSqlExecutionPlanElementIndex.BITMAP_INDEX_SCAN,
+                PostgreSqlExecutionPlanElementIndex.BITMAP_HEAP_SCAN
+        )) {
+            detailLines.add("✓ Scan · Bitmap Scan");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.TID_SCAN)) {
+            detailLines.add("✓ Scan · Tid Scan");
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                PostgreSqlExecutionPlanElementIndex.SUBQUERY_SCAN,
+                PostgreSqlExecutionPlanElementIndex.CTE_SCAN,
+                PostgreSqlExecutionPlanElementIndex.FUNCTION_SCAN,
+                PostgreSqlExecutionPlanElementIndex.VALUES_SCAN
+        )) {
+            detailLines.add("✓ Scan · Derived Scan");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.NESTED_LOOP)) {
+            detailLines.add("✓ Join · Nested Loop");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.MERGE_JOIN)) {
+            detailLines.add("✓ Join · Merge Join");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.HASH_JOIN)) {
+            detailLines.add("✓ Join · Hash Join");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.INDEX_CONDITION)) {
+            detailLines.add("✓ Filter · Access Filter");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.FILTER)) {
+            detailLines.add("✓ Filter · Post Filter");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.SORT)) {
+            detailLines.add("✓ Sort · Plain Sort");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.INCREMENTAL_SORT)) {
+            detailLines.add("✓ Sort · Incremental Sort");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.HASH_AGGREGATE)) {
+            detailLines.add("✓ Aggregate · Hash Agg");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.GROUP_AGGREGATE)) {
+            detailLines.add("✓ Aggregate · Group Agg");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.UNIQUE)) {
+            detailLines.add("✓ Aggregate · Unique Agg");
+        }
+
+        if (hasPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.HINT)) {
+            detailLines.add("✓ Hint · Used");
+        }
+
+        return List.copyOf(detailLines);
+    }
+
+    private boolean hasAnyPlanElement(long executionPlanElement, int... indexes) {
+        for (int index : indexes) {
+            if (hasPlanElement(executionPlanElement, index)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean hasPlanElement(long executionPlanElement, int index) {
+        return (executionPlanElement & (1L << index)) != 0;
+    }
+
+    private PlanAnalysisResult analyzePostgreSqlPlan(List<String> planLines, String submittedSql) {
+        long executionPlanElement = 0L;
+        LinkedHashSet<String> summaryLines = new LinkedHashSet<>();
+
+        if (submittedSql != null && submittedSql.contains("/*+")) {
+            executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.HINT);
+            summaryLines.add("힌트를 사용했다.");
+        }
+
+        for (String planLine : planLines) {
+            if (planLine == null || planLine.isBlank()) {
+                continue;
+            }
+
+            String normalizedLine = planLine.trim().toUpperCase(Locale.ROOT);
+
+            if (normalizedLine.contains("SEQ SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.FULL_SCAN);
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.SEQ_SCAN);
+                summaryLines.add("Seq Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("INDEX ONLY SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.INDEX_ONLY_SCAN);
+                summaryLines.add("Index Only Scan이 포함되었다.");
+            } else if (normalizedLine.contains("BITMAP INDEX SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.BITMAP_INDEX_SCAN);
+                summaryLines.add("Bitmap Index Scan이 포함되었다.");
+            } else if (normalizedLine.contains("BITMAP HEAP SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.BITMAP_HEAP_SCAN);
+                summaryLines.add("Bitmap Heap Scan이 포함되었다.");
+            } else if (normalizedLine.contains("INDEX SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.INDEX_SCAN);
+                summaryLines.add("Index Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("TID SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.TID_SCAN);
+                summaryLines.add("Tid Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("SUBQUERY SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.SUBQUERY_SCAN);
+                summaryLines.add("Subquery Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("CTE SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.CTE_SCAN);
+                summaryLines.add("CTE Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("FUNCTION SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.FUNCTION_SCAN);
+                summaryLines.add("Function Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("VALUES SCAN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.VALUES_SCAN);
+                summaryLines.add("Values Scan이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("HASH JOIN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.HASH_JOIN);
+                summaryLines.add("Hash Join이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("MERGE JOIN")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.MERGE_JOIN);
+                summaryLines.add("Merge Join이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("NESTED LOOP")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.NESTED_LOOP);
+                summaryLines.add("Nested Loop가 포함되었다.");
+            }
+
+            if (containsAny(normalizedLine, Set.of("HASHAGGREGATE", "HASH AGGREGATE"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.HASH_AGGREGATE);
+                summaryLines.add("Hash Aggregate가 포함되었다.");
+            }
+
+            if (containsAny(normalizedLine, Set.of("GROUPAGGREGATE", "GROUP AGGREGATE"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.GROUP_AGGREGATE);
+                summaryLines.add("Group Aggregate가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("INCREMENTAL SORT")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.INCREMENTAL_SORT);
+                summaryLines.add("Incremental Sort가 포함되었다.");
+            } else if (normalizedLine.contains("SORT")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.SORT);
+                summaryLines.add("Sort가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("LIMIT")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.LIMIT);
+                summaryLines.add("Limit이 포함되었다.");
+            }
+
+            if (normalizedLine.contains("UNIQUE") && !normalizedLine.contains("INNER UNIQUE")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.UNIQUE);
+                summaryLines.add("Unique가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("MATERIALIZE")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.MATERIALIZE);
+                summaryLines.add("Materialize가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("MEMOIZE")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.MEMOIZE);
+                summaryLines.add("Memoize가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("MERGE APPEND")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.MERGE_APPEND);
+                summaryLines.add("Merge Append가 포함되었다.");
+            } else if (normalizedLine.contains("APPEND")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.APPEND);
+                summaryLines.add("Append가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("GATHER MERGE")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.GATHER_MERGE);
+                summaryLines.add("Gather Merge가 포함되었다.");
+            } else if (normalizedLine.contains("GATHER")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.GATHER);
+                summaryLines.add("Gather가 포함되었다.");
+            }
+
+            if (normalizedLine.contains("PARALLEL")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.PARALLEL);
+                summaryLines.add("병렬 실행이 포함되었다.");
+            }
+
+            if (containsAny(normalizedLine, Set.of("PARTITION PRUNING", "PARTITIONS REMOVED"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.PARTITION_PRUNING);
+                summaryLines.add("파티션 가지치기가 포함되었다.");
+            }
+
+            if (containsAny(normalizedLine, Set.of("INDEX COND:", "RECHECK COND:"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.INDEX_CONDITION);
+                summaryLines.add("인덱스 접근 조건이 포함되었다.");
+            }
+
+            if (containsAny(normalizedLine, Set.of("FILTER:", "ROWS REMOVED BY FILTER", "JOIN FILTER:"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.FILTER);
+                summaryLines.add("후처리 필터가 포함되었다.");
+            }
+        }
+
+        if (summaryLines.isEmpty()) {
+            summaryLines.add("대표 실행계획 요소를 찾지 못했다.");
+        }
+
+        return new PlanAnalysisResult(executionPlanElement, List.copyOf(summaryLines));
+    }
+
+    private long appendPlanElement(long executionPlanElement, int index) {
+        return executionPlanElement | (1L << index);
+    }
+
+    private boolean containsAny(String normalizedLine, Set<String> tokens) {
+        for (String token : tokens) {
+            if (normalizedLine.contains(token)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private long extractExplainAnalyzeExecutionTimeMs(List<String> planLines) {
+        Double executionTimeMs = null;
+
+        for (String planLine : planLines) {
+            if (planLine == null || planLine.isBlank()) {
+                continue;
+            }
+
+            Matcher matcher = PLAN_EXECUTION_TIME_PATTERN.matcher(planLine);
+            if (matcher.find()) {
+                try {
+                    executionTimeMs = Double.parseDouble(matcher.group(1));
+                } catch (NumberFormatException ignored) {
+                    return 0L;
+                }
+            }
+        }
+
+        return executionTimeMs != null ? Math.round(executionTimeMs) : 0L;
+    }
+
+    private boolean isRetriableConnectionError(RuntimeException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof SQLException sqlException) {
+                String sqlState = sqlException.getSQLState();
+                if (sqlState != null && sqlState.startsWith("08")) {
+                    return true;
+                }
+
+                String message = sqlException.getMessage();
+                if (message != null) {
+                    String normalizedMessage = message.toLowerCase(Locale.ROOT);
+                    if (containsAny(normalizedMessage, Set.of(
+                            "connection refused",
+                            "connection reset",
+                            "connection is closed",
+                            "broken pipe",
+                            "communications link failure",
+                            "the connection attempt failed",
+                            "terminating connection"
+                    ))) {
+                        return true;
+                    }
+                }
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
+    }
+
+    private void sleepForRetryDelay() {
+        try {
+            Thread.sleep(CONNECTION_RETRY_DELAY_MS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("재시도 대기 중 인터럽트가 발생했다.", exception);
+        }
+    }
+
+    private Statement createTrackedStatement(String socketId, Connection connection) throws SQLException {
+        Statement statement = connection.createStatement();
+        activeStatements.put(socketId, statement);
+        return statement;
+    }
+
+    private PreparedStatement createTrackedPreparedStatement(String socketId,
+                                                             Connection connection,
+                                                             String sql) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(sql);
+        activeStatements.put(socketId, statement);
+        return statement;
+    }
+
+    private void clearTrackedStatement(String socketId, Statement statement) {
+        activeStatements.remove(socketId, statement);
+    }
+
+    private String resolveProblemSubmitErrorMessage(Exception exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof SQLException sqlException) {
+                return resolveSqlErrorMessage(sqlException);
+            }
+
+            if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
+                return cause.getMessage();
+            }
+
+            cause = cause.getCause();
+        }
+
+        return "SQL 제출에 실패했다.";
+    }
+
+    private String resolveSqlErrorMessage(SQLException exception) {
+        String message = exception.getMessage();
+        String sqlState = exception.getSQLState();
+        String normalizedMessage = message != null ? message.toLowerCase(Locale.ROOT) : "";
+
+        if ("57014".equals(sqlState)) {
+            if (normalizedMessage.contains("statement timeout")) {
+                return "SQL 실행 시간이 제한을 초과했다.";
+            }
+
+            if (normalizedMessage.contains("user request")) {
+                return "SQL 실행을 중지했다.";
+            }
+
+            return "SQL 실행이 취소되었다.";
+        }
+
+        return message != null && !message.isBlank()
+                ? message
+                : "SQL 실행에 실패했다.";
+    }
+
+    private String buildSubmittedDdlPreview(String sql) {
+        String preview = sql.replaceAll("\\s+", " ").trim();
+        if (preview.length() <= 20) {
+            return preview;
+        }
+
+        return preview.substring(0, 20) + "...";
+    }
+
+    private enum ExecutionMode {
+        SELECT,
+        EXPLAIN,
+        EXPLAIN_ANALYZE,
+        INDEX_COMMAND
+    }
+
+    public record QueryExecutionResult(String problemId,
+                                       String mode,
+                                       String message,
+                                       List<String> columns,
+                                       List<List<String>> rows,
+                                       List<String> planLines,
+                                       long rowCount,
+                                       Integer currentPage,
+                                       Integer pageSize,
+                                       long executionTimeMs,
+                                       Double cost) {
+
+        private static QueryExecutionResult selectWithCost(String problemId,
+                                                           List<String> columns,
+                                                           List<List<String>> rows,
+                                                           long rowCount,
+                                                           Integer currentPage,
+                                                           Integer pageSize,
+                                                           Double cost) {
+            return new QueryExecutionResult(
+                    problemId,
+                    "select",
+                    "조회 결과를 반환했다.",
+                    columns,
+                    rows,
+                    List.of(),
+                    rowCount,
+                    currentPage,
+                    pageSize,
+                    0,
+                    cost
+            );
+        }
+
+        private static QueryExecutionResult planWithCost(String problemId,
+                                                         String mode,
+                                                         List<String> planLines,
+                                                         Double cost) {
+            return new QueryExecutionResult(
+                    problemId,
+                    mode,
+                    "실행 계획을 반환했다.",
+                    List.of(),
+                    List.of(),
+                    planLines,
+                    planLines.size(),
+                    null,
+                    null,
+                    0,
+                    cost
+            );
+        }
+
+        private static QueryExecutionResult command(String problemId, String message) {
+            return new QueryExecutionResult(
+                    problemId,
+                    "command",
+                    message != null && !message.isBlank() ? message : "명령을 실행했다.",
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    0,
+                    null,
+                    null,
+                    0,
+                    null
+            );
+        }
+
+        private QueryExecutionResult withExecutionTimeMs(long executionTimeMs) {
+            return new QueryExecutionResult(
+                    problemId,
+                    mode,
+                    message,
+                    columns,
+                    rows,
+                    planLines,
+                    rowCount,
+                    currentPage,
+                    pageSize,
+                    executionTimeMs,
+                    cost
+            );
+        }
+    }
+
+    public record ProblemSubmitResult(String problemId,
+                                      boolean success,
+                                      String message,
+                                      Long executionTimeMs) {
+
+        private static ProblemSubmitResult success(String problemId, String message, long executionTimeMs) {
+            return new ProblemSubmitResult(problemId, true, message, executionTimeMs);
+        }
+
+        private static ProblemSubmitResult failure(String problemId, String message) {
+            return new ProblemSubmitResult(problemId, false, message, null);
+        }
+    }
+
+    public record ProblemSubmitProgress(String problemId,
+                                        String stepKey,
+                                        String status,
+                                        String message,
+                                        List<String> detailLines,
+                                        String statementKey,
+                                        Integer statementIndex,
+                                        String statementSql,
+                                        String statementMode,
+                                        Boolean statementReference) {
+
+        private static ProblemSubmitProgress running(String problemId, String stepKey, String message) {
+            return new ProblemSubmitProgress(problemId, stepKey, "running", message, List.of(), null, null, null, null, null);
+        }
+
+        private static ProblemSubmitProgress success(String problemId, String stepKey, String message) {
+            return new ProblemSubmitProgress(problemId, stepKey, "success", message, List.of(), null, null, null, null, null);
+        }
+
+        private static ProblemSubmitProgress success(String problemId, String stepKey, String message, List<String> detailLines) {
+            return new ProblemSubmitProgress(problemId, stepKey, "success", message, detailLines != null ? detailLines : List.of(), null, null, null, null, null);
+        }
+
+        private static ProblemSubmitProgress incorrect(String problemId, String stepKey, String message) {
+            return new ProblemSubmitProgress(problemId, stepKey, "incorrect", message, List.of(), null, null, null, null, null);
+        }
+
+        private static ProblemSubmitProgress error(String problemId, String stepKey, String message) {
+            return new ProblemSubmitProgress(problemId, stepKey, "error", message, List.of(), null, null, null, null, null);
+        }
+
+        private static ProblemSubmitProgress error(String problemId, String stepKey, String message, List<String> detailLines) {
+            return new ProblemSubmitProgress(problemId, stepKey, "error", message, detailLines != null ? detailLines : List.of(), null, null, null, null, null);
+        }
+
+        private static ProblemSubmitProgress runningStatement(String problemId, SubmittedStatement statement, String message) {
+            return statement(problemId, statement, "running", message);
+        }
+
+        private static ProblemSubmitProgress successStatement(String problemId, SubmittedStatement statement, String message) {
+            return statement(problemId, statement, "success", message);
+        }
+
+        private static ProblemSubmitProgress errorStatement(String problemId, SubmittedStatement statement, String message) {
+            return statement(problemId, statement, "error", message);
+        }
+
+        private static ProblemSubmitProgress statement(String problemId, SubmittedStatement statement, String status, String message) {
+            return new ProblemSubmitProgress(
+                    problemId,
+                    statement.key(),
+                    status,
+                    message,
+                    List.of(),
+                    statement.key(),
+                    statement.index(),
+                    statement.sql(),
+                    statement.mode() == ExecutionMode.SELECT ? "select" : "command",
+                    statement.referenceSelect()
+            );
+        }
+    }
+
+    private record SubmittedStatement(String key,
+                                      int index,
+                                      String sql,
+                                      ExecutionMode mode,
+                                      boolean referenceSelect) {
+    }
+
+    private record SubmittedExecutionContext(QueryExecutionResult referenceResult, String referenceSql) {
+    }
+
+    private record SelectPageResult(List<String> columns, List<List<String>> rows) {
+    }
+
+    private record PlanAnalysisResult(long executionPlanElement, List<String> summaryLines) {
+    }
+
+    private static final class SubmittedDdlExecutionException extends RuntimeException {
+
+        private final List<String> detailLines;
+
+        private SubmittedDdlExecutionException(String message, List<String> detailLines, Throwable cause) {
+            super(message, cause);
+            this.detailLines = detailLines != null ? detailLines : List.of();
+        }
+
+        private List<String> detailLines() {
+            return detailLines;
+        }
+    }
+}

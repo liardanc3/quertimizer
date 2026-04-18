@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
 import { Fragment } from 'react';
@@ -36,7 +36,6 @@ import logoImage from '../assets/logo.png';
 interface ProblemSolvePageProps {
   problemId: string;
 }
-
 type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
 type SolveAuthSocialProvider = 'google' | 'github' | 'kakao';
 
@@ -106,6 +105,7 @@ interface CollapsedCardState {
 
 type ProblemExecutionMode = 'select' | 'explain' | 'explain_analyze' | 'command';
 const EXECUTION_RESULT_PAGE_SIZE = 10;
+const SUBMIT_REFERENCE_WRITE_CTE_PATTERN = /\bWITH\b[\s\S]*\b(INSERT|UPDATE|DELETE|MERGE)\b/i;
 
 interface ProblemExecutionResult {
   success: boolean;
@@ -135,6 +135,7 @@ interface ProblemSocketMessage extends SessionSocketMessage {
 }
 
 type ProblemSubmitStepStatus = 'running' | 'success' | 'incorrect' | 'error';
+type StatementPickerMode = 'execute' | 'submit';
 
 interface ProblemSubmitProgressMessage extends SessionSocketMessage {
   problemId?: string | null;
@@ -142,6 +143,11 @@ interface ProblemSubmitProgressMessage extends SessionSocketMessage {
   status?: ProblemSubmitStepStatus | null;
   message?: string | null;
   detailLines?: string[] | null;
+  statementKey?: string | null;
+  statementSql?: string | null;
+  statementIndex?: number | null;
+  statementMode?: ProblemExecutionMode | null;
+  statementReference?: boolean | null;
 }
 
 interface ProblemSubmitProgressStep {
@@ -179,6 +185,7 @@ interface SqlExecutionPickerOption {
 }
 
 interface SqlExecutionPickerState {
+  mode: StatementPickerMode;
   options: SqlExecutionPickerOption[];
   selectedIndex: number;
   selectionStart: number;
@@ -187,6 +194,16 @@ interface SqlExecutionPickerState {
   top: number;
   maxWidth: number;
   maxHeight: number;
+}
+
+interface SqlHighlightRange {
+  start: number;
+  end: number;
+}
+
+interface SqlEditorSelection {
+  start: number;
+  end: number;
 }
 
 interface GridColumn {
@@ -216,6 +233,14 @@ interface SqlAutocompleteAnchor {
   top: number;
   maxWidth: number;
   maxHeight: number;
+}
+
+interface ExecutionStatementMarkerLayout {
+  left: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  topOffsets: Record<number, number>;
 }
 
 type SqlHighlightKind =
@@ -416,7 +441,8 @@ const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 1;
 const SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO = 1.7;
 const SQL_EDITOR_INLINE_PADDING_TOP_REM = 1.08;
 const SQL_EDITOR_FLOATING_PADDING_TOP_REM = 1.34;
-const SUBMIT_STEP_ORDER = ['submit', 'answer', 'cost', 'plan'] as const;
+const SUBMIT_STEP_ORDER = ['validate', 'answer', 'ddl', 'plan'] as const;
+const SUBMIT_INDEX_DDL_PATTERN = /^(CREATE|DROP|ALTER)\s+INDEX\b/i;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -446,16 +472,22 @@ function formatGroupedNumber(value?: number) {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
-function formatExecutionMetricValue(value?: number) {
-  if (value == null) {
-    return '-';
-  }
-
-  return `${formatGroupedNumber(Math.round(value))} ms`;
-}
-
 function getExecutionResultPageCount(rowCount: number) {
   return Math.max(1, Math.ceil(rowCount / EXECUTION_RESULT_PAGE_SIZE));
+}
+
+function resolveSubmitStatementMode(sql: string): ProblemExecutionMode {
+  const normalizedSql = sql.trim().replace(/\s+/g, ' ').toUpperCase();
+
+  if (normalizedSql.startsWith('SELECT ')) {
+    return 'select';
+  }
+
+  if (normalizedSql.startsWith('WITH ') && !SUBMIT_REFERENCE_WRITE_CTE_PATTERN.test(normalizedSql)) {
+    return 'select';
+  }
+
+  return 'command';
 }
 
 function toProblemSequence(problemId: string) {
@@ -934,18 +966,6 @@ function parseSqlStatements(value: string): SqlStatementSegment[] {
   return statements;
 }
 
-function isElementVisibleInViewport(element: HTMLElement | null) {
-  if (element == null) {
-    return false;
-  }
-
-  const rect = element.getBoundingClientRect();
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-
-  return rect.bottom > 0 && rect.right > 0 && rect.top < viewportHeight && rect.left < viewportWidth;
-}
-
 function hasBlankLineBoundary(value: string, leftEnd: number, rightStart: number) {
   const betweenText = value.slice(leftEnd, rightStart);
   return /\n\s*\n/.test(betweenText);
@@ -998,6 +1018,103 @@ function resolveNearestSqlStatement(statements: SqlStatementSegment[], caretInde
 
     return bestMatch;
   }, null as { statement: SqlStatementSegment; distance: number } | null)?.statement ?? null;
+}
+
+function isSubmitSelectableDdlStatement(sql: string) {
+  return SUBMIT_INDEX_DDL_PATTERN.test(sql.trim());
+}
+
+function findContainingSqlStatementIndex(statements: SqlStatementSegment[], caretIndex: number) {
+  return statements.findIndex((statement) => caretIndex >= statement.start && caretIndex <= statement.end);
+}
+
+function resolveSubmitReferenceStatementIndex(statements: SqlStatementSegment[], caretIndex: number) {
+  const currentStatementIndex = findContainingSqlStatementIndex(statements, caretIndex);
+
+  if (currentStatementIndex >= 0) {
+    const currentStatement = statements[currentStatementIndex];
+    if (resolveSubmitStatementMode(currentStatement.sql) === 'select') {
+      return currentStatementIndex;
+    }
+
+    const nextSelectIndex = statements.findIndex(
+      (statement, statementIndex) => statementIndex > currentStatementIndex && resolveSubmitStatementMode(statement.sql) === 'select',
+    );
+    if (nextSelectIndex >= 0) {
+      return nextSelectIndex;
+    }
+
+    for (let statementIndex = currentStatementIndex - 1; statementIndex >= 0; statementIndex -= 1) {
+      if (resolveSubmitStatementMode(statements[statementIndex].sql) === 'select') {
+        return statementIndex;
+      }
+    }
+
+    return -1;
+  }
+
+  const selectableStatements = statements.filter((statement) => resolveSubmitStatementMode(statement.sql) === 'select');
+  const nextStatement = selectableStatements.find((statement) => statement.start >= caretIndex);
+  if (nextStatement != null) {
+    return statements.findIndex((statement) => statement.start === nextStatement.start);
+  }
+
+  const previousStatements = selectableStatements.filter((statement) => statement.start < caretIndex);
+  if (previousStatements.length > 0) {
+    return statements.findIndex((statement) => statement.start === previousStatements[previousStatements.length - 1].start);
+  }
+
+  return -1;
+}
+
+function createSubmitPickerOptions(value: string, caretIndex: number): SqlExecutionPickerOption[] {
+  const statements = parseSqlStatements(value);
+  if (statements.length === 0) {
+    return [];
+  }
+
+  const referenceStatementIndex = resolveSubmitReferenceStatementIndex(statements, caretIndex);
+  if (referenceStatementIndex < 0) {
+    return [];
+  }
+
+  const referenceStatement = statements[referenceStatementIndex];
+  if (resolveSubmitStatementMode(referenceStatement.sql) !== 'select') {
+    return [];
+  }
+
+  const selectOnlyOption: SqlExecutionPickerOption = {
+    key: 'submit-select-only',
+    kind: 'statement',
+    label: '기준 SELECT만 제출',
+    preview: referenceStatement.preview,
+    start: referenceStatement.start,
+    end: referenceStatement.end,
+    segments: [referenceStatement],
+  };
+
+  const ddlSegments = statements.filter(
+    (statement, statementIndex) =>
+      statementIndex < referenceStatementIndex && statement.start <= caretIndex && isSubmitSelectableDdlStatement(statement.sql),
+  );
+  const optionCandidates = [selectOnlyOption];
+
+  if (ddlSegments.length > 0) {
+    optionCandidates.push({
+      key: 'submit-ddl-with-select',
+      kind: 'statement',
+      label: '위 DDL 포함 제출',
+      preview: createSqlStatementPreview([...ddlSegments, referenceStatement].map((statement) => statement.sql).join(';\n')),
+      start: ddlSegments[0].start,
+      end: referenceStatement.end,
+      segments: [...ddlSegments, referenceStatement],
+    });
+  }
+
+  return optionCandidates.filter(
+    (option, optionIndex, source) =>
+      source.findIndex((candidate) => candidate.start === option.start && candidate.end === option.end) === optionIndex,
+  );
 }
 
 function createExecutionPickerOptions(value: string, caretIndex: number): SqlExecutionPickerOption[] {
@@ -1141,24 +1258,123 @@ function tokenizeSqlLine(line: string, tableNames: Set<string>, columnNames: Set
   return tokens;
 }
 
-function renderHighlightedSql(sql: string, tableNames: Set<string>, columnNames: Set<string>) {
+function normalizeSqlHighlightRanges(ranges: SqlHighlightRange[], sqlLength: number) {
+  const normalizedRanges = ranges
+    .map((range) => ({
+      start: Math.max(0, Math.min(range.start, sqlLength)),
+      end: Math.max(0, Math.min(range.end, sqlLength)),
+    }))
+    .filter((range) => range.end > range.start)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+
+  return normalizedRanges.reduce<SqlHighlightRange[]>((mergedRanges, range) => {
+    const previousRange = mergedRanges[mergedRanges.length - 1];
+
+    if (!previousRange || range.start > previousRange.end) {
+      mergedRanges.push({ ...range });
+      return mergedRanges;
+    }
+
+    previousRange.end = Math.max(previousRange.end, range.end);
+    return mergedRanges;
+  }, []);
+}
+
+function splitSqlTokenByHighlightRanges(text: string, tokenAbsoluteStart: number, highlightRanges: SqlHighlightRange[]) {
+  if (text.length === 0 || highlightRanges.length === 0) {
+    return [
+      {
+        text,
+        isHighlighted: false,
+      },
+    ];
+  }
+
+  const tokenAbsoluteEnd = tokenAbsoluteStart + text.length;
+  const overlappingRanges = highlightRanges.filter((range) => range.end > tokenAbsoluteStart && range.start < tokenAbsoluteEnd);
+
+  if (overlappingRanges.length === 0) {
+    return [
+      {
+        text,
+        isHighlighted: false,
+      },
+    ];
+  }
+
+  const segments: Array<{ text: string; isHighlighted: boolean }> = [];
+  let cursor = tokenAbsoluteStart;
+
+  overlappingRanges.forEach((range) => {
+    const segmentStart = Math.max(range.start, tokenAbsoluteStart);
+    const segmentEnd = Math.min(range.end, tokenAbsoluteEnd);
+
+    if (cursor < segmentStart) {
+      segments.push({
+        text: text.slice(cursor - tokenAbsoluteStart, segmentStart - tokenAbsoluteStart),
+        isHighlighted: false,
+      });
+    }
+
+    if (segmentStart < segmentEnd) {
+      segments.push({
+        text: text.slice(segmentStart - tokenAbsoluteStart, segmentEnd - tokenAbsoluteStart),
+        isHighlighted: true,
+      });
+    }
+
+    cursor = Math.max(cursor, segmentEnd);
+  });
+
+  if (cursor < tokenAbsoluteEnd) {
+    segments.push({
+      text: text.slice(cursor - tokenAbsoluteStart),
+      isHighlighted: false,
+    });
+  }
+
+  return segments.filter((segment) => segment.text.length > 0);
+}
+
+function renderHighlightedSql(sql: string, tableNames: Set<string>, columnNames: Set<string>, highlightRanges: SqlHighlightRange[] = []) {
   const normalizedSql = sql.replace(/\r\n/g, '\n');
+  const normalizedHighlightRanges = normalizeSqlHighlightRanges(highlightRanges, normalizedSql.length);
   const lines = normalizedSql.split('\n');
+
+  let lineAbsoluteStart = 0;
 
   return lines.map((line, lineIndex) => {
     const lineTokens = tokenizeSqlLine(line, tableNames, columnNames);
+    let tokenOffset = 0;
+    const renderedLine = lineTokens.flatMap((token, tokenIndex) => {
+      const tokenAbsoluteStart = lineAbsoluteStart + tokenOffset;
+      const tokenSegments = splitSqlTokenByHighlightRanges(token.text, tokenAbsoluteStart, normalizedHighlightRanges);
+
+      tokenOffset += token.text.length;
+
+      return tokenSegments.map((segment, segmentIndex) => {
+        const tokenContent =
+          token.kind == null ? (
+            segment.text
+          ) : (
+            <span className={`solve-sql-token is-${token.kind}`}>{segment.text}</span>
+          );
+
+        return segment.isHighlighted ? (
+          <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`} className="solve-sql-selection-fill">
+            {tokenContent}
+          </span>
+        ) : (
+          <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`}>{tokenContent}</span>
+        );
+      });
+    });
+
+    lineAbsoluteStart += line.length + 1;
 
     return (
       <Fragment key={`line-${lineIndex}`}>
-        {lineTokens.map((token, tokenIndex) =>
-          token.kind == null ? (
-            <Fragment key={`token-${lineIndex}-${tokenIndex}`}>{token.text}</Fragment>
-          ) : (
-            <span key={`token-${lineIndex}-${tokenIndex}`} className={`solve-sql-token is-${token.kind}`}>
-              {token.text}
-            </span>
-          ),
-        )}
+        {renderedLine}
         {lineIndex < lines.length - 1 ? '\n' : null}
       </Fragment>
     );
@@ -1360,6 +1576,41 @@ function measureStatementStartOffsets(textarea: HTMLTextAreaElement, value: stri
   return measuredOffsets;
 }
 
+function measureExecutionStatementMarkerLayout(
+  textarea: HTMLTextAreaElement,
+  value: string,
+  offsets: number[],
+  sqlEditorFontSize: number,
+): ExecutionStatementMarkerLayout | null {
+  if (offsets.length === 0) {
+    return null;
+  }
+
+  const ownerWindow = textarea.ownerDocument.defaultView ?? window;
+  const editorDocumentElement = textarea.ownerDocument.documentElement;
+  const computedStyle = ownerWindow.getComputedStyle(textarea);
+  const rootFontSize = Number.parseFloat(ownerWindow.getComputedStyle(editorDocumentElement).fontSize) || 16;
+  const lineHeight =
+    Number.parseFloat(computedStyle.lineHeight) || sqlEditorFontSize * SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO;
+  const paddingLeft = Number.parseFloat(computedStyle.paddingLeft) || 0;
+  const markerIconSize = Math.max(sqlEditorFontSize * 0.82, rootFontSize * 0.82);
+  const markerSlotWidth = Math.max(markerIconSize + rootFontSize * 0.08, rootFontSize * 0.84);
+  const markerLeft = paddingLeft - markerSlotWidth - rootFontSize * 0.22;
+  const measuredStatementOffsets = measureStatementStartOffsets(textarea, value, offsets);
+  const topOffsets = offsets.reduce<Record<number, number>>((result, offset) => {
+    result[offset] = measuredStatementOffsets.get(offset) ?? 0;
+    return result;
+  }, {});
+
+  return {
+    left: markerLeft,
+    width: markerSlotWidth,
+    height: lineHeight,
+    fontSize: markerIconSize,
+    topOffsets,
+  };
+}
+
 function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecutionResult {
   return {
     success: message.success ?? false,
@@ -1410,27 +1661,60 @@ function upsertSubmitProgressStep(
   });
 }
 
-function renderSubmitProgressMark(status: ProblemSubmitStepStatus) {
-  if (status === 'success') {
-    return (
-      <span className="solve-submit-progress-mark is-success" aria-hidden="true">
-        ✓
-      </span>
-    );
-  }
+function SubmitProgressItem({ step }: { step: ProblemSubmitProgressStep }) {
+  const isExpandable = step.stepKey === 'ddl' && step.detailLines.length > 0;
+  const [collapsed, setCollapsed] = useState(step.stepKey === 'ddl');
+  const toneClass =
+    step.status === 'running'
+      ? 'is-pending'
+      : step.status === 'success'
+        ? 'is-success'
+        : 'is-error';
+  const indicator = step.status === 'running' ? <span className="solve-editor-statement-spinner" /> : step.status === 'success' ? '✓' : '✕';
 
-  if (status === 'incorrect' || status === 'error') {
-    return (
-      <span className="solve-submit-progress-mark is-error" aria-hidden="true">
-        ✕
-      </span>
-    );
-  }
+  useEffect(() => {
+    if (!isExpandable) {
+      setCollapsed(false);
+    }
+  }, [isExpandable]);
+
+  useEffect(() => {
+    if (isExpandable) {
+      setCollapsed(true);
+    }
+  }, [isExpandable, step.detailLines.length]);
 
   return (
-    <span className="solve-submit-progress-mark is-running" aria-hidden="true">
-      …
-    </span>
+    <div className={`solve-editor-inline-result-group solve-submit-progress-item ${collapsed ? 'is-collapsed' : ''} ${toneClass}`.trim()}>
+      <div className="solve-editor-inline-result-header">
+        {isExpandable ? (
+          <button
+            type="button"
+            className="solve-detail-section-divider-button solve-pane-section-divider-button"
+            aria-label={collapsed ? '펼치기' : '접기'}
+            aria-expanded={!collapsed}
+            onClick={() => setCollapsed((current) => !current)}
+          >
+            <CollapseChevronIcon collapsed={collapsed} />
+          </button>
+        ) : null}
+        <div className="solve-pane-summary-row">
+          <span className={`solve-pane-summary-status-button ${toneClass}`.trim()} aria-hidden="true">
+            {indicator}
+          </span>
+          <span className={`solve-pane-summary-statement-title ${toneClass}`.trim()}>{step.message}</span>
+        </div>
+      </div>
+      {step.detailLines.length > 0 && (!isExpandable || !collapsed) ? (
+        <div className="solve-editor-inline-result-body solve-pane-result-stack">
+          {step.detailLines.map((detailLine) => (
+            <p key={`${step.stepKey}-${detailLine}`} className={`solve-pane-result-message ${toneClass === 'is-error' ? 'is-error' : ''}`.trim()}>
+              {detailLine}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1438,7 +1722,6 @@ function renderResultTable(
   columns: string[],
   rows: string[][],
   emptyMessage: string,
-  executionTimeMs: number | undefined,
   rowCount: number,
   currentPage: number,
   pageSize: number,
@@ -1473,13 +1756,8 @@ function renderResultTable(
       <div className="solve-detail-table-block solve-result-table-shell">
         <div className="solve-result-table-header">
           <div className="solve-result-table-summary">
-            <span className="solve-result-table-summary-item">
-              <span className="solve-result-table-summary-label">경과 시간</span>
-              <span className="solve-result-table-summary-value">{formatExecutionMetricValue(executionTimeMs)}</span>
-            </span>
-            <span className="solve-result-table-summary-item">
-              <span className="solve-result-table-summary-label">결과 Rows</span>
-              <span className="solve-result-table-summary-value">{formatGroupedNumber(rowCount)}</span>
+            <span className="solve-result-table-summary-item is-rows">
+              <span className="solve-result-table-summary-value">{`${formatGroupedNumber(rowCount)} Rows`}</span>
             </span>
             <button
               type="button"
@@ -1491,7 +1769,17 @@ function renderResultTable(
             </button>
           </div>
         </div>
-        <ExecutionResultGrid columns={gridColumns} rows={gridRows} emptyMessage={emptyMessage} resetKey={resetKey} />
+        <div className={`solve-result-table-grid-shell ${isPageLoading ? 'is-loading' : ''}`.trim()}>
+          <div className="solve-result-table-grid-content">
+            <ExecutionResultGrid columns={gridColumns} rows={gridRows} emptyMessage={emptyMessage} resetKey={resetKey} />
+          </div>
+          {isPageLoading ? (
+            <div className="solve-result-table-grid-overlay" aria-live="polite" aria-label="실행 결과 페이지 로딩 중">
+              <span className="solve-result-table-grid-spinner" aria-hidden="true" />
+              <span className="solve-result-table-grid-overlay-label">로딩 중</span>
+            </div>
+          ) : null}
+        </div>
         {totalPages > 1 ? (
           <div className="solve-result-pagination">
             <button
@@ -1577,7 +1865,6 @@ function renderExecutionContent(
       executionResult.columns,
       executionResult.rows,
       '표시할 실행 결과가 없다.',
-      executionResult.executionTimeMs,
       executionResult.rowCount,
       currentPage,
       pageSize,
@@ -1615,13 +1902,11 @@ function renderExecutionContent(
 
 function ExecutionStatementResultItem({
   item,
-  isBlinking,
   onStatusIndicatorClick,
   registerResultItemRef,
   onRequestPage,
 }: {
   item: ExecutionStatementRun;
-  isBlinking: boolean;
   onStatusIndicatorClick: () => void;
   registerResultItemRef: (key: string, element: HTMLDivElement | null) => void;
   onRequestPage: (item: ExecutionStatementRun, page: number) => Promise<void>;
@@ -1733,7 +2018,7 @@ function ExecutionStatementResultItem({
         <div className="solve-pane-summary-row">
           <button
             type="button"
-            className={`solve-pane-summary-status-button ${titleToneClass} ${isBlinking ? 'is-blinking' : ''}`.trim()}
+            className={`solve-pane-summary-status-button ${titleToneClass}`.trim()}
             aria-label="실행 결과 위치로 이동"
             onClick={onStatusIndicatorClick}
           >
@@ -2757,6 +3042,30 @@ function RefreshIcon() {
   );
 }
 
+function ExecutionSuccessIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3.5 8.4 6.5 11.2 12.5 4.8"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function ExecutionErrorIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M4.75 4.75 11.25 11.25" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      <path d="M11.25 4.75 4.75 11.25" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function OpacityIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -2914,6 +3223,7 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
     copyDocumentStyles(openedWindow.document);
     openedWindow.document.title = title;
     openedWindow.document.documentElement.style.height = '100%';
+    openedWindow.document.documentElement.style.overflow = 'hidden';
     openedWindow.document.body.innerHTML = '';
     openedWindow.document.body.className = document.body.className;
     openedWindow.document.body.style.margin = '0';
@@ -2926,6 +3236,8 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 
     const container = openedWindow.document.createElement('div');
     container.className = 'solve-external-window-root';
+    container.style.height = '100%';
+    container.style.overflow = 'hidden';
     openedWindow.document.body.appendChild(container);
     containerRef.current = container;
     setIsReady(true);
@@ -2963,6 +3275,7 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const sqlEditorSelectionRef = useRef<SqlEditorSelection>({ start: 0, end: 0 });
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
   const executionResultItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const submitPanelRef = useRef<HTMLElement | null>(null);
@@ -2975,7 +3288,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
   const [executionRuns, setExecutionRuns] = useState<ExecutionStatementRun[]>([]);
-  const [blinkingExecutionRunKeys, setBlinkingExecutionRunKeys] = useState<string[]>([]);
+  const [executionStatementMarkerLayout, setExecutionStatementMarkerLayout] = useState<ExecutionStatementMarkerLayout | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -3004,6 +3317,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [floatingResizeState, setFloatingResizeState] = useState<FloatingResizeState | null>(null);
   const [editorFloatingOpacity, setEditorFloatingOpacity] = useState(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA);
   const [authOverlayMode, setAuthOverlayMode] = useState<SolveAuthOverlayMode | null>(null);
+  const [sqlEditorElement, setSqlEditorElement] = useState<HTMLTextAreaElement | null>(null);
   const problem = fallbackProblem;
   const availableDbms = getAvailableDbms(problem);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
@@ -3023,10 +3337,45 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     () => new Set(ddlAutocompleteItems.filter((item) => item.kind === 'column').map((item) => item.value.toLowerCase())),
     [ddlAutocompleteItems],
   );
+  const pickerHighlightRanges = useMemo(() => {
+    if (executionPickerState == null) {
+      return [] as SqlHighlightRange[];
+    }
+
+    const selectedOption = executionPickerState.options[executionPickerState.selectedIndex];
+    if (!selectedOption) {
+      return [] as SqlHighlightRange[];
+    }
+
+    return selectedOption.segments.map((segment) => ({
+      start: segment.start,
+      end: segment.end,
+    }));
+  }, [executionPickerState]);
   const highlightedSql = useMemo(
-    () => renderHighlightedSql(sql, sqlHighlightTableNames, sqlHighlightColumnNames),
-    [sql, sqlHighlightColumnNames, sqlHighlightTableNames],
+    () => renderHighlightedSql(sql, sqlHighlightTableNames, sqlHighlightColumnNames, pickerHighlightRanges),
+    [pickerHighlightRanges, sql, sqlHighlightColumnNames, sqlHighlightTableNames],
   );
+  const updateSqlEditorSelection = useCallback((selectionStart: number, selectionEnd = selectionStart) => {
+    sqlEditorSelectionRef.current = {
+      start: selectionStart,
+      end: selectionEnd,
+    };
+  }, []);
+  const syncSqlEditorSelectionFromElement = useCallback((element: HTMLTextAreaElement | null) => {
+    if (!element) {
+      return;
+    }
+
+    const selectionStart = element.selectionStart ?? element.value.length;
+    const selectionEnd = element.selectionEnd ?? selectionStart;
+    updateSqlEditorSelection(selectionStart, selectionEnd);
+  }, [updateSqlEditorSelection]);
+  const handleSqlEditorRef = useCallback((element: HTMLTextAreaElement | null) => {
+    sqlEditorRef.current = element;
+    setSqlEditorElement(element);
+    syncSqlEditorSelectionFromElement(element);
+  }, [syncSqlEditorSelectionFromElement]);
   const executionStatementMarkerRuns = useMemo(() => {
     const currentStatementSegments = parseSqlStatements(sql);
     const remainingRuns = executionRuns.filter((run) => run.status !== 'idle');
@@ -3043,11 +3392,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           key: matchedRun.key,
           status: matchedRun.status,
           startOffset: segment.start,
-          isBlinking: blinkingExecutionRunKeys.includes(matchedRun.key),
         },
       ];
     });
-  }, [blinkingExecutionRunKeys, executionRuns, sql]);
+  }, [executionRuns, sql]);
   const autocompleteItems = useMemo(
     () => [
       ...SQL_AUTOCOMPLETE_KEYWORDS.map(
@@ -3061,14 +3409,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     ],
     [ddlAutocompleteItems],
   );
-  const editorPortalTarget = sqlEditorRef.current?.ownerDocument?.body ?? document.body;
+  const editorPortalTarget = sqlEditorElement?.ownerDocument?.body ?? document.body;
 
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
     problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중..'));
 
-  const shouldRenderPanel = (panelKey: PanelKey) =>
-    panelKey === 'editor' || submitMessage != null || submitProgressSteps.length > 0;
+  const shouldRenderPanel = (panelKey: PanelKey) => panelKey === 'editor' || submitMessage != null || submitProgressSteps.length > 0;
   const visibleFloatingPanels = panelOrder.filter(
     (panelKey) =>
       shouldRenderPanel(panelKey) && panelVisibility[panelKey] && detachedPanels[panelKey] && !externalWindowPanels[panelKey],
@@ -3096,6 +3443,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       sqlEditorRef.current.focus();
       sqlEditorRef.current.setSelectionRange(selectionStart, selectionEnd);
+      updateSqlEditorSelection(selectionStart, selectionEnd);
     });
   };
 
@@ -3103,12 +3451,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     executionResultItemRefs.current[key] = element;
   };
 
-  const acknowledgeExecutionRun = (runKey: string) => {
-    setBlinkingExecutionRunKeys((current) => current.filter((key) => key !== runKey));
-  };
-
   const focusExecutionRun = (runKey: string) => {
-    acknowledgeExecutionRun(runKey);
     requestAnimationFrame(() => {
       const targetElement = executionResultItemRefs.current[runKey];
       if (!targetElement) {
@@ -3116,17 +3459,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-  };
-
-  const updateExecutionRunBlinking = (runKey: string) => {
-    requestAnimationFrame(() => {
-      if (isElementVisibleInViewport(executionPanelRef.current)) {
-        setBlinkingExecutionRunKeys((current) => current.filter((key) => key !== runKey));
-        return;
-      }
-
-      setBlinkingExecutionRunKeys((current) => (current.includes(runKey) ? current : [...current, runKey]));
     });
   };
 
@@ -3192,9 +3524,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     const restoredAuthReturn = consumeSolvePageAuthReturn(problemId);
 
     setSql('');
+    updateSqlEditorSelection(0, 0);
     setExecutionRuns([]);
-    setBlinkingExecutionRunKeys([]);
+    setExecutionStatementMarkerLayout(null);
     setIsExecuting(false);
+    setIsSubmitting(false);
     setSubmitMessage(null);
     setSubmitProgressSteps([]);
     setExecutionPickerState(null);
@@ -3222,19 +3556,81 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }, [defaultDbms, problemId]);
 
   useEffect(() => {
-    if (!sqlEditorRef.current) {
+    if (!sqlEditorElement) {
       return;
     }
 
-    const textarea = sqlEditorRef.current;
+    const textarea = sqlEditorElement;
     textarea.style.height = '0px';
     textarea.style.height = `${Math.max(SQL_EDITOR_MIN_HEIGHT, textarea.scrollHeight)}px`;
-  }, [collapsedCards.editor, sql, sqlEditorFontSize]);
+  }, [collapsedCards.editor, sql, sqlEditorElement, sqlEditorFontSize]);
+
+  useEffect(() => {
+    const textarea = sqlEditorElement;
+    if (!textarea || executionStatementMarkerRuns.length === 0) {
+      setExecutionStatementMarkerLayout(null);
+      return;
+    }
+
+    let animationFrameId = 0;
+    let resizeObserver: ResizeObserver | null = null;
+    const ownerWindow = textarea.ownerDocument.defaultView ?? window;
+    const measure = () => {
+      if (!sqlEditorElement) {
+        return;
+      }
+
+      setExecutionStatementMarkerLayout(
+        measureExecutionStatementMarkerLayout(
+          sqlEditorElement,
+          sql,
+          executionStatementMarkerRuns.map((marker) => marker.startOffset),
+          sqlEditorFontSize,
+        ),
+      );
+    };
+    const scheduleMeasure = () => {
+      ownerWindow.cancelAnimationFrame(animationFrameId);
+      animationFrameId = ownerWindow.requestAnimationFrame(() => {
+        animationFrameId = ownerWindow.requestAnimationFrame(measure);
+      });
+    };
+
+    scheduleMeasure();
+    ownerWindow.addEventListener('resize', scheduleMeasure);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleMeasure();
+      });
+      resizeObserver.observe(textarea);
+    }
+
+    return () => {
+      ownerWindow.cancelAnimationFrame(animationFrameId);
+      ownerWindow.removeEventListener('resize', scheduleMeasure);
+      resizeObserver?.disconnect();
+    };
+  }, [
+    detachedPanels.editor,
+    executionStatementMarkerRuns,
+    externalWindowPanels.editor,
+    panelVisibility.editor,
+    sql,
+    sqlEditorElement,
+    sqlEditorFontSize,
+    visibleExternalWindows.length,
+    visibleFloatingPanels.length,
+  ]);
 
   useEffect(() => {
     const wasAuthenticated = previousAuthenticationStateRef.current;
 
-    if (wasAuthenticated && !isAuthenticated && (sql.trim() !== '' || executionRuns.length > 0 || submitProgressSteps.length > 0 || submitMessage != null)) {
+    if (
+      wasAuthenticated &&
+      !isAuthenticated &&
+      (sql.trim() !== '' || executionRuns.length > 0 || submitProgressSteps.length > 0 || submitMessage != null)
+    ) {
       openAuthOverlay('login');
     }
 
@@ -3246,20 +3642,16 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
-    updateAutocompleteState(sqlEditorRef.current.value, sqlEditorRef.current.selectionStart ?? sqlEditorRef.current.value.length);
-  }, [autocompleteState != null, sqlEditorFontSize]);
+    syncSqlEditorSelectionFromElement(sqlEditorRef.current);
+    updateAutocompleteState(sqlEditorRef.current.value, sqlEditorSelectionRef.current.start);
+  }, [autocompleteState != null, sqlEditorFontSize, syncSqlEditorSelectionFromElement]);
 
   useEffect(() => {
     if (executionPickerState == null || !sqlEditorRef.current) {
       return;
     }
 
-    const selectedOption = executionPickerState.options[executionPickerState.selectedIndex];
-    if (!selectedOption) {
-      return;
-    }
-
-    restoreEditorSelection(selectedOption.start, selectedOption.end);
+    restoreEditorSelection(executionPickerState.selectionStart, executionPickerState.selectionEnd);
   }, [executionPickerState]);
 
   useEffect(() => {
@@ -3288,22 +3680,24 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       if (message.type === 'problem.submit.progress') {
         const progressMessage = message as ProblemSubmitProgressMessage;
-        if (progressMessage.problemId !== problemId || !progressMessage.stepKey || !progressMessage.status || !progressMessage.message) {
+        if (progressMessage.problemId !== problemId || !progressMessage.status || !progressMessage.message) {
           return;
         }
 
         setSubmitMessage(null);
-        setSubmitProgressSteps((current) =>
-          upsertSubmitProgressStep(
-            current,
-            createSubmitProgressStep(
-              progressMessage.stepKey,
-              progressMessage.status,
-              progressMessage.message,
-              Array.isArray(progressMessage.detailLines) ? progressMessage.detailLines : [],
+        if (progressMessage.stepKey) {
+          setSubmitProgressSteps((current) =>
+            upsertSubmitProgressStep(
+              current,
+              createSubmitProgressStep(
+                progressMessage.stepKey,
+                progressMessage.status,
+                progressMessage.message,
+                Array.isArray(progressMessage.detailLines) ? progressMessage.detailLines : [],
+              ),
             ),
-          ),
-        );
+          );
+        }
         setCollapsedCards((current) => ({
           ...current,
           submit: false,
@@ -3326,7 +3720,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         }
 
         setIsSubmitting(false);
-        setSubmitMessage(nextSubmitMessage);
+        setSubmitMessage((message as ProblemSocketMessage).success === false && nextSubmitMessage !== '오답' ? nextSubmitMessage : null);
         setCollapsedCards((current) => ({
           ...current,
           submit: false,
@@ -3381,7 +3775,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           ...current,
           editor: true,
         }));
-        updateExecutionRunBlinking(nextRun.key);
       }
     });
 
@@ -3392,7 +3785,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         problemId,
       });
     };
-  }, [problemId]);
+  }, [problemId, updateSqlEditorSelection]);
 
   useEffect(() => {
     setIsSubmitting(false);
@@ -3594,11 +3987,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
+    syncSqlEditorSelectionFromElement(sqlEditorRef.current);
     if (executionPickerState != null) {
       setExecutionPickerState(null);
     }
 
-    updateAutocompleteState(sqlEditorRef.current.value, sqlEditorRef.current.selectionStart ?? sqlEditorRef.current.value.length);
+    updateAutocompleteState(sqlEditorRef.current.value, sqlEditorSelectionRef.current.start);
   };
 
   const applyAutocompleteItem = (item: SqlAutocompleteItem) => {
@@ -3619,6 +4013,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       sqlEditorRef.current.focus();
       sqlEditorRef.current.setSelectionRange(nextCaretIndex, nextCaretIndex);
+      updateSqlEditorSelection(nextCaretIndex, nextCaretIndex);
     });
   };
 
@@ -3627,6 +4022,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       setExecutionPickerState(null);
     }
 
+    updateSqlEditorSelection(caretIndex, caretIndex);
     setSql(nextSql);
     updateAutocompleteState(nextSql, caretIndex);
   };
@@ -3636,6 +4032,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const handleSubmit = async () => {
+    if (executionPickerState != null) {
+      if (executionPickerState.mode === 'submit') {
+        confirmExecutionPickerSelection();
+        return;
+      }
+
+      closeExecutionPicker(false);
+    }
+
     if (!isAuthenticated) {
       setSubmitProgressSteps([]);
       setSubmitMessage(null);
@@ -3684,38 +4089,43 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }));
     }
 
-    setIsSubmitting(true);
-    setSubmitMessage(null);
-    setSubmitProgressSteps([createSubmitProgressStep('submit', 'running', 'SQL 제출 중')]);
-    setCollapsedCards((current) => ({
-      ...current,
-      submit: false,
-    }));
-    setPanelVisibility((current) => ({
-      ...current,
-      submit: true,
-    }));
-    focusPanelSection(() => submitPanelRef.current);
-
-    try {
-      await sendSessionSocketMessage({
-        type: 'problem.submit',
-        problemId,
-        sql,
-        dbms: selectedDbms,
-      });
-    } catch (error) {
-      setIsSubmitting(false);
+    const parsedStatements = parseSqlStatements(sql);
+    if (parsedStatements.length === 0) {
       setSubmitProgressSteps([]);
-
-      const isSessionValid = await syncSession();
-      if (!isSessionValid) {
-        openAuthOverlay('login');
-        return;
-      }
-
-      setSubmitMessage(error instanceof SessionSocketError ? error.message : '제출 연결에 실패했다.');
+      setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setCollapsedCards((current) => ({
+        ...current,
+        submit: false,
+      }));
+      setPanelVisibility((current) => ({
+        ...current,
+        submit: true,
+      }));
+      return;
     }
+
+    const caretIndex = Math.min(sqlEditorSelectionRef.current.start, sql.length);
+    const submitOptions = createSubmitPickerOptions(sql, caretIndex);
+
+    if (parsedStatements.length > 1 && submitOptions.length > 0 && openSubmitPicker(caretIndex)) {
+      return;
+    }
+
+    if (submitOptions.length === 0) {
+      setSubmitProgressSteps([]);
+      setSubmitMessage('제출 가능한 SELECT 구문이 없다.');
+      setCollapsedCards((current) => ({
+        ...current,
+        submit: false,
+      }));
+      setPanelVisibility((current) => ({
+        ...current,
+        submit: true,
+      }));
+      return;
+    }
+
+    await submitStatementSegments(submitOptions[0].segments);
   };
 
   const requestExecutionResult = async (statementSql: string, page = 1) =>
@@ -3836,8 +4246,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             return run;
           }),
         );
-        updateExecutionRunBlinking(completedRunKey);
-
         if (!shouldContinue) {
           break;
         }
@@ -3861,21 +4269,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       const nextErrorResult = createProblemExecutionError(error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.');
-      let erroredRunKey: string | null = null;
-
       setExecutionRuns((current) => {
         if (current.length === 0) {
-          const nextRun = createSingleExecutionStatementRun(sql, nextErrorResult);
-          erroredRunKey = nextRun.key;
-          return [nextRun];
+          return [createSingleExecutionStatementRun(sql, nextErrorResult)];
         }
 
         const runningIndex = current.findIndex((run) => run.status === 'running');
         if (runningIndex === -1) {
           return current;
         }
-
-        erroredRunKey = current[runningIndex]?.key ?? null;
 
         return current.map((run, runIndex) =>
           runIndex === runningIndex
@@ -3891,9 +4293,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         ...current,
         editor: true,
       }));
-      if (erroredRunKey) {
-        updateExecutionRunBlinking(erroredRunKey);
-      }
     } finally {
       executionStopRequestedRef.current = false;
       executionResponseResolverRef.current = null;
@@ -3916,18 +4315,104 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return false;
     }
 
+    const selectionStart = Math.min(sqlEditorSelectionRef.current.start, sql.length);
+    const selectionEnd = Math.min(sqlEditorSelectionRef.current.end, sql.length);
     setAutocompleteState(null);
     setExecutionPickerState({
+      mode: 'execute',
       options,
       selectedIndex: 0,
-      selectionStart: sqlEditorRef.current.selectionStart ?? caretIndex,
-      selectionEnd: sqlEditorRef.current.selectionEnd ?? caretIndex,
+      selectionStart,
+      selectionEnd,
       left: anchor.left,
       top: anchor.top,
       maxWidth: Math.max(anchor.maxWidth, 320),
       maxHeight: anchor.maxHeight,
     });
     return true;
+  };
+
+  const openSubmitPicker = (caretIndex: number) => {
+    if (!sqlEditorRef.current) {
+      return false;
+    }
+
+    const options = createSubmitPickerOptions(sql, caretIndex);
+    if (options.length === 0) {
+      return false;
+    }
+
+    const anchor = measureAutocompleteAnchor(sqlEditorRef.current, sql, caretIndex, options.length);
+    if (anchor.maxHeight < 40) {
+      return false;
+    }
+
+    const selectionStart = Math.min(sqlEditorSelectionRef.current.start, sql.length);
+    const selectionEnd = Math.min(sqlEditorSelectionRef.current.end, sql.length);
+    setAutocompleteState(null);
+    setExecutionPickerState({
+      mode: 'submit',
+      options,
+      selectedIndex: 0,
+      selectionStart,
+      selectionEnd,
+      left: anchor.left,
+      top: anchor.top,
+      maxWidth: Math.max(anchor.maxWidth, 320),
+      maxHeight: anchor.maxHeight,
+    });
+    return true;
+  };
+
+  const submitStatementSegments = async (statementSegments: SqlStatementSegment[]) => {
+    const submitSql = statementSegments.map((statement) => statement.sql).join(';\n');
+
+    if (submitSql.trim().length === 0) {
+      setSubmitProgressSteps([]);
+      setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setCollapsedCards((current) => ({
+        ...current,
+        submit: false,
+      }));
+      setPanelVisibility((current) => ({
+        ...current,
+        submit: true,
+      }));
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitMessage(null);
+    setSubmitProgressSteps([]);
+    setCollapsedCards((current) => ({
+      ...current,
+      submit: false,
+    }));
+    setPanelVisibility((current) => ({
+      ...current,
+      submit: true,
+    }));
+    focusPanelSection(() => submitPanelRef.current);
+
+    try {
+      await sendSessionSocketMessage({
+        type: 'problem.submit',
+        problemId,
+        sql: submitSql,
+        dbms: selectedDbms,
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      setSubmitProgressSteps([]);
+
+      const isSessionValid = await syncSession();
+      if (!isSessionValid) {
+        openAuthOverlay('login');
+        return;
+      }
+
+      setSubmitMessage(error instanceof SessionSocketError ? error.message : '제출 연결에 실패했다.');
+    }
   };
 
   const confirmExecutionPickerSelection = () => {
@@ -3941,18 +4426,32 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     closeExecutionPicker(true);
+    if (executionPickerState.mode === 'submit') {
+      void submitStatementSegments(selectedOption.segments);
+      return;
+    }
+
     void runExecutionStatements(selectedOption.segments);
   };
 
   const confirmExecutionPickerOption = (option: SqlExecutionPickerOption) => {
     closeExecutionPicker(true);
+    if (executionPickerState?.mode === 'submit') {
+      void submitStatementSegments(option.segments);
+      return;
+    }
+
     void runExecutionStatements(option.segments);
   };
 
   const executeSql = async () => {
     if (executionPickerState != null) {
-      confirmExecutionPickerSelection();
-      return;
+      if (executionPickerState.mode === 'execute') {
+        confirmExecutionPickerSelection();
+        return;
+      }
+
+      closeExecutionPicker(false);
     }
 
     if (!isAuthenticated) {
@@ -3988,7 +4487,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
-    const caretIndex = sqlEditorRef.current?.selectionStart ?? sql.length;
+    const caretIndex = Math.min(sqlEditorSelectionRef.current.start, sql.length);
     if (openExecutionPicker(caretIndex)) {
       return;
     }
@@ -4045,10 +4544,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    const selectionStart = event.currentTarget.selectionStart ?? 0;
+    const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart;
+    updateSqlEditorSelection(selectionStart, selectionEnd);
+
     if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'Enter') {
       event.preventDefault();
       setAutocompleteState(null);
-      if (executionPickerState != null) {
+      if (executionPickerState != null && executionPickerState.mode === 'execute') {
         closeExecutionPicker(false);
       }
       void handleSubmit();
@@ -4105,12 +4608,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     if (!autocompleteState && event.key === 'Tab') {
       event.preventDefault();
 
-      const selectionStart = event.currentTarget.selectionStart ?? 0;
-      const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart;
       const { nextSql, nextSelectionStart, nextSelectionEnd } = indentSqlEditorValue(sql, selectionStart, selectionEnd);
 
       setSql(nextSql);
       setAutocompleteState(null);
+      updateSqlEditorSelection(nextSelectionStart, nextSelectionEnd);
 
       requestAnimationFrame(() => {
         if (!sqlEditorRef.current) {
@@ -4119,6 +4621,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
         sqlEditorRef.current.focus();
         sqlEditorRef.current.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+        updateSqlEditorSelection(nextSelectionStart, nextSelectionEnd);
       });
       return;
     }
@@ -4404,7 +4907,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               <ExecutionStatementResultItem
                 key={run.key}
                 item={run}
-                isBlinking={blinkingExecutionRunKeys.includes(run.key)}
                 onStatusIndicatorClick={() => focusExecutionRun(run.key)}
                 registerResultItemRef={registerExecutionResultItemRef}
                 onRequestPage={requestExecutionResultPage}
@@ -4417,44 +4919,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const renderEditorPanel = (isFloating: boolean) => {
-    const editorOwnerWindow = sqlEditorRef.current?.ownerDocument.defaultView ?? (typeof window !== 'undefined' ? window : null);
-    const editorDocumentElement =
-      sqlEditorRef.current?.ownerDocument.documentElement ?? (typeof document !== 'undefined' ? document.documentElement : null);
-    const rootFontSize =
-      editorOwnerWindow != null && editorDocumentElement != null
-        ? Number.parseFloat(editorOwnerWindow.getComputedStyle(editorDocumentElement).fontSize) || 16
-        : 16;
-    const editorComputedStyle =
-      editorOwnerWindow != null && sqlEditorRef.current != null ? editorOwnerWindow.getComputedStyle(sqlEditorRef.current) : null;
-    const lineHeight =
-      editorComputedStyle != null
-        ? Number.parseFloat(editorComputedStyle.lineHeight) || sqlEditorFontSize * SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO
-        : sqlEditorFontSize * SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO;
-    const topOffset =
-      editorComputedStyle != null
-        ? Number.parseFloat(editorComputedStyle.paddingTop) || 0
-        : (isFloating ? SQL_EDITOR_FLOATING_PADDING_TOP_REM : SQL_EDITOR_INLINE_PADDING_TOP_REM) * rootFontSize;
-    const paddingLeft =
-      editorComputedStyle != null ? Number.parseFloat(editorComputedStyle.paddingLeft) || 0 : 0;
-    const markerSlotWidth = Math.max(sqlEditorFontSize + rootFontSize * 0.42, rootFontSize * 1.18);
-    const markerPaddingRight = Math.max(rootFontSize * 0.22, sqlEditorFontSize * 0.24);
-    const markerLeft = -Math.max(rootFontSize * 0.4, markerSlotWidth - paddingLeft + rootFontSize * 0.18);
-    const measuredStatementOffsets =
-      sqlEditorRef.current != null
-        ? measureStatementStartOffsets(
-            sqlEditorRef.current,
-            sql,
-            executionStatementMarkerRuns.map((marker) => marker.startOffset),
-          )
-        : new Map<number, number>();
     const executionStatementMarkers = executionStatementMarkerRuns.map((marker) => ({
       ...marker,
-      left: markerLeft,
-      top: topOffset + (measuredStatementOffsets.get(marker.startOffset) ?? 0),
-      width: markerSlotWidth,
-      height: lineHeight,
-      paddingRight: markerPaddingRight,
-    }));
+      left: executionStatementMarkerLayout?.left ?? 0,
+      top: executionStatementMarkerLayout?.topOffsets[marker.startOffset] ?? 0,
+      width: executionStatementMarkerLayout?.width ?? 0,
+      height: executionStatementMarkerLayout?.height ?? 0,
+      fontSize: executionStatementMarkerLayout?.fontSize ?? sqlEditorFontSize,
+    })).filter((marker) => executionStatementMarkerLayout?.topOffsets[marker.startOffset] != null);
 
     return (
     <section className={`${isFloating ? 'panel-card' : 'solve-surface-section'} solve-pane solve-pane-editor ${isFloating ? 'is-floating' : ''}`}>
@@ -4502,22 +4974,21 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                           <button
                             type="button"
                             key={marker.key}
-                            className={`solve-editor-statement-status is-${marker.status} ${marker.isBlinking ? 'is-blinking' : ''}`.trim()}
+                            className={`solve-editor-statement-status is-${marker.status}`.trim()}
                             style={{
                               left: `${marker.left}px`,
                               top: `${marker.top}px`,
                               width: `${marker.width}px`,
                               height: `${marker.height}px`,
-                              paddingRight: `${marker.paddingRight}px`,
-                              fontSize: `${sqlEditorFontSize}px`,
+                              fontSize: `${marker.fontSize}px`,
                             }}
                             aria-label="실행 결과 위치로 이동"
                             onClick={() => focusExecutionRun(marker.key)}
                           >
                             {marker.status === 'success' ? (
-                              '✓'
+                              <ExecutionSuccessIcon />
                             ) : marker.status === 'error' ? (
-                              '✕'
+                              <ExecutionErrorIcon />
                             ) : marker.status === 'running' ? (
                               <span className="solve-editor-statement-spinner" />
                             ) : null}
@@ -4537,13 +5008,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       )}
                     </pre>
                     <textarea
-                      ref={sqlEditorRef}
+                      ref={handleSqlEditorRef}
                       className={`solve-sql-editor ${sql.length === 0 ? 'is-empty' : 'has-content'}`}
                       spellCheck={false}
+                      wrap="soft"
                       placeholder="이곳에 SQL을 작성하세요."
                       style={{ fontSize: `${sqlEditorFontSize}px` }}
                       value={sql}
                       onChange={(event) => handleEditorChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
+                      onSelect={(event) => syncSqlEditorSelectionFromElement(event.currentTarget)}
                       onClick={refreshAutocompleteFromEditor}
                       onScroll={refreshAutocompleteFromEditor}
                       onWheel={handleEditorWheel}
@@ -4559,7 +5032,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                         refreshAutocompleteFromEditor();
                       }}
                       onKeyDown={handleEditorKeyDown}
-                      onBlur={() => {
+                      onBlur={(event) => {
+                        syncSqlEditorSelectionFromElement(event.currentTarget);
                         window.setTimeout(() => {
                           setAutocompleteState(null);
                           if (executionPickerState != null) {
@@ -4628,7 +5102,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                             maxHeight: `${executionPickerState.maxHeight}px`,
                           }}
                           role="listbox"
-                          aria-label="SQL 실행 구문 선택"
+                          aria-label={executionPickerState.mode === 'submit' ? 'SQL 제출 구문 선택' : 'SQL 실행 구문 선택'}
                         >
                           {executionPickerState.options.map((option, index) => (
                             <button
@@ -4683,29 +5157,20 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         <div className="solve-detail-section-main solve-pane-section-main">
           {renderPanelHeader('submit', isFloating)}
           {isFloating || !collapsedCards.submit ? (
-            submitProgressSteps.length > 0 ? (
-              <div className="solve-submit-progress-list">
-                {submitProgressSteps.map((step) => (
-                  <div key={step.stepKey} className={`solve-submit-progress-item is-${step.status}`}>
-                    <div className="solve-submit-progress-header">
-                      {renderSubmitProgressMark(step.status)}
-                      <p className="solve-submit-progress-message">{step.message}</p>
-                    </div>
-                    {step.detailLines.length > 0 ? (
-                      <div className="solve-submit-progress-details">
-                        {step.detailLines.map((detailLine) => (
-                          <p key={`${step.stepKey}-${detailLine}`} className="solve-submit-progress-detail">
-                            {detailLine}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
+            submitProgressSteps.length > 0 || submitMessage ? (
+              <div className="solve-submit-panel-stack">
+                {submitProgressSteps.length > 0 ? (
+                  <div className="solve-submit-progress-list">
+                    {submitProgressSteps.map((step) => (
+                      <SubmitProgressItem key={step.stepKey} step={step} />
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : submitMessage ? (
-              <div className="solve-pane-result-stack">
-                <p className="solve-pane-result-message">{submitMessage}</p>
+                ) : null}
+                {submitMessage ? (
+                  <div className="solve-pane-result-stack">
+                    <p className={`solve-pane-result-message ${submitMessage === '오답' ? 'is-error' : ''}`.trim()}>{submitMessage}</p>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="solve-result-empty">제출 결과 없음.</div>
@@ -4723,6 +5188,17 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     return renderSubmitPanel(isFloating);
   };
+
+  const inlineEditorPanel =
+    panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor ? renderEditorPanel(false) : null;
+  const inlineSubmitPanel =
+    (submitMessage != null || submitProgressSteps.length > 0) &&
+    panelVisibility.submit &&
+    !detachedPanels.submit &&
+    !externalWindowPanels.submit
+      ? renderSubmitPanel(false)
+      : null;
+  const inlineDetailPanels = [inlineEditorPanel, inlineSubmitPanel].filter((panel): panel is ReactNode => panel != null);
 
   if (!problemLoadError && problemDetail == null) {
     return (
@@ -4762,14 +5238,16 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
           {problemLoadError ? <p className="content-text solve-problem-description">{problemLoadError}</p> : null}
         </div>
-        {problemDetail ? <ProblemDetailContent detail={problemDetail} selectedDbms={selectedDbms} /> : null}
+        {problemDetail ? (
+          <ProblemDetailContent
+            detail={problemDetail}
+            selectedDbms={selectedDbms}
+            afterSectionsContent={inlineDetailPanels}
+          />
+        ) : null}
       </section>
 
-      {panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor ? renderEditorPanel(false) : null}
-
-      {(submitMessage != null || submitProgressSteps.length > 0) && panelVisibility.submit && !detachedPanels.submit && !externalWindowPanels.submit
-        ? renderSubmitPanel(false)
-        : null}
+      {!problemDetail ? inlineDetailPanels : null}
 
       {visibleFloatingPanels.map((panelKey) => (
         <div
@@ -4845,4 +5323,3 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     </div>
   );
 }
-

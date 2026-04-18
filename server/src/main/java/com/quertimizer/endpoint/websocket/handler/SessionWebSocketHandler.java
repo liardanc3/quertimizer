@@ -323,7 +323,12 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
                     progress.stepKey(),
                     progress.status(),
                     progress.message(),
-                    progress.detailLines()
+                    progress.detailLines(),
+                    progress.statementKey(),
+                    progress.statementIndex(),
+                    progress.statementSql(),
+                    progress.statementMode(),
+                    progress.statementReference()
             ));
         } catch (Exception exception) {
             log.warn("제출 진행 상태 응답 전송에 실패했다.", exception);
