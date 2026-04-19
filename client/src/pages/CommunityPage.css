@@ -232,3 +232,309 @@
     background: var(--surface);
   }
 }
+
+.community-page.home-page.page-stack {
+  gap: 1.5rem;
+}
+
+.community-page.home-page .community-toolbar-card,
+.community-page.home-page .community-board {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.community-page.home-page .community-toolbar {
+  display: grid;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.community-page.home-page .community-search-form {
+  width: 100%;
+}
+
+.community-page.home-page .community-search-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.community-page.home-page .community-search-input {
+  font-weight: 400;
+}
+
+.community-page.home-page .community-search-input::placeholder {
+  font-weight: 400;
+}
+
+.community-page.home-page .community-board {
+  display: grid;
+  gap: 0.56rem;
+  margin-top: 0;
+}
+
+.community-page .community-board-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.community-page .community-write-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #111827;
+  font-size: 1.58rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.community-page .community-write-icon-button:hover {
+  color: #2563eb;
+}
+
+.community-page .community-write-icon-button:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.community-page .community-table-shell {
+  margin-top: 0;
+}
+
+.community-page .community-table {
+  min-width: 54rem;
+}
+
+.community-page .community-table .submit-history-row {
+  grid-template-columns: minmax(0, 1fr) 118px 132px 72px 72px 72px;
+}
+
+.community-page .community-table-head {
+  padding-top: 0.12rem;
+  padding-bottom: 0.58rem;
+}
+
+.community-page .community-table-row .submit-history-cell {
+  align-items: flex-start;
+}
+
+.community-page .community-table-title-cell {
+  display: grid;
+  gap: 0.18rem;
+  align-content: center;
+}
+
+.community-page .community-table-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.community-page .community-table-tag {
+  color: #1976d2;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.community-page .community-post-title-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.community-page .community-post-title-link:hover .community-post-title-text {
+  color: #0f5db3;
+}
+
+.community-page .community-post-title-link:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.community-page .community-post-title-text {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.34;
+  text-decoration: none;
+}
+
+.community-page .community-handle-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.community-page .community-handle-link:hover {
+  color: #2563eb;
+}
+
+.community-page .community-handle-link:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+.community-page .community-table-date-cell,
+.community-page .community-table-cell {
+  font-size: 0.74rem;
+}
+
+.community-page .community-empty-row {
+  background: transparent;
+}
+
+.community-page .community-error-state {
+  min-height: 7.2rem;
+}
+
+@media (max-width: 960px) {
+  .community-page .community-table {
+    min-width: 49rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .community-page .community-table {
+    min-width: 45rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .community-page .community-write-icon-button {
+    color: var(--ink-subtle);
+  }
+
+  .community-page .community-write-icon-button:hover {
+    color: var(--accent-ink);
+  }
+
+  .community-page .community-post-title-text,
+  .community-page .community-handle-link {
+    color: var(--ink-strong);
+  }
+
+  .community-page .community-post-title-link:hover .community-post-title-text,
+  .community-page .community-handle-link:hover {
+    color: var(--accent-ink);
+  }
+
+  .community-page .community-table-tag {
+    color: var(--accent-ink);
+  }
+}
+
+/* 2026-04-20 community list tab/table overrides */
+.community-page.home-page.page-stack {
+  gap: 1.5rem;
+}
+
+.community-page .community-toolbar {
+  gap: 0.72rem;
+}
+
+.community-page .community-tab-row {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.44rem;
+}
+
+.community-page .community-write-tab {
+  margin-left: 0.72rem;
+}
+
+.community-page .community-board-actions,
+.community-page .community-write-icon-button {
+  display: none;
+}
+
+.community-page .community-search-form,
+.community-page .community-search-field {
+  width: 100%;
+}
+
+.community-page .community-table {
+  min-width: 60rem;
+}
+
+.community-page .community-table .submit-history-row {
+  grid-template-columns: 92px minmax(0, 2.8fr) 112px 132px 72px 72px 72px;
+}
+
+.community-page .community-table-head,
+.community-page .community-table .submit-history-row,
+.community-page .community-table .submit-history-cell {
+  text-align: left;
+  justify-items: start;
+}
+
+.community-page .community-category-text {
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.community-page .community-category-text.is-question {
+  color: #1565c0;
+}
+
+.community-page .community-category-text.is-notice {
+  color: #b45309;
+}
+
+.community-page .community-table-title-cell {
+  display: grid;
+  gap: 0.18rem;
+  align-content: center;
+}
+
+.community-page .community-post-title-text {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.34;
+  text-decoration: none;
+}
+
+.community-page .community-post-title-link:hover .community-post-title-text {
+  color: #0f5db3;
+}
+
+@media (max-width: 960px) {
+  .community-page .community-table {
+    min-width: 56rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .community-page .community-table {
+    min-width: 52rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .community-page .community-category-text.is-question {
+    color: var(--accent-ink);
+  }
+
+  .community-page .community-category-text.is-notice {
+    color: #fbbf24;
+  }
+}

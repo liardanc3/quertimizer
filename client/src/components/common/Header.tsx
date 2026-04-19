@@ -6,6 +6,7 @@ import {
   LANDING_SIGNUP_PATH,
   PROBLEMS_PATH,
   RANKING_PATH,
+  SUBMIT_HISTORY_PATH,
   getProfilePath,
   navigate,
 } from '../../lib/navigation';
@@ -76,6 +77,8 @@ export default function Header() {
 
   const activeNav = pathname.startsWith(RANKING_PATH)
     ? 'ranking'
+    : pathname.startsWith(SUBMIT_HISTORY_PATH)
+      ? 'submitHistory'
     : pathname.startsWith(GUIDE_PATH)
       ? 'guide'
       : pathname.startsWith(ADMIN_PATH)
@@ -269,6 +272,13 @@ export default function Header() {
               onClick={() => navigate(PROBLEMS_PATH)}
             >
               문제
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${activeNav === 'submitHistory' ? 'is-active' : ''}`}
+              onClick={() => navigate(SUBMIT_HISTORY_PATH)}
+            >
+              제출 목록
             </button>
             <button
               type="button"

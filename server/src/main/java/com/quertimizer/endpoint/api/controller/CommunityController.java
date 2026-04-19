@@ -37,10 +37,11 @@ public class CommunityController {
     public ResponseEntity<CommunityPostPageRes> getPosts(@RequestParam(defaultValue = "1") int page,
                                                          @RequestParam(required = false) String search,
                                                          @RequestParam(required = false) String tag,
-                                                         @RequestParam(defaultValue = "latest") String sortKey) {
+                                                         @RequestParam(defaultValue = "all") String category,
+                                                         @RequestParam(defaultValue = "default") String sortKey) {
 
         // 게시글 목록 검색, 태그 필터, 정렬, 페이징 조회
-        return ResponseEntity.ok(communityService.getPosts(page, search, tag, sortKey));
+        return ResponseEntity.ok(communityService.getPosts(page, search, tag, category, sortKey));
     }
 
     @GetMapping("/community/posts/{postId}")

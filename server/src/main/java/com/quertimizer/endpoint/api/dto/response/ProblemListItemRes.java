@@ -13,13 +13,23 @@ public class ProblemListItemRes {
     private final String problemId;
     private final String title;
     private final String description;
+    private final int totalSubmitCount;
+    private final int successSubmitCount;
+    private final double spreadRate;
     private final List<ProblemSubmittedHistoryRes> submittedHistories;
 
-    public static ProblemListItemRes of(Problem problem, List<ProblemSubmittedHistoryRes> submittedHistories) {
+    public static ProblemListItemRes of(Problem problem,
+                                        int totalSubmitCount,
+                                        int successSubmitCount,
+                                        double spreadRate,
+                                        List<ProblemSubmittedHistoryRes> submittedHistories) {
         return new ProblemListItemRes(
                 problem.getProblemId(),
                 problem.getTitle(),
                 problem.getDescription(),
+                totalSubmitCount,
+                successSubmitCount,
+                spreadRate,
                 submittedHistories
         );
     }

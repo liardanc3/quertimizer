@@ -1,5 +1,6 @@
 export const PROBLEMS_PATH = '/problems';
 export const PROBLEM_CREATE_PATH = '/problems/create';
+export const SUBMIT_HISTORY_PATH = '/submissions';
 export const RANKING_PATH = '/ranking';
 export const COMMUNITY_PATH = '/community';
 export const GUIDE_PATH = '/guide';

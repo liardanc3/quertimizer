@@ -4,9 +4,12 @@ import type { FormEvent } from 'react';
 import { Fragment } from 'react';
 import './ProblemSolvePage.css';
 import './PublicHomePage.css';
+import './SubmitHistoryPage.css';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import { fetchProblemDetail, type ProblemDetailData } from '../lib/problemApi';
+import { fetchSubmitHistories } from '../lib/submitHistoryApi';
+import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
 import {
   AuthApiError,
   RecoveryApiError,
@@ -29,13 +32,116 @@ import {
   type SessionSocketMessage,
 } from '../lib/sessionSocket';
 import { syncSession, useMockSession } from '../lib/session';
+import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
-import type { DbmsType, ProblemDetail } from '../types/domain';
+import { getExecutionPlanDetailGroups } from '../lib/executionPlanFilters';
+import type { CommunityPostSummary, DbmsType, ProblemDetail, SubmitHistoryEntry, SubmitHistoryPageData, SubmitHistoryPlanFilters } from '../types/domain';
 import logoImage from '../assets/logo.png';
 
 interface ProblemSolvePageProps {
   problemId: string;
 }
+
+type SolveContentTab = 'problem' | 'submissions' | 'community';
+
+type SolveRelatedModalState =
+  | { type: 'sql'; history: SubmitHistoryEntry }
+  | { type: 'plan'; history: SubmitHistoryEntry }
+  | null;
+
+const solveRelatedCostFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
+
+function createEmptySolveSubmitHistoryPage(): SubmitHistoryPageData {
+  return {
+    currentPage: 1,
+    pageSize: 30,
+    totalCount: 0,
+    totalPages: 1,
+    problemIds: [],
+    histories: [],
+  };
+}
+
+function createEmptySolveCommunityPage(): CommunityPostPage {
+  return {
+    currentPage: 1,
+    pageSize: 10,
+    totalCount: 0,
+    totalPages: 1,
+    posts: [],
+  };
+}
+
+function createEmptySolvePlanFilters(): SubmitHistoryPlanFilters {
+  return {
+    matchMode: 'or',
+    scanBuckets: [],
+    joinBuckets: [],
+    filterBuckets: [],
+    sortBuckets: [],
+    aggregateBuckets: [],
+    hintFilters: [],
+  };
+}
+
+function createEmptySolvePlanFiltersByDbms(): Record<DbmsType, SubmitHistoryPlanFilters> {
+  return {
+    postgresql: createEmptySolvePlanFilters(),
+    oracle: createEmptySolvePlanFilters(),
+  };
+}
+
+function formatSolveRelatedCost(value: number) {
+  return solveRelatedCostFormatter.format(Math.round(value * 10) / 10);
+}
+
+function padSolveRelatedDatePart(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function formatSolveRelatedSubmittedAt(value: string) {
+  if (value.trim() === '') {
+    return '-';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return `${parsedDate.getFullYear()}-${padSolveRelatedDatePart(parsedDate.getMonth() + 1)}-${padSolveRelatedDatePart(parsedDate.getDate())} ${padSolveRelatedDatePart(parsedDate.getHours())}:${padSolveRelatedDatePart(parsedDate.getMinutes())}:${padSolveRelatedDatePart(parsedDate.getSeconds())}`;
+}
+
+function formatSolveRelatedBoardDate(value: string) {
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '-';
+  }
+
+  const year = String(parsedDate.getFullYear()).slice(-2);
+  const month = padSolveRelatedDatePart(parsedDate.getMonth() + 1);
+  const day = padSolveRelatedDatePart(parsedDate.getDate());
+  const hours = padSolveRelatedDatePart(parsedDate.getHours());
+  const minutes = padSolveRelatedDatePart(parsedDate.getMinutes());
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function getSolveRelatedCommunityCategoryLabel(value: CommunityPostSummary['category']) {
+  if (value === 'question') {
+    return '질문';
+  }
+
+  if (value === 'notice') {
+    return '공지';
+  }
+
+  return '자유';
+}
+
+function getSolveRelatedCommunitySearchTerm(problemId: string) {
+  return /^[PO]\d{5}-\d{5}$/.test(problemId) ? problemId.slice(1) : problemId;
+}
+
 type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
 type SolveAuthSocialProvider = 'google' | 'github' | 'kakao';
 
@@ -542,11 +648,15 @@ function resolveColumnWidths(containerWidth: number, columnCount: number, initia
 }
 
 function createFallbackProblemDetail(problemId: string): ProblemDetail {
+  const scopedDbms = problemId.startsWith('O') ? 'oracle' : problemId.startsWith('P') ? 'postgresql' : null;
   const matchedProblem = mockProblemDetailById[problemId];
+
   if (matchedProblem) {
     return {
       ...matchedProblem,
       problemNumber: matchedProblem.problemNumber ?? problemId,
+      dbmsOptions: scopedDbms ? [scopedDbms] : matchedProblem.dbmsOptions,
+      disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['oracle'] : ['postgresql']) : matchedProblem.disabledDbms,
     };
   }
 
@@ -558,6 +668,8 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
     title: '',
     preview: '',
     description: '',
+    dbmsOptions: scopedDbms ? [scopedDbms] : mockProblemDetails[0].dbmsOptions,
+    disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['oracle'] : ['postgresql']) : mockProblemDetails[0].disabledDbms,
   };
 }
 
@@ -3282,7 +3394,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const executionResponseResolverRef = useRef<((result: ProblemExecutionResult) => void) | null>(null);
   const executionStopRequestedRef = useRef(false);
   const ignoredExecutionResponseCountRef = useRef(0);
-  const { defaultDbms, isAuthenticated } = useMockSession();
+  const { defaultDbms, isAuthenticated, isReady, userId } = useMockSession();
   const previousAuthenticationStateRef = useRef(isAuthenticated);
   const fallbackProblem = createFallbackProblemDetail(problemId);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
@@ -3323,6 +3435,20 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
     resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null)
   );
+  const [contentTab, setContentTab] = useState<SolveContentTab>('problem');
+  const [mySubmitHistoryPage, setMySubmitHistoryPage] = useState<SubmitHistoryPageData>(createEmptySolveSubmitHistoryPage());
+  const [isMySubmitLoading, setIsMySubmitLoading] = useState(false);
+  const [mySubmitLoadError, setMySubmitLoadError] = useState<string | null>(null);
+  const [mySubmitRequestedPage, setMySubmitRequestedPage] = useState(1);
+  const [isMySubmitPageJumpEditing, setIsMySubmitPageJumpEditing] = useState(false);
+  const [mySubmitPageJumpDraft, setMySubmitPageJumpDraft] = useState('1');
+  const [taggedPostPage, setTaggedPostPage] = useState<CommunityPostPage>(createEmptySolveCommunityPage());
+  const [isTaggedPostLoading, setIsTaggedPostLoading] = useState(false);
+  const [taggedPostLoadError, setTaggedPostLoadError] = useState<string | null>(null);
+  const [taggedPostRequestedPage, setTaggedPostRequestedPage] = useState(1);
+  const [isTaggedPostPageJumpEditing, setIsTaggedPostPageJumpEditing] = useState(false);
+  const [taggedPostPageJumpDraft, setTaggedPostPageJumpDraft] = useState('1');
+  const [relatedModalState, setRelatedModalState] = useState<SolveRelatedModalState>(null);
   const [sql, setSql] = useState('');
   const [sqlEditorFontSize, setSqlEditorFontSize] = useState(SQL_EDITOR_DEFAULT_FONT_SIZE);
   const getPanelTitle = (panelKey: PanelKey) =>
@@ -3414,6 +3540,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
     problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중..'));
+  const taggedPostPrimarySearchTerm = displayProblemNumber;
+  const taggedPostFallbackSearchTerm = getSolveRelatedCommunitySearchTerm(displayProblemNumber);
 
   const shouldRenderPanel = (panelKey: PanelKey) => panelKey === 'editor' || submitMessage != null || submitProgressSteps.length > 0;
   const visibleFloatingPanels = panelOrder.filter(
@@ -3545,15 +3673,168 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       submit: false,
     }));
     setEditorFloatingOpacity(FLOATING_EDITOR_BACKGROUND_MAX_ALPHA);
-    setSelectedDbms(
-      restoredAuthReturn?.selectedDbms != null
+    const restoredSelectedDbms =
+      restoredAuthReturn?.selectedDbms != null && availableDbms.includes(restoredAuthReturn.selectedDbms)
         ? restoredAuthReturn.selectedDbms
-        : resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null),
-    );
+        : null;
+
+    setSelectedDbms(restoredSelectedDbms ?? resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
     if (restoredAuthReturn?.sql) {
       setSql(restoredAuthReturn.sql);
     }
   }, [defaultDbms, problemId]);
+
+  useEffect(() => {
+    setContentTab('problem');
+    setMySubmitHistoryPage(createEmptySolveSubmitHistoryPage());
+    setIsMySubmitLoading(false);
+    setMySubmitLoadError(null);
+    setMySubmitRequestedPage(1);
+    setIsMySubmitPageJumpEditing(false);
+    setMySubmitPageJumpDraft('1');
+    setTaggedPostPage(createEmptySolveCommunityPage());
+    setIsTaggedPostLoading(false);
+    setTaggedPostLoadError(null);
+    setTaggedPostRequestedPage(1);
+    setIsTaggedPostPageJumpEditing(false);
+    setTaggedPostPageJumpDraft('1');
+    setRelatedModalState(null);
+  }, [problemId]);
+
+  useEffect(() => {
+    if (isMySubmitPageJumpEditing) {
+      return;
+    }
+
+    setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
+  }, [isMySubmitPageJumpEditing, mySubmitHistoryPage.currentPage]);
+
+  useEffect(() => {
+    if (isTaggedPostPageJumpEditing) {
+      return;
+    }
+
+    setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
+  }, [isTaggedPostPageJumpEditing, taggedPostPage.currentPage]);
+
+  useEffect(() => {
+    if (contentTab !== 'submissions') {
+      return;
+    }
+
+    if (!isReady) {
+      return;
+    }
+
+    if (!isAuthenticated || !userId) {
+      setMySubmitHistoryPage(createEmptySolveSubmitHistoryPage());
+      setIsMySubmitLoading(false);
+      setMySubmitLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsMySubmitLoading(true);
+    setMySubmitLoadError(null);
+
+    void fetchSubmitHistories({
+      page: mySubmitRequestedPage,
+      submitId: '',
+      query: userId,
+      dbms: selectedDbms,
+      problemId: displayProblemNumber,
+      judge: 'all',
+      costSort: 'none',
+      planFiltersByDbms: createEmptySolvePlanFiltersByDbms(),
+    })
+      .then((page) => {
+        if (cancelled) {
+          return;
+        }
+
+        setMySubmitHistoryPage(page);
+        if (page.currentPage !== mySubmitRequestedPage) {
+          setMySubmitRequestedPage(page.currentPage);
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        setMySubmitLoadError(error instanceof Error ? error.message : '내 제출을 불러오지 못했다.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsMySubmitLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contentTab, displayProblemNumber, isAuthenticated, isReady, mySubmitRequestedPage, selectedDbms, userId]);
+
+  useEffect(() => {
+    if (contentTab !== 'community') {
+      return;
+    }
+
+    let cancelled = false;
+    setIsTaggedPostLoading(true);
+    setTaggedPostLoadError(null);
+
+    async function loadTaggedPosts() {
+      try {
+        let nextPage = await fetchCommunityPosts({
+          page: taggedPostRequestedPage,
+          search: taggedPostPrimarySearchTerm,
+          tag: '',
+          category: 'all',
+          sortKey: 'default',
+        });
+
+        if (
+          nextPage.totalCount === 0
+          && taggedPostFallbackSearchTerm !== taggedPostPrimarySearchTerm
+          && taggedPostFallbackSearchTerm.trim() !== ''
+        ) {
+          nextPage = await fetchCommunityPosts({
+            page: taggedPostRequestedPage,
+            search: taggedPostFallbackSearchTerm,
+            tag: '',
+            category: 'all',
+            sortKey: 'default',
+          });
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setTaggedPostPage(nextPage);
+        if (nextPage.currentPage !== taggedPostRequestedPage) {
+          setTaggedPostRequestedPage(nextPage.currentPage);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setTaggedPostLoadError(error instanceof Error ? error.message : '태그된 게시글을 불러오지 못했다.');
+      } finally {
+        if (!cancelled) {
+          setIsTaggedPostLoading(false);
+        }
+      }
+    }
+
+    void loadTaggedPosts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contentTab, taggedPostFallbackSearchTerm, taggedPostPrimarySearchTerm, taggedPostRequestedPage]);
 
   useEffect(() => {
     if (!sqlEditorElement) {
@@ -5189,9 +5470,453 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     return renderSubmitPanel(isFloating);
   };
 
+  const hasRelatedExecutionPlanDetails = (history: SubmitHistoryEntry) =>
+    getExecutionPlanDetailGroups(history.dbms, history.executionPlanElement).length > 0;
+
+  const applyMySubmitPageJump = () => {
+    const parsedPage = Number.parseInt(mySubmitPageJumpDraft, 10);
+    const nextPage = Number.isNaN(parsedPage)
+      ? mySubmitHistoryPage.currentPage
+      : Math.min(mySubmitHistoryPage.totalPages, Math.max(1, parsedPage));
+
+    setMySubmitPageJumpDraft(String(nextPage));
+    setIsMySubmitPageJumpEditing(false);
+
+    if (nextPage !== mySubmitHistoryPage.currentPage) {
+      setMySubmitRequestedPage(nextPage);
+    }
+  };
+
+  const cancelMySubmitPageJump = () => {
+    setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
+    setIsMySubmitPageJumpEditing(false);
+  };
+
+  const applyTaggedPostPageJump = () => {
+    const parsedPage = Number.parseInt(taggedPostPageJumpDraft, 10);
+    const nextPage = Number.isNaN(parsedPage)
+      ? taggedPostPage.currentPage
+      : Math.min(taggedPostPage.totalPages, Math.max(1, parsedPage));
+
+    setTaggedPostPageJumpDraft(String(nextPage));
+    setIsTaggedPostPageJumpEditing(false);
+
+    if (nextPage !== taggedPostPage.currentPage) {
+      setTaggedPostRequestedPage(nextPage);
+    }
+  };
+
+  const cancelTaggedPostPageJump = () => {
+    setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
+    setIsTaggedPostPageJumpEditing(false);
+  };
+
+  const relatedModalContent =
+    relatedModalState == null || typeof document === 'undefined'
+      ? null
+      : createPortal(
+          <div
+            className="submit-history-modal-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setRelatedModalState(null);
+              }
+            }}
+          >
+            {relatedModalState.type === 'sql' ? (
+              <div className="submit-history-modal" role="dialog" aria-modal="true" aria-label="제출 결과 보기">
+                <div className="submit-history-modal-header">
+                  <div className="submit-history-modal-copy">
+                    <div className="submit-history-modal-title-row">
+                      <strong>제출 결과</strong>
+                      <span className={`submit-history-modal-title-status ${relatedModalState.history.success ? 'is-success' : 'is-fail'}`}>
+                        {relatedModalState.history.success ? '정답' : '오답'}
+                      </span>
+                    </div>
+                    <span>{`${relatedModalState.history.submitId} · ${relatedModalState.history.userId} · 문제 ${relatedModalState.history.problemId}`}</span>
+                    <div className="submit-history-modal-meta">
+                      <div className="submit-history-modal-meta-stack">
+                        <span className="submit-history-modal-meta-line">{getDbmsLabel(relatedModalState.history.dbms)}</span>
+                        {relatedModalState.history.success || relatedModalState.history.cost > 0 ? (
+                          <span className="submit-history-modal-meta-line">{formatSolveRelatedCost(relatedModalState.history.cost)}</span>
+                        ) : null}
+                        <span className="submit-history-modal-meta-line">{formatSolveRelatedSubmittedAt(relatedModalState.history.submittedAt)}</span>
+                        {hasRelatedExecutionPlanDetails(relatedModalState.history) ? (
+                          <button
+                            type="button"
+                            className="submit-history-modal-meta-action submit-history-modal-meta-icon"
+                            aria-label="실행계획 요소 보기"
+                            title="실행계획 요소 보기"
+                            onClick={() => setRelatedModalState({ type: 'plan', history: relatedModalState.history })}
+                          >
+                            ↗
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
+                    닫기
+                  </button>
+                </div>
+
+                <div className="submit-history-modal-body submit-history-sql-modal-body">
+                  <pre className="solve-related-sql-viewer" aria-label="제출 SQL">{relatedModalState.history.submittedSql}</pre>
+                </div>
+              </div>
+            ) : (
+              <div className="submit-history-modal submit-history-plan-modal" role="dialog" aria-modal="true" aria-label="실행계획 요소 보기">
+                <div className="submit-history-modal-header">
+                  <div className="submit-history-modal-copy">
+                    <strong>실행계획 요소</strong>
+                    <span>{`${relatedModalState.history.userId} · ${getDbmsLabel(relatedModalState.history.dbms)} · 문제 ${relatedModalState.history.problemId}`}</span>
+                  </div>
+                  <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
+                    닫기
+                  </button>
+                </div>
+
+                <div className="submit-history-modal-body submit-history-plan-modal-body">
+                  <div className="submit-history-plan-modal-summary">
+                    <span className="submit-history-plan-modal-label">Cost</span>
+                    <strong>{formatSolveRelatedCost(relatedModalState.history.cost)}</strong>
+                  </div>
+
+                  {getExecutionPlanDetailGroups(relatedModalState.history.dbms, relatedModalState.history.executionPlanElement).length > 0 ? (
+                    <div className="solve-related-plan-group-list">
+                      {getExecutionPlanDetailGroups(relatedModalState.history.dbms, relatedModalState.history.executionPlanElement).map((group) => (
+                        <div key={`${group.sectionKey}-${group.sectionLabel}`} className="solve-related-plan-group">
+                          <span className="solve-related-plan-group-label">{group.sectionLabel}</span>
+                          <span className="solve-related-plan-group-values">{group.labels.join(', ')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="submit-history-empty-state submit-history-modal-empty-state">감지된 대표 실행계획 요소가 없습니다.</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>,
+          document.body,
+        );
+
+  const renderSubmissionTabPanel = () => {
+    if (!isReady) {
+      return null;
+    }
+
+    if (!isAuthenticated || !userId) {
+      return <div className="solve-related-empty-state">로그인 후 내 제출을 확인할 수 있습니다.</div>;
+    }
+
+    if (mySubmitLoadError) {
+      return <div className="solve-related-empty-state">{mySubmitLoadError}</div>;
+    }
+
+    return (
+      <div className="solve-related-tab-panel">
+        <div className={`submit-history-table-shell solve-related-table-shell ${isMySubmitLoading ? 'is-loading' : ''}`.trim()}>
+          <div className="submit-history-table solve-related-submit-table" role="table" aria-label="내 제출 목록">
+            <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
+              <div role="columnheader" className="submit-history-head-cell">제출번호</div>
+              <div role="columnheader" className="submit-history-head-cell">Handle</div>
+              <div role="columnheader" className="submit-history-head-cell">문제 번호</div>
+              <div role="columnheader" className="submit-history-head-cell">제출 결과</div>
+              <div role="columnheader" className="submit-history-head-cell">Cost</div>
+              <div role="columnheader" className="submit-history-head-cell">제출 시각</div>
+              <div role="columnheader" className="submit-history-head-cell">실행계획요소</div>
+            </div>
+
+            {mySubmitHistoryPage.histories.length === 0 && !isMySubmitLoading ? (
+              <div className="submit-history-row submit-history-empty-row" role="row">
+                <span className="submit-history-empty-cell" role="cell">이 문제에 대한 내 제출이 없습니다.</span>
+              </div>
+            ) : (
+              mySubmitHistoryPage.histories.map((history) => (
+                <article key={history.submitId} className="submit-history-row submit-history-body solve-related-table-row" role="row">
+                  <span className="submit-history-cell" role="cell" data-label="제출번호">{history.submitId}</span>
+                  <span className="submit-history-cell" role="cell" data-label="Handle">
+                    <button
+                      type="button"
+                      className="submit-history-link-button"
+                      onClick={() => navigate(getProfilePath(history.userId))}
+                      aria-label={`${history.userId} 프로필로 이동`}
+                    >
+                      {history.userId}
+                    </button>
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="문제 번호">
+                    <button
+                      type="button"
+                      className="submit-history-link-button"
+                      onClick={() => navigate(`/problems/${encodeURIComponent(history.problemId)}`)}
+                      aria-label={`문제 ${history.problemId}로 이동`}
+                    >
+                      {history.problemId}
+                    </button>
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="제출 결과">
+                    <button
+                      type="button"
+                      className={`submit-history-status-text ${history.success ? 'is-success' : 'is-fail'}`}
+                      onClick={() => setRelatedModalState({ type: 'sql', history })}
+                    >
+                      {history.success ? '정답' : '오답'}
+                    </button>
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="Cost">
+                    {history.success || history.cost > 0 ? formatSolveRelatedCost(history.cost) : '-'}
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="제출 시각">
+                    {formatSolveRelatedSubmittedAt(history.submittedAt)}
+                  </span>
+                  <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label="실행계획요소">
+                    {hasRelatedExecutionPlanDetails(history) ? (
+                      <button
+                        type="button"
+                        className="submit-history-detail-button"
+                        aria-label="실행계획 요소 보기"
+                        onClick={() => setRelatedModalState({ type: 'plan', history })}
+                      >
+                        ↗
+                      </button>
+                    ) : (
+                      <span className="submit-history-empty-value">-</span>
+                    )}
+                  </span>
+                </article>
+              ))
+            )}
+          </div>
+
+          {isMySubmitLoading ? (
+            <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
+              <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
+            </div>
+          ) : null}
+        </div>
+
+        {mySubmitHistoryPage.totalCount > 0 ? (
+          <div className="solve-related-pagination" role="navigation" aria-label="내 제출 페이지">
+            <button
+              type="button"
+              className="solve-related-page-button"
+              onClick={() => setMySubmitRequestedPage((page) => Math.max(1, page - 1))}
+              disabled={mySubmitHistoryPage.currentPage === 1}
+            >
+              이전
+            </button>
+
+            {isMySubmitPageJumpEditing ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                className="solve-related-pagination-input"
+                aria-label="이동할 내 제출 페이지 입력"
+                value={mySubmitPageJumpDraft}
+                onChange={(event) => setMySubmitPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
+                onBlur={applyMySubmitPageJump}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyMySubmitPageJump();
+                    return;
+                  }
+
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelMySubmitPageJump();
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                className="solve-related-pagination-meta"
+                aria-label="이동할 내 제출 페이지 입력 열기"
+                onClick={() => {
+                  setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
+                  setIsMySubmitPageJumpEditing(true);
+                }}
+              >
+                {`${mySubmitHistoryPage.currentPage} / ${mySubmitHistoryPage.totalPages}`}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="solve-related-page-button"
+              onClick={() => setMySubmitRequestedPage((page) => Math.min(mySubmitHistoryPage.totalPages, page + 1))}
+              disabled={mySubmitHistoryPage.currentPage >= mySubmitHistoryPage.totalPages}
+            >
+              다음
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderTaggedPostTabPanel = () => {
+    if (taggedPostLoadError) {
+      return <div className="solve-related-empty-state">{taggedPostLoadError}</div>;
+    }
+
+    return (
+      <div className="solve-related-tab-panel">
+        <div className={`submit-history-table-shell solve-related-table-shell ${isTaggedPostLoading ? 'is-loading' : ''}`.trim()}>
+          <div className="submit-history-table solve-related-community-table" role="table" aria-label="태그된 게시글 목록">
+            <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
+              <div role="columnheader" className="submit-history-head-cell">구분</div>
+              <div role="columnheader" className="submit-history-head-cell">제목</div>
+              <div role="columnheader" className="submit-history-head-cell">Handle</div>
+              <div role="columnheader" className="submit-history-head-cell">작성일</div>
+              <div role="columnheader" className="submit-history-head-cell">조회수</div>
+              <div role="columnheader" className="submit-history-head-cell">좋아요</div>
+              <div role="columnheader" className="submit-history-head-cell">댓글</div>
+            </div>
+
+            {taggedPostPage.posts.length === 0 && !isTaggedPostLoading ? (
+              <div className="submit-history-row submit-history-empty-row" role="row">
+                <span className="submit-history-empty-cell" role="cell">이 문제 번호로 태그된 게시글이 없습니다.</span>
+              </div>
+            ) : (
+              taggedPostPage.posts.map((post) => (
+                <article key={post.id} className="submit-history-row submit-history-body solve-related-table-row" role="row">
+                  <span className="submit-history-cell solve-related-community-category" role="cell" data-label="구분">
+                    <span className={`solve-related-community-category-text is-${post.category}`}>{getSolveRelatedCommunityCategoryLabel(post.category)}</span>
+                  </span>
+                  <div role="cell" className="submit-history-cell solve-related-community-title-cell" data-label="제목">
+                    {post.tags.length > 0 ? (
+                      <div className="solve-related-community-tags">
+                        {post.tags.slice(0, 5).map((tag) => (
+                          <span key={tag} className="solve-related-community-tag">#{tag}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="solve-related-community-title-link"
+                      onClick={() => navigate(getCommunityPostPath(post.id))}
+                    >
+                      <span className="solve-related-community-title-text">{post.title}</span>
+                    </button>
+                  </div>
+                  <span className="submit-history-cell" role="cell" data-label="Handle">
+                    <button
+                      type="button"
+                      className="submit-history-link-button"
+                      onClick={() => navigate(getProfilePath(post.authorHandle))}
+                      aria-label={`${post.authorHandle} 프로필로 이동`}
+                    >
+                      {post.authorHandle}
+                    </button>
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="작성일">{formatSolveRelatedBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                  <span className="submit-history-cell" role="cell" data-label="조회수">{formatGroupedNumber(post.views)}</span>
+                  <span className="submit-history-cell" role="cell" data-label="좋아요">{formatGroupedNumber(post.likes)}</span>
+                  <span className="submit-history-cell" role="cell" data-label="댓글">{formatGroupedNumber(post.comments)}</span>
+                </article>
+              ))
+            )}
+          </div>
+
+          {isTaggedPostLoading ? (
+            <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
+              <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
+            </div>
+          ) : null}
+        </div>
+
+        {taggedPostPage.totalCount > 0 ? (
+          <div className="solve-related-pagination" role="navigation" aria-label="태그된 게시글 페이지">
+            <button
+              type="button"
+              className="solve-related-page-button"
+              onClick={() => setTaggedPostRequestedPage((page) => Math.max(1, page - 1))}
+              disabled={taggedPostPage.currentPage === 1}
+            >
+              이전
+            </button>
+
+            {isTaggedPostPageJumpEditing ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                className="solve-related-pagination-input"
+                aria-label="이동할 태그된 게시글 페이지 입력"
+                value={taggedPostPageJumpDraft}
+                onChange={(event) => setTaggedPostPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
+                onBlur={applyTaggedPostPageJump}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyTaggedPostPageJump();
+                    return;
+                  }
+
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelTaggedPostPageJump();
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                className="solve-related-pagination-meta"
+                aria-label="이동할 태그된 게시글 페이지 입력 열기"
+                onClick={() => {
+                  setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
+                  setIsTaggedPostPageJumpEditing(true);
+                }}
+              >
+                {`${taggedPostPage.currentPage} / ${taggedPostPage.totalPages}`}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="solve-related-page-button"
+              onClick={() => setTaggedPostRequestedPage((page) => Math.min(taggedPostPage.totalPages, page + 1))}
+              disabled={taggedPostPage.currentPage >= taggedPostPage.totalPages}
+            >
+              다음
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderActiveContentTab = () => {
+    if (contentTab === 'submissions') {
+      return renderSubmissionTabPanel();
+    }
+
+    if (contentTab === 'community') {
+      return renderTaggedPostTabPanel();
+    }
+
+    return problemDetail ? (
+      <ProblemDetailContent
+        detail={problemDetail}
+        selectedDbms={selectedDbms}
+        afterSectionsContent={inlineDetailPanels}
+      />
+    ) : null;
+  };
+
   const inlineEditorPanel =
-    panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor ? renderEditorPanel(false) : null;
+    contentTab === 'problem' && panelVisibility.editor && !detachedPanels.editor && !externalWindowPanels.editor
+      ? renderEditorPanel(false)
+      : null;
   const inlineSubmitPanel =
+    contentTab === 'problem' &&
     (submitMessage != null || submitProgressSteps.length > 0) &&
     panelVisibility.submit &&
     !detachedPanels.submit &&
@@ -5212,20 +5937,35 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   return (
     <div className="page-stack solve-page">
-      <div className="solve-page-topbar solve-page-topbar-dbms">
-        <div className="solve-dbms-tab-row" role="tablist" aria-label="DBMS 선택">
-          {availableDbms.map((dbms) => (
-            <button
-              key={dbms}
-              type="button"
-              role="tab"
-              aria-selected={selectedDbms === dbms}
-              className={`solve-dbms-tab ${selectedDbms === dbms ? 'is-selected' : ''}`}
-              onClick={() => setSelectedDbms(dbms)}
-            >
-              {getDbmsLabel(dbms)}
-            </button>
-          ))}
+      <div className="solve-page-topbar solve-page-topbar-content-tabs">
+        <div className="solve-dbms-tab-row solve-content-tab-row" role="tablist" aria-label="문제 상세 화면 탭 선택">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={contentTab === 'problem'}
+            className={`solve-dbms-tab ${contentTab === 'problem' ? 'is-selected' : ''}`}
+            onClick={() => setContentTab('problem')}
+          >
+            문제
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={contentTab === 'submissions'}
+            className={`solve-dbms-tab ${contentTab === 'submissions' ? 'is-selected' : ''}`}
+            onClick={() => setContentTab('submissions')}
+          >
+            내 제출
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={contentTab === 'community'}
+            className={`solve-dbms-tab ${contentTab === 'community' ? 'is-selected' : ''}`}
+            onClick={() => setContentTab('community')}
+          >
+            태그된 게시글
+          </button>
         </div>
       </div>
 
@@ -5238,16 +5978,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
           {problemLoadError ? <p className="content-text solve-problem-description">{problemLoadError}</p> : null}
         </div>
-        {problemDetail ? (
-          <ProblemDetailContent
-            detail={problemDetail}
-            selectedDbms={selectedDbms}
-            afterSectionsContent={inlineDetailPanels}
-          />
-        ) : null}
+        {renderActiveContentTab()}
       </section>
 
-      {!problemDetail ? inlineDetailPanels : null}
+      {contentTab === 'problem' && !problemDetail ? inlineDetailPanels : null}
 
       {visibleFloatingPanels.map((panelKey) => (
         <div
@@ -5304,6 +6038,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           <div className={`solve-external-window-root-inner is-${panelKey}-panel`}>{renderPanel(panelKey, false)}</div>
         </PanelExternalWindow>
       ))}
+
+      {relatedModalContent}
 
       <HandleSetupGate />
 

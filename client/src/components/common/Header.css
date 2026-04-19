@@ -111,14 +111,14 @@
   align-items: center;
   justify-content: center;
   justify-self: center;
-  gap: 1.15rem;
+  gap: 1.32rem;
   flex-wrap: nowrap;
 }
 
 .header-nav-group {
   display: inline-flex;
   align-items: center;
-  gap: 0.72rem;
+  gap: 0.82rem;
 }
 
 .nav-pill,
@@ -140,7 +140,7 @@
   position: relative;
   color: #475569;
   font-size: 0.9rem;
-  font-weight: 800;
+  font-weight: 700;
   min-height: 2rem;
   padding: 0.18rem 0.22rem;
   border-bottom: 2px solid transparent;
@@ -170,7 +170,7 @@
 .nav-pill.is-active {
   background: transparent;
   color: #0f172a;
-  font-weight: 800;
+  font-weight: 700;
   border-bottom-color: #2563eb;
   box-shadow: none;
 }
@@ -479,7 +479,7 @@
 
   .nav-pill {
     font-size: 0.79rem;
-    font-weight: 800;
+    font-weight: 700;
     min-height: 1.8rem;
   }
 

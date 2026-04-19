@@ -15,6 +15,7 @@ public class CommunityPostSummaryRes {
     private final String authorId;
     private final String excerpt;
     private final List<String> tags;
+    private final String category;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
     private final int viewCount;

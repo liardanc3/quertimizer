@@ -17,6 +17,7 @@ interface CommunityPostSummaryResponse {
   authorId?: string;
   excerpt?: string;
   tags?: string[];
+  category?: string;
   createdAt?: string;
   updatedAt?: string | null;
   viewCount?: number;
@@ -81,7 +82,8 @@ export interface FetchCommunityPostsParams {
   page: number;
   search: string;
   tag: string;
-  sortKey: 'relevance' | 'latest' | 'oldest' | 'views' | 'likes' | 'comments';
+  category: 'all' | 'discussion' | 'question';
+  sortKey: 'default' | 'latest' | 'oldest' | 'views' | 'viewsAsc' | 'likes' | 'likesAsc' | 'comments' | 'commentsAsc';
 }
 
 export interface CommunityPostPage {
@@ -100,7 +102,7 @@ export interface CommunityPostDetail {
   content: string;
   contentHtml: string;
   tags: string[];
-  category: 'discussion';
+  category: CommunityPostSummary['category'];
   createdAt: string;
   updatedAt?: string;
   views: number;
@@ -164,6 +166,14 @@ function normalizeComment(comment: CommunityCommentResponse): CommunityComment {
   };
 }
 
+function normalizePostCategory(value?: string): CommunityPostSummary['category'] {
+  if (value === 'question' || value === 'notice' || value === 'tip') {
+    return value;
+  }
+
+  return 'discussion';
+}
+
 function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPostSummary {
   return {
     id: post.postId!,
@@ -173,7 +183,7 @@ function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPost
     content: '',
     contentHtml: undefined,
     tags: Array.isArray(post.tags) ? post.tags : [],
-    category: 'discussion',
+    category: normalizePostCategory(post.category),
     createdAt: post.createdAt!,
     updatedAt: typeof post.updatedAt === 'string' ? post.updatedAt : undefined,
     views: post.viewCount ?? 0,
@@ -231,6 +241,10 @@ export async function fetchCommunityPosts(params: FetchCommunityPostsParams): Pr
 
   if (params.tag.trim() !== '') {
     searchParams.set('tag', params.tag.trim());
+  }
+
+  if (params.category !== 'all') {
+    searchParams.set('category', params.category);
   }
 
   return requestCommunity(
@@ -294,7 +308,7 @@ export async function fetchCommunityPostDetail(postId: string): Promise<Communit
         content: extractPlainText(post.contentHtml),
         contentHtml: post.contentHtml,
         tags: Array.isArray(post.tags) ? post.tags : [],
-        category: 'discussion',
+        category: normalizePostCategory(post.category),
         createdAt: post.createdAt,
         updatedAt: typeof post.updatedAt === 'string' ? post.updatedAt : undefined,
         views: post.viewCount ?? 0,

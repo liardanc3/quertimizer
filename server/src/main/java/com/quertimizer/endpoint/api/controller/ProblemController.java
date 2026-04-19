@@ -32,20 +32,25 @@ public class ProblemController {
     @GetMapping("/problems")
     public ResponseEntity<ProblemPageRes> getProblems(@RequestParam(defaultValue = "1") int page,
                                                       @RequestParam(required = false) String query,
+                                                      @RequestParam(defaultValue = "postgresql") String dbms,
                                                       @RequestParam(defaultValue = "all") String solveState,
                                                       @RequestParam(defaultValue = "desc") String solvedCountSort,
+                                                      @RequestParam(defaultValue = "none") String totalSubmitSort,
+                                                      @RequestParam(defaultValue = "none") String successSubmitSort,
                                                       @RequestParam(defaultValue = "none") String spreadRateSort,
                                                       @RequestParam(required = false) Double spreadRateMin,
                                                       @RequestParam(required = false) Double spreadRateMax,
                                                       Authentication authentication) {
 
-        // 현재 조회 조건 기준 문제 목록 페이지 반환
         return ResponseEntity.ok(problemService.getProblems(
                 page,
                 query,
+                dbms,
                 solveState,
                 resolveCurrentUserId(authentication),
                 solvedCountSort,
+                totalSubmitSort,
+                successSubmitSort,
                 spreadRateSort,
                 spreadRateMin,
                 spreadRateMax
@@ -54,29 +59,21 @@ public class ProblemController {
 
     @GetMapping("/problems/{problemId}")
     public ResponseEntity<ProblemDetailRes> getProblem(@PathVariable String problemId) {
-
-        // 문제 id 기준 상세 응답 반환
         return ResponseEntity.of(problemService.getProblem(problemId));
     }
 
     @GetMapping("/admin/problem-sets")
     public ResponseEntity<List<ProblemSetSummaryRes>> getProblemSets() {
-
-        // 기존 테이블셋 목록 반환
         return ResponseEntity.ok(problemService.getProblemSets());
     }
 
     @GetMapping("/admin/problem-sets/{problemSetId}")
     public ResponseEntity<ProblemSetDetailRes> getProblemSet(@PathVariable String problemSetId) {
-
-        // 테이블셋 번호 기준 상세 반환
         return ResponseEntity.of(problemService.getProblemSet(problemSetId));
     }
 
     @PostMapping("/admin/problems")
     public ResponseEntity<ProblemCreateRes> createProblem(@Valid @RequestBody ProblemCreateReq request) {
-
-        // 관리자 문제 생성 처리
         ProblemCreateRes response = problemService.createProblem(request);
 
         return ResponseEntity.created(URI.create("/problems/" + response.getProblemId())).body(response);

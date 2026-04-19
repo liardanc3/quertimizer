@@ -43,6 +43,42 @@ export type AggregateBucket =
   | 'SET_AGG'
   | 'OTHERS';
 
+export type PlanFilterMatchMode = 'and' | 'or';
+export type HintFilterValue = 'USED' | 'UNUSED';
+export type SubmitHistoryJudge = 'all' | 'success' | 'fail';
+
+export interface SubmitHistoryPlanFilters {
+  matchMode: PlanFilterMatchMode;
+  scanBuckets: ScanBucket[];
+  joinBuckets: JoinBucket[];
+  filterBuckets: FilterBucket[];
+  sortBuckets: SortBucket[];
+  aggregateBuckets: AggregateBucket[];
+  hintFilters: HintFilterValue[];
+}
+
+export interface SubmitHistoryEntry {
+  submitId: string;
+  userId: string;
+  dbms: DbmsType;
+  problemId: string;
+  submittedAt: string;
+  success: boolean;
+  message: string;
+  submittedSql: string;
+  cost: number;
+  executionPlanElement: number;
+}
+
+export interface SubmitHistoryPageData {
+  currentPage: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  problemIds: string[];
+  histories: SubmitHistoryEntry[];
+}
+
 export type JudgeStatus = 'success' | 'fail';
 
 export interface ResultRow {
@@ -76,6 +112,7 @@ export interface ProblemSubmittedHistory {
   userId: string;
   executionPlanElement: number;
   executionTimeMs: number;
+  cost?: number;
 }
 
 export interface RuntimeSample {
@@ -133,6 +170,9 @@ export interface ProblemSummary {
   tags: string[];
   difficulty: Difficulty;
   solvedCount: number;
+  totalSubmitCount?: number;
+  successSubmitCount?: number;
+  spreadRate?: number;
   solvedAt?: string;
   isSolved?: boolean | null;
   submittedHistories?: ProblemSubmittedHistory[];

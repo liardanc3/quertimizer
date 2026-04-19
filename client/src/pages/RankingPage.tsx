@@ -1,54 +1,53 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getProfilePath, navigate } from '../lib/navigation';
 import { fetchRanks, type RankPage } from '../lib/rankApi';
-import { useMockSession } from '../lib/session';
 import type { DbmsType, RankingMetricKey } from '../types/domain';
+import './HomePage.css';
+import './SubmitHistoryPage.css';
 import './RankingPage.css';
 
 const PAGE_SIZE = 100;
 
-const dbmsOptions: Array<{ id: DbmsType; label: string }> = [
-  { id: 'postgresql', label: 'PostgreSQL' },
-  { id: 'oracle', label: 'Oracle' },
+const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
+  { value: 'postgresql', label: 'PostgreSQL' },
+  { value: 'oracle', label: 'Oracle' },
 ];
 
-const sortOptions: Array<{ id: RankingMetricKey; label: string; description: string }> = [
-  {
-    id: 'solvedCount',
-    label: '푼 문제 수',
-    description: '많을수록 상위로 정렬됩니다.',
-  },
-  {
-    id: 'avgExecutionPercentile',
-    label: '평균 실행시간 백분위',
-    description: '낮을수록 더 빠른 상위권 풀이입니다.',
-  },
-];
-
-function formatPercent(value: number) {
-  return `${value.toFixed(1)}%`;
+function SortAscendingIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 2.5v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M5.2 5.25 8 2.5l2.8 2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
-function getDeltaMeta(value: number) {
-  if (value > 0) {
-    return {
-      label: `▲ ${value}`,
-      className: 'is-up',
-    };
-  }
-
-  if (value < 0) {
-    return {
-      label: `▼ ${Math.abs(value)}`,
-      className: 'is-down',
-    };
-  }
-
-  return {
-    label: '-',
-    className: 'is-flat',
-  };
+function SortDescendingIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 2.6v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="m5.2 10.75 2.8 2.75 2.8-2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
+
+function SortNeutralIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M5.7 6.2 8 3.9l2.3 2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m5.7 9.8 2.3 2.3 2.3-2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+type LinkMenuState = {
+  label: string;
+  path: string;
+  ariaLabel: string;
+  left: number;
+  top: number;
+} | null;
 
 function createEmptyRankPage(): RankPage {
   return {
@@ -60,18 +59,24 @@ function createEmptyRankPage(): RankPage {
   };
 }
 
+function formatPercentile(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
 export default function RankingPage() {
-  const { isAuthenticated, userId } = useMockSession();
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>('postgresql');
   const [sortKey, setSortKey] = useState<RankingMetricKey>('solvedCount');
-  const [draftIdQuery, setDraftIdQuery] = useState('');
-  const [submittedIdQuery, setSubmittedIdQuery] = useState('');
+  const [draftQuery, setDraftQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [requestedPage, setRequestedPage] = useState(1);
+  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
+  const [pageJumpDraft, setPageJumpDraft] = useState('1');
   const [rankPage, setRankPage] = useState<RankPage>(createEmptyRankPage());
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
+  const linkMenuRef = useRef<HTMLButtonElement | null>(null);
 
-  const activeDbmsLabel = dbmsOptions.find((option) => option.id === selectedDbms)?.label ?? selectedDbms;
   const rankedEntries = useMemo(
     () =>
       rankPage.ranks.map((entry, index) => ({
@@ -80,6 +85,14 @@ export default function RankingPage() {
       })),
     [rankPage],
   );
+
+  useEffect(() => {
+    if (isPageJumpEditing) {
+      return;
+    }
+
+    setPageJumpDraft(String(rankPage.currentPage));
+  }, [isPageJumpEditing, rankPage.currentPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +105,7 @@ export default function RankingPage() {
         const fetchedRankPage = await fetchRanks({
           page: requestedPage,
           dbms: selectedDbms,
-          query: submittedIdQuery,
+          query: submittedQuery,
           sortKey,
         });
 
@@ -122,165 +135,238 @@ export default function RankingPage() {
     return () => {
       cancelled = true;
     };
-  }, [requestedPage, selectedDbms, sortKey, submittedIdQuery]);
+  }, [requestedPage, selectedDbms, sortKey, submittedQuery]);
 
-  function applyIdSearch() {
-    setSubmittedIdQuery(draftIdQuery);
+  useEffect(() => {
+    if (linkMenuState == null) {
+      return;
+    }
+
+    function closeLinkMenu() {
+      setLinkMenuState(null);
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!linkMenuRef.current?.contains(event.target as Node)) {
+        closeLinkMenu();
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeLinkMenu();
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', closeLinkMenu);
+    window.addEventListener('scroll', closeLinkMenu, true);
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', closeLinkMenu);
+      window.removeEventListener('scroll', closeLinkMenu, true);
+    };
+  }, [linkMenuState]);
+
+  function applySearch() {
+    setSubmittedQuery(draftQuery);
     setRequestedPage(1);
   }
 
+  function applyPageJump() {
+    const parsedPage = Number.parseInt(pageJumpDraft, 10);
+    const nextPage = Number.isNaN(parsedPage)
+      ? rankPage.currentPage
+      : Math.min(rankPage.totalPages, Math.max(1, parsedPage));
+
+    setPageJumpDraft(String(nextPage));
+    setIsPageJumpEditing(false);
+
+    if (nextPage !== rankPage.currentPage) {
+      setRequestedPage(nextPage);
+    }
+  }
+
+  function cancelPageJump() {
+    setPageJumpDraft(String(rankPage.currentPage));
+    setIsPageJumpEditing(false);
+  }
+
+  function openHandleMenu(handle: string, button: HTMLButtonElement) {
+    const rect = button.getBoundingClientRect();
+    const menuWidth = 224;
+    const viewportWidth = document.documentElement.clientWidth;
+    const maxLeft = viewportWidth - menuWidth - 12;
+    const nextLeft = Math.max(12, Math.min(rect.left, maxLeft));
+
+    setLinkMenuState({
+      label: `${handle} 프로필로 이동`,
+      path: getProfilePath(handle),
+      ariaLabel: `${handle} 프로필 이동`,
+      left: nextLeft,
+      top: rect.bottom + 8,
+    });
+  }
+
+  const linkMenuContent =
+    linkMenuState == null || typeof document === 'undefined'
+      ? null
+      : createPortal(
+          <button
+            ref={linkMenuRef}
+            type="button"
+            className="submit-history-link-menu"
+            role="menuitem"
+            aria-label={linkMenuState.ariaLabel}
+            style={{ top: `${linkMenuState.top}px`, left: `${linkMenuState.left}px` }}
+            onClick={() => {
+              navigate(linkMenuState.path);
+              setLinkMenuState(null);
+            }}
+          >
+            <span className="submit-history-link-menu-label">{linkMenuState.label}</span>
+          </button>,
+          document.body,
+        );
+
   return (
-    <div className="page-stack ranking-page">
-      <section className="panel-card">
-        <div className="ranking-toolbar">
-          <div className="ranking-toolbar-line">
-            <div className="ranking-control-block ranking-control-block-fixed">
-              <span className="ranking-control-label">DBMS</span>
-              <div className="segmented" role="group" aria-label="리더보드 DBMS 선택">
-                {dbmsOptions.map((option) => {
-                  const isSelected = option.id === selectedDbms;
+    <div className="page-stack ranking-page submit-history-page home-page">
+      <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card ranking-toolbar-card">
+        <div className="problem-toolbar submit-history-toolbar-stack ranking-toolbar-stack">
+          <div className="solve-dbms-tab-row ranking-dbms-tab-row" role="tablist" aria-label="랭킹 DBMS 선택">
+            {dbmsOptions.map((option) => {
+              const isSelected = option.value === selectedDbms;
 
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={`segmented-btn ${isSelected ? 'is-selected' : ''}`}
-                      aria-pressed={isSelected}
-                      onClick={() => {
-                        setSelectedDbms(option.id);
-                        setRequestedPage(1);
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="ranking-control-block">
-              <span className="ranking-control-label">정렬 기준</span>
-              <div className="segmented" role="group" aria-label="리더보드 정렬 기준 선택">
-                {sortOptions.map((option) => {
-                  const isSelected = option.id === sortKey;
-
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={`segmented-btn ranking-sort-button ${isSelected ? 'is-selected' : ''}`}
-                      aria-pressed={isSelected}
-                      title={option.description}
-                      onClick={() => {
-                        setSortKey(option.id);
-                        setRequestedPage(1);
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <form
-              className="ranking-control-block ranking-control-block-fixed ranking-search-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                applyIdSearch();
-              }}
-            >
-              <span className="ranking-control-label">ID 검색</span>
-              <div className="ranking-search-shell">
-                <input
-                  type="search"
-                  value={draftIdQuery}
-                  onChange={(event) => setDraftIdQuery(event.target.value)}
-                  className="text-field ranking-search-input"
-                  placeholder="ID 검색"
-                  aria-label="리더보드 ID 검색"
-                />
-                <button type="submit" className="ranking-search-button" aria-label="ID 검색 실행" title="ID 검색">
-                  <span aria-hidden="true">⌕</span>
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    setSelectedDbms(option.value);
+                    setRequestedPage(1);
+                  }}
+                >
+                  {option.label}
                 </button>
-              </div>
-            </form>
+              );
+            })}
           </div>
+
+          <form
+            className="home-problem-search-form ranking-search-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              applySearch();
+            }}
+          >
+            <label className="problem-search-field home-problem-search-field ranking-search-field">
+              <input
+                type="search"
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                className="text-field problem-search-input home-problem-search-input ranking-search-input"
+                placeholder="Handle 검색"
+                aria-label="Handle 검색"
+              />
+              <button type="submit" className="problem-search-button home-problem-search-button" aria-label="Handle 검색 실행">
+                검색
+              </button>
+            </label>
+          </form>
         </div>
+      </section>
 
-        {isLoading || rankedEntries.length > 0 ? (
-          <div className="ranking-table" role="table" aria-label={`${activeDbmsLabel} 리더보드`}>
-            <div className="ranking-row ranking-head" role="row">
-              <span role="columnheader" className="ranking-change-heading">
-                <span>이번달 1일 대비</span>
-                <span className="tooltip-anchor ranking-tooltip-anchor">
-                  <button type="button" className="ranking-tooltip-button" aria-label="이번달 1일 대비 설명">
-                    ?
+      <section className="panel-card problem-board submit-history-board ranking-board">
+        {loadFailed ? (
+          <div className="submit-history-empty-state">랭킹을 불러오지 못했습니다.</div>
+        ) : (
+          <div className={`submit-history-table-shell ranking-table-shell ${isLoading ? 'is-loading' : ''}`}>
+            <div className="submit-history-table ranking-table" role="table" aria-label="랭킹 목록">
+              <div className="submit-history-row submit-history-head ranking-head" role="row">
+                <div role="columnheader" className="submit-history-head-cell">순위</div>
+                <div role="columnheader" className="submit-history-head-cell">Handle</div>
+                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                  <span>해결한 문제</span>
+                  <button
+                    type="button"
+                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'solvedCount' ? 'is-active' : ''}`}
+                    aria-label="해결한 문제 내림차순 정렬"
+                    onClick={() => {
+                      if (sortKey !== 'solvedCount') {
+                        setSortKey('solvedCount');
+                        setRequestedPage(1);
+                      }
+                    }}
+                  >
+                    {sortKey === 'solvedCount' ? <SortDescendingIcon /> : <SortNeutralIcon />}
                   </button>
-                  <span className="ui-tooltip is-passive ranking-change-tooltip" role="tooltip">
-                    선택한 정렬 기준에서 이번달 1일 기준 순위와 비교한 상승 또는 하락 폭입니다.
-                  </span>
-                </span>
-              </span>
-              <span role="columnheader" className="ranking-rank-heading">
-                순위
-              </span>
-              <span role="columnheader">사용자</span>
-              <span role="columnheader">해결한 문제</span>
-              <span role="columnheader">평균 실행시간 백분위</span>
-            </div>
-
-            {isLoading ? (
-              <div className="ranking-row ranking-empty-row" role="row">
-                <span className="ranking-empty-cell" role="cell">
-                  데이터 로딩중
-                </span>
+                </div>
+                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                  <span>평균 Cost 백분위</span>
+                  <button
+                    type="button"
+                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'avgExecutionPercentile' ? 'is-active' : ''}`}
+                    aria-label="평균 Cost 백분위 오름차순 정렬"
+                    onClick={() => {
+                      if (sortKey !== 'avgExecutionPercentile') {
+                        setSortKey('avgExecutionPercentile');
+                        setRequestedPage(1);
+                      }
+                    }}
+                  >
+                    {sortKey === 'avgExecutionPercentile' ? <SortAscendingIcon /> : <SortNeutralIcon />}
+                  </button>
+                </div>
               </div>
-            ) : (
-              rankedEntries.map((entry) => {
-                const isCurrentUser = isAuthenticated && entry.userId === userId;
-                const delta = getDeltaMeta(entry.monthlyRankDelta[sortKey]);
 
-                return (
-                  <article key={`${selectedDbms}-${entry.userId}`} className={`ranking-row ${isCurrentUser ? 'is-highlight' : ''}`}>
-                    <div className="ranking-cell ranking-change-cell" data-label="이번달 1일 대비">
-                      <span className={`ranking-change-badge ${delta.className}`}>{delta.label}</span>
-                    </div>
-
-                    <div className="ranking-cell ranking-rank-cell" data-label="순위">
-                      <span className={`ranking-rank-badge ${entry.rank <= 3 ? 'is-top' : ''}`}>{entry.rank}</span>
-                    </div>
-
-                    <div className="ranking-cell ranking-user-cell" data-label="사용자">
+              {rankedEntries.length === 0 && !isLoading ? (
+                <div className="submit-history-row submit-history-empty-row" role="row">
+                  <span className="submit-history-empty-cell" role="cell">
+                    조건에 맞는 랭킹이 없습니다.
+                  </span>
+                </div>
+              ) : (
+                rankedEntries.map((entry) => (
+                  <article key={`${selectedDbms}-${entry.userId}`} className="submit-history-row submit-history-body ranking-body" role="row">
+                    <span className="submit-history-cell" role="cell" data-label="순위">
+                      {entry.rank}
+                    </span>
+                    <span className="submit-history-cell" role="cell" data-label="Handle">
                       <button
                         type="button"
-                        className="ranking-profile-trigger"
-                        onClick={() => navigate(getProfilePath(entry.userId))}
+                        className="submit-history-link-button"
+                        onClick={(event) => openHandleMenu(entry.userId, event.currentTarget)}
+                        aria-label={`${entry.userId} Handle 메뉴 열기`}
                       >
-                        <strong>{entry.userId}</strong>
+                        {entry.userId}
                       </button>
-                    </div>
-
-                    <div className="ranking-cell" data-label="해결한 문제">
-                      <strong>{entry.solvedCount.toLocaleString('ko-KR')}문제</strong>
-                    </div>
-
-                    <div className="ranking-cell" data-label="평균 실행시간 백분위">
-                      <strong>{formatPercent(entry.avgExecutionPercentile)}</strong>
-                    </div>
+                    </span>
+                    <span className="submit-history-cell" role="cell" data-label="해결한 문제">
+                      {entry.solvedCount}
+                    </span>
+                    <span className="submit-history-cell" role="cell" data-label="평균 Cost 백분위">
+                      {formatPercentile(entry.avgExecutionPercentile)}
+                    </span>
                   </article>
-                );
-              })
-            )}
+                ))
+              )}
+            </div>
+            {isLoading ? (
+              <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
+                <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
+              </div>
+            ) : null}
           </div>
-        ) : loadFailed ? (
-          <div className="problem-empty-state">랭킹을 불러오지 못했다.</div>
-        ) : (
-          <div className="problem-empty-state">검색된 ID가 없습니다.</div>
         )}
 
-        {!isLoading && !loadFailed && rankPage.totalPages > 1 && rankedEntries.length > 0 ? (
-          <div className="problem-pagination" role="navigation" aria-label="랭킹 페이지">
+        {!loadFailed && rankPage.totalCount > 0 ? (
+          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="랭킹 페이지">
             <button
               type="button"
               className="mini-toggle problem-page-button"
@@ -290,35 +376,55 @@ export default function RankingPage() {
               이전
             </button>
 
-            <div className="problem-page-numbers">
-              {Array.from({ length: rankPage.totalPages }, (_, index) => index + 1).map((page) => (
-                <button
-                  key={page}
-                  type="button"
-                  className={`mini-toggle problem-page-button ${page === rankPage.currentPage ? 'is-selected' : ''}`}
-                  aria-current={page === rankPage.currentPage ? 'page' : undefined}
-                  onClick={() => setRequestedPage(page)}
-                >
-                  {page}
-                </button>
-              ))}
-            </div>
+            {isPageJumpEditing ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                className="problem-pagination-meta-input"
+                aria-label="이동할 랭킹 페이지 입력"
+                value={pageJumpDraft}
+                onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
+                onBlur={applyPageJump}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyPageJump();
+                    return;
+                  }
+
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelPageJump();
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                className="problem-pagination-meta problem-pagination-meta-button"
+                aria-label="이동할 랭킹 페이지 입력 열기"
+                onClick={() => {
+                  setPageJumpDraft(String(rankPage.currentPage));
+                  setIsPageJumpEditing(true);
+                }}
+              >
+                {`${rankPage.currentPage} / ${rankPage.totalPages}`}
+              </button>
+            )}
 
             <button
               type="button"
               className="mini-toggle problem-page-button"
               onClick={() => setRequestedPage((page) => Math.min(rankPage.totalPages, page + 1))}
-              disabled={rankPage.currentPage === rankPage.totalPages}
+              disabled={rankPage.currentPage >= rankPage.totalPages}
             >
               다음
             </button>
-
-            <span className="problem-pagination-meta">
-              {rankPage.currentPage} / {rankPage.totalPages}
-            </span>
           </div>
         ) : null}
       </section>
+      {linkMenuContent}
     </div>
   );
 }

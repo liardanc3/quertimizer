@@ -1,7 +1,8 @@
 package com.quertimizer.endpoint.api.dto.response;
 
-import com.quertimizer.entity.ProblemSet;
+import com.quertimizer.constant.DbmsType;
 import com.quertimizer.entity.Problem;
+import com.quertimizer.entity.ProblemSet;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -19,19 +20,21 @@ public class ProblemDetailRes {
     private final String condition;
     private final String output;
     private final String outputSample;
+    private final String dbms;
 
     public static ProblemDetailRes from(Problem problem, ProblemSet problemSet) {
         return new ProblemDetailRes(
                 problem.getProblemId(),
                 problem.getTitle(),
                 normalize(problem.getDescription()),
-                normalize(problem.getDdlPostgresql()),
-                normalize(problem.getDdlOracle()),
-                normalize(problemSet.getDataPostgresql()),
-                normalize(problemSet.getDataOracle()),
+                problem.getDbmsType() == DbmsType.POSTGRESQL ? normalize(problem.getDdl()) : "",
+                problem.getDbmsType() == DbmsType.ORACLE ? normalize(problem.getDdl()) : "",
+                problemSet.getDbmsType() == DbmsType.POSTGRESQL ? normalize(problemSet.getData()) : "",
+                problemSet.getDbmsType() == DbmsType.ORACLE ? normalize(problemSet.getData()) : "",
                 normalize(problem.getCondition()),
                 normalize(problem.getOutput()),
-                normalize(problem.getOutputSample())
+                normalize(problem.getOutputSample()),
+                problem.getDbmsType().getValue()
         );
     }
 
@@ -40,13 +43,14 @@ public class ProblemDetailRes {
                 problem.getProblemId(),
                 problem.getTitle(),
                 normalize(problem.getDescription()),
-                normalize(problem.getDdlPostgresql()),
-                normalize(problem.getDdlOracle()),
+                problem.getDbmsType() == DbmsType.POSTGRESQL ? normalize(problem.getDdl()) : "",
+                problem.getDbmsType() == DbmsType.ORACLE ? normalize(problem.getDdl()) : "",
                 "",
                 "",
                 normalize(problem.getCondition()),
                 normalize(problem.getOutput()),
-                normalize(problem.getOutputSample())
+                normalize(problem.getOutputSample()),
+                problem.getDbmsType().getValue()
         );
     }
 

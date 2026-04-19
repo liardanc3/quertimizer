@@ -10,7 +10,8 @@ import ProfileActivityPage from './pages/ProfileActivityPage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
 import PublicHomePage from './pages/PublicHomePage';
 import RankingPage from './pages/RankingPage';
-import { PROBLEMS_PATH, navigate } from './lib/navigation';
+import SubmitHistoryPage from './pages/SubmitHistoryPage';
+import { PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from './lib/navigation';
 import { useMockSession } from './lib/session';
 
 interface ProblemRoute {
@@ -28,6 +29,10 @@ interface ProblemsRoute {
 
 interface RankingRoute {
   type: 'ranking';
+}
+
+interface SubmitHistoryRoute {
+  type: 'submitHistory';
 }
 
 interface CommunityRoute {
@@ -69,6 +74,7 @@ interface ProfileActivityRoute {
 type AppRoute =
   | HomeRoute
   | ProblemsRoute
+  | SubmitHistoryRoute
   | RankingRoute
   | CommunityRoute
   | GuideRoute
@@ -106,6 +112,10 @@ function parseRoute(pathname: string): AppRoute {
 
   if (normalizedPathname === '/ranking') {
     return { type: 'ranking' };
+  }
+
+  if (normalizedPathname === SUBMIT_HISTORY_PATH) {
+    return { type: 'submitHistory' };
   }
 
   if (normalizedPathname === '/community') {
@@ -192,6 +202,10 @@ export default function AppRouter() {
 
   if (route.type === 'ranking') {
     return <RankingPage />;
+  }
+
+  if (route.type === 'submitHistory') {
+    return <SubmitHistoryPage />;
   }
 
   if (route.type === 'community') {

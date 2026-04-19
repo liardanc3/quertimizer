@@ -1,5 +1,6 @@
 package com.quertimizer.entity;
 
+import com.quertimizer.constant.DbmsType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -15,49 +16,73 @@ import lombok.NoArgsConstructor;
 public class ProblemSet {
 
     @Id
-    @Column(name = "problem_set_id", nullable = false, length = 5)
+    @Column(name = "problem_set_id", nullable = false, length = 6)
     private String problemSetId;
 
-    @Column(name = "ddl_postgresql", nullable = false, columnDefinition = "TEXT")
-    private String ddlPostgresql;
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String ddl;
 
-    @Column(name = "ddl_oracle", nullable = false, columnDefinition = "TEXT")
-    private String ddlOracle;
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String data;
 
-    @Column(name = "data_postgresql", nullable = false, columnDefinition = "TEXT")
-    private String dataPostgresql;
+    @Column(name = "is_postgresql", nullable = false)
+    private boolean isPostgresql;
 
-    @Column(name = "data_oracle", nullable = false, columnDefinition = "TEXT")
-    private String dataOracle;
+    @Column(name = "is_oracle", nullable = false)
+    private boolean isOracle;
 
     public static ProblemSet create(String problemSetId,
-                                    String ddlPostgresql,
-                                    String ddlOracle,
-                                    String dataPostgresql,
-                                    String dataOracle) {
-        return new ProblemSet(problemSetId, ddlPostgresql, ddlOracle, dataPostgresql, dataOracle);
+                                    String ddl,
+                                    String data,
+                                    boolean isPostgresql,
+                                    boolean isOracle) {
+        return new ProblemSet(problemSetId, ddl, data, isPostgresql, isOracle);
     }
 
-    public void changeContent(String ddlPostgresql,
-                              String ddlOracle,
-                              String dataPostgresql,
-                              String dataOracle) {
-        this.ddlPostgresql = ddlPostgresql;
-        this.ddlOracle = ddlOracle;
-        this.dataPostgresql = dataPostgresql;
-        this.dataOracle = dataOracle;
+    public void changeContent(String ddl,
+                              String data,
+                              boolean isPostgresql,
+                              boolean isOracle) {
+        this.ddl = ddl;
+        this.data = data;
+        this.isPostgresql = isPostgresql;
+        this.isOracle = isOracle;
+    }
+
+    public boolean supportsDbms(DbmsType dbmsType) {
+        if (dbmsType == DbmsType.ORACLE) {
+            return isOracle;
+        }
+
+        return isPostgresql;
+    }
+
+    public boolean hasSupportedDbms() {
+        return isPostgresql || isOracle;
+    }
+
+    public DbmsType getDbmsType() {
+        return isOracle ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+    }
+
+    public String getBaseProblemSetId() {
+        if (problemSetId == null || problemSetId.isBlank()) {
+            return "";
+        }
+
+        return problemSetId.matches("^[PO]\\d{5}$") ? problemSetId.substring(1) : problemSetId;
     }
 
     private ProblemSet(String problemSetId,
-                       String ddlPostgresql,
-                       String ddlOracle,
-                       String dataPostgresql,
-                       String dataOracle) {
+                       String ddl,
+                       String data,
+                       boolean isPostgresql,
+                       boolean isOracle) {
         this.problemSetId = problemSetId;
-        this.ddlPostgresql = ddlPostgresql;
-        this.ddlOracle = ddlOracle;
-        this.dataPostgresql = dataPostgresql;
-        this.dataOracle = dataOracle;
+        this.ddl = ddl;
+        this.data = data;
+        this.isPostgresql = isPostgresql;
+        this.isOracle = isOracle;
     }
 
 }

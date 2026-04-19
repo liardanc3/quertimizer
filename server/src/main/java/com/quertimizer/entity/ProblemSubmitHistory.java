@@ -26,7 +26,7 @@ public class ProblemSubmitHistory {
     @Column(name = "submit_id", nullable = false)
     private Long submitId;
 
-    @Column(name = "problem_id", nullable = false, length = 11)
+    @Column(name = "problem_id", nullable = false, length = 12)
     private String problemId;
 
     @Column(name = "user_id", nullable = false, length = 50)
@@ -54,6 +54,9 @@ public class ProblemSubmitHistory {
     @Column(name = "row_count", nullable = false)
     private long rowCount;
 
+    @Column(name = "execution_plan_element")
+    private Long executionPlanElement;
+
     @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
 
@@ -66,6 +69,7 @@ public class ProblemSubmitHistory {
                                               long executionTimeMs,
                                               double cost,
                                               long rowCount,
+                                              long executionPlanElement,
                                               LocalDateTime submittedAt) {
         return new ProblemSubmitHistory(
                 problemId,
@@ -77,6 +81,7 @@ public class ProblemSubmitHistory {
                 executionTimeMs,
                 cost,
                 rowCount,
+                executionPlanElement,
                 submittedAt
         );
     }
@@ -90,6 +95,7 @@ public class ProblemSubmitHistory {
                                  long executionTimeMs,
                                  double cost,
                                  long rowCount,
+                                 long executionPlanElement,
                                  LocalDateTime submittedAt) {
         this.problemId = problemId;
         this.userId = userId;
@@ -100,6 +106,7 @@ public class ProblemSubmitHistory {
         this.executionTimeMs = executionTimeMs;
         this.cost = cost;
         this.rowCount = rowCount;
+        this.executionPlanElement = executionPlanElement;
         this.submittedAt = submittedAt;
     }
 

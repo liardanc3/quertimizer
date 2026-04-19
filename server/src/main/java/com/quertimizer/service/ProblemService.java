@@ -1,5 +1,6 @@
 package com.quertimizer.service;
 
+import com.quertimizer.constant.DbmsType;
 import com.quertimizer.endpoint.api.dto.request.ProblemCreateReq;
 import com.quertimizer.endpoint.api.dto.response.ProblemCreateRes;
 import com.quertimizer.endpoint.api.dto.response.ProblemDetailRes;
@@ -34,29 +35,36 @@ public class ProblemService {
 
     public ProblemPageRes getProblems(int page,
                                       String query,
+                                      String dbms,
                                       String solveState,
                                       String currentUserId,
                                       String solvedCountSort,
+                                      String totalSubmitSort,
+                                      String successSubmitSort,
                                       String spreadRateSort,
                                       Double spreadRateMin,
                                       Double spreadRateMax) {
 
-        // 목록 조회 조건 반영 후 메모리 페이지 조회
         ProblemStore.ProblemPage problemPage = problemStore.findProblemPage(
                 page,
                 query,
+                resolveDbmsType(dbms),
                 solveState,
                 currentUserId,
-                "asc".equalsIgnoreCase(solvedCountSort),
+                solvedCountSort,
+                totalSubmitSort,
+                successSubmitSort,
                 spreadRateSort,
                 spreadRateMin,
                 spreadRateMax
         );
 
-        // 목록 응답 DTO 변환
         List<ProblemListItemRes> problems = problemPage.problems().stream()
                 .map(problemEntry -> ProblemListItemRes.of(
                         problemEntry.problem(),
+                        problemEntry.totalSubmitCount(),
+                        problemEntry.successSubmitCount(),
+                        problemEntry.spreadRate(),
                         problemEntry.submittedHistories().stream()
                                 .map(ProblemSubmittedHistoryRes::from)
                                 .toList()
@@ -75,8 +83,6 @@ public class ProblemService {
     }
 
     public Optional<ProblemDetailRes> getProblem(String problemId) {
-
-        // 문제, 테이블셋 조합으로 상세 응답 구성
         return problemStore.findProblem(problemId)
                 .map(problem -> problemStore.findProblemSet(problem.getResolvedProblemSetId())
                         .map(problemSet -> ProblemDetailRes.from(problem, problemSet))
@@ -84,40 +90,63 @@ public class ProblemService {
     }
 
     public List<ProblemSetSummaryRes> getProblemSets() {
-
-        // 문제셋 목록 응답 DTO 변환
         return problemStore.findAllProblemSets().stream()
-                .map(problemSet -> new ProblemSetSummaryRes(problemSet.getProblemSetId()))
+                .map(ProblemSet::getBaseProblemSetId)
+                .distinct()
+                .sorted()
+                .map(ProblemSetSummaryRes::new)
                 .toList();
     }
 
     public Optional<ProblemSetDetailRes> getProblemSet(String problemSetId) {
+        String baseProblemSetId = normalizeBaseProblemSetId(problemSetId);
+        ProblemSetPair problemSetPair = findProblemSetPair(baseProblemSetId);
 
-        // 테이블셋 상세 응답 구성
-        return problemStore.findProblemSet(problemSetId)
-                .map(ProblemSetDetailRes::from);
+        if (problemSetPair.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(ProblemSetDetailRes.from(baseProblemSetId, problemSetPair.postgresqlProblemSet(), problemSetPair.oracleProblemSet()));
     }
 
     @Transactional
     public ProblemCreateRes createProblem(ProblemCreateReq request) {
         boolean useExistingProblemSet = "existing".equalsIgnoreCase(request.getProblemSetMode());
+        String baseProblemSetId = useExistingProblemSet
+                ? normalizeBaseProblemSetId(request.getProblemSetId())
+                : createNextProblemSetBaseId();
 
-        // 테이블셋 선택 또는 신규 생성
-        ProblemSet problemSet = useExistingProblemSet
-                ? findExistingProblemSet(request.getProblemSetId())
-                : createProblemSet(request);
+        ProblemSetPair problemSetPair = useExistingProblemSet
+                ? requireExistingProblemSetPair(baseProblemSetId)
+                : createProblemSetPair(baseProblemSetId, request);
 
-        // 다음 문제 번호 계산
-        String problemId = createNextProblemId(problemSet.getProblemSetId());
+        String postgresDdl = requireText(request.getDdlPostgresql(), "PostgreSQL DDL이 필요하다.");
+        String oracleDdl = requireText(request.getDdlOracle(), "Oracle DDL이 필요하다.");
+        int nextProblemSequence = createNextProblemSequence(baseProblemSetId);
+        String postgresProblemId = createProblemId(DbmsType.POSTGRESQL, baseProblemSetId, nextProblemSequence);
+        String oracleProblemId = createProblemId(DbmsType.ORACLE, baseProblemSetId, nextProblemSequence);
 
-        // 문제 저장
         problemRepository.save(Problem.create(
-                problemId,
-                problemSet.getProblemSetId(),
+                postgresProblemId,
+                problemSetPair.postgresqlProblemSet().getProblemSetId(),
                 request.getTitle().trim(),
                 request.getDescription().trim(),
-                normalizeOptionalText(request.getDdlPostgresql()),
-                normalizeOptionalText(request.getDdlOracle()),
+                postgresDdl,
+                true,
+                false,
+                request.getCondition().trim(),
+                request.getOutput().trim(),
+                normalizeOptionalText(request.getOutputSample()),
+                normalizeOptionalText(request.getAnswer())
+        ));
+        problemRepository.save(Problem.create(
+                oracleProblemId,
+                problemSetPair.oracleProblemSet().getProblemSetId(),
+                request.getTitle().trim(),
+                request.getDescription().trim(),
+                oracleDdl,
+                false,
+                true,
                 request.getCondition().trim(),
                 request.getOutput().trim(),
                 normalizeOptionalText(request.getOutputSample()),
@@ -126,39 +155,57 @@ public class ProblemService {
 
         problemStore.loadProblems();
 
-        return new ProblemCreateRes(problemId);
+        return new ProblemCreateRes(postgresProblemId);
     }
 
-    private ProblemSet findExistingProblemSet(String problemSetId) {
-        if (problemSetId == null || problemSetId.isBlank()) {
-            throw new BusinessException("기존 테이블셋 번호가 필요하다.", HttpStatus.BAD_REQUEST);
+    private DbmsType resolveDbmsType(String dbms) {
+        return "oracle".equalsIgnoreCase(dbms) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+    }
+
+    private ProblemSetPair requireExistingProblemSetPair(String problemSetId) {
+        ProblemSetPair problemSetPair = findProblemSetPair(problemSetId);
+        if (problemSetPair.postgresqlProblemSet() == null || problemSetPair.oracleProblemSet() == null) {
+            throw new BusinessException("PostgreSQL과 Oracle 테이블셋이 모두 필요하다.", HttpStatus.BAD_REQUEST);
         }
 
-        return problemSetRepository.findById(problemSetId.trim())
-                .orElseThrow(() -> new BusinessException("존재하지 않는 테이블셋이다.", HttpStatus.NOT_FOUND));
+        return problemSetPair;
     }
 
-    private ProblemSet createProblemSet(ProblemCreateReq request) {
+    private ProblemSetPair createProblemSetPair(String baseProblemSetId, ProblemCreateReq request) {
         String ddlPostgresql = requireText(request.getDdlPostgresql(), "PostgreSQL DDL이 필요하다.");
         String ddlOracle = requireText(request.getDdlOracle(), "Oracle DDL이 필요하다.");
         String dataPostgresql = requireText(request.getDataPostgresql(), "PostgreSQL 데이터 SQL이 필요하다.");
         String dataOracle = requireText(request.getDataOracle(), "Oracle 데이터 SQL이 필요하다.");
 
-        ProblemSet problemSet = ProblemSet.create(
-                createNextProblemSetId(),
+        ProblemSet postgresqlProblemSet = problemSetRepository.save(ProblemSet.create(
+                createProblemSetId(DbmsType.POSTGRESQL, baseProblemSetId),
                 ddlPostgresql,
-                ddlOracle,
                 dataPostgresql,
-                dataOracle
-        );
-        problemSetRepository.save(problemSet);
+                true,
+                false
+        ));
+        ProblemSet oracleProblemSet = problemSetRepository.save(ProblemSet.create(
+                createProblemSetId(DbmsType.ORACLE, baseProblemSetId),
+                ddlOracle,
+                dataOracle,
+                false,
+                true
+        ));
 
-        return problemSet;
+        return new ProblemSetPair(postgresqlProblemSet, oracleProblemSet);
     }
 
-    private String createNextProblemSetId() {
+    private ProblemSetPair findProblemSetPair(String problemSetId) {
+        return new ProblemSetPair(
+                problemSetRepository.findById(createProblemSetId(DbmsType.POSTGRESQL, problemSetId)).orElse(null),
+                problemSetRepository.findById(createProblemSetId(DbmsType.ORACLE, problemSetId)).orElse(null)
+        );
+    }
+
+    private String createNextProblemSetBaseId() {
         return problemSetRepository.findAll().stream()
-                .map(ProblemSet::getProblemSetId)
+                .map(ProblemSet::getBaseProblemSetId)
+                .filter(problemSetId -> !problemSetId.isBlank())
                 .map(problemSetId -> {
                     try {
                         return Integer.parseInt(problemSetId);
@@ -171,10 +218,10 @@ public class ProblemService {
                 .orElse("00001");
     }
 
-    private String createNextProblemId(String problemSetId) {
-        int nextSequence = problemRepository.findAll().stream()
+    private int createNextProblemSequence(String baseProblemSetId) {
+        return problemRepository.findAll().stream()
                 .map(Problem::getProblemId)
-                .filter(problemId -> problemId.startsWith(problemSetId + "-"))
+                .filter(problemId -> extractBaseProblemSetId(problemId).equals(baseProblemSetId))
                 .map(problemId -> problemId.split("-"))
                 .filter(tokens -> tokens.length == 2)
                 .map(tokens -> {
@@ -187,8 +234,37 @@ public class ProblemService {
                 .max(Comparator.naturalOrder())
                 .map(maxValue -> maxValue + 1)
                 .orElse(1);
+    }
 
-        return problemSetId + "-" + formatFiveDigits(nextSequence);
+    private String createProblemSetId(DbmsType dbmsType, String baseProblemSetId) {
+        return (dbmsType == DbmsType.POSTGRESQL ? "P" : "O") + normalizeBaseProblemSetId(baseProblemSetId);
+    }
+
+    private String createProblemId(DbmsType dbmsType, String baseProblemSetId, int sequence) {
+        return createProblemSetId(dbmsType, baseProblemSetId) + "-" + formatFiveDigits(sequence);
+    }
+
+    private String normalizeBaseProblemSetId(String problemSetId) {
+        if (problemSetId == null || problemSetId.isBlank()) {
+            throw new BusinessException("기존 테이블셋 번호가 필요하다.", HttpStatus.BAD_REQUEST);
+        }
+
+        String normalizedProblemSetId = problemSetId.trim();
+        if (normalizedProblemSetId.matches("^[PO]\\d{5}$")) {
+            return normalizedProblemSetId.substring(1);
+        }
+
+        return normalizedProblemSetId;
+    }
+
+    private String extractBaseProblemSetId(String problemId) {
+        if (problemId == null || problemId.isBlank()) {
+            return "";
+        }
+
+        String[] tokens = problemId.split("-");
+        String scopedProblemSetId = tokens.length > 0 ? tokens[0] : problemId;
+        return scopedProblemSetId.matches("^[PO]\\d{5}$") ? scopedProblemSetId.substring(1) : scopedProblemSetId;
     }
 
     private String formatFiveDigits(int value) {
@@ -205,5 +281,12 @@ public class ProblemService {
 
     private String normalizeOptionalText(String value) {
         return value != null ? value.trim() : "";
+    }
+
+    private record ProblemSetPair(ProblemSet postgresqlProblemSet, ProblemSet oracleProblemSet) {
+
+        private boolean isEmpty() {
+            return postgresqlProblemSet == null && oracleProblemSet == null;
+        }
     }
 }

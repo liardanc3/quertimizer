@@ -47,7 +47,7 @@ public class CommunityService {
     private final CommunitySearchService communitySearchService;
 
     @Transactional(readOnly = true)
-    public CommunityPostPageRes getPosts(int requestedPage, String searchKeyword, String tag, String sortKey) {
+    public CommunityPostPageRes getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
         List<CommunityPost> posts = communityPostRepository.findAll();
         Map<String, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
@@ -57,6 +57,7 @@ public class CommunityService {
                 COMMUNITY_PAGE_SIZE,
                 searchKeyword,
                 tag,
+                category,
                 sortKey,
                 posts,
                 tagsByPostId

@@ -1,37 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemList from '../components/home/ProblemList';
-import ProblemModeSwitch from '../components/home/ProblemModeSwitch';
-import ProblemSpreadRateFilter from '../components/home/ProblemSpreadRateFilter';
-import ProblemStatusFilter from '../components/home/ProblemStatusFilter';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
 import { useMockSession } from '../lib/session';
 import { useHomeSiteTitle } from '../lib/uiText';
+import type { DbmsType } from '../types/domain';
 import './HomePage.css';
 
-function SortAscendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.5v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M5.2 5.25 8 2.5l2.8 2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortDescendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.6v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="m5.2 10.75 2.8 2.75 2.8-2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-type SolvedCountSortOrder = 'desc' | 'asc';
+type SortDirection = 'desc' | 'asc';
 type SpreadRateSortOrder = 'none' | 'desc' | 'asc';
 type SolveState = 'all' | 'solved' | 'unsolved' | 'none';
+type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
 type RangeSelection = { min: number; max: number };
 const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
+const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
+  { value: 'postgresql', label: 'PostgreSQL' },
+  { value: 'oracle', label: 'Oracle' },
+];
 
 function resolveSolveState(showSolved: boolean, showUnsolved: boolean): SolveState {
   if (showSolved && showUnsolved) {
@@ -94,13 +79,22 @@ function keepRangeIfSame(current: RangeSelection | null, next: RangeSelection | 
   return areSameRange(current, next) ? current : next;
 }
 
+function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: boolean) {
+  if (currentChecked && !otherChecked) {
+    return { currentChecked: false, otherChecked: true };
+  }
+
+  return { currentChecked: !currentChecked, otherChecked };
+}
+
 export default function HomePage() {
   useHomeSiteTitle();
   const { isAuthenticated, isReady, userId } = useMockSession();
-  const [showStats, setShowStats] = useState(true);
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>('postgresql');
   const [showSolved, setShowSolved] = useState(true);
   const [showUnsolved, setShowUnsolved] = useState(true);
-  const [solvedCountSortOrder, setSolvedCountSortOrder] = useState<SolvedCountSortOrder>('desc');
+  const [countSortField, setCountSortField] = useState<CountSortField>('solvedCount');
+  const [countSortDirection, setCountSortDirection] = useState<SortDirection>('desc');
   const [spreadRateSortOrder, setSpreadRateSortOrder] = useState<SpreadRateSortOrder>('none');
   const [draftSearchValue, setDraftSearchValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,6 +108,7 @@ export default function HomePage() {
   const [committedSpreadRateRange, setCommittedSpreadRateRange] = useState<RangeSelection | null>(DEFAULT_SPREAD_RATE_RANGE);
 
   const canShowSolveState = isReady && isAuthenticated;
+  const showStats = true;
   const solveState = canShowSolveState ? resolveSolveState(showSolved, showUnsolved) : 'all';
   const spreadRateSliderMax = Math.max(DEFAULT_SPREAD_RATE_RANGE.max, Math.ceil(problemPage.spreadRateRange.max));
   const spreadRateSliderBounds = useMemo(() => ({ min: DEFAULT_SPREAD_RATE_RANGE.min, max: spreadRateSliderMax }), [spreadRateSliderMax]);
@@ -121,6 +116,10 @@ export default function HomePage() {
   const resolvedVisibleSpreadRateRange = resolveRangeSelection(visibleSpreadRateRange) ?? spreadRateSliderBounds;
   const resolvedSelectedSpreadRateRange = resolveRangeSelection(selectedSpreadRateRange);
   const hasPendingSpreadRateRange = !areSameRange(resolvedSelectedSpreadRateRange, committedSpreadRateRange);
+  const hasActiveSpreadRateConstraints =
+    committedSpreadRateRange != null
+      && (committedSpreadRateRange.min > spreadRateSliderBounds.min || committedSpreadRateRange.max < spreadRateSliderBounds.max);
+  const isSpreadRateFilterActive = spreadRateSortOrder !== 'none' || hasActiveSpreadRateConstraints;
 
   useEffect(() => {
     setSelectedSpreadRateRange((current) => keepRangeIfSame(current, normalizeRangeSelection(current, spreadRateSliderBounds)));
@@ -147,9 +146,12 @@ export default function HomePage() {
       try {
         const fetchedProblemPage = await fetchProblems({
           page: requestedPage,
+          dbms: selectedDbms,
           query: searchQuery,
           solveState,
-          solvedCountSort: solvedCountSortOrder,
+          solvedCountSort: countSortField === 'solvedCount' ? countSortDirection : 'none',
+          totalSubmitSort: countSortField === 'totalSubmitCount' ? countSortDirection : 'none',
+          successSubmitSort: countSortField === 'successSubmitCount' ? countSortDirection : 'none',
           spreadRateSort: spreadRateSortOrder,
           spreadRateMin: committedSpreadRateRange?.min ?? null,
           spreadRateMax: committedSpreadRateRange?.max ?? null,
@@ -181,7 +183,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [requestedPage, searchQuery, solveState, solvedCountSortOrder, spreadRateSortOrder, committedSpreadRateRange]);
+  }, [committedSpreadRateRange, countSortDirection, countSortField, requestedPage, searchQuery, selectedDbms, solveState, spreadRateSortOrder]);
 
   const resolvedProblems = useMemo(
     () =>
@@ -202,23 +204,33 @@ export default function HomePage() {
     setRequestedPage(1);
   }
 
-  function toggleSolvedCountSortOrder() {
-    setSolvedCountSortOrder((value) => (value === 'asc' ? 'desc' : 'asc'));
+  function toggleCountSort(field: CountSortField) {
+    if (countSortField === field) {
+      setCountSortDirection((value) => (value === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setCountSortField(field);
+      setCountSortDirection('desc');
+    }
+
+    setRequestedPage(1);
+  }
+
+  function toggleSolvedFilter() {
+    const nextSelection = toggleRequiredPairSelection(showSolved, showUnsolved);
+    setShowSolved(nextSelection.currentChecked);
+    setShowUnsolved(nextSelection.otherChecked);
+    setRequestedPage(1);
+  }
+
+  function toggleUnsolvedFilter() {
+    const nextSelection = toggleRequiredPairSelection(showUnsolved, showSolved);
+    setShowUnsolved(nextSelection.currentChecked);
+    setShowSolved(nextSelection.otherChecked);
     setRequestedPage(1);
   }
 
   function toggleSpreadRateSortOrder() {
-    setSpreadRateSortOrder((value) => {
-      if (value === 'none') {
-        return 'desc';
-      }
-
-      if (value === 'desc') {
-        return 'asc';
-      }
-
-      return 'none';
-    });
+    setSpreadRateSortOrder((value) => (value === 'desc' ? 'asc' : 'desc'));
     setRequestedPage(1);
   }
 
@@ -268,21 +280,34 @@ export default function HomePage() {
     setIsPageJumpEditing(false);
   }
 
-  if (isLoading) {
-    return (
-      <div className="page-stack home-page">
-        <section className="page-loading-shell" aria-label="Loading problems" aria-busy="true">
-          <span className="page-loading-spinner" aria-hidden="true" />
-        </section>
-        <HandleSetupGate />
-      </div>
-    );
-  }
-
   return (
     <div className="page-stack home-page">
       <section className="panel-card compact problem-toolbar-card">
-        <div className="problem-toolbar">
+        <div className="problem-toolbar home-problem-toolbar-stack">
+          <div className="solve-dbms-tab-row home-problem-dbms-tab-row" role="tablist" aria-label="문제 목록 DBMS 선택">
+            {dbmsOptions.map((option) => {
+              const isSelected = option.value === selectedDbms;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    if (!isSelected) {
+                      setSelectedDbms(option.value);
+                      setRequestedPage(1);
+                    }
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
           <form
             className="problem-search-form home-problem-search-form"
             onSubmit={(event) => {
@@ -308,7 +333,7 @@ export default function HomePage() {
                 className="btn secondary problem-search-button home-problem-search-button"
                 aria-label="검색"
               >
-                {'검색'}
+                검색
               </button>
             </label>
           </form>
@@ -316,80 +341,39 @@ export default function HomePage() {
       </section>
 
       <section className="panel-card problem-board">
-        <div className="problem-board-header">
-          <div className="problem-board-controls">
-            <ProblemModeSwitch label="통계 표시" checked={showStats} onChange={setShowStats} />
-
-            {canShowSolveState ? (
-              <ProblemStatusFilter
-                showSolved={showSolved}
-                showUnsolved={showUnsolved}
-                onToggleSolved={() => {
-                  setShowSolved((value) => !value);
-                  setRequestedPage(1);
-                }}
-                onToggleUnsolved={() => {
-                  setShowUnsolved((value) => !value);
-                  setRequestedPage(1);
-                }}
-              />
-            ) : null}
-
-            <div
-              className="problem-control-group problem-sort-group"
-              role="group"
-              aria-label="푼 사람 정렬"
-            >
-              <span className="problem-control-label">{'푼 사람'}</span>
-              <div className="problem-sort-controls">
-                <button
-                  type="button"
-                  className="problem-sort-toggle-button"
-                  aria-label={
-                    solvedCountSortOrder === 'asc'
-                      ? '푼 사람 오름차순'
-                      : '푼 사람 내림차순'
-                  }
-                  title={
-                    solvedCountSortOrder === 'asc'
-                      ? '푼 사람 오름차순'
-                      : '푼 사람 내림차순'
-                  }
-                  onClick={toggleSolvedCountSortOrder}
-                >
-                  {solvedCountSortOrder === 'asc' ? <SortAscendingIcon /> : <SortDescendingIcon />}
-                </button>
-              </div>
-            </div>
-
-            <ProblemSpreadRateFilter
-              minBound={spreadRateSliderBounds.min}
-              maxBound={spreadRateSliderBounds.max}
-              selectedMin={visibleSpreadRateRange.min}
-              selectedMax={visibleSpreadRateRange.max}
-              displayMin={resolvedVisibleSpreadRateRange.min}
-              displayMax={resolvedVisibleSpreadRateRange.max}
-              sortOrder={spreadRateSortOrder}
-              onToggleSort={toggleSpreadRateSortOrder}
-              onChangeMin={updateSpreadRateMin}
-              onChangeMax={updateSpreadRateMax}
-              onChangeRange={updateSpreadRateRange}
-              onApplyRange={applySpreadRateRange}
-              hasPendingChanges={hasPendingSpreadRateRange}
-            />
-          </div>
-        </div>
-
         {loadFailed ? (
           <section className="problem-list is-empty">
-            <div className="problem-empty-state">{'문제 목록을 불러오지 못했습니다.'}</div>
+            <div className="problem-empty-state">문제 목록을 불러오지 못했습니다.</div>
           </section>
         ) : (
           <ProblemList
             problems={resolvedProblems}
+            currentDbms={selectedDbms}
             showStats={showStats}
             showSolveState={canShowSolveState}
+            showSolved={showSolved}
+            showUnsolved={showUnsolved}
+            countSortField={countSortField}
+            countSortDirection={countSortDirection}
+            isLoading={isLoading}
+            isSpreadRateFilterActive={isSpreadRateFilterActive}
+            spreadRateMinBound={spreadRateSliderBounds.min}
+            spreadRateMaxBound={spreadRateSliderBounds.max}
+            selectedSpreadRateMin={visibleSpreadRateRange.min}
+            selectedSpreadRateMax={visibleSpreadRateRange.max}
+            displaySpreadRateMin={resolvedVisibleSpreadRateRange.min}
+            displaySpreadRateMax={resolvedVisibleSpreadRateRange.max}
+            spreadRateSortOrder={spreadRateSortOrder}
+            hasPendingSpreadRateRange={hasPendingSpreadRateRange}
             onSearchSelect={applySearch}
+            onToggleSolved={toggleSolvedFilter}
+            onToggleUnsolved={toggleUnsolvedFilter}
+            onToggleCountSort={toggleCountSort}
+            onToggleSpreadRateSort={toggleSpreadRateSortOrder}
+            onChangeSpreadRateMin={updateSpreadRateMin}
+            onChangeSpreadRateMax={updateSpreadRateMax}
+            onChangeSpreadRateRange={updateSpreadRateRange}
+            onApplySpreadRateRange={applySpreadRateRange}
           />
         )}
 
@@ -401,7 +385,7 @@ export default function HomePage() {
               onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
               disabled={problemPage.currentPage === 1}
             >
-              {'이전'}
+              이전
             </button>
 
             {isPageJumpEditing ? (
@@ -450,7 +434,7 @@ export default function HomePage() {
               onClick={() => setRequestedPage((page) => Math.min(problemPage.totalPages, page + 1))}
               disabled={problemPage.currentPage === problemPage.totalPages}
             >
-              {'다음'}
+              다음
             </button>
           </div>
         ) : null}
@@ -460,12 +444,12 @@ export default function HomePage() {
         <section className="panel-card disabled-panel">
           <div className="panel-heading-row responsive">
             <div>
-              <p className="panel-meta">{'준비 중인 영역'}</p>
-              <h2 className="panel-title">NoSQL {'트랙'}</h2>
+              <p className="panel-meta">준비 중인 영역</p>
+              <h2 className="panel-title">NoSQL 트랙</h2>
             </div>
             <span className="section-badge is-disabled">Coming Soon</span>
           </div>
-          <p className="content-text">{'문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개될 예정입니다.'}</p>
+          <p className="content-text">문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개될 예정입니다.</p>
         </section>
       </div>
 

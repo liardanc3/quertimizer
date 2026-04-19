@@ -45,13 +45,21 @@ public class ProblemMockData {
 
     @PostConstruct
     public void seed() {
+        saveProblem("P00001-00001", "P00001", ProblemSetMockData.TABLE_SET_00001_POSTGRESQL_DDL, true, false);
+        saveProblem("O00001-00001", "O00001", ProblemSetMockData.TABLE_SET_00001_ORACLE_DDL, false, true);
+        saveProblem("P00001-00002", "P00001", ProblemSetMockData.TABLE_SET_00001_POSTGRESQL_DDL, true, false);
+        saveProblem("O00001-00002", "O00001", ProblemSetMockData.TABLE_SET_00001_ORACLE_DDL, false, true);
+    }
+
+    private void saveProblem(String problemId, String problemSetId, String ddl, boolean isPostgresql, boolean isOracle) {
         problemRepository.save(Problem.create(
-                "00001-00001",
-                "00001",
+                problemId,
+                problemSetId,
                 "3월 고객별 주문 건수와 총 주문 금액 조회",
                 DESCRIPTION,
-                ProblemSetMockData.TABLE_SET_00001_POSTGRESQL_DDL,
-                ProblemSetMockData.TABLE_SET_00001_ORACLE_DDL,
+                ddl,
+                isPostgresql,
+                isOracle,
                 CONDITION,
                 OUTPUT,
                 OUTPUT_SAMPLE,

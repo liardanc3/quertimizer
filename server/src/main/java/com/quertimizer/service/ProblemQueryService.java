@@ -135,6 +135,7 @@ public class ProblemQueryService {
                                                 Consumer<ProblemSubmitProgress> progressListener) {
         LocalDateTime submittedAt = LocalDateTime.now();
         String submittedProblemId = normalizeProblemId(problemId);
+        String storedSubmittedSql = preserveSubmittedSql(sql);
         String submittedSql = normalizeSubmittedSql(sql);
 
         try {
@@ -174,6 +175,7 @@ public class ProblemQueryService {
                         0,
                         null,
                         0,
+                        0L,
                         submittedAt
                 );
                 return ProblemSubmitResult.failure(submittedProblemId, message);
@@ -209,6 +211,7 @@ public class ProblemQueryService {
                         0,
                         null,
                         0,
+                        0L,
                         submittedAt
                 );
                 return ProblemSubmitResult.failure(submittedProblemId, message);
@@ -221,18 +224,20 @@ public class ProblemQueryService {
                         submittedProblemId,
                         userId,
                         dbmsType,
-                        submittedSql,
+                        storedSubmittedSql,
                         false,
                         "오답",
                         submissionResult.executionTimeMs(),
                         submissionResult.cost(),
                         submissionResult.rowCount(),
+                        0L,
                         submittedAt
                 );
                 return ProblemSubmitResult.failure(submittedProblemId, "오답");
             }
 
             progressListener.accept(ProblemSubmitProgress.success(submittedProblemId, "answer", "출력 데이터 정답"));
+            String ddlFailureMessage = null;
             progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "ddl", "인덱스 변경 반영 중"));
             try {
                 List<String> ddlDetailLines = executeSubmittedDdlWithRetry(
@@ -250,46 +255,21 @@ public class ProblemQueryService {
                         ddlDetailLines
                 ));
             } catch (SubmittedDdlExecutionException exception) {
+                ddlFailureMessage = exception.getMessage();
                 progressListener.accept(ProblemSubmitProgress.error(
                         submittedProblemId,
                         "ddl",
                         "인덱스 변경 반영 실패",
                         exception.detailLines()
                 ));
-                saveProblemSubmitHistory(
-                        submittedProblemId,
-                        userId,
-                        dbmsType,
-                        submittedSql,
-                        false,
-                        exception.getMessage(),
-                        submissionResult.executionTimeMs(),
-                        null,
-                        submissionResult.rowCount(),
-                        submittedAt
-                );
-                return ProblemSubmitResult.failure(submittedProblemId, exception.getMessage());
             } catch (Exception exception) {
-                String message = resolveProblemSubmitErrorMessage(exception);
+                ddlFailureMessage = resolveProblemSubmitErrorMessage(exception);
                 progressListener.accept(ProblemSubmitProgress.error(
                         submittedProblemId,
                         "ddl",
                         "인덱스 변경 반영 실패",
-                        List.of(message)
+                        List.of(ddlFailureMessage)
                 ));
-                saveProblemSubmitHistory(
-                        submittedProblemId,
-                        userId,
-                        dbmsType,
-                        submittedSql,
-                        false,
-                        message,
-                        submissionResult.executionTimeMs(),
-                        null,
-                        submissionResult.rowCount(),
-                        submittedAt
-                );
-                return ProblemSubmitResult.failure(submittedProblemId, message);
             }
 
             progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, "plan", "실행계획 분석 중"));
@@ -323,46 +303,57 @@ public class ProblemQueryService {
                         submittedProblemId,
                         userId,
                         dbmsType,
-                        submittedSql,
+                        storedSubmittedSql,
                         false,
                         message,
                         submissionResult.executionTimeMs(),
                         null,
                         submissionResult.rowCount(),
+                        0L,
                         submittedAt
                 );
                 return ProblemSubmitResult.failure(submittedProblemId, message);
             }
 
+            long submittedExecutionTimeMs = resolveSubmittedExecutionTimeMs(submissionResult, explainAnalyzeResult);
+            boolean submitSucceeded = ddlFailureMessage == null;
+            String submitMessage = submitSucceeded ? "정답" : ddlFailureMessage;
+
             saveProblemSubmitHistory(
                     submittedProblemId,
                     userId,
                     dbmsType,
-                    submittedSql,
-                    true,
-                    "정답",
+                    storedSubmittedSql,
+                    submitSucceeded,
+                    submitMessage,
                     submissionResult.executionTimeMs(),
                     explainAnalyzeResult.cost(),
                     submissionResult.rowCount(),
-                    submittedAt
-            );
-            saveProblemTopHistory(
-                    submittedProblemId,
-                    userId,
-                    dbmsType,
-                    submittedSql,
-                    resolveSubmittedExecutionTimeMs(submissionResult, explainAnalyzeResult),
-                    explainAnalyzeResult.cost(),
-                    0,
                     planAnalysisResult.executionPlanElement(),
                     submittedAt
             );
 
-            return ProblemSubmitResult.success(
-                    submittedProblemId,
-                    "정답",
-                    resolveSubmittedExecutionTimeMs(submissionResult, explainAnalyzeResult)
-            );
+            if (submitSucceeded) {
+                saveProblemTopHistory(
+                        submittedProblemId,
+                        userId,
+                        dbmsType,
+                        storedSubmittedSql,
+                        submittedExecutionTimeMs,
+                        explainAnalyzeResult.cost(),
+                        0,
+                        planAnalysisResult.executionPlanElement(),
+                        submittedAt
+                );
+
+                return ProblemSubmitResult.success(
+                        submittedProblemId,
+                        "정답",
+                        submittedExecutionTimeMs
+                );
+            }
+
+            return ProblemSubmitResult.failure(submittedProblemId, submitMessage);
         } catch (Exception exception) {
             String message = resolveProblemSubmitErrorMessage(exception);
 
@@ -376,12 +367,13 @@ public class ProblemQueryService {
                     submittedProblemId,
                     userId,
                     dbmsType,
-                    submittedSql,
+                    storedSubmittedSql,
                     false,
                     message,
                     0,
                     null,
                     0,
+                    0L,
                     submittedAt
             );
 
@@ -933,6 +925,10 @@ public class ProblemQueryService {
         return sql != null ? trimTrailingSemicolon(sql) : "";
     }
 
+    private String preserveSubmittedSql(String sql) {
+        return sql != null ? sql.replace("\r\n", "\n") : "";
+    }
+
     private List<SubmittedStatement> parseSubmittedStatements(String sql) {
         validateSqlText(sql);
 
@@ -1231,6 +1227,7 @@ public class ProblemQueryService {
                                           long executionTimeMs,
                                           Double cost,
                                           long rowCount,
+                                          long executionPlanElement,
                                           LocalDateTime submittedAt) {
         problemSubmitHistoryRepository.save(ProblemSubmitHistory.create(
                 problemId,
@@ -1242,6 +1239,7 @@ public class ProblemQueryService {
                 executionTimeMs,
                 cost != null ? cost : 0d,
                 rowCount,
+                executionPlanElement,
                 submittedAt
         ));
     }

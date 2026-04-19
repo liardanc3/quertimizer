@@ -19,6 +19,7 @@ type HintFilterValue = 'USED' | 'UNUSED';
 
 interface ProblemRuntimeChartProps {
   problem: ProblemSummary;
+  forcedDbms?: DbmsType;
   onSearchSelect: (value: string) => void;
   onSolvedCountChange: (count: number) => void;
 }
@@ -418,10 +419,17 @@ function buildPlanSectionRatioItems(args: {
   return [...bucketItems, ...hintItem];
 }
 
-export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedCountChange }: ProblemRuntimeChartProps) {
+export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelect, onSolvedCountChange }: ProblemRuntimeChartProps) {
   const { userId, defaultDbms } = useMockSession();
   const samples = useMemo(() => toSamples(problem, userId), [problem, userId]);
-  const availableDbms = useMemo(() => DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key)), [samples]);
+  const availableDbms = useMemo(() => {
+    if (forcedDbms) {
+      return DBMS_OPTIONS.filter((option) => option.key === forcedDbms);
+    }
+
+    const sampleDbms = DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key));
+    return sampleDbms.length > 0 ? sampleDbms : DBMS_OPTIONS;
+  }, [forcedDbms, samples]);
   const defaultPlanSections = useMemo(() => PLAN_SECTION_OPTIONS.map((section) => section.key), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0]?.key ?? 'postgresql');
   const hasUserSelectedDbmsRef = useRef(false);
@@ -434,6 +442,13 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
   const floatingTooltipTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (forcedDbms) {
+      if (selectedDbms !== forcedDbms) {
+        setSelectedDbms(forcedDbms);
+      }
+      return;
+    }
+
     if (availableDbms.length === 0) {
       return;
     }
@@ -451,7 +466,7 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
 
       setSelectedDbms(availableDbms[0].key);
     }
-  }, [availableDbms, defaultDbms, selectedDbms]);
+  }, [availableDbms, defaultDbms, forcedDbms, selectedDbms]);
 
   const activeSamples = useMemo(() => samples.filter((sample) => sample.dbms === selectedDbms), [samples, selectedDbms]);
   const availableBucketFilters = useMemo(() => buildAvailableBucketFilters(selectedDbms), [selectedDbms]);
@@ -608,102 +623,81 @@ export default function ProblemRuntimeChart({ problem, onSearchSelect, onSolvedC
       <div className="problem-runtime-main">
         <div className="runtime-toolbar">
           <div className="runtime-toolbar-primary">
-            <div className="runtime-filter-cluster" role="group" aria-label="DBMS 선택">
-              <div className="runtime-toolbar-group is-dbms">
-                {availableDbms.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    className={`runtime-filter-button is-dbms ${selectedDbms === option.key ? 'is-selected' : ''}`}
-                    aria-pressed={selectedDbms === option.key}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      hasUserSelectedDbmsRef.current = true;
-                      setSelectedDbms(option.key);
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="runtime-filter-cluster" role="group" aria-label="필터 조합 방식">
-              <div className="runtime-toolbar-group is-dbms">
-                {FILTER_MODE_OPTIONS.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    className={`runtime-filter-button is-dbms ${filterMatchMode === option.key ? 'is-selected' : ''}`}
-                    aria-pressed={filterMatchMode === option.key}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setFilterMatchMode(option.key);
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className={`runtime-plan-shell ${normalizedSelectedPlanSections.length > 0 && showPlanDetails ? 'is-open' : ''}`}>
               <div className="runtime-filter-cluster is-wide" role="group" aria-label="실행 계획 요소">
-              <span className="runtime-filter-cluster-label">실행 계획 요소</span>
-              <div className="runtime-filter-group is-plan">
-                <button
-                  type="button"
-                  className={`runtime-filter-button is-plan-option runtime-check-button runtime-plan-all-button ${allPlanSectionsSelected ? 'is-selected' : ''}`}
-                  aria-pressed={allPlanSectionsSelected}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setSelectedPlanSections((current) => defaultPlanSections.every((sectionKey) => current.includes(sectionKey)) ? [] : defaultPlanSections);
-                  }}
-                >
-                  <SelectionCheckbox checked={allPlanSectionsSelected} />
-                  <span className="runtime-check-label">전체</span>
-                </button>
+                <span className="runtime-filter-cluster-label">실행 계획 요소</span>
 
-                {PLAN_SECTION_OPTIONS.map((section) => {
-                  const isSelected = normalizedSelectedPlanSections.includes(section.key);
-
-                  return (
+                <div className="runtime-plan-mode-cluster" role="group" aria-label="필터 조합 방식">
+                  {FILTER_MODE_OPTIONS.map((option) => (
                     <button
-                      key={section.key}
+                      key={option.key}
                       type="button"
-                      className={`runtime-filter-button is-plan-option runtime-check-button ${isSelected ? 'is-selected' : ''}`}
-                      aria-pressed={isSelected}
+                      className={`runtime-filter-button is-plan-inline ${filterMatchMode === option.key ? 'is-selected' : ''}`}
+                      aria-pressed={filterMatchMode === option.key}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        setSelectedPlanSections((current) => {
-                          const nextValues = current.includes(section.key) ? current.filter((currentKey) => currentKey !== section.key) : [...current, section.key];
-                          return defaultPlanSections.filter((sectionKey) => nextValues.includes(sectionKey));
-                        });
+                        setFilterMatchMode(option.key);
                       }}
                     >
-                      <SelectionCheckbox checked={isSelected} />
-                      <span className="runtime-check-label">{section.label}</span>
+                      {option.label}
                     </button>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                className="runtime-detail-toggle"
-                aria-expanded={showPlanDetails}
-                aria-label={showPlanDetails ? '실행 계획 요소 상세 접기' : '실행 계획 요소 상세 펼치기'}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setShowPlanDetails((value) => !value);
-                }}
-              >
-                {showPlanDetails ? '▴' : '▾'}
-              </button>
+                  ))}
+                </div>
+
+                <div className="runtime-filter-group is-plan runtime-plan-section-cluster">
+                  <button
+                    type="button"
+                    className={`runtime-filter-button is-plan-option runtime-check-button runtime-plan-all-button ${allPlanSectionsSelected ? 'is-selected' : ''}`}
+                    aria-pressed={allPlanSectionsSelected}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedPlanSections((current) => defaultPlanSections.every((sectionKey) => current.includes(sectionKey)) ? [] : defaultPlanSections);
+                    }}
+                  >
+                    <SelectionCheckbox checked={allPlanSectionsSelected} />
+                    <span className="runtime-check-label">전체</span>
+                  </button>
+
+                  {PLAN_SECTION_OPTIONS.map((section) => {
+                    const isSelected = normalizedSelectedPlanSections.includes(section.key);
+
+                    return (
+                      <button
+                        key={section.key}
+                        type="button"
+                        className={`runtime-filter-button is-plan-option runtime-check-button ${isSelected ? 'is-selected' : ''}`}
+                        aria-pressed={isSelected}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setSelectedPlanSections((current) => {
+                            const nextValues = current.includes(section.key) ? current.filter((currentKey) => currentKey !== section.key) : [...current, section.key];
+                            return defaultPlanSections.filter((sectionKey) => nextValues.includes(sectionKey));
+                          });
+                        }}
+                      >
+                        <SelectionCheckbox checked={isSelected} />
+                        <span className="runtime-check-label">{section.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  className="runtime-detail-toggle"
+                  aria-expanded={showPlanDetails}
+                  aria-label={showPlanDetails ? '실행 계획 요소 상세 접기' : '실행 계획 요소 상세 펼치기'}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setShowPlanDetails((value) => !value);
+                  }}
+                >
+                  {showPlanDetails ? '▴' : '▾'}
+                </button>
               </div>
             </div>
           </div>

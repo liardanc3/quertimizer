@@ -20,7 +20,7 @@ public class ProblemGeneratorPermissionId implements Serializable {
     @Column(name = "user_id", nullable = false, length = 50)
     private String userId;
 
-    @Column(name = "problem_id", nullable = false, length = 11)
+    @Column(name = "problem_id", nullable = false, length = 12)
     private String problemId;
 
     public static ProblemGeneratorPermissionId create(String userId, String problemId) {

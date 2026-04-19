@@ -178,11 +178,18 @@ public class ProblemSetMockData {
     @PostConstruct
     public void seed() {
         problemSetRepository.save(ProblemSet.create(
-                "00001",
+                "P00001",
                 TABLE_SET_00001_POSTGRESQL_DDL,
-                TABLE_SET_00001_ORACLE_DDL,
                 TABLE_SET_00001_POSTGRESQL_DATA,
-                TABLE_SET_00001_ORACLE_DATA
+                true,
+                false
+        ));
+        problemSetRepository.save(ProblemSet.create(
+                "O00001",
+                TABLE_SET_00001_ORACLE_DDL,
+                TABLE_SET_00001_ORACLE_DATA,
+                false,
+                true
         ));
     }
 }

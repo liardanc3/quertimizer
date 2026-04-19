@@ -14,13 +14,13 @@ public class ProblemSetDetailRes {
     private final String dataPostgresql;
     private final String dataOracle;
 
-    public static ProblemSetDetailRes from(ProblemSet problemSet) {
+    public static ProblemSetDetailRes from(String problemSetId, ProblemSet postgresqlProblemSet, ProblemSet oracleProblemSet) {
         return new ProblemSetDetailRes(
-                problemSet.getProblemSetId(),
-                normalize(problemSet.getDdlPostgresql()),
-                normalize(problemSet.getDdlOracle()),
-                normalize(problemSet.getDataPostgresql()),
-                normalize(problemSet.getDataOracle())
+                problemSetId,
+                postgresqlProblemSet != null ? normalize(postgresqlProblemSet.getDdl()) : "",
+                oracleProblemSet != null ? normalize(oracleProblemSet.getDdl()) : "",
+                postgresqlProblemSet != null ? normalize(postgresqlProblemSet.getData()) : "",
+                oracleProblemSet != null ? normalize(oracleProblemSet.getData()) : ""
         );
     }
 

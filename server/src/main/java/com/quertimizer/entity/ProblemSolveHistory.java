@@ -22,7 +22,7 @@ import java.time.LocalDateTime;
 public class ProblemSolveHistory {
 
     @Id
-    @Column(name = "problem_id", nullable = false, length = 11)
+    @Column(name = "problem_id", nullable = false, length = 12)
     private String problemId;
 
     @Id

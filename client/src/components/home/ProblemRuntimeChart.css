@@ -1403,3 +1403,84 @@
     background: transparent;
   }
 }
+
+/* 2026-04 problem runtime inline filter overrides */
+.runtime-toolbar-primary {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.runtime-filter-cluster.is-wide {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 0.58rem;
+}
+
+.runtime-filter-cluster-label {
+  padding-right: 0.58rem;
+  border-right: 1px solid #d7e2ef;
+}
+
+.runtime-plan-mode-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-width: max-content;
+  padding-right: 0.58rem;
+  border-right: 1px solid #d7e2ef;
+}
+
+.runtime-filter-button.is-plan-inline {
+  min-height: 1.18rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.63rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.runtime-filter-button.is-plan-inline:hover {
+  border-color: transparent;
+  background: transparent;
+  color: #0f5db3;
+}
+
+.runtime-filter-button.is-plan-inline.is-selected {
+  border-color: transparent;
+  background: transparent;
+  color: #1565c0;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.runtime-plan-section-cluster {
+  position: static;
+  top: 0;
+  flex: 1 1 auto;
+  gap: 0.62rem;
+}
+
+.runtime-detail-toggle {
+  margin-left: 0;
+  top: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .runtime-filter-cluster-label,
+  .runtime-filter-button.is-plan-inline {
+    color: var(--ink-faint);
+  }
+
+  .runtime-filter-cluster-label,
+  .runtime-plan-mode-cluster {
+    border-right-color: var(--line-soft);
+  }
+
+  .runtime-filter-button.is-plan-inline:hover,
+  .runtime-filter-button.is-plan-inline.is-selected {
+    color: var(--accent-ink);
+  }
+}

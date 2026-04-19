@@ -61,13 +61,14 @@ public class CommunitySearchService {
                                             int pageSize,
                                             String searchKeyword,
                                             String tag,
+                                            String category,
                                             String sortKey,
                                             List<CommunityPost> posts,
                                             Map<String, List<String>> tagsByPostId) {
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
-            return searchPostsInMemory(requestedPage, pageSize, searchKeyword, tag, sortKey, posts, tagsByPostId);
+            return searchPostsInMemory(requestedPage, pageSize, searchKeyword, tag, category, sortKey, posts, tagsByPostId);
         }
 
         try {
@@ -77,12 +78,13 @@ public class CommunitySearchService {
                     pageSize,
                     searchKeyword,
                     tag,
+                    category,
                     sortKey,
                     posts,
                     tagsByPostId
             );
         } catch (RuntimeException ignored) {
-            return searchPostsInMemory(requestedPage, pageSize, searchKeyword, tag, sortKey, posts, tagsByPostId);
+            return searchPostsInMemory(requestedPage, pageSize, searchKeyword, tag, category, sortKey, posts, tagsByPostId);
         }
     }
 
@@ -101,6 +103,7 @@ public class CommunitySearchService {
                     post.getUserId(),
                     post.getContentText(),
                     tags,
+                    resolveCategory(post),
                     post.getLikeCount(),
                     post.getCommentCount(),
                     post.getViewCount(),
@@ -146,10 +149,11 @@ public class CommunitySearchService {
                                                             int pageSize,
                                                             String searchKeyword,
                                                             String tag,
+                                                            String category,
                                                             String sortKey,
                                                             List<CommunityPost> posts,
                                                             Map<String, List<String>> tagsByPostId) {
-        StringQuery query = new StringQuery(createSearchQuery(searchKeyword, tag, sortKey));
+        StringQuery query = new StringQuery(createSearchQuery(searchKeyword, tag, category, sortKey));
         query.setPageable(PageRequest.of(Math.max(requestedPage - 1, 0), pageSize));
 
         SearchHits<CommunityPostDocument> hits = elasticsearchOperations.search(query, CommunityPostDocument.class);
@@ -181,7 +185,7 @@ public class CommunitySearchService {
         );
     }
 
-    private String createSearchQuery(String searchKeyword, String tag, String sortKey) {
+    private String createSearchQuery(String searchKeyword, String tag, String category, String sortKey) {
         Map<String, Object> root = new LinkedHashMap<>();
         Map<String, Object> functionScore = new LinkedHashMap<>();
         Map<String, Object> bool = new LinkedHashMap<>();
@@ -206,6 +210,10 @@ public class CommunitySearchService {
         // 선택한 태그 필터 적용
         if (StringUtils.hasText(tag)) {
             filter.add(Map.of("term", Map.of("tags.keyword", tag.trim())));
+        }
+
+        if (StringUtils.hasText(category) && !"all".equalsIgnoreCase(category.trim())) {
+            filter.add(Map.of("term", Map.of("category.keyword", category.trim().toLowerCase(Locale.ROOT))));
         }
 
         bool.put("must", must);
@@ -243,7 +251,7 @@ public class CommunitySearchService {
         root.put("query", Map.of("function_score", functionScore));
 
         // 명시 정렬이 있으면 검색 점수 대신 정렬 기준 적용
-        if ("latest".equalsIgnoreCase(sortKey)) {
+        if ("latest".equalsIgnoreCase(sortKey) || ("default".equalsIgnoreCase(sortKey) && !StringUtils.hasText(searchKeyword))) {
             root.put("sort", List.of(Map.of("createdAt", Map.of("order", "desc"))));
         } else if ("oldest".equalsIgnoreCase(sortKey)) {
             root.put("sort", List.of(Map.of("createdAt", Map.of("order", "asc"))));
@@ -252,14 +260,29 @@ public class CommunitySearchService {
                     Map.of("likeCount", Map.of("order", "desc")),
                     Map.of("createdAt", Map.of("order", "desc"))
             ));
+        } else if ("likesAsc".equalsIgnoreCase(sortKey)) {
+            root.put("sort", List.of(
+                    Map.of("likeCount", Map.of("order", "asc")),
+                    Map.of("createdAt", Map.of("order", "desc"))
+            ));
         } else if ("comments".equalsIgnoreCase(sortKey)) {
             root.put("sort", List.of(
                     Map.of("commentCount", Map.of("order", "desc")),
                     Map.of("createdAt", Map.of("order", "desc"))
             ));
+        } else if ("commentsAsc".equalsIgnoreCase(sortKey)) {
+            root.put("sort", List.of(
+                    Map.of("commentCount", Map.of("order", "asc")),
+                    Map.of("createdAt", Map.of("order", "desc"))
+            ));
         } else if ("views".equalsIgnoreCase(sortKey)) {
             root.put("sort", List.of(
                     Map.of("viewCount", Map.of("order", "desc")),
+                    Map.of("createdAt", Map.of("order", "desc"))
+            ));
+        } else if ("viewsAsc".equalsIgnoreCase(sortKey)) {
+            root.put("sort", List.of(
+                    Map.of("viewCount", Map.of("order", "asc")),
                     Map.of("createdAt", Map.of("order", "desc"))
             ));
         }
@@ -275,12 +298,15 @@ public class CommunitySearchService {
                                                      int pageSize,
                                                      String searchKeyword,
                                                      String tag,
+                                                     String category,
                                                      String sortKey,
                                                      List<CommunityPost> posts,
                                                      Map<String, List<String>> tagsByPostId) {
         String normalizedSearchKeyword = normalizeKeyword(searchKeyword);
         String normalizedTag = normalizeKeyword(tag);
+        String normalizedCategory = normalizeCategory(category);
         List<RankedPost> rankedPosts = posts.stream()
+                .filter(post -> matchesCategory(post, normalizedCategory))
                 .filter(post -> matchesTag(tagsByPostId.getOrDefault(post.getPostId(), List.of()), normalizedTag))
                 .map(post -> new RankedPost(
                         post,
@@ -288,7 +314,7 @@ public class CommunitySearchService {
                         calculateScore(post, tagsByPostId.getOrDefault(post.getPostId(), List.of()), normalizedSearchKeyword)
                 ))
                 .filter(rankedPost -> normalizedSearchKeyword.isBlank() || rankedPost.score() > 0)
-                .sorted(createComparator(sortKey))
+                .sorted(createComparator(sortKey, !normalizedSearchKeyword.isBlank()))
                 .toList();
 
         int totalCount = rankedPosts.size();
@@ -308,7 +334,12 @@ public class CommunitySearchService {
         );
     }
 
-    private Comparator<RankedPost> createComparator(String sortKey) {
+    private Comparator<RankedPost> createComparator(String sortKey, boolean hasSearchKeyword) {
+        if ("latest".equalsIgnoreCase(sortKey) || ("default".equalsIgnoreCase(sortKey) && !hasSearchKeyword)) {
+            return Comparator.comparing((RankedPost rankedPost) -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder())
+                    .thenComparing(rankedPost -> rankedPost.post().getPostId());
+        }
+
         if ("oldest".equalsIgnoreCase(sortKey)) {
             return Comparator.comparing((RankedPost rankedPost) -> rankedPost.post().getCreatedAt())
                     .thenComparing(rankedPost -> rankedPost.post().getPostId());
@@ -320,15 +351,30 @@ public class CommunitySearchService {
                     .thenComparing(rankedPost -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder());
         }
 
+        if ("viewsAsc".equalsIgnoreCase(sortKey)) {
+            return Comparator.comparingInt((RankedPost rankedPost) -> rankedPost.post().getViewCount())
+                    .thenComparing(rankedPost -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder());
+        }
+
         if ("likes".equalsIgnoreCase(sortKey)) {
             return Comparator.comparingInt((RankedPost rankedPost) -> rankedPost.post().getLikeCount())
                     .reversed()
                     .thenComparing(rankedPost -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder());
         }
 
+        if ("likesAsc".equalsIgnoreCase(sortKey)) {
+            return Comparator.comparingInt((RankedPost rankedPost) -> rankedPost.post().getLikeCount())
+                    .thenComparing(rankedPost -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder());
+        }
+
         if ("comments".equalsIgnoreCase(sortKey)) {
             return Comparator.comparingInt((RankedPost rankedPost) -> rankedPost.post().getCommentCount())
                     .reversed()
+                    .thenComparing(rankedPost -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder());
+        }
+
+        if ("commentsAsc".equalsIgnoreCase(sortKey)) {
+            return Comparator.comparingInt((RankedPost rankedPost) -> rankedPost.post().getCommentCount())
                     .thenComparing(rankedPost -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder());
         }
 
@@ -391,6 +437,50 @@ public class CommunitySearchService {
         return 0d;
     }
 
+
+    private String normalizeCategory(String value) {
+        if (!StringUtils.hasText(value) || "all".equalsIgnoreCase(value.trim())) {
+            return "all";
+        }
+
+        return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean matchesCategory(CommunityPost post, String normalizedCategory) {
+        return "all".equals(normalizedCategory) || resolveCategory(post).equals(normalizedCategory);
+    }
+
+    private String resolveCategory(CommunityPost post) {
+        int postNumber = extractPostNumber(post.getPostId());
+
+        if (postNumber > 0) {
+            if (postNumber % 10 == 0) {
+                return "notice";
+            }
+
+            return postNumber % 2 == 0 ? "discussion" : "question";
+        }
+
+        return "discussion";
+    }
+
+    private int extractPostNumber(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return 0;
+        }
+
+        String digits = postId.replaceAll("\\D+", "");
+        if (!StringUtils.hasText(digits)) {
+            return 0;
+        }
+
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
     private String normalizeKeyword(String value) {
         if (!StringUtils.hasText(value)) {
             return "";
@@ -406,6 +496,7 @@ public class CommunitySearchService {
                 post.getUserId(),
                 createExcerpt(post.getContentText()),
                 tags,
+                resolveCategory(post),
                 post.getCreatedAt(),
                 post.getUpdatedAt(),
                 post.getViewCount(),

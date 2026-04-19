@@ -1,17 +1,21 @@
 import { getApiBaseUrl } from './authApi';
-import type { ProblemSubmittedHistory, ProblemSummary } from '../types/domain';
+import type { DbmsType, ProblemSubmittedHistory, ProblemSummary } from '../types/domain';
 
 interface ProblemSubmittedHistoryResponse {
   dbms?: string;
   userId?: string;
   executionPlanElement?: number;
   executionTimeMs?: number;
+  cost?: number;
 }
 
 interface ProblemListItemResponse {
   problemId?: string;
   title?: string;
   description?: string;
+  totalSubmitCount?: number;
+  successSubmitCount?: number;
+  spreadRate?: number;
   submittedHistories?: ProblemSubmittedHistoryResponse[];
 }
 
@@ -36,6 +40,7 @@ interface ProblemDetailResponse {
   condition?: string;
   output?: string;
   outputSample?: string;
+  dbms?: string;
 }
 
 interface ProblemSetSummaryResponse {
@@ -72,6 +77,7 @@ export interface ProblemDetailData {
   condition: string;
   output: string;
   outputSample: string;
+  dbms: DbmsType;
 }
 
 export interface ProblemSetSummary {
@@ -103,9 +109,12 @@ export interface CreateProblemPayload {
 
 export interface FetchProblemsParams {
   page: number;
+  dbms: DbmsType;
   query: string;
   solveState: 'all' | 'solved' | 'unsolved' | 'none';
-  solvedCountSort: 'asc' | 'desc';
+  solvedCountSort: 'none' | 'asc' | 'desc';
+  totalSubmitSort: 'none' | 'asc' | 'desc';
+  successSubmitSort: 'none' | 'asc' | 'desc';
   spreadRateSort: 'none' | 'asc' | 'desc';
   spreadRateMin?: number | null;
   spreadRateMax?: number | null;
@@ -131,7 +140,8 @@ function toDbmsType(value?: string) {
 
 function toProblemNumber(problemId: string) {
   const [tableSetNumber] = problemId.split('-');
-  const parsedNumber = Number.parseInt(tableSetNumber ?? '', 10);
+  const normalizedNumber = (tableSetNumber ?? '').replace(/^[A-Za-z]/, '');
+  const parsedNumber = Number.parseInt(normalizedNumber, 10);
 
   return Number.isNaN(parsedNumber) ? 0 : parsedNumber;
 }
@@ -143,7 +153,7 @@ function toSubmittedHistories(submittedHistories: ProblemSubmittedHistoryRespons
 
   return submittedHistories
     .filter(
-      (submittedHistory): submittedHistory is Required<ProblemSubmittedHistoryResponse> =>
+      (submittedHistory): submittedHistory is Required<Pick<ProblemSubmittedHistoryResponse, 'userId' | 'executionPlanElement' | 'executionTimeMs'>> & ProblemSubmittedHistoryResponse =>
         typeof submittedHistory.userId === 'string' &&
         typeof submittedHistory.executionPlanElement === 'number' &&
         typeof submittedHistory.executionTimeMs === 'number',
@@ -153,6 +163,7 @@ function toSubmittedHistories(submittedHistories: ProblemSubmittedHistoryRespons
       userId: submittedHistory.userId,
       executionPlanElement: submittedHistory.executionPlanElement,
       executionTimeMs: submittedHistory.executionTimeMs,
+      cost: typeof submittedHistory.cost === 'number' ? submittedHistory.cost : undefined,
     }));
 }
 
@@ -173,6 +184,9 @@ function toProblemSummary(problem: ProblemListItemResponse) {
     tags: [],
     difficulty: DEFAULT_PROBLEM_DIFFICULTY,
     solvedCount: countSolvedUsers(submittedHistories),
+    totalSubmitCount: typeof problem.totalSubmitCount === 'number' ? problem.totalSubmitCount : submittedHistories.length,
+    successSubmitCount: typeof problem.successSubmitCount === 'number' ? problem.successSubmitCount : submittedHistories.length,
+    spreadRate: typeof problem.spreadRate === 'number' ? problem.spreadRate : 0,
     submittedHistories,
   } satisfies ProblemSummary;
 }
@@ -221,6 +235,7 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       condition: data.condition,
       output: data.output,
       outputSample: data.outputSample,
+      dbms: toDbmsType(data.dbms),
     };
   } catch {
     throw new Error('문제 상세 조회에 실패했다.');
@@ -232,8 +247,20 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
 
   const searchParams = new URLSearchParams({
     page: String(params.page),
-    solvedCountSort: params.solvedCountSort,
+    dbms: params.dbms,
   });
+
+  if (params.solvedCountSort !== 'none') {
+    searchParams.set('solvedCountSort', params.solvedCountSort);
+  }
+
+  if (params.totalSubmitSort !== 'none') {
+    searchParams.set('totalSubmitSort', params.totalSubmitSort);
+  }
+
+  if (params.successSubmitSort !== 'none') {
+    searchParams.set('successSubmitSort', params.successSubmitSort);
+  }
 
   if (params.spreadRateSort !== 'none') {
     searchParams.set('spreadRateSort', params.spreadRateSort);

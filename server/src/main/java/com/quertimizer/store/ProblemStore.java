@@ -4,9 +4,11 @@ import com.quertimizer.constant.DbmsType;
 import com.quertimizer.entity.Problem;
 import com.quertimizer.entity.ProblemSet;
 import com.quertimizer.entity.ProblemSolveHistory;
+import com.quertimizer.entity.ProblemSubmitHistory;
 import com.quertimizer.repository.ProblemRepository;
 import com.quertimizer.repository.ProblemSetRepository;
 import com.quertimizer.repository.ProblemSolveHistoryRepository;
+import com.quertimizer.repository.ProblemSubmitHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -33,29 +35,36 @@ public class ProblemStore {
     private final ProblemRepository problemRepository;
     private final ProblemSetRepository problemSetRepository;
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
+    private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
 
     private final Map<String, Problem> problemsById = new ConcurrentHashMap<>();
     private final Map<String, ProblemSet> problemSetsById = new ConcurrentHashMap<>();
     private final Map<String, List<ProblemSolveHistory>> bestSubmittedHistoriesByProblemId = new ConcurrentHashMap<>();
+    private final Map<String, ProblemSubmissionStats> submissionStatsByProblemId = new ConcurrentHashMap<>();
 
     @EventListener(ApplicationReadyEvent.class)
     public void loadProblems() {
 
         // 문제 목록, 테이블셋 메모리 적재
         List<Problem> problems = problemRepository.findAll().stream()
+                .filter(Problem::hasSupportedDbms)
                 .sorted(Comparator.comparing(Problem::getProblemId))
                 .toList();
         List<ProblemSet> problemSets = problemSetRepository.findAll().stream()
+                .filter(ProblemSet::hasSupportedDbms)
                 .sorted(Comparator.comparing(ProblemSet::getProblemSetId))
                 .toList();
 
         // 문제별 사용자 기준 최고 제출 추출
         Map<String, List<ProblemSolveHistory>> bestHistoriesByProblemId =
                 createBestSubmittedHistoriesByProblemId(problemSolveHistoryRepository.findAll());
+        Map<String, ProblemSubmissionStats> submissionStats =
+                createSubmissionStatsByProblemId(problemSubmitHistoryRepository.findAll());
 
         problemsById.clear();
         problemSetsById.clear();
         bestSubmittedHistoriesByProblemId.clear();
+        submissionStatsByProblemId.clear();
 
         for (ProblemSet problemSet : problemSets) {
             problemSetsById.put(problemSet.getProblemSetId(), problemSet);
@@ -67,6 +76,10 @@ public class ProblemStore {
                     problem.getProblemId(),
                     bestHistoriesByProblemId.getOrDefault(problem.getProblemId(), List.of())
             );
+            submissionStatsByProblemId.put(
+                    problem.getProblemId(),
+                    submissionStats.getOrDefault(problem.getProblemId(), ProblemSubmissionStats.empty())
+            );
         }
 
         log.info("ProblemStore 로딩 완료 : {} MB", formatLoadedDataSizeInMb());
@@ -74,15 +87,19 @@ public class ProblemStore {
 
     public ProblemPage findProblemPage(int requestedPage,
                                        String searchKeyword,
+                                       DbmsType dbmsType,
                                        String solveState,
                                        String currentUserId,
-                                       boolean sortSolvedCountAscending,
+                                       String solvedCountSort,
+                                       String totalSubmitSort,
+                                       String successSubmitSort,
                                        String spreadRateSort,
                                        Double spreadRateMin,
                                        Double spreadRateMax) {
 
         // 목록 필터와 정렬에 필요한 데이터 메모리 구성
         List<ProblemListEntry> searchableProblems = problemsById.values().stream()
+                .filter(problem -> problem.supportsDbms(dbmsType))
                 .map(problem -> createProblemListEntry(problem, currentUserId))
                 .filter(problemEntry -> matchesSearch(problemEntry, searchKeyword))
                 .filter(problemEntry -> matchesSolveState(problemEntry, solveState, currentUserId))
@@ -91,7 +108,7 @@ public class ProblemStore {
         SpreadRateFilter spreadRateFilter = createSpreadRateFilter(spreadRateMin, spreadRateMax);
         List<ProblemListEntry> filteredProblems = searchableProblems.stream()
                 .filter(problemEntry -> matchesSpreadRate(problemEntry, spreadRateFilter))
-                .sorted(createProblemComparator(sortSolvedCountAscending, spreadRateSort))
+                .sorted(createProblemComparator(solvedCountSort, totalSubmitSort, successSubmitSort, spreadRateSort))
                 .toList();
 
         // 페이지 경계 계산
@@ -139,6 +156,10 @@ public class ProblemStore {
 
     private ProblemListEntry createProblemListEntry(Problem problem, String currentUserId) {
         List<ProblemSolveHistory> submittedHistories = findBestSubmittedHistories(problem.getProblemId());
+        ProblemSubmissionStats submissionStats = submissionStatsByProblemId.getOrDefault(
+                problem.getProblemId(),
+                ProblemSubmissionStats.empty()
+        );
 
         // 목록 통계 계산
         int solvedUserCount = (int) submittedHistories.stream()
@@ -155,6 +176,8 @@ public class ProblemStore {
                 submittedHistories,
                 solvedUserCount,
                 solvedByCurrentUser,
+                submissionStats.totalSubmitCount(),
+                submissionStats.successSubmitCount(),
                 calculateSpreadRate(submittedHistories)
         );
     }
@@ -194,26 +217,53 @@ public class ProblemStore {
                 && problemEntry.spreadRate() <= spreadRateFilter.max();
     }
 
-    private Comparator<ProblemListEntry> createProblemComparator(boolean sortSolvedCountAscending, String spreadRateSort) {
-        Comparator<ProblemListEntry> solvedCountComparator = Comparator.comparingInt(ProblemListEntry::solvedUserCount);
-        if (!sortSolvedCountAscending) {
-            solvedCountComparator = solvedCountComparator.reversed();
-        }
+    private Comparator<ProblemListEntry> createProblemComparator(String solvedCountSort,
+                                                             String totalSubmitSort,
+                                                             String successSubmitSort,
+                                                             String spreadRateSort) {
+        Comparator<ProblemListEntry> problemIdComparator = Comparator.comparing(problemEntry -> problemEntry.problem().getProblemId());
 
         if ("asc".equalsIgnoreCase(spreadRateSort)) {
             return Comparator.comparingDouble(ProblemListEntry::spreadRate)
-                    .thenComparing(solvedCountComparator)
-                    .thenComparing(problemEntry -> problemEntry.problem().getProblemId());
+                    .thenComparing(problemIdComparator);
         }
 
         if ("desc".equalsIgnoreCase(spreadRateSort)) {
             return Comparator.comparingDouble(ProblemListEntry::spreadRate)
                     .reversed()
-                    .thenComparing(solvedCountComparator)
-                    .thenComparing(problemEntry -> problemEntry.problem().getProblemId());
+                    .thenComparing(problemIdComparator);
         }
 
-        return solvedCountComparator.thenComparing(problemEntry -> problemEntry.problem().getProblemId());
+        if ("asc".equalsIgnoreCase(totalSubmitSort)) {
+            return Comparator.comparingInt(ProblemListEntry::totalSubmitCount)
+                    .thenComparing(problemIdComparator);
+        }
+
+        if ("desc".equalsIgnoreCase(totalSubmitSort)) {
+            return Comparator.comparingInt(ProblemListEntry::totalSubmitCount)
+                    .reversed()
+                    .thenComparing(problemIdComparator);
+        }
+
+        if ("asc".equalsIgnoreCase(successSubmitSort)) {
+            return Comparator.comparingInt(ProblemListEntry::successSubmitCount)
+                    .thenComparing(problemIdComparator);
+        }
+
+        if ("desc".equalsIgnoreCase(successSubmitSort)) {
+            return Comparator.comparingInt(ProblemListEntry::successSubmitCount)
+                    .reversed()
+                    .thenComparing(problemIdComparator);
+        }
+
+        if ("asc".equalsIgnoreCase(solvedCountSort)) {
+            return Comparator.comparingInt(ProblemListEntry::solvedUserCount)
+                    .thenComparing(problemIdComparator);
+        }
+
+        return Comparator.comparingInt(ProblemListEntry::solvedUserCount)
+                .reversed()
+                .thenComparing(problemIdComparator);
     }
 
     private SpreadRateBounds createSpreadRateBounds(List<ProblemListEntry> problemEntries) {
@@ -315,6 +365,20 @@ public class ProblemStore {
         return currentHistory;
     }
 
+    private Map<String, ProblemSubmissionStats> createSubmissionStatsByProblemId(List<ProblemSubmitHistory> histories) {
+        Map<String, ProblemSubmissionStats> submissionStatsByProblemId = new HashMap<>();
+
+        for (ProblemSubmitHistory history : histories) {
+            submissionStatsByProblemId.merge(
+                    history.getProblemId(),
+                    ProblemSubmissionStats.from(history.isSuccess()),
+                    ProblemSubmissionStats::merge
+            );
+        }
+
+        return submissionStatsByProblemId;
+    }
+
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
@@ -346,8 +410,7 @@ public class ProblemStore {
                 + measureString(problem.getResolvedProblemSetId())
                 + measureString(problem.getTitle())
                 + measureString(problem.getDescription())
-                + measureString(problem.getDdlPostgresql())
-                + measureString(problem.getDdlOracle())
+                + measureString(problem.getDdl())
                 + measureString(problem.getCondition())
                 + measureString(problem.getOutput())
                 + measureString(problem.getOutputSample())
@@ -356,10 +419,8 @@ public class ProblemStore {
 
     private long measureProblemSet(ProblemSet problemSet) {
         return measureString(problemSet.getProblemSetId())
-                + measureString(problemSet.getDdlPostgresql())
-                + measureString(problemSet.getDdlOracle())
-                + measureString(problemSet.getDataPostgresql())
-                + measureString(problemSet.getDataOracle());
+                + measureString(problemSet.getDdl())
+                + measureString(problemSet.getData());
     }
 
     private long measureProblemSolveHistory(ProblemSolveHistory history) {
@@ -385,10 +446,30 @@ public class ProblemStore {
     private record ProblemSubmittedHistoryKey(String problemId, String userId) {
     }
 
+    private record ProblemSubmissionStats(int totalSubmitCount, int successSubmitCount) {
+
+        private static ProblemSubmissionStats empty() {
+            return new ProblemSubmissionStats(0, 0);
+        }
+
+        private static ProblemSubmissionStats from(boolean success) {
+            return new ProblemSubmissionStats(1, success ? 1 : 0);
+        }
+
+        private ProblemSubmissionStats merge(ProblemSubmissionStats other) {
+            return new ProblemSubmissionStats(
+                    totalSubmitCount + other.totalSubmitCount,
+                    successSubmitCount + other.successSubmitCount
+            );
+        }
+    }
+
     public record ProblemListEntry(Problem problem,
                                    List<ProblemSolveHistory> submittedHistories,
                                    int solvedUserCount,
                                    boolean solvedByCurrentUser,
+                                   int totalSubmitCount,
+                                   int successSubmitCount,
                                    double spreadRate) {
     }
 

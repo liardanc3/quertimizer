@@ -54,7 +54,7 @@ public class ProblemWorkspaceService {
                 key -> new WorkspaceContext(
                         workspaceKey,
                         createSchemaName(userId, problemId),
-                        problem.getResolvedProblemSetId(),
+                        problem.getBaseProblemSetId(),
                         resolveProblemTableNames(problem)
                 )
         );
@@ -218,17 +218,21 @@ public class ProblemWorkspaceService {
 
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
-            if (schemaExists(connection, workspaceContext.schemaName)) {
-                return;
-            }
-
-            // 작업용 스키마 생성
-            statement.execute("CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(workspaceContext.schemaName));
-
             List<String> tableNames = workspaceContext.tableNames;
             if (tableNames.isEmpty()) {
                 throw new IllegalArgumentException("문제에서 사용할 테이블이 없다.");
             }
+
+            if (schemaExists(connection, workspaceContext.schemaName)) {
+                if (hasAllWorkspaceTables(connection, workspaceContext.schemaName, tableNames)) {
+                    return;
+                }
+
+                dropSchema(connection, workspaceContext.schemaName);
+            }
+
+            // 작업용 스키마 생성
+            statement.execute("CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(workspaceContext.schemaName));
 
             for (String tableName : tableNames) {
                 createWorkspaceTable(connection, baseSchemaName, workspaceContext.schemaName, tableName);
@@ -245,6 +249,34 @@ public class ProblemWorkspaceService {
                 WHERE schema_name = ?
                 """)) {
             preparedStatement.setString(1, schemaName);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1) > 0;
+            }
+        }
+    }
+
+
+    private boolean hasAllWorkspaceTables(Connection connection, String schemaName, List<String> tableNames) throws Exception {
+        for (String tableName : tableNames) {
+            if (!tableExists(connection, schemaName, tableName)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean tableExists(Connection connection, String schemaName, String tableName) throws Exception {
+        try (var preparedStatement = connection.prepareStatement("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = ?
+                  AND table_name = ?
+                """)) {
+            preparedStatement.setString(1, schemaName);
+            preparedStatement.setString(2, tableName);
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 resultSet.next();
@@ -303,9 +335,7 @@ public class ProblemWorkspaceService {
     }
 
     private List<String> resolveProblemTableNames(Problem problem) {
-        String ddl = problem.getDdlPostgresql() != null && !problem.getDdlPostgresql().isBlank()
-                ? problem.getDdlPostgresql()
-                : problem.getDdlOracle();
+        String ddl = problem.getDdl();
         if (ddl == null || ddl.isBlank()) {
             return List.of();
         }

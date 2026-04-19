@@ -1841,3 +1841,199 @@ body.handle-setup-locked {
     background: rgba(148, 163, 184, 0.22);
   }
 }
+
+.solve-page .solve-page-topbar-content-tabs {
+  margin-bottom: 0.08rem;
+}
+
+.solve-page .solve-content-tab-row {
+  width: 100%;
+}
+
+.solve-page .solve-related-tab-panel {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+}
+
+.solve-page .solve-related-table-shell {
+  width: 100%;
+}
+
+.solve-page .solve-related-table-head,
+.solve-page .solve-related-table-row,
+.solve-page .solve-related-table-row .submit-history-cell {
+  font-size: 0.72rem;
+}
+
+.solve-page .solve-related-community-table .submit-history-row {
+  grid-template-columns: 92px minmax(0, 2.8fr) 112px 132px 72px 72px 72px;
+}
+
+.solve-page .solve-related-empty-state {
+  padding: 1.4rem 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.solve-page .solve-related-pagination {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding-top: 0.16rem;
+}
+
+.solve-page .solve-related-page-button,
+.solve-page .solve-related-pagination-meta,
+.solve-page .solve-related-pagination-input {
+  border: 0;
+  background: transparent;
+  color: #617690;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.solve-page .solve-related-page-button {
+  cursor: pointer;
+}
+
+.solve-page .solve-related-page-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.solve-page .solve-related-pagination-meta {
+  cursor: pointer;
+}
+
+.solve-page .solve-related-pagination-input {
+  width: 3.4rem;
+  padding: 0;
+  text-align: center;
+  outline: none;
+}
+
+.solve-page .solve-related-sql-viewer {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #0f172a;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.79rem;
+  line-height: 1.64;
+  background: transparent;
+}
+
+.solve-page .solve-related-plan-group-list {
+  display: grid;
+  gap: 0.82rem;
+}
+
+.solve-page .solve-related-plan-group {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.solve-page .solve-related-plan-group-label {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.solve-page .solve-related-plan-group-values {
+  color: #0f172a;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.solve-page .solve-related-community-category-text {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.solve-page .solve-related-community-category-text.is-question {
+  color: #0f5db3;
+}
+
+.solve-page .solve-related-community-category-text.is-notice {
+  color: #b45309;
+}
+
+.solve-page .solve-related-community-title-cell {
+  display: grid;
+  gap: 0.22rem;
+  align-items: start;
+}
+
+.solve-page .solve-related-community-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.26rem;
+}
+
+.solve-page .solve-related-community-tag {
+  color: #5c6f88;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.solve-page .solve-related-community-title-link {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.solve-page .solve-related-community-title-text {
+  color: #0f172a;
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1.34;
+  text-decoration: none;
+}
+
+.solve-page .solve-related-community-title-link:hover .solve-related-community-title-text {
+  color: #0f5db3;
+}
+
+@media (prefers-color-scheme: dark) {
+  .solve-page .solve-related-page-button,
+  .solve-page .solve-related-pagination-meta,
+  .solve-page .solve-related-pagination-input {
+    color: #bfd0e3;
+  }
+
+  .solve-page .solve-related-sql-viewer,
+  .solve-page .solve-related-plan-group-values,
+  .solve-page .solve-related-community-title-text {
+    color: #e2e8f0;
+  }
+
+  .solve-page .solve-related-empty-state,
+  .solve-page .solve-related-plan-group-label,
+  .solve-page .solve-related-community-category-text,
+  .solve-page .solve-related-community-tag {
+    color: #94a3b8;
+  }
+
+  .solve-page .solve-related-community-category-text.is-question {
+    color: #93c5fd;
+  }
+
+  .solve-page .solve-related-community-category-text.is-notice {
+    color: #fbbf24;
+  }
+
+  .solve-page .solve-related-community-title-link:hover .solve-related-community-title-text {
+    color: #93c5fd;
+  }
+}
