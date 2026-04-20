@@ -225,6 +225,27 @@
   flex-wrap: nowrap;
 }
 
+.favorite-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0;
+}
+
+.favorite-link-button.is-active {
+  color: #0f172a;
+}
+
+.favorite-link-button-icon {
+  width: 1rem;
+  height: 1rem;
+  color: currentColor;
+}
+
 .header-actions.is-guest {
   gap: 1.1rem;
 }

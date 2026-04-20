@@ -11,6 +11,7 @@ interface UserProfileSolvedRecordResponse {
   problemTitle?: string;
   dbms?: string;
   executionTimeMs?: number;
+  cost?: number;
   submittedAt?: string;
 }
 
@@ -49,6 +50,7 @@ export interface UserProfileSolvedRecord {
   problemTitle: string;
   dbms: DbmsType;
   executionTimeMs: number;
+  cost: number;
   submittedAt: string;
 }
 
@@ -115,6 +117,7 @@ function normalizeSolvedRecords(records?: UserProfileSolvedRecordResponse[]) {
         typeof record.problemId === 'string' &&
         typeof record.problemTitle === 'string' &&
         typeof record.executionTimeMs === 'number' &&
+        typeof record.cost === 'number' &&
         typeof record.submittedAt === 'string',
     )
     .map((record) => ({
@@ -122,6 +125,7 @@ function normalizeSolvedRecords(records?: UserProfileSolvedRecordResponse[]) {
       problemTitle: record.problemTitle,
       dbms: toDbmsType(record.dbms),
       executionTimeMs: record.executionTimeMs,
+      cost: record.cost,
       submittedAt: record.submittedAt,
     }));
 }

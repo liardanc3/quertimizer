@@ -82,7 +82,7 @@ export interface FetchCommunityPostsParams {
   page: number;
   search: string;
   tag: string;
-  category: 'all' | 'discussion' | 'question';
+  category: 'all' | 'discussion' | 'question' | 'notice';
   sortKey: 'default' | 'latest' | 'oldest' | 'views' | 'viewsAsc' | 'likes' | 'likesAsc' | 'comments' | 'commentsAsc';
 }
 
@@ -174,6 +174,28 @@ function normalizePostCategory(value?: string): CommunityPostSummary['category']
   return 'discussion';
 }
 
+function normalizeTags(tags?: string[]) {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+
+  const uniqueTags = new Set<string>();
+
+  tags.forEach((tag) => {
+    if (typeof tag !== 'string') {
+      return;
+    }
+
+    const normalizedTag = tag.trim();
+
+    if (normalizedTag !== '') {
+      uniqueTags.add(normalizedTag);
+    }
+  });
+
+  return Array.from(uniqueTags);
+}
+
 function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPostSummary {
   return {
     id: post.postId!,
@@ -182,7 +204,7 @@ function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPost
     excerpt: post.excerpt ?? '',
     content: '',
     contentHtml: undefined,
-    tags: Array.isArray(post.tags) ? post.tags : [],
+    tags: normalizeTags(post.tags),
     category: normalizePostCategory(post.category),
     createdAt: post.createdAt!,
     updatedAt: typeof post.updatedAt === 'string' ? post.updatedAt : undefined,
@@ -307,7 +329,7 @@ export async function fetchCommunityPostDetail(postId: string): Promise<Communit
         excerpt: post.excerpt ?? '',
         content: extractPlainText(post.contentHtml),
         contentHtml: post.contentHtml,
-        tags: Array.isArray(post.tags) ? post.tags : [],
+        tags: normalizeTags(post.tags),
         category: normalizePostCategory(post.category),
         createdAt: post.createdAt,
         updatedAt: typeof post.updatedAt === 'string' ? post.updatedAt : undefined,
@@ -492,7 +514,7 @@ async function fetchProfileCommunityPosts(path: string): Promise<ProfileCommunit
           postId: post.postId,
           title: post.title,
           excerpt: post.excerpt ?? '',
-          tags: Array.isArray(post.tags) ? post.tags : [],
+          tags: normalizeTags(post.tags),
           createdAt: post.createdAt,
           updatedAt: typeof post.updatedAt === 'string' ? post.updatedAt : undefined,
           likeCount: post.likeCount ?? 0,
@@ -557,4 +579,12 @@ export function fetchMyCommunityComments() {
 
 export function fetchCommunityCommentsByUser(userId: string) {
   return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(userId)}/community/comments`);
+}
+
+export function fetchMyLikedComments() {
+  return fetchProfileCommunityComments('/profile/me/community/liked-comments');
+}
+
+export function fetchLikedCommentsByUser(userId: string) {
+  return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(userId)}/community/liked-comments`);
 }

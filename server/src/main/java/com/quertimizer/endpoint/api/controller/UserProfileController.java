@@ -98,6 +98,18 @@ public class UserProfileController {
         return ResponseEntity.of(userProfileService.getCommunityComments(currentUserId));
     }
 
+    @GetMapping("/profile/me/community/liked-comments")
+    public ResponseEntity<UserProfileCommunityCommentsRes> getMyLikedComments(Authentication authentication) {
+        String currentUserId = resolveCurrentUserId(authentication);
+
+        // 내가 좋아요한 댓글 조회
+        if (currentUserId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.of(userProfileService.getLikedComments(currentUserId));
+    }
+
     @PutMapping("/profile/me")
     public ResponseEntity<UserProfileSummaryRes> updateMyProfile(@Valid @RequestBody UserProfileUpdateReq request,
                                                                  Authentication authentication) {
@@ -157,6 +169,13 @@ public class UserProfileController {
 
         // 공개 프로필 댓글 조회
         return ResponseEntity.of(userProfileService.getCommunityComments(userId));
+    }
+
+    @GetMapping("/profiles/{userId}/community/liked-comments")
+    public ResponseEntity<UserProfileCommunityCommentsRes> getLikedComments(@PathVariable String userId) {
+
+        // 공개 프로필 좋아요 댓글 조회
+        return ResponseEntity.of(userProfileService.getLikedComments(userId));
     }
 
     private String resolveCurrentUserId(Authentication authentication) {

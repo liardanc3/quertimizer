@@ -1,6 +1,8 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { getProfilePath, navigate } from '../lib/navigation';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
+import { getLocationSearchSnapshot, getProfilePath, RANKING_PATH, subscribeLocation, navigate } from '../lib/navigation';
 import { fetchRanks, type RankPage } from '../lib/rankApi';
 import type { DbmsType, RankingMetricKey } from '../types/domain';
 import './HomePage.css';
@@ -13,6 +15,19 @@ const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
   { value: 'oracle', label: 'Oracle' },
 ];
+
+function readRankingDbmsFromSearch(search: string) {
+  const dbms = new URLSearchParams(search).get('dbms');
+  return dbms === 'oracle' ? 'oracle' : 'postgresql';
+}
+
+function buildRankingPath(dbms: DbmsType) {
+  if (dbms === 'postgresql') {
+    return RANKING_PATH;
+  }
+
+  return `${RANKING_PATH}?dbms=${encodeURIComponent(dbms)}`;
+}
 
 function SortAscendingIcon() {
   return (
@@ -49,6 +64,14 @@ type LinkMenuState = {
   top: number;
 } | null;
 
+interface RankingPageFavoriteSnapshot {
+  selectedDbms: DbmsType;
+  sortKey: RankingMetricKey;
+  draftQuery: string;
+  submittedQuery: string;
+  requestedPage: number;
+}
+
 function createEmptyRankPage(): RankPage {
   return {
     currentPage: 1,
@@ -64,11 +87,13 @@ function formatPercentile(value: number) {
 }
 
 export default function RankingPage() {
-  const [selectedDbms, setSelectedDbms] = useState<DbmsType>('postgresql');
-  const [sortKey, setSortKey] = useState<RankingMetricKey>('solvedCount');
-  const [draftQuery, setDraftQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
-  const [requestedPage, setRequestedPage] = useState(1);
+  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<RankingPageFavoriteSnapshot>('ranking'), []);
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readRankingDbmsFromSearch(window.location.search));
+  const [sortKey, setSortKey] = useState<RankingMetricKey>(() => favoriteRestoreSnapshot?.sortKey ?? 'solvedCount');
+  const [draftQuery, setDraftQuery] = useState(() => favoriteRestoreSnapshot?.draftQuery ?? '');
+  const [submittedQuery, setSubmittedQuery] = useState(() => favoriteRestoreSnapshot?.submittedQuery ?? '');
+  const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
   const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
   const [pageJumpDraft, setPageJumpDraft] = useState('1');
   const [rankPage, setRankPage] = useState<RankPage>(createEmptyRankPage());
@@ -76,6 +101,10 @@ export default function RankingPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
   const linkMenuRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    clearFavoriteRestoreSnapshot('ranking');
+  }, []);
 
   const rankedEntries = useMemo(
     () =>
@@ -93,6 +122,21 @@ export default function RankingPage() {
 
     setPageJumpDraft(String(rankPage.currentPage));
   }, [isPageJumpEditing, rankPage.currentPage]);
+
+  useEffect(() => {
+    const nextDbms = readRankingDbmsFromSearch(locationSearch);
+
+    setSelectedDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
+  }, [locationSearch]);
+
+  useEffect(() => {
+    const nextPath = buildRankingPath(selectedDbms);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+
+    if (currentPath !== nextPath) {
+      window.history.replaceState(window.history.state ?? {}, '', nextPath);
+    }
+  }, [selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -256,6 +300,21 @@ export default function RankingPage() {
                 </button>
               );
             })}
+            <FavoriteTabButton
+              className="favorite-tab-toggle-end"
+              label={`랭킹 / ${selectedDbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}`}
+              path={buildRankingPath(selectedDbms)}
+              snapshot={{
+                kind: 'ranking',
+                payload: {
+                  selectedDbms,
+                  sortKey,
+                  draftQuery,
+                  submittedQuery,
+                  requestedPage,
+                },
+              }}
+            />
           </div>
 
           <form

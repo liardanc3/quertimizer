@@ -9,10 +9,10 @@
 }
 
 .guide-page-tab-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0;
-  border-bottom: 1px solid var(--line-soft);
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .guide-page-tab {

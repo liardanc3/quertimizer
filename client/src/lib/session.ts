@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { fetchSessionMe, type SessionMeResult } from './authApi';
+import { handleFavoriteTabsSessionState } from './favoriteTabs';
 import { disconnectSessionSocket } from './sessionSocket';
 
 const SESSION_AUTH_STORAGE_KEY = 'quertimizer.session-authenticated';
@@ -43,6 +44,10 @@ function emitAuthChange() {
 
 function updateSessionSnapshot(nextSnapshot: SessionSnapshot) {
   sessionSnapshot = nextSnapshot;
+  void handleFavoriteTabsSessionState({
+    isReady: nextSnapshot.isReady,
+    isAuthenticated: nextSnapshot.isAuthenticated,
+  });
   emitAuthChange();
 }
 

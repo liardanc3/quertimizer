@@ -11,6 +11,8 @@ public interface CommunityCommentRepository extends JpaRepository<CommunityComme
 
     List<CommunityComment> findAllByUserIdOrderByCreatedAtDesc(String userId);
 
+    List<CommunityComment> findAllByCommentIdIn(List<Long> commentIds);
+
     long countByUserId(String userId);
 
     void deleteAllByPostId(String postId);

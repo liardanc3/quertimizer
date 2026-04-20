@@ -1,3 +1,4 @@
+import { type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { getProfilePath, navigate } from '../../lib/navigation';
 import type { CommunityComment } from '../../types/domain';
 
@@ -14,13 +15,30 @@ interface CommunityCommentThreadProps {
 
 function formatBoardDate(value: string) {
   const date = new Date(value);
-  const year = String(date.getFullYear()).slice(-2);
+  const year = String(date.getFullYear());
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function LikeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 13.3 3.5 9.1a2.8 2.8 0 0 1 4-4L8 5.6l.5-.5a2.8 2.8 0 0 1 4 4L8 13.3Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.7 7.6 13.3 3 9.4 13l-2.2-3.2-4.5-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export default function CommunityCommentThread({
@@ -34,10 +52,26 @@ export default function CommunityCommentThread({
   onToggleLike,
 }: CommunityCommentThreadProps) {
   const isReplyComposerOpen = activeReplyId === comment.id;
-  const canReply = depth === 0;
+  const canReply = depth < 3;
+
+  function handleReplyDraftKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      onSubmitReply(comment.id);
+    }
+  }
+
+  const articleClassName = [
+    'community-comment-item',
+    depth > 0 ? 'is-reply' : '',
+    `depth-${Math.min(depth, 3)}`,
+    comment.replies.length > 0 ? 'has-replies' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <article className={`community-comment-item ${depth > 0 ? 'is-reply' : ''}`.trim()}>
+    <article className={articleClassName}>
       <div className="community-comment-meta">
         <div className="community-comment-author-group">
           <button
@@ -48,61 +82,73 @@ export default function CommunityCommentThread({
             <strong className="community-comment-author">{comment.authorHandle}</strong>
           </button>
           <span className="community-comment-time">{formatBoardDate(comment.createdAt)}</span>
-        </div>
-
-        <div className="community-comment-actions">
           <button
             type="button"
-            className="community-comment-reply-button"
+            className={`community-comment-like-button ${comment.likedByCurrentUser ? 'is-liked' : ''}`.trim()}
             onClick={() => onToggleLike(comment.id)}
+            aria-label={comment.likedByCurrentUser ? '댓글 좋아요 취소' : '댓글 좋아요'}
           >
-            {comment.likedByCurrentUser ? `좋아요 취소 ${comment.likes}` : `좋아요 ${comment.likes}`}
+            <LikeIcon />
+            <span>{comment.likes}</span>
           </button>
-          {canReply ? (
-            <button
-              type="button"
-              className="community-comment-reply-button"
-              onClick={() => onToggleReply(comment.id)}
-            >
-              {isReplyComposerOpen ? '대댓글 닫기' : '대댓글'}
-            </button>
-          ) : null}
         </div>
       </div>
 
       <p className="community-comment-content">{comment.content}</p>
 
-      {isReplyComposerOpen ? (
-        <div className="community-reply-compose">
-          <textarea
-            className="text-field community-comment-textarea is-reply"
-            value={replyDrafts[comment.id] ?? ''}
-            onChange={(event) => onChangeReplyDraft(comment.id, event.target.value)}
-            placeholder="대댓글을 입력해."
-          />
-          <div className="community-reply-actions">
-            <button type="button" className="btn secondary" onClick={() => onSubmitReply(comment.id)}>
-              대댓글 등록
-            </button>
-          </div>
+      {canReply ? (
+        <div className="community-comment-inline-actions">
+          <button
+            type="button"
+            className="community-comment-inline-reply"
+            onClick={() => onToggleReply(comment.id)}
+          >
+            {isReplyComposerOpen ? '닫기' : '댓글 달기'}
+          </button>
         </div>
       ) : null}
 
-      {comment.replies.length > 0 ? (
-        <div className="community-comment-replies">
-          {comment.replies.map((reply) => (
-            <CommunityCommentThread
-              key={reply.id}
-              comment={reply}
-              depth={depth + 1}
-              activeReplyId={activeReplyId}
-              replyDrafts={replyDrafts}
-              onToggleReply={onToggleReply}
-              onChangeReplyDraft={onChangeReplyDraft}
-              onSubmitReply={onSubmitReply}
-              onToggleLike={onToggleLike}
-            />
-          ))}
+      {isReplyComposerOpen || comment.replies.length > 0 ? (
+        <div className="community-comment-branch">
+          {isReplyComposerOpen ? (
+            <div className="community-reply-compose">
+              <div className="community-reply-compose-field">
+                <textarea
+                  className="text-field community-comment-textarea community-comment-textarea-reply is-reply"
+                  value={replyDrafts[comment.id] ?? ''}
+                  onChange={(event) => onChangeReplyDraft(comment.id, event.target.value)}
+                  onKeyDown={handleReplyDraftKeyDown}
+                  placeholder="댓글 추가"
+                />
+                <button
+                  type="button"
+                  className="community-comment-submit-icon community-reply-submit-icon"
+                  onClick={() => onSubmitReply(comment.id)}
+                  aria-label="대댓글 등록"
+                >
+                  <SendIcon />
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {comment.replies.length > 0 ? (
+            <div className="community-comment-replies">
+              {comment.replies.map((reply) => (
+                <CommunityCommentThread
+                  key={reply.id}
+                  comment={reply}
+                  depth={depth + 1}
+                  activeReplyId={activeReplyId}
+                  replyDrafts={replyDrafts}
+                  onToggleReply={onToggleReply}
+                  onChangeReplyDraft={onChangeReplyDraft}
+                  onSubmitReply={onSubmitReply}
+                  onToggleLike={onToggleLike}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>

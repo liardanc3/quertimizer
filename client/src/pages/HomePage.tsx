@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemList from '../components/home/ProblemList';
+import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
+import { getLocationSearchSnapshot, PROBLEMS_PATH, subscribeLocation } from '../lib/navigation';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
 import { useMockSession } from '../lib/session';
 import { useHomeSiteTitle } from '../lib/uiText';
@@ -12,11 +15,37 @@ type SpreadRateSortOrder = 'none' | 'desc' | 'asc';
 type SolveState = 'all' | 'solved' | 'unsolved' | 'none';
 type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
 type RangeSelection = { min: number; max: number };
+interface HomePageFavoriteSnapshot {
+  selectedDbms: DbmsType;
+  showSolved: boolean;
+  showUnsolved: boolean;
+  countSortField: CountSortField;
+  countSortDirection: SortDirection;
+  spreadRateSortOrder: SpreadRateSortOrder;
+  draftSearchValue: string;
+  searchQuery: string;
+  requestedPage: number;
+  selectedSpreadRateRange: RangeSelection | null;
+  committedSpreadRateRange: RangeSelection | null;
+}
 const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
   { value: 'oracle', label: 'Oracle' },
 ];
+
+function readProblemsDbmsFromSearch(search: string) {
+  const dbms = new URLSearchParams(search).get('dbms');
+  return dbms === 'oracle' ? 'oracle' : 'postgresql';
+}
+
+function buildProblemsPath(dbms: DbmsType) {
+  if (dbms === 'postgresql') {
+    return PROBLEMS_PATH;
+  }
+
+  return `${PROBLEMS_PATH}?dbms=${encodeURIComponent(dbms)}`;
+}
 
 function resolveSolveState(showSolved: boolean, showUnsolved: boolean): SolveState {
   if (showSolved && showUnsolved) {
@@ -90,22 +119,24 @@ function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: bool
 export default function HomePage() {
   useHomeSiteTitle();
   const { isAuthenticated, isReady, userId } = useMockSession();
-  const [selectedDbms, setSelectedDbms] = useState<DbmsType>('postgresql');
-  const [showSolved, setShowSolved] = useState(true);
-  const [showUnsolved, setShowUnsolved] = useState(true);
-  const [countSortField, setCountSortField] = useState<CountSortField>('solvedCount');
-  const [countSortDirection, setCountSortDirection] = useState<SortDirection>('desc');
-  const [spreadRateSortOrder, setSpreadRateSortOrder] = useState<SpreadRateSortOrder>('none');
-  const [draftSearchValue, setDraftSearchValue] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [requestedPage, setRequestedPage] = useState(1);
+  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<HomePageFavoriteSnapshot>('home'), []);
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search));
+  const [showSolved, setShowSolved] = useState(() => favoriteRestoreSnapshot?.showSolved ?? true);
+  const [showUnsolved, setShowUnsolved] = useState(() => favoriteRestoreSnapshot?.showUnsolved ?? true);
+  const [countSortField, setCountSortField] = useState<CountSortField>(() => favoriteRestoreSnapshot?.countSortField ?? 'solvedCount');
+  const [countSortDirection, setCountSortDirection] = useState<SortDirection>(() => favoriteRestoreSnapshot?.countSortDirection ?? 'desc');
+  const [spreadRateSortOrder, setSpreadRateSortOrder] = useState<SpreadRateSortOrder>(() => favoriteRestoreSnapshot?.spreadRateSortOrder ?? 'none');
+  const [draftSearchValue, setDraftSearchValue] = useState(() => favoriteRestoreSnapshot?.draftSearchValue ?? '');
+  const [searchQuery, setSearchQuery] = useState(() => favoriteRestoreSnapshot?.searchQuery ?? '');
+  const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
   const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
   const [pageJumpDraft, setPageJumpDraft] = useState('1');
   const [problemPage, setProblemPage] = useState<ProblemPage>(createEmptyProblemPage());
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [selectedSpreadRateRange, setSelectedSpreadRateRange] = useState<RangeSelection | null>(DEFAULT_SPREAD_RATE_RANGE);
-  const [committedSpreadRateRange, setCommittedSpreadRateRange] = useState<RangeSelection | null>(DEFAULT_SPREAD_RATE_RANGE);
+  const [selectedSpreadRateRange, setSelectedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.selectedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
+  const [committedSpreadRateRange, setCommittedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.committedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
 
   const canShowSolveState = isReady && isAuthenticated;
   const showStats = true;
@@ -122,6 +153,10 @@ export default function HomePage() {
   const isSpreadRateFilterActive = spreadRateSortOrder !== 'none' || hasActiveSpreadRateConstraints;
 
   useEffect(() => {
+    clearFavoriteRestoreSnapshot('home');
+  }, []);
+
+  useEffect(() => {
     setSelectedSpreadRateRange((current) => keepRangeIfSame(current, normalizeRangeSelection(current, spreadRateSliderBounds)));
     setCommittedSpreadRateRange((current) =>
       keepRangeIfSame(current, resolveRangeSelection(normalizeRangeSelection(current, spreadRateSliderBounds)))
@@ -135,6 +170,21 @@ export default function HomePage() {
 
     setPageJumpDraft(String(problemPage.currentPage));
   }, [isPageJumpEditing, problemPage.currentPage]);
+
+  useEffect(() => {
+    const nextDbms = readProblemsDbmsFromSearch(locationSearch);
+
+    setSelectedDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
+  }, [locationSearch]);
+
+  useEffect(() => {
+    const nextPath = buildProblemsPath(selectedDbms);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+
+    if (currentPath !== nextPath) {
+      window.history.replaceState(window.history.state ?? {}, '', nextPath);
+    }
+  }, [selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,6 +356,27 @@ export default function HomePage() {
                 </button>
               );
             })}
+            <FavoriteTabButton
+              className="favorite-tab-toggle-end"
+              label={`문제 / ${selectedDbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}`}
+              path={buildProblemsPath(selectedDbms)}
+              snapshot={{
+                kind: 'home',
+                payload: {
+                  selectedDbms,
+                  showSolved,
+                  showUnsolved,
+                  countSortField,
+                  countSortDirection,
+                  spreadRateSortOrder,
+                  draftSearchValue,
+                  searchQuery,
+                  requestedPage,
+                  selectedSpreadRateRange,
+                  committedSpreadRateRange,
+                },
+              }}
+            />
           </div>
 
           <form

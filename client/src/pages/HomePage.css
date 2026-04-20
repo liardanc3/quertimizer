@@ -1568,7 +1568,7 @@ body.handle-setup-locked {
 
 .home-page .problem-table-head-cell-stats,
 .home-page .problem-table-cell-stats {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .home-page .problem-table-head-cell-spread {

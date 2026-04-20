@@ -3,6 +3,7 @@ import AdminPage from './pages/AdminPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
 import CommunityPage from './pages/CommunityPage';
 import CommunityWritePage from './pages/CommunityWritePage';
+import FavoritePage from './pages/FavoritePage';
 import GuidePage from './pages/GuidePage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
@@ -11,7 +12,7 @@ import ProblemSolvePage from './pages/ProblemSolvePage';
 import PublicHomePage from './pages/PublicHomePage';
 import RankingPage from './pages/RankingPage';
 import SubmitHistoryPage from './pages/SubmitHistoryPage';
-import { PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from './lib/navigation';
+import { FAVORITES_PATH, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from './lib/navigation';
 import { useMockSession } from './lib/session';
 
 interface ProblemRoute {
@@ -33,6 +34,10 @@ interface RankingRoute {
 
 interface SubmitHistoryRoute {
   type: 'submitHistory';
+}
+
+interface FavoritesRoute {
+  type: 'favorites';
 }
 
 interface CommunityRoute {
@@ -75,6 +80,7 @@ type AppRoute =
   | HomeRoute
   | ProblemsRoute
   | SubmitHistoryRoute
+  | FavoritesRoute
   | RankingRoute
   | CommunityRoute
   | GuideRoute
@@ -116,6 +122,10 @@ function parseRoute(pathname: string): AppRoute {
 
   if (normalizedPathname === SUBMIT_HISTORY_PATH) {
     return { type: 'submitHistory' };
+  }
+
+  if (normalizedPathname === FAVORITES_PATH) {
+    return { type: 'favorites' };
   }
 
   if (normalizedPathname === '/community') {
@@ -208,6 +218,10 @@ export default function AppRouter() {
     return <SubmitHistoryPage />;
   }
 
+  if (route.type === 'favorites') {
+    return <FavoritePage />;
+  }
+
   if (route.type === 'community') {
     return <CommunityPage />;
   }
@@ -221,7 +235,7 @@ export default function AppRouter() {
   }
 
   if (route.type === 'communityWrite') {
-    return <CommunityWritePage />;
+    return <CommunityPage />;
   }
 
   if (route.type === 'communityEdit') {

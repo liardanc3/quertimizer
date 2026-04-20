@@ -1,13 +1,16 @@
+import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import { GUIDE_PATH } from '../lib/navigation';
 import './GuidePage.css';
 
 export default function GuidePage() {
   return (
     <div className="page-stack guide-page">
       <div className="guide-page-header">
-        <div className="guide-page-tab-row" role="tablist" aria-label="가이드">
-          <button type="button" role="tab" aria-selected={true} className="guide-page-tab is-selected">
+        <div className="guide-page-tab-row solve-dbms-tab-row" role="tablist" aria-label="가이드">
+          <button type="button" role="tab" aria-selected={true} className="solve-dbms-tab is-selected">
             문제 생성
           </button>
+          <FavoriteTabButton className="favorite-tab-toggle-end" label="가이드 / 문제 생성" path={GUIDE_PATH} />
         </div>
       </div>
 

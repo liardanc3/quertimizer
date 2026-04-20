@@ -17,12 +17,11 @@
 }
 
 .admin-page-tab-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0;
   width: 100%;
   flex-wrap: nowrap;
-  border-bottom: 1px solid #dbe6f2;
   justify-content: flex-start;
   overflow-x: auto;
 }

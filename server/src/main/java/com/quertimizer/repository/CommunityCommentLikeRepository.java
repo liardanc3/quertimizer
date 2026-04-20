@@ -8,6 +8,8 @@ import java.util.List;
 
 public interface CommunityCommentLikeRepository extends JpaRepository<CommunityCommentLike, CommunityCommentLikeId> {
 
+    List<CommunityCommentLike> findAllByIdUserIdOrderByCreatedAtDesc(String userId);
+
     void deleteAllByIdCommentIdIn(List<Long> commentIds);
 
 }

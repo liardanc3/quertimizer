@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   HINT_FILTER_OPTIONS,
   buildAvailableBucketFilters,
@@ -14,8 +14,10 @@ import {
   type BucketFilterValue,
   type PlanSectionKey,
 } from '../lib/executionPlanFilters';
+import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { fetchSubmitHistories } from '../lib/submitHistoryApi';
-import { PROBLEMS_PATH, getProfilePath, navigate } from '../lib/navigation';
+import { getLocationSearchSnapshot, getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, subscribeLocation, navigate } from '../lib/navigation';
 import type {
   DbmsType,
   SubmitHistoryEntry,
@@ -107,12 +109,33 @@ interface SubmitHistoryFilters {
   planFiltersByDbms: SubmitHistoryPlanFiltersByDbms;
 }
 
+interface SubmitHistoryFavoriteSnapshot {
+  draftFilters: SubmitHistoryFilters;
+  submittedFilters: SubmitHistoryFilters;
+  requestedPage: number;
+  selectedPlanSections: PlanSectionKey[];
+  activePlanDetailDbms: DbmsType;
+}
+
 const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
   { value: 'oracle', label: 'Oracle' },
 ];
+
+function readSubmitHistoryDbmsFromSearch(search: string) {
+  const dbms = new URLSearchParams(search).get('dbms');
+  return dbms === 'oracle' ? 'oracle' : 'postgresql';
+}
+
+function buildSubmitHistoryPath(dbms: DbmsType) {
+  if (dbms === 'postgresql') {
+    return SUBMIT_HISTORY_PATH;
+  }
+
+  return `${SUBMIT_HISTORY_PATH}?dbms=${encodeURIComponent(dbms)}`;
+}
 
 const judgeOptions: Array<{ value: JudgeSelectionValue; label: string }> = [
   { value: 'success', label: '정답' },
@@ -234,11 +257,11 @@ function createEmptyPlanFiltersByDbms(): SubmitHistoryPlanFiltersByDbms {
   };
 }
 
-function createDefaultFilters(): SubmitHistoryFilters {
+function createDefaultFilters(initialDbms: DbmsType = 'postgresql'): SubmitHistoryFilters {
   return {
     submitId: '',
     query: '',
-    dbmsSelections: ['postgresql'],
+    dbmsSelections: [initialDbms],
     problemId: '',
     judgeSelections: ['success', 'fail'],
     costSort: 'none',
@@ -523,17 +546,20 @@ function SelectionCheckbox({ checked }: { checked: boolean }) {
 }
 
 export default function SubmitHistoryPage() {
-  const [draftFilters, setDraftFilters] = useState<SubmitHistoryFilters>(() => createDefaultFilters());
-  const [submittedFilters, setSubmittedFilters] = useState<SubmitHistoryFilters>(() => createDefaultFilters());
-  const [requestedPage, setRequestedPage] = useState(1);
+  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<SubmitHistoryFavoriteSnapshot>('submitHistory'), []);
+  const initialDbms = favoriteRestoreSnapshot?.draftFilters.dbmsSelections[0] ?? readSubmitHistoryDbmsFromSearch(window.location.search);
+  const [draftFilters, setDraftFilters] = useState<SubmitHistoryFilters>(() => favoriteRestoreSnapshot?.draftFilters ?? createDefaultFilters(initialDbms));
+  const [submittedFilters, setSubmittedFilters] = useState<SubmitHistoryFilters>(() => favoriteRestoreSnapshot?.submittedFilters ?? createDefaultFilters(initialDbms));
+  const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
   const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
   const [pageJumpDraft, setPageJumpDraft] = useState('1');
   const [historyPage, setHistoryPage] = useState<SubmitHistoryPageData>(createEmptySubmitHistoryPage());
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [headerFilterMenuState, setHeaderFilterMenuState] = useState<HeaderFilterMenuState>(null);
-  const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(DEFAULT_PLAN_SECTION_KEYS);
-  const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>('postgresql');
+  const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(() => favoriteRestoreSnapshot?.selectedPlanSections ?? DEFAULT_PLAN_SECTION_KEYS);
+  const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.activePlanDetailDbms ?? 'postgresql');
   const [modalState, setModalState] = useState<SubmitHistoryModalState>(null);
   const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
   const headerFilterMenuRef = useRef<HTMLDivElement | null>(null);
@@ -573,6 +599,10 @@ export default function SubmitHistoryPage() {
     () => availableBucketFilters.filter((filter) => normalizedSelectedPlanSections.includes(filter.key)),
     [availableBucketFilters, normalizedSelectedPlanSections],
   );
+  useEffect(() => {
+    clearFavoriteRestoreSnapshot('submitHistory');
+  }, []);
+
   const highlightedModalSql = useMemo(() => {
     if (modalState?.type !== 'sql') {
       return null;
@@ -588,6 +618,41 @@ export default function SubmitHistoryPage() {
 
     setPageJumpDraft(String(historyPage.currentPage));
   }, [historyPage.currentPage, isPageJumpEditing]);
+
+  useEffect(() => {
+    const nextDbms = readSubmitHistoryDbmsFromSearch(locationSearch);
+
+    setActivePlanDetailDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
+    setDraftFilters((currentFilters) => {
+      if (currentFilters.dbmsSelections.length === 1 && currentFilters.dbmsSelections[0] === nextDbms) {
+        return currentFilters;
+      }
+
+      return {
+        ...currentFilters,
+        dbmsSelections: [nextDbms],
+      };
+    });
+    setSubmittedFilters((currentFilters) => {
+      if (currentFilters.dbmsSelections.length === 1 && currentFilters.dbmsSelections[0] === nextDbms) {
+        return currentFilters;
+      }
+
+      return {
+        ...currentFilters,
+        dbmsSelections: [nextDbms],
+      };
+    });
+  }, [locationSearch]);
+
+  useEffect(() => {
+    const nextPath = buildSubmitHistoryPath(selectedDbms);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+
+    if (currentPath !== nextPath) {
+      window.history.replaceState(window.history.state ?? {}, '', nextPath);
+    }
+  }, [selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1334,6 +1399,21 @@ export default function SubmitHistoryPage() {
                 </button>
               );
             })}
+            <FavoriteTabButton
+              className="favorite-tab-toggle-end"
+              label={`제출 목록 / ${selectedDbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}`}
+              path={buildSubmitHistoryPath(selectedDbms)}
+              snapshot={{
+                kind: 'submitHistory',
+                payload: {
+                  draftFilters,
+                  submittedFilters,
+                  requestedPage,
+                  selectedPlanSections,
+                  activePlanDetailDbms,
+                },
+              }}
+            />
           </div>
 
           <form

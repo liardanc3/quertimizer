@@ -1,0 +1,82 @@
+.favorite-page {
+  gap: 1.5rem;
+}
+
+.favorite-toolbar-card,
+.favorite-board {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.favorite-toolbar-stack {
+  display: grid;
+  width: 100%;
+}
+
+.favorite-tab-row {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.favorite-nav-tab {
+  flex: 0 0 auto;
+  text-align: left;
+}
+
+.favorite-empty-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  border-top: 1px solid rgba(219, 230, 242, 0.86);
+}
+
+.favorite-empty-copy {
+  display: grid;
+  justify-items: center;
+  gap: 0.42rem;
+  color: #64748b;
+}
+
+.favorite-empty-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: #2563eb;
+}
+
+.favorite-empty-title {
+  margin: 0;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.favorite-empty-link {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: default;
+}
+
+@media (prefers-color-scheme: dark) {
+  .favorite-empty-shell {
+    border-top-color: rgba(71, 85, 105, 0.62);
+  }
+
+  .favorite-empty-copy {
+    color: #94a3b8;
+  }
+
+  .favorite-empty-title {
+    color: #cbd5e1;
+  }
+
+  .favorite-empty-link {
+    color: #93c5fd;
+  }
+}

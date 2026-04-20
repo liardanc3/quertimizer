@@ -13,12 +13,14 @@ import com.quertimizer.endpoint.api.dto.response.UserProfileSolvedRecordRes;
 import com.quertimizer.endpoint.api.dto.response.UserProfileSolvedRecordsRes;
 import com.quertimizer.endpoint.api.dto.response.UserProfileSummaryRes;
 import com.quertimizer.entity.CommunityComment;
+import com.quertimizer.entity.CommunityCommentLike;
 import com.quertimizer.entity.CommunityPost;
 import com.quertimizer.entity.CommunityPostLike;
 import com.quertimizer.entity.CommunityPostTag;
 import com.quertimizer.entity.ProblemSolveHistory;
 import com.quertimizer.entity.User;
 import com.quertimizer.entity.UserExternalLink;
+import com.quertimizer.repository.CommunityCommentLikeRepository;
 import com.quertimizer.repository.CommunityCommentRepository;
 import com.quertimizer.repository.CommunityPostLikeRepository;
 import com.quertimizer.repository.CommunityPostRepository;
@@ -50,6 +52,7 @@ public class UserProfileService {
     private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
     private final CommunityCommentRepository communityCommentRepository;
+    private final CommunityCommentLikeRepository communityCommentLikeRepository;
     private final CommunityPostLikeRepository communityPostLikeRepository;
     private final ProblemStore problemStore;
 
@@ -84,19 +87,20 @@ public class UserProfileService {
     public Optional<UserProfileCommunityPostsRes> getLikedPosts(String targetUserId) {
         return userRepository.findByUserId(targetUserId)
                 .map(user -> {
-                    List<String> likedPostIds = communityPostLikeRepository.findAllByIdUserIdOrderByCreatedAtDesc(targetUserId).stream()
-                            .map(CommunityPostLike::getId)
-                            .map(postLikeId -> postLikeId.getPostId())
-                            .distinct()
-                            .toList();
-                    Map<String, CommunityPost> postById = communityPostRepository.findAllByPostIdIn(likedPostIds).stream()
+                    List<CommunityPostLike> likedPosts = communityPostLikeRepository.findAllByIdUserIdOrderByCreatedAtDesc(targetUserId);
+                    Map<String, CommunityPost> postById = communityPostRepository.findAllByPostIdIn(
+                                    likedPosts.stream()
+                                            .map(CommunityPostLike::getId)
+                                            .map(postLikeId -> postLikeId.getPostId())
+                                            .distinct()
+                                            .toList()
+                            ).stream()
                             .collect(java.util.stream.Collectors.toMap(CommunityPost::getPostId, post -> post));
 
                     return new UserProfileCommunityPostsRes(
-                            likedPostIds.stream()
-                                    .map(postById::get)
-                                    .filter(java.util.Objects::nonNull)
-                                    .map(this::createCommunityPostResponse)
+                            likedPosts.stream()
+                                    .map(postLike -> createLikedCommunityPostResponse(postLike, postById))
+                                    .flatMap(Optional::stream)
                                     .toList()
                     );
                 });
@@ -106,21 +110,40 @@ public class UserProfileService {
         return userRepository.findByUserId(targetUserId)
                 .map(user -> {
                     List<CommunityComment> comments = communityCommentRepository.findAllByUserIdOrderByCreatedAtDesc(targetUserId);
-                    Map<String, String> postTitleByPostId = communityPostRepository.findAllByPostIdIn(
-                                    comments.stream().map(CommunityComment::getPostId).distinct().toList()
-                            ).stream()
-                            .collect(java.util.stream.Collectors.toMap(CommunityPost::getPostId, CommunityPost::getTitle));
+                    Map<String, String> postTitleByPostId = createPostTitleByPostId(comments.stream()
+                            .map(CommunityComment::getPostId)
+                            .distinct()
+                            .toList());
 
                     return new UserProfileCommunityCommentsRes(
                             comments.stream()
-                                    .map(comment -> new UserProfileCommunityCommentRes(
-                                            comment.getCommentId(),
-                                            comment.getPostId(),
-                                            postTitleByPostId.getOrDefault(comment.getPostId(), comment.getPostId()),
-                                            comment.getContent(),
-                                            comment.getCreatedAt(),
-                                            comment.getParentCommentId() != null
-                                    ))
+                                    .map(comment -> createCommunityCommentResponse(comment, postTitleByPostId, comment.getCreatedAt()))
+                                    .toList()
+                    );
+                });
+    }
+
+    public Optional<UserProfileCommunityCommentsRes> getLikedComments(String targetUserId) {
+        return userRepository.findByUserId(targetUserId)
+                .map(user -> {
+                    List<CommunityCommentLike> likedComments = communityCommentLikeRepository.findAllByIdUserIdOrderByCreatedAtDesc(targetUserId);
+                    Map<Long, CommunityComment> commentById = communityCommentRepository.findAllByCommentIdIn(
+                                    likedComments.stream()
+                                            .map(CommunityCommentLike::getId)
+                                            .map(commentLikeId -> commentLikeId.getCommentId())
+                                            .distinct()
+                                            .toList()
+                            ).stream()
+                            .collect(java.util.stream.Collectors.toMap(CommunityComment::getCommentId, comment -> comment));
+                    Map<String, String> postTitleByPostId = createPostTitleByPostId(commentById.values().stream()
+                            .map(CommunityComment::getPostId)
+                            .distinct()
+                            .toList());
+
+                    return new UserProfileCommunityCommentsRes(
+                            likedComments.stream()
+                                    .map(commentLike -> createLikedCommunityCommentResponse(commentLike, commentById, postTitleByPostId))
+                                    .flatMap(Optional::stream)
                                     .toList()
                     );
                 });
@@ -355,6 +378,61 @@ public class UserProfileService {
                 post.getLikeCount(),
                 post.getCommentCount()
         );
+    }
+
+    private Optional<UserProfileCommunityPostRes> createLikedCommunityPostResponse(CommunityPostLike postLike, Map<String, CommunityPost> postById) {
+        CommunityPost post = postById.get(postLike.getId().getPostId());
+
+        if (post == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new UserProfileCommunityPostRes(
+                post.getPostId(),
+                post.getTitle(),
+                createCommunityExcerpt(post.getContentText()),
+                communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(post.getPostId()).stream()
+                        .map(CommunityPostTag::getTag)
+                        .toList(),
+                postLike.getCreatedAt(),
+                post.getUpdatedAt(),
+                post.getLikeCount(),
+                post.getCommentCount()
+        ));
+    }
+
+    private Optional<UserProfileCommunityCommentRes> createLikedCommunityCommentResponse(CommunityCommentLike commentLike,
+                                                                                          Map<Long, CommunityComment> commentById,
+                                                                                          Map<String, String> postTitleByPostId) {
+        CommunityComment comment = commentById.get(commentLike.getId().getCommentId());
+
+        if (comment == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(createCommunityCommentResponse(comment, postTitleByPostId, commentLike.getCreatedAt()));
+    }
+
+    private UserProfileCommunityCommentRes createCommunityCommentResponse(CommunityComment comment,
+                                                                          Map<String, String> postTitleByPostId,
+                                                                          java.time.LocalDateTime actedAt) {
+        return new UserProfileCommunityCommentRes(
+                comment.getCommentId(),
+                comment.getPostId(),
+                postTitleByPostId.getOrDefault(comment.getPostId(), comment.getPostId()),
+                comment.getContent(),
+                actedAt,
+                comment.getParentCommentId() != null
+        );
+    }
+
+    private Map<String, String> createPostTitleByPostId(List<String> postIds) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return communityPostRepository.findAllByPostIdIn(postIds).stream()
+                .collect(java.util.stream.Collectors.toMap(CommunityPost::getPostId, CommunityPost::getTitle));
     }
 
     private String createCommunityExcerpt(String contentText) {

@@ -1,17 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
+import CommunityWritePage from './CommunityWritePage';
 import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
-import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
+import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, subscribeLocation, navigate } from '../lib/navigation';
 import './HomePage.css';
 import './SubmitHistoryPage.css';
 import './CommunityPage.css';
 
 type CommunitySortKey = 'default' | 'latest' | 'oldest' | 'views' | 'viewsAsc' | 'likes' | 'likesAsc' | 'comments' | 'commentsAsc';
-type CommunityCategoryTab = 'all' | 'discussion' | 'question';
+type CommunityCategoryTab = 'all' | 'notice' | 'discussion' | 'question';
+
+interface CommunityPageFavoriteSnapshot {
+  draftSearchValue: string;
+  searchQuery: string;
+  selectedCategory: CommunityCategoryTab;
+  sortKey: CommunitySortKey;
+  requestedPage: number;
+}
 
 const PAGE_SIZE = 10;
 const numberFormatter = new Intl.NumberFormat('ko-KR');
+const loadingPlaceholderRows = Array.from({ length: 6 }, (_, index) => index);
 const categoryTabs: Array<{ value: CommunityCategoryTab; label: string }> = [
   { value: 'all', label: '전체' },
+  { value: 'notice', label: '공지' },
   { value: 'discussion', label: '자유' },
   { value: 'question', label: '질문' },
 ];
@@ -56,7 +69,7 @@ function isSortKey(value: string | null): value is CommunitySortKey {
 }
 
 function isCategoryTab(value: string | null): value is CommunityCategoryTab {
-  return value === 'all' || value === 'discussion' || value === 'question';
+  return value === 'all' || value === 'notice' || value === 'discussion' || value === 'question';
 }
 
 function getDefaultSortKey(): CommunitySortKey {
@@ -76,6 +89,30 @@ function readCommunityListState() {
     category: isCategoryTab(category) ? category : 'all',
     page: Number.isNaN(page) || page < 1 ? 1 : page,
   };
+}
+
+function getCommunityTabLabel(category: CommunityCategoryTab) {
+  if (category === 'notice') {
+    return '공지';
+  }
+
+  if (category === 'discussion') {
+    return '자유';
+  }
+
+  if (category === 'question') {
+    return '질문';
+  }
+
+  return '전체';
+}
+
+function buildCommunityFavoritePath(category: CommunityCategoryTab) {
+  return category === 'all' ? COMMUNITY_PATH : `${COMMUNITY_PATH}?category=${encodeURIComponent(category)}`;
+}
+
+function buildCommunityWritePath(category: CommunityCategoryTab) {
+  return category === 'all' ? COMMUNITY_WRITE_PATH : `${COMMUNITY_WRITE_PATH}?category=${encodeURIComponent(category)}`;
 }
 
 function buildCommunityListPath({ search, sortKey, category, page }: { search: string; sortKey: CommunitySortKey; category: CommunityCategoryTab; page: number }) {
@@ -117,7 +154,7 @@ function formatBoardDate(value: string) {
     return '-';
   }
 
-  const year = String(date.getFullYear()).slice(-2);
+  const year = String(date.getFullYear());
   const month = padDatePart(date.getMonth() + 1);
   const day = padDatePart(date.getDate());
   const hours = padDatePart(date.getHours());
@@ -135,6 +172,10 @@ function getCategoryLabel(value: string) {
     return '공지';
   }
 
+  if (value === 'tip') {
+    return '팁';
+  }
+
   return '자유';
 }
 
@@ -147,8 +188,19 @@ const emptyPage: CommunityPostPage = {
 };
 
 export default function CommunityPage() {
-  const initialState = readCommunityListState();
-  const [draftSearchValue, setDraftSearchValue] = useState(initialState.search);
+  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityPageFavoriteSnapshot>('community'), []);
+  const didApplyFavoriteRestoreRef = useRef(false);
+  const isWriteMode = window.location.pathname === COMMUNITY_WRITE_PATH;
+  const initialState = favoriteRestoreSnapshot
+    ? {
+        search: favoriteRestoreSnapshot.searchQuery,
+        sortKey: favoriteRestoreSnapshot.sortKey,
+        category: favoriteRestoreSnapshot.selectedCategory,
+        page: favoriteRestoreSnapshot.requestedPage,
+      }
+    : readCommunityListState();
+  const [draftSearchValue, setDraftSearchValue] = useState(favoriteRestoreSnapshot?.draftSearchValue ?? initialState.search);
   const [searchQuery, setSearchQuery] = useState(initialState.search);
   const [selectedCategory, setSelectedCategory] = useState<CommunityCategoryTab>(initialState.category);
   const [sortKey, setSortKey] = useState<CommunitySortKey>(initialState.sortKey);
@@ -158,6 +210,10 @@ export default function CommunityPage() {
   const [postPage, setPostPage] = useState<CommunityPostPage>(emptyPage);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    clearFavoriteRestoreSnapshot('community');
+  }, []);
 
   useEffect(() => {
     const savedScrollY = window.history.state?.scrollY;
@@ -170,6 +226,16 @@ export default function CommunityPage() {
   }, []);
 
   useEffect(() => {
+    const nextState = readCommunityListState();
+
+    setDraftSearchValue((currentValue) => (currentValue === nextState.search ? currentValue : nextState.search));
+    setSearchQuery((currentValue) => (currentValue === nextState.search ? currentValue : nextState.search));
+    setSelectedCategory((currentValue) => (currentValue === nextState.category ? currentValue : nextState.category));
+    setSortKey((currentValue) => (currentValue === nextState.sortKey ? currentValue : nextState.sortKey));
+    setRequestedPage((currentValue) => (currentValue === nextState.page ? currentValue : nextState.page));
+  }, [locationSearch]);
+
+  useEffect(() => {
     if (isPageJumpEditing) {
       return;
     }
@@ -178,6 +244,12 @@ export default function CommunityPage() {
   }, [isPageJumpEditing, postPage.currentPage]);
 
   useEffect(() => {
+    if (isWriteMode) {
+      setIsLoading(false);
+      setErrorMessage(null);
+      return;
+    }
+
     let cancelled = false;
 
     setIsLoading(true);
@@ -217,7 +289,7 @@ export default function CommunityPage() {
     return () => {
       cancelled = true;
     };
-  }, [requestedPage, searchQuery, selectedCategory, sortKey]);
+  }, [isWriteMode, requestedPage, searchQuery, selectedCategory, sortKey]);
 
   function replaceListHistory(nextSearch: string, nextCategory: CommunityCategoryTab, nextSortKey: CommunitySortKey, nextPage: number, scrollY = 0) {
     window.history.replaceState(
@@ -244,7 +316,7 @@ export default function CommunityPage() {
   }
 
   function selectCategory(category: CommunityCategoryTab) {
-    if (category === selectedCategory) {
+    if (!isWriteMode && category === selectedCategory) {
       return;
     }
 
@@ -282,6 +354,27 @@ export default function CommunityPage() {
     setIsPageJumpEditing(false);
   }
 
+  useEffect(() => {
+    if (!favoriteRestoreSnapshot || didApplyFavoriteRestoreRef.current || isWriteMode) {
+      return;
+    }
+
+    didApplyFavoriteRestoreRef.current = true;
+    setDraftSearchValue(favoriteRestoreSnapshot.draftSearchValue);
+    setSearchQuery(favoriteRestoreSnapshot.searchQuery);
+    setSelectedCategory(favoriteRestoreSnapshot.selectedCategory);
+    setSortKey(favoriteRestoreSnapshot.sortKey);
+    setRequestedPage(favoriteRestoreSnapshot.requestedPage);
+    setPageJumpDraft(String(favoriteRestoreSnapshot.requestedPage));
+    replaceListHistory(
+      favoriteRestoreSnapshot.searchQuery,
+      favoriteRestoreSnapshot.selectedCategory,
+      favoriteRestoreSnapshot.sortKey,
+      favoriteRestoreSnapshot.requestedPage,
+      0,
+    );
+  }, [favoriteRestoreSnapshot, isWriteMode]);
+
   function handleOpenPost(postId: string) {
     const scrollY = window.scrollY;
     replaceListHistory(searchQuery, selectedCategory, sortKey, postPage.currentPage, scrollY);
@@ -298,56 +391,86 @@ export default function CommunityPage() {
       <section className="panel-card compact community-toolbar-card">
         <div className="problem-toolbar community-toolbar submit-history-toolbar-stack">
           <div className="solve-dbms-tab-row community-tab-row" role="tablist" aria-label="커뮤니티 구분 선택">
-            {categoryTabs.map((tab) => {
-              const isSelected = tab.value === selectedCategory;
+            <div className="community-tab-list">
+              {categoryTabs.map((tab) => {
+                const isSelected = !isWriteMode && tab.value === selectedCategory;
 
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
-                  role="tab"
-                  aria-selected={isSelected}
-                  onClick={() => selectCategory(tab.value)}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => selectCategory(tab.value)}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
 
-            <button
-              type="button"
-              className="solve-dbms-tab community-write-tab"
-              onClick={() => navigate(COMMUNITY_WRITE_PATH)}
-            >
-              글쓰기
-            </button>
+              <button
+                type="button"
+                className={`solve-dbms-tab ${isWriteMode ? 'is-selected' : ''}`}
+                role="tab"
+                aria-selected={isWriteMode}
+                onClick={() => {
+                  if (!isWriteMode) {
+                    navigate(buildCommunityWritePath(selectedCategory));
+                  }
+                }}
+              >
+                글쓰기
+              </button>
+            </div>
+            <FavoriteTabButton
+              className="favorite-tab-toggle-end"
+              label={`커뮤니티 / ${getCommunityTabLabel(selectedCategory)}`}
+              path={buildCommunityListPath({ search: searchQuery, sortKey, category: selectedCategory, page: requestedPage })}
+              snapshot={{
+                kind: 'community',
+                payload: {
+                  draftSearchValue,
+                  searchQuery,
+                  selectedCategory,
+                  sortKey,
+                  requestedPage,
+                },
+              }}
+            />
           </div>
 
-          <form
-            className="problem-search-form home-problem-search-form community-search-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              applySearch();
-            }}
-          >
-            <label className="problem-search-field home-problem-search-field community-search-field">
-              <input
-                type="search"
-                value={draftSearchValue}
-                onChange={(event) => setDraftSearchValue(event.target.value)}
-                className="text-field problem-search-input home-problem-search-input community-search-input"
-                placeholder="제목, 작성자, 태그, 내용 검색"
-                aria-label="커뮤니티 검색"
-              />
-              <button type="submit" className="problem-search-button home-problem-search-button" aria-label="커뮤니티 검색 실행">
-                검색
-              </button>
-            </label>
-          </form>
+          {!isWriteMode ? (
+            <form
+              className="problem-search-form home-problem-search-form community-search-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                applySearch();
+              }}
+            >
+              <label className="problem-search-field home-problem-search-field community-search-field">
+                <input
+                  type="search"
+                  value={draftSearchValue}
+                  onChange={(event) => setDraftSearchValue(event.target.value)}
+                  className="text-field problem-search-input home-problem-search-input community-search-input"
+                  placeholder="제목, 작성자, 태그, 내용 검색"
+                  aria-label="커뮤니티 검색"
+                />
+                <button type="submit" className="problem-search-button home-problem-search-button" aria-label="커뮤니티 검색 실행">
+                  검색
+                </button>
+              </label>
+            </form>
+          ) : null}
         </div>
       </section>
 
+      {isWriteMode ? (
+        <section className="panel-card problem-board community-board community-write-board">
+          <CommunityWritePage embedded />
+        </section>
+      ) : (
       <section className="panel-card problem-board community-board">
         {errorMessage ? (
           <div className="submit-history-empty-state">{errorMessage}</div>
@@ -404,7 +527,22 @@ export default function CommunityPage() {
                 </div>
               </div>
 
-              {postPage.posts.length === 0 && !isLoading ? (
+              {isLoading && postPage.posts.length === 0 ? (
+                loadingPlaceholderRows.map((rowIndex) => (
+                  <div key={`community-loading-${rowIndex}`} className="submit-history-row submit-history-body community-table-row community-loading-row" role="row" aria-hidden="true">
+                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                    <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell">
+                      <span className="community-loading-placeholder is-long" />
+                      <span className="community-loading-placeholder is-medium" />
+                    </div>
+                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
+                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
+                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                  </div>
+                ))
+              ) : postPage.posts.length === 0 ? (
                 <div className="submit-history-row submit-history-empty-row community-empty-row" role="row">
                   <span className="submit-history-empty-cell" role="cell">조건에 맞는 게시글이 없습니다.</span>
                 </div>
@@ -416,17 +554,17 @@ export default function CommunityPage() {
                     </div>
 
                     <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell" data-label="제목">
+                      <button type="button" className="community-post-title-link" onClick={() => handleOpenPost(post.id)}>
+                        <span className="community-post-title-text">{post.title}</span>
+                      </button>
+
                       {post.tags.length > 0 ? (
                         <div className="community-table-tags">
-                          {post.tags.slice(0, 5).map((tag) => (
+                          {Array.from(new Set(post.tags)).slice(0, 5).map((tag) => (
                             <span key={tag} className="community-table-tag">#{tag}</span>
                           ))}
                         </div>
                       ) : null}
-
-                      <button type="button" className="community-post-title-link" onClick={() => handleOpenPost(post.id)}>
-                        <span className="community-post-title-text">{post.title}</span>
-                      </button>
                     </div>
 
                     <div role="cell" className="submit-history-cell community-table-cell" data-label="Handle">
@@ -526,6 +664,7 @@ export default function CommunityPage() {
           </div>
         ) : null}
       </section>
+      )}
     </div>
   );
 }

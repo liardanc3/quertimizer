@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
 import { Fragment } from 'react';
 import './ProblemSolvePage.css';
 import './PublicHomePage.css';
 import './SubmitHistoryPage.css';
+import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import { fetchProblemDetail, type ProblemDetailData } from '../lib/problemApi';
@@ -32,7 +34,7 @@ import {
   type SessionSocketMessage,
 } from '../lib/sessionSocket';
 import { syncSession, useMockSession } from '../lib/session';
-import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
+import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import { getExecutionPlanDetailGroups } from '../lib/executionPlanFilters';
 import type { CommunityPostSummary, DbmsType, ProblemDetail, SubmitHistoryEntry, SubmitHistoryPageData, SubmitHistoryPlanFilters } from '../types/domain';
@@ -43,6 +45,47 @@ interface ProblemSolvePageProps {
 }
 
 type SolveContentTab = 'problem' | 'submissions' | 'community';
+
+interface ProblemSolveFavoriteSnapshot {
+  selectedDbms: DbmsType;
+  contentTab: SolveContentTab;
+  sql: string;
+  editorSelection: SqlEditorSelection | null;
+  mySubmitRequestedPage: number;
+  taggedPostRequestedPage: number;
+}
+
+function readSolveContentTabFromSearch(search: string): SolveContentTab {
+  const tab = new URLSearchParams(search).get('tab');
+
+  if (tab === 'submissions' || tab === 'community') {
+    return tab;
+  }
+
+  return 'problem';
+}
+
+function buildSolveContentTabPath(problemId: string, tab: SolveContentTab) {
+  const encodedProblemId = encodeURIComponent(problemId);
+
+  if (tab === 'problem') {
+    return `/problems/${encodedProblemId}`;
+  }
+
+  return `/problems/${encodedProblemId}?tab=${encodeURIComponent(tab)}`;
+}
+
+function getSolveContentTabLabel(tab: SolveContentTab) {
+  if (tab === 'submissions') {
+    return '내 제출 목록';
+  }
+
+  if (tab === 'community') {
+    return '태그된 게시글';
+  }
+
+  return '제출';
+}
 
 type SolveRelatedModalState =
   | { type: 'sql'; history: SubmitHistoryEntry }
@@ -3388,12 +3431,15 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const sqlEditorSelectionRef = useRef<SqlEditorSelection>({ start: 0, end: 0 });
+  const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<ProblemSolveFavoriteSnapshot>('problemSolve'), []);
+  const favoriteSelectionRestoreRef = useRef<SqlEditorSelection | null>(favoriteRestoreSnapshot?.editorSelection ?? null);
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
   const executionResultItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const submitPanelRef = useRef<HTMLElement | null>(null);
   const executionResponseResolverRef = useRef<((result: ProblemExecutionResult) => void) | null>(null);
   const executionStopRequestedRef = useRef(false);
   const ignoredExecutionResponseCountRef = useRef(0);
+  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const { defaultDbms, isAuthenticated, isReady, userId } = useMockSession();
   const previousAuthenticationStateRef = useRef(isAuthenticated);
   const fallbackProblem = createFallbackProblemDetail(problemId);
@@ -3433,23 +3479,25 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const problem = fallbackProblem;
   const availableDbms = getAvailableDbms(problem);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
-    resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null)
+    favoriteRestoreSnapshot?.selectedDbms != null && availableDbms.includes(favoriteRestoreSnapshot.selectedDbms)
+      ? favoriteRestoreSnapshot.selectedDbms
+      : resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null)
   );
-  const [contentTab, setContentTab] = useState<SolveContentTab>('problem');
+  const [contentTab, setContentTab] = useState<SolveContentTab>(() => favoriteRestoreSnapshot?.contentTab ?? readSolveContentTabFromSearch(window.location.search));
   const [mySubmitHistoryPage, setMySubmitHistoryPage] = useState<SubmitHistoryPageData>(createEmptySolveSubmitHistoryPage());
   const [isMySubmitLoading, setIsMySubmitLoading] = useState(false);
   const [mySubmitLoadError, setMySubmitLoadError] = useState<string | null>(null);
-  const [mySubmitRequestedPage, setMySubmitRequestedPage] = useState(1);
+  const [mySubmitRequestedPage, setMySubmitRequestedPage] = useState(() => favoriteRestoreSnapshot?.mySubmitRequestedPage ?? 1);
   const [isMySubmitPageJumpEditing, setIsMySubmitPageJumpEditing] = useState(false);
   const [mySubmitPageJumpDraft, setMySubmitPageJumpDraft] = useState('1');
   const [taggedPostPage, setTaggedPostPage] = useState<CommunityPostPage>(createEmptySolveCommunityPage());
   const [isTaggedPostLoading, setIsTaggedPostLoading] = useState(false);
   const [taggedPostLoadError, setTaggedPostLoadError] = useState<string | null>(null);
-  const [taggedPostRequestedPage, setTaggedPostRequestedPage] = useState(1);
+  const [taggedPostRequestedPage, setTaggedPostRequestedPage] = useState(() => favoriteRestoreSnapshot?.taggedPostRequestedPage ?? 1);
   const [isTaggedPostPageJumpEditing, setIsTaggedPostPageJumpEditing] = useState(false);
   const [taggedPostPageJumpDraft, setTaggedPostPageJumpDraft] = useState('1');
   const [relatedModalState, setRelatedModalState] = useState<SolveRelatedModalState>(null);
-  const [sql, setSql] = useState('');
+  const [sql, setSql] = useState(() => favoriteRestoreSnapshot?.sql ?? '');
   const [sqlEditorFontSize, setSqlEditorFontSize] = useState(SQL_EDITOR_DEFAULT_FONT_SIZE);
   const getPanelTitle = (panelKey: PanelKey) =>
     panelKey === 'editor' ? `${getDbmsLabel(selectedDbms)} 에디터` : panelLabels[panelKey];
@@ -3537,6 +3585,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   );
   const editorPortalTarget = sqlEditorElement?.ownerDocument?.body ?? document.body;
 
+  useEffect(() => {
+    clearFavoriteRestoreSnapshot('problemSolve');
+  }, []);
+
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
     problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중..'));
@@ -3574,6 +3626,17 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       updateSqlEditorSelection(selectionStart, selectionEnd);
     });
   };
+
+  useEffect(() => {
+    if (favoriteSelectionRestoreRef.current == null || contentTab !== 'problem' || sqlEditorElement == null) {
+      return;
+    }
+
+    const nextSelectionStart = Math.min(favoriteSelectionRestoreRef.current.start, sql.length);
+    const nextSelectionEnd = Math.min(favoriteSelectionRestoreRef.current.end, sql.length);
+    favoriteSelectionRestoreRef.current = null;
+    restoreEditorSelection(nextSelectionStart, nextSelectionEnd);
+  }, [contentTab, restoreEditorSelection, sql, sqlEditorElement]);
 
   const registerExecutionResultItemRef = (key: string, element: HTMLDivElement | null) => {
     executionResultItemRefs.current[key] = element;
@@ -3650,9 +3713,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   useEffect(() => {
     const restoredAuthReturn = consumeSolvePageAuthReturn(problemId);
+    const favoriteSelection = favoriteRestoreSnapshot?.editorSelection ?? null;
 
-    setSql('');
-    updateSqlEditorSelection(0, 0);
+    favoriteSelectionRestoreRef.current = restoredAuthReturn?.sql ? null : favoriteSelection;
+    setSql(restoredAuthReturn?.sql ?? favoriteRestoreSnapshot?.sql ?? '');
+    updateSqlEditorSelection(
+      restoredAuthReturn?.sql ? 0 : favoriteSelection?.start ?? 0,
+      restoredAuthReturn?.sql ? 0 : favoriteSelection?.end ?? favoriteSelection?.start ?? 0,
+    );
     setExecutionRuns([]);
     setExecutionStatementMarkerLayout(null);
     setIsExecuting(false);
@@ -3677,29 +3745,49 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       restoredAuthReturn?.selectedDbms != null && availableDbms.includes(restoredAuthReturn.selectedDbms)
         ? restoredAuthReturn.selectedDbms
         : null;
+    const favoriteSelectedDbms =
+      favoriteRestoreSnapshot?.selectedDbms != null && availableDbms.includes(favoriteRestoreSnapshot.selectedDbms)
+        ? favoriteRestoreSnapshot.selectedDbms
+        : null;
 
-    setSelectedDbms(restoredSelectedDbms ?? resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
-    if (restoredAuthReturn?.sql) {
-      setSql(restoredAuthReturn.sql);
-    }
-  }, [defaultDbms, problemId]);
+    setSelectedDbms(restoredSelectedDbms ?? favoriteSelectedDbms ?? resolvePreferredDbms(availableDbms, problem.dbmsOptions, defaultDbms ?? null));
+  }, [availableDbms, defaultDbms, favoriteRestoreSnapshot, problem.dbmsOptions, problemId, updateSqlEditorSelection]);
 
   useEffect(() => {
-    setContentTab('problem');
+    const nextContentTab = readSolveContentTabFromSearch(locationSearch);
+
+    setContentTab((currentTab) => (currentTab === nextContentTab ? currentTab : nextContentTab));
+  }, [locationSearch]);
+
+  useEffect(() => {
+    const nextPath = buildSolveContentTabPath(problemId, contentTab);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+
+    if (currentPath !== nextPath) {
+      window.history.replaceState(window.history.state ?? {}, '', nextPath);
+    }
+  }, [contentTab, problemId]);
+
+  useEffect(() => {
+    const restoredContentTab = favoriteRestoreSnapshot?.contentTab ?? readSolveContentTabFromSearch(window.location.search);
+    const restoredMySubmitPage = favoriteRestoreSnapshot?.mySubmitRequestedPage ?? 1;
+    const restoredTaggedPostPage = favoriteRestoreSnapshot?.taggedPostRequestedPage ?? 1;
+
+    setContentTab(restoredContentTab);
     setMySubmitHistoryPage(createEmptySolveSubmitHistoryPage());
     setIsMySubmitLoading(false);
     setMySubmitLoadError(null);
-    setMySubmitRequestedPage(1);
+    setMySubmitRequestedPage(restoredMySubmitPage);
     setIsMySubmitPageJumpEditing(false);
-    setMySubmitPageJumpDraft('1');
+    setMySubmitPageJumpDraft(String(restoredMySubmitPage));
     setTaggedPostPage(createEmptySolveCommunityPage());
     setIsTaggedPostLoading(false);
     setTaggedPostLoadError(null);
-    setTaggedPostRequestedPage(1);
+    setTaggedPostRequestedPage(restoredTaggedPostPage);
     setIsTaggedPostPageJumpEditing(false);
-    setTaggedPostPageJumpDraft('1');
+    setTaggedPostPageJumpDraft(String(restoredTaggedPostPage));
     setRelatedModalState(null);
-  }, [problemId]);
+  }, [favoriteRestoreSnapshot, problemId]);
 
   useEffect(() => {
     if (isMySubmitPageJumpEditing) {
@@ -5893,6 +5981,18 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     );
   };
 
+  const getFavoriteSnapshot = useCallback(() => ({
+    kind: 'problemSolve',
+    payload: {
+      selectedDbms,
+      contentTab,
+      sql,
+      editorSelection: { ...sqlEditorSelectionRef.current },
+      mySubmitRequestedPage,
+      taggedPostRequestedPage,
+    },
+  }), [contentTab, mySubmitRequestedPage, selectedDbms, sql, taggedPostRequestedPage]);
+
   const renderActiveContentTab = () => {
     if (contentTab === 'submissions') {
       return renderSubmissionTabPanel();
@@ -5946,7 +6046,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             className={`solve-dbms-tab ${contentTab === 'problem' ? 'is-selected' : ''}`}
             onClick={() => setContentTab('problem')}
           >
-            문제
+            제출
           </button>
           <button
             type="button"
@@ -5955,7 +6055,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             className={`solve-dbms-tab ${contentTab === 'submissions' ? 'is-selected' : ''}`}
             onClick={() => setContentTab('submissions')}
           >
-            내 제출
+            내 제출 목록
           </button>
           <button
             type="button"
@@ -5966,6 +6066,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           >
             태그된 게시글
           </button>
+          <FavoriteTabButton
+            className="favorite-tab-toggle-end"
+            label={`${displayProblemNumber} / ${getSolveContentTabLabel(contentTab)}`}
+            path={buildSolveContentTabPath(problemId, contentTab)}
+            getSnapshot={getFavoriteSnapshot}
+          />
         </div>
       </div>
 

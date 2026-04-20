@@ -1,6 +1,7 @@
 export const PROBLEMS_PATH = '/problems';
 export const PROBLEM_CREATE_PATH = '/problems/create';
 export const SUBMIT_HISTORY_PATH = '/submissions';
+export const FAVORITES_PATH = '/favorites';
 export const RANKING_PATH = '/ranking';
 export const COMMUNITY_PATH = '/community';
 export const GUIDE_PATH = '/guide';
@@ -50,4 +51,13 @@ export function navigate(path: string, options: NavigateOptions = {}) {
 
   window.history[method](options.state ?? {}, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+export function subscribeLocation(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  return () => window.removeEventListener('popstate', callback);
+}
+
+export function getLocationSearchSnapshot() {
+  return window.location.search;
 }

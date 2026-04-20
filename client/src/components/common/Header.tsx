@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSPro
 import {
   ADMIN_PATH,
   COMMUNITY_PATH,
+  FAVORITES_PATH,
   GUIDE_PATH,
   LANDING_SIGNUP_PATH,
   PROBLEMS_PATH,
@@ -20,6 +21,8 @@ import {
   useUiTextValue,
 } from '../../lib/uiText';
 import { mockNotifications } from '../../mocks/notifications';
+import { FavoriteStarIcon } from './FavoriteTabButton';
+import { getFavoriteTabsSnapshot, navigateToFavoriteTab, subscribeFavoriteTabs } from '../../lib/favoriteTabs';
 import './Header.css';
 
 function subscribe(callback: () => void) {
@@ -59,11 +62,18 @@ function formatNotificationTime(value: string) {
   return `${month}-${day} ${hours}:${minutes}`;
 }
 
+const FAVORITE_PANEL_PAGE_SIZE = 5;
+
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useMockSession();
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isFavoriteOpen, setIsFavoriteOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
+  const favoriteTabs = useSyncExternalStore(subscribeFavoriteTabs, getFavoriteTabsSnapshot, () => []);
+  const [favoritePage, setFavoritePage] = useState(1);
+  const [isFavoritePageJumpEditing, setIsFavoritePageJumpEditing] = useState(false);
+  const [favoritePageJumpDraft, setFavoritePageJumpDraft] = useState('1');
   const marqueeMessage = useUiTextValue(NOTIFICATION_UI_TEXT_KEY, DEFAULT_NOTIFICATION_TEXT);
   const [marqueeMetrics, setMarqueeMetrics] = useState<{
     startOffset: number;
@@ -71,6 +81,7 @@ export default function Header() {
     durationSeconds: number;
   } | null>(null);
   const notificationRootRef = useRef<HTMLDivElement | null>(null);
+  const favoriteRootRef = useRef<HTMLDivElement | null>(null);
   const marqueeShellRef = useRef<HTMLDivElement | null>(null);
   const marqueeCopyRef = useRef<HTMLSpanElement | null>(null);
   const floatingHeaderRef = useRef<HTMLDivElement | null>(null);
@@ -79,6 +90,8 @@ export default function Header() {
     ? 'ranking'
     : pathname.startsWith(SUBMIT_HISTORY_PATH)
       ? 'submitHistory'
+    : pathname.startsWith(FAVORITES_PATH)
+      ? 'favorites'
     : pathname.startsWith(GUIDE_PATH)
       ? 'guide'
       : pathname.startsWith(ADMIN_PATH)
@@ -93,10 +106,16 @@ export default function Header() {
     () => notifications.filter((notification) => notification.isUnread).length,
     [notifications],
   );
+  const favoriteTotalPages = Math.max(1, Math.ceil(favoriteTabs.length / FAVORITE_PANEL_PAGE_SIZE));
+  const favoriteVisibleTabs = useMemo(() => {
+    const startIndex = (favoritePage - 1) * FAVORITE_PANEL_PAGE_SIZE;
+    return favoriteTabs.slice(startIndex, startIndex + FAVORITE_PANEL_PAGE_SIZE);
+  }, [favoritePage, favoriteTabs]);
   const isFloatingHeaderVisible = true;
 
   useEffect(() => {
     setIsNotificationOpen(false);
+    setIsFavoriteOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -124,6 +143,45 @@ export default function Header() {
       window.removeEventListener('keydown', handleEscape);
     };
   }, [isNotificationOpen]);
+
+  useEffect(() => {
+    setFavoritePage((currentPage) => Math.min(currentPage, favoriteTotalPages));
+  }, [favoriteTotalPages]);
+
+  useEffect(() => {
+    if (isFavoritePageJumpEditing) {
+      return;
+    }
+
+    setFavoritePageJumpDraft(String(favoritePage));
+  }, [favoritePage, isFavoritePageJumpEditing]);
+
+  useEffect(() => {
+    if (!isFavoriteOpen) {
+      setIsFavoritePageJumpEditing(false);
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!favoriteRootRef.current?.contains(event.target as Node)) {
+        setIsFavoriteOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsFavoriteOpen(false);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isFavoriteOpen]);
 
   useEffect(() => {
     void refreshCachedUiTexts();
@@ -219,6 +277,22 @@ export default function Header() {
 
     setIsNotificationOpen(false);
     navigate(href);
+  }
+
+  function applyFavoritePageJump() {
+    const parsedPage = Number.parseInt(favoritePageJumpDraft, 10);
+    const nextPage = Number.isNaN(parsedPage)
+      ? favoritePage
+      : Math.min(favoriteTotalPages, Math.max(1, parsedPage));
+
+    setFavoritePage(nextPage);
+    setFavoritePageJumpDraft(String(nextPage));
+    setIsFavoritePageJumpEditing(false);
+  }
+
+  function cancelFavoritePageJump() {
+    setFavoritePageJumpDraft(String(favoritePage));
+    setIsFavoritePageJumpEditing(false);
   }
 
   async function handleLogout() {
@@ -381,6 +455,106 @@ export default function Header() {
                           </button>
                         ))}
                       </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="header-favorite" ref={favoriteRootRef}>
+                  <button
+                    type="button"
+                    className={`header-link-button favorite-link-button ${(activeNav === 'favorites' || isFavoriteOpen) ? 'is-active' : ''}`.trim()}
+                    onClick={() => setIsFavoriteOpen((currentState) => !currentState)}
+                    aria-label="즐겨찾기"
+                    aria-haspopup="dialog"
+                    aria-expanded={isFavoriteOpen}
+                  >
+                    <FavoriteStarIcon filled={activeNav === 'favorites' || isFavoriteOpen} className="favorite-link-button-icon" />
+                  </button>
+
+                  {isFavoriteOpen ? (
+                    <div className="header-favorite-panel" role="dialog" aria-label="즐겨찾기">
+                      {favoriteTabs.length > 0 ? (
+                        <>
+                          <div className="header-favorite-list">
+                            {favoriteVisibleTabs.map((favoriteTab) => (
+                              <button
+                                key={favoriteTab.path}
+                                type="button"
+                                className="header-favorite-item"
+                                onClick={() => {
+                                  setIsFavoriteOpen(false);
+                                  navigateToFavoriteTab(favoriteTab);
+                                }}
+                              >
+                                <FavoriteStarIcon filled={true} className="header-favorite-item-icon" />
+                                <span className="header-favorite-item-label">{favoriteTab.label}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="problem-pagination header-favorite-pagination" role="navigation" aria-label="즐겨찾기 페이지">
+                            <button
+                              type="button"
+                              className="mini-toggle problem-page-button"
+                              onClick={() => setFavoritePage((currentPage) => Math.max(1, currentPage - 1))}
+                              disabled={favoritePage === 1}
+                            >
+                              이전
+                            </button>
+
+                            {isFavoritePageJumpEditing ? (
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                className="problem-pagination-meta-input"
+                                aria-label="이동할 즐겨찾기 페이지 입력"
+                                value={favoritePageJumpDraft}
+                                onChange={(event) => {
+                                  const nextValue = event.target.value.replace(/\D+/g, '');
+                                  setFavoritePageJumpDraft(nextValue);
+                                }}
+                                onBlur={applyFavoritePageJump}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    applyFavoritePageJump();
+                                    return;
+                                  }
+
+                                  if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    cancelFavoritePageJump();
+                                  }
+                                }}
+                                autoFocus
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="problem-pagination-meta problem-pagination-meta-button"
+                                aria-label="이동할 즐겨찾기 페이지 입력 열기"
+                                onClick={() => {
+                                  setFavoritePageJumpDraft(String(favoritePage));
+                                  setIsFavoritePageJumpEditing(true);
+                                }}
+                              >
+                                {`${favoritePage} / ${favoriteTotalPages}`}
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              className="mini-toggle problem-page-button"
+                              onClick={() => setFavoritePage((currentPage) => Math.min(favoriteTotalPages, currentPage + 1))}
+                              disabled={favoritePage >= favoriteTotalPages}
+                            >
+                              다음
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="header-favorite-empty">즐겨찾기 된 페이지가 없습니다.</p>
+                      )}
                     </div>
                   ) : null}
                 </div>
