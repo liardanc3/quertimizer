@@ -1,20 +1,10 @@
 import { useState } from 'react';
 import StatusPopup from '../common/StatusPopup';
-import { navigate } from '../../lib/navigation';
-import {
-  RecoveryApiError,
-  findUserId,
-  resetPassword,
-  sendPasswordResetCode,
-  sendUserIdRecoveryCode,
-  verifyPasswordResetCode,
-} from '../../lib/authApi';
+import { RecoveryApiError, resetPassword, sendPasswordResetCode, verifyPasswordResetCode } from '../../lib/authApi';
 
-type AccountRecoveryMode = 'find-user-id' | 'reset-password';
 type PopupLevel = 1 | 2 | 3;
 
 interface AccountRecoveryOverlayProps {
-  mode: AccountRecoveryMode;
   onClose: () => void;
 }
 
@@ -30,11 +20,6 @@ const PASSWORD_HINT = '비밀번호는 특수문자를 포함해 8자 이상이�
 const PASSWORD_CONFIRM_HINT = '비밀번호 확인은 비밀번호와 동일하게 입력해 주세요.';
 const CODE_SENT_MESSAGE = '인증코드를 전송했습니다. 5분 내에 입력해 주세요.';
 
-const findUserIdGuideLines = [
-  '가입할 때 사용한 이메일을 입력하면 인증코드를 보내드립니다.',
-  '이메일로 받은 인증코드를 5분 내에 입력하면 가입된 아이디를 확인할 수 있습니다.',
-];
-
 const resetPasswordGuideLines = [
   '가입할 때 사용한 이메일을 입력하면 인증코드를 보내드립니다.',
   '인증코드 확인이 완료되면 새로운 비밀번호를 바로 설정할 수 있습니다.',
@@ -48,21 +33,19 @@ function hasRequiredPasswordFormat(value: string) {
   return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
 }
 
-export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecoveryOverlayProps) {
+export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverlayProps) {
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [errorReasons, setErrorReasons] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [recoveredUserId, setRecoveredUserId] = useState<string | null>(null);
   const [isCodeSent, setIsCodeSent] = useState(false);
   const [isResetPasswordVerified, setIsResetPasswordVerified] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [popupState, setPopupState] = useState<PopupState | null>(null);
-  const isFindUserIdMode = mode === 'find-user-id';
   const normalizedEmail = email.trim();
   const normalizedVerificationCode = verificationCode.trim().toUpperCase();
   const isEmailValid = EMAIL_PATTERN.test(normalizedEmail);
@@ -78,9 +61,8 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
     isNewPasswordValid &&
     isNewPasswordConfirmValid &&
     !isResettingPassword;
-  const overlayTitle = isFindUserIdMode ? '아이디 찾기' : '비밀번호 찾기';
-  const guideLines = isFindUserIdMode ? findUserIdGuideLines : resetPasswordGuideLines;
-  const isResetPasswordStage = !isFindUserIdMode && isResetPasswordVerified;
+  const overlayTitle = '비밀번호 찾기';
+  const isResetPasswordStage = isResetPasswordVerified;
   const emailHintMessage =
     normalizedEmail === ''
       ? '가입할 때 사용한 이메일을 입력해 주세요.'
@@ -95,7 +77,6 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
     setNewPasswordConfirm('');
     setErrorReasons([]);
     setStatusMessage(null);
-    setRecoveredUserId(null);
     setIsCodeSent(false);
     setIsResetPasswordVerified(false);
     setPopupState(null);
@@ -110,16 +91,9 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
       setIsSendingCode(true);
       setErrorReasons([]);
       setStatusMessage(null);
-      setRecoveredUserId(null);
       setIsResetPasswordVerified(false);
       setPopupState(null);
-
-      if (isFindUserIdMode) {
-        await sendUserIdRecoveryCode({ email: normalizedEmail });
-      } else {
-        await sendPasswordResetCode({ email: normalizedEmail });
-      }
-
+      await sendPasswordResetCode({ email: normalizedEmail });
       setIsCodeSent(true);
       setVerificationCode('');
       setStatusMessage(CODE_SENT_MESSAGE);
@@ -139,18 +113,6 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
       setIsVerifyingCode(true);
       setErrorReasons([]);
       setStatusMessage(null);
-
-      if (isFindUserIdMode) {
-        const result = await findUserId({
-          email: normalizedEmail,
-          code: normalizedVerificationCode,
-        });
-
-        setRecoveredUserId(result.userId);
-        setStatusMessage('인증이 완료되었습니다.');
-        return;
-      }
-
       await verifyPasswordResetCode({
         email: normalizedEmail,
         code: normalizedVerificationCode,
@@ -158,7 +120,6 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
       setIsResetPasswordVerified(true);
       setStatusMessage('인증코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
     } catch (error) {
-      setRecoveredUserId(null);
       setIsResetPasswordVerified(false);
       setErrorReasons(error instanceof RecoveryApiError ? error.reasons : ['인증코드 확인 중 알 수 없는 오류가 발생했습니다.']);
     } finally {
@@ -200,21 +161,6 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
     onClose();
   }
 
-  function moveToLoginWithEmail() {
-    if (!recoveredUserId || normalizedEmail === '') {
-      return;
-    }
-
-    navigate('/', {
-      replace: true,
-      state: {
-        ...(window.history.state ?? {}),
-        prefillLoginEmail: normalizedEmail,
-        focusLoginPassword: true,
-      },
-    });
-  }
-
   return (
     <div
       className={`signup-overlay-layout account-recovery-overlay ${isResetPasswordStage ? 'is-reset-password-stage' : ''}`}
@@ -235,7 +181,7 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
         <div className="signup-guide-panel">
           <p className="panel-meta">{overlayTitle}</p>
           <div className="signup-guide-copy account-recovery-guide-copy">
-            {guideLines.map((line, index) => (
+            {resetPasswordGuideLines.map((line, index) => (
               <p key={line} className={`signup-guide-message account-recovery-guide-message ${index > 0 ? 'is-compact' : ''}`}>
                 {line}
               </p>
@@ -249,12 +195,12 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
           </div>
 
           <div className="field-stack">
-            <label className="field-label" htmlFor={`${mode}-email`}>
+            <label className="field-label" htmlFor="reset-password-email">
               이메일
             </label>
             <div className="inline-field-row">
               <input
-                id={`${mode}-email`}
+                id="reset-password-email"
                 type="email"
                 className="text-field"
                 value={email}
@@ -282,21 +228,18 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
           </div>
 
           <div className="field-stack">
-            <label className="field-label" htmlFor={`${mode}-verification-code`}>
+            <label className="field-label" htmlFor="reset-password-verification-code">
               인증코드
             </label>
             <div className="inline-field-row">
               <input
-                id={`${mode}-verification-code`}
+                id="reset-password-verification-code"
                 className="text-field"
                 value={verificationCode}
                 onChange={(event) => {
                   setVerificationCode(sanitizeVerificationCode(event.target.value));
                   setErrorReasons([]);
-                  setRecoveredUserId(null);
-                  if (!isFindUserIdMode) {
-                    setIsResetPasswordVerified(false);
-                  }
+                  setIsResetPasswordVerified(false);
                 }}
                 placeholder="인증코드 6자를 입력하세요"
                 inputMode="text"
@@ -318,24 +261,7 @@ export default function AccountRecoveryOverlay({ mode, onClose }: AccountRecover
             </p>
           </div>
 
-          {isFindUserIdMode && recoveredUserId ? (
-            <div className="recovery-result-box" role="status" aria-live="polite">
-              <p className="recovery-result-title">가입된 아이디</p>
-              <div className="recovery-result-row">
-                <p className="recovery-result-value">{recoveredUserId}</p>
-                <button
-                  type="button"
-                  className="recovery-result-arrow-button"
-                  onClick={moveToLoginWithEmail}
-                  aria-label="이메일을 입력한 채 로그인 화면으로 이동"
-                >
-                  →
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {!isFindUserIdMode && isResetPasswordVerified ? (
+          {isResetPasswordVerified ? (
             <>
               <div className="field-stack">
                 <label className="field-label" htmlFor="reset-password">

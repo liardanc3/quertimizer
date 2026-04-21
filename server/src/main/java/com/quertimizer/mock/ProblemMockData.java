@@ -41,6 +41,20 @@ public class ProblemMockData {
 
     private static final String ANSWER = "0ed060840788ca7700422dc92721117f3e1d40dd161e5b433458fc0baacc2a48d2137c0ffd1a91baf6d85259e9b43e469a6fe6592de6f0f8656b24be300aec39";
 
+    private static final String ANSWER_SQL = """
+            SELECT c.customer_id,
+                   c.customer_name,
+                   COUNT(DISTINCT o.order_id) AS order_count,
+                   SUM(oi.quantity * oi.unit_price) AS total_amount
+            FROM customers c
+            JOIN orders o ON o.customer_id = c.customer_id
+            JOIN order_items oi ON oi.order_id = o.order_id
+            WHERE o.ordered_at >= '2024-03-01 00:00:00'
+              AND o.ordered_at < '2024-04-01 00:00:00'
+            GROUP BY c.customer_id, c.customer_name
+            ORDER BY total_amount DESC, c.customer_id ASC;
+            """;
+
     private final ProblemRepository problemRepository;
 
     @PostConstruct
@@ -63,7 +77,8 @@ public class ProblemMockData {
                 CONDITION,
                 OUTPUT,
                 OUTPUT_SAMPLE,
-                ANSWER
+                ANSWER,
+                ANSWER_SQL
         ));
     }
 }

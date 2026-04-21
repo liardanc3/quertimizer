@@ -20,6 +20,8 @@ public class ProblemDetailRes {
     private final String condition;
     private final String output;
     private final String outputSample;
+    private final String answer;
+    private final String answerHash;
     private final String dbms;
 
     public static ProblemDetailRes from(Problem problem, ProblemSet problemSet) {
@@ -34,6 +36,8 @@ public class ProblemDetailRes {
                 normalize(problem.getCondition()),
                 normalize(problem.getOutput()),
                 normalize(problem.getOutputSample()),
+                normalizeAnswerSql(problem),
+                normalize(problem.getAnswer()),
                 problem.getDbmsType().getValue()
         );
     }
@@ -50,8 +54,18 @@ public class ProblemDetailRes {
                 normalize(problem.getCondition()),
                 normalize(problem.getOutput()),
                 normalize(problem.getOutputSample()),
+                normalizeAnswerSql(problem),
+                normalize(problem.getAnswer()),
                 problem.getDbmsType().getValue()
         );
+    }
+
+    private static String normalizeAnswerSql(Problem problem) {
+        if (problem.getAnswerSql() != null && !problem.getAnswerSql().isBlank()) {
+            return problem.getAnswerSql();
+        }
+
+        return normalize(problem.getAnswer());
     }
 
     private static String normalize(String value) {

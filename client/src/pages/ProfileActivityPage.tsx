@@ -10,6 +10,7 @@ import {
   type ProfileCommunityPost,
 } from '../lib/communityApi';
 import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { useMockSession } from '../lib/session';
 
 interface ProfileActivityPageProps {
@@ -153,7 +154,7 @@ export default function ProfileActivityPage({ handle }: ProfileActivityPageProps
         </div>
 
         {isLoading ? <div className="community-activity-empty">불러오는 중이다.</div> : null}
-        {!isLoading && errorMessage ? <div className="community-activity-empty">{errorMessage}</div> : null}
+        {!isLoading && errorMessage ? <PageLoadFailureState className="community-activity-empty" /> : null}
 
         {!isLoading && !errorMessage && activeTab === 'posts' ? (
           posts.length > 0 ? (

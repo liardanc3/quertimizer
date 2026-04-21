@@ -10,5 +10,7 @@ public interface ProblemGeneratorPermissionRepository extends JpaRepository<Prob
 
     List<ProblemGeneratorPermission> findAllByOrderByIdUserIdAscIdProblemIdAsc();
 
+    List<ProblemGeneratorPermission> findAllByIdUserIdOrderByIdProblemIdAsc(String userId);
+
     void deleteAllByIdUserId(String userId);
 }

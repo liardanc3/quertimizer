@@ -49,9 +49,12 @@ public class Problem {
     @Column(columnDefinition = "TEXT")
     private String answer;
 
+    @Column(name = "answer_sql", columnDefinition = "TEXT")
+    private String answerSql;
+
     public static Problem create(String problemId, String title, String description) {
         DbmsType dbmsType = problemId != null && problemId.startsWith("O") ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
-        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType == DbmsType.POSTGRESQL, dbmsType == DbmsType.ORACLE, "", "", "", "");
+        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType == DbmsType.POSTGRESQL, dbmsType == DbmsType.ORACLE, "", "", "", "", "");
     }
 
     public static Problem create(String problemId,
@@ -64,8 +67,9 @@ public class Problem {
                                  String condition,
                                  String output,
                                  String outputSample,
-                                 String answer) {
-        return new Problem(problemId, problemSetId, title, description, ddl, isPostgresql, isOracle, condition, output, outputSample, answer);
+                                 String answer,
+                                 String answerSql) {
+        return new Problem(problemId, problemSetId, title, description, ddl, isPostgresql, isOracle, condition, output, outputSample, answer, answerSql);
     }
 
     public void changeContent(String title,
@@ -76,7 +80,8 @@ public class Problem {
                               String condition,
                               String output,
                               String outputSample,
-                              String answer) {
+                              String answer,
+                              String answerSql) {
         this.title = title;
         this.description = description;
         this.ddl = ddl;
@@ -86,6 +91,7 @@ public class Problem {
         this.output = output;
         this.outputSample = outputSample;
         this.answer = answer;
+        this.answerSql = answerSql;
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
@@ -139,7 +145,8 @@ public class Problem {
                     String condition,
                     String output,
                     String outputSample,
-                    String answer) {
+                    String answer,
+                    String answerSql) {
         this.problemId = problemId;
         this.problemSetId = problemSetId;
         this.title = title;
@@ -151,6 +158,7 @@ public class Problem {
         this.output = output;
         this.outputSample = outputSample;
         this.answer = answer;
+        this.answerSql = answerSql;
     }
 
 }

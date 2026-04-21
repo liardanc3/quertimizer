@@ -1,0 +1,219 @@
+ .admin-anomaly-panel {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.admin-anomaly-layout {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.95fr) minmax(0, 4.6fr);
+  gap: 1.18rem;
+  align-items: start;
+}
+
+.admin-anomaly-side-nav {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.admin-anomaly-side-nav-item {
+  display: grid;
+  width: 100%;
+  min-height: 2.02rem;
+  padding: 0.42rem 0.78rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-anomaly-side-nav-item strong {
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.18;
+}
+
+.admin-anomaly-side-nav-item:hover,
+.admin-anomaly-side-nav-item.is-selected {
+  color: #0f5db3;
+}
+
+.admin-anomaly-side-nav-item:hover strong,
+.admin-anomaly-side-nav-item.is-selected strong {
+  color: #0f5db3;
+}
+
+.admin-anomaly-side-nav-item.is-selected {
+  background: rgba(25, 118, 210, 0.08);
+}
+
+.admin-anomaly-content {
+  display: grid;
+  gap: 0.58rem;
+}
+
+.admin-anomaly-range-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.58rem;
+  flex-wrap: wrap;
+}
+
+.admin-anomaly-range-tabs {
+  width: auto;
+  justify-content: flex-start;
+  gap: 0.34rem;
+}
+
+.admin-anomaly-custom-range-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+  flex-wrap: wrap;
+}
+
+.admin-anomaly-datetime-input {
+  min-width: 10.5rem;
+  min-height: 2rem;
+  height: 2rem;
+  padding: 0.32rem 0.52rem;
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.admin-anomaly-custom-range-separator {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.admin-anomaly-range-feedback {
+  margin: -0.18rem 0 0;
+  color: #64748b;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.admin-anomaly-range-feedback.is-error {
+  color: #b42318;
+}
+
+.admin-anomaly-table {
+  min-width: 46rem;
+}
+
+.admin-anomaly-trend-table .submit-history-row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 0.9fr) auto;
+}
+
+.admin-anomaly-blocked-user-table .submit-history-row {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) auto;
+}
+
+.admin-anomaly-blocked-ip-table .submit-history-row {
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.1fr) auto;
+}
+
+.admin-anomaly-action-head {
+  min-width: 1.4rem;
+}
+
+.admin-anomaly-action-cell {
+  justify-content: flex-start;
+}
+
+.admin-anomaly-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.08rem;
+  min-width: 1.08rem;
+  min-height: 1.08rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.admin-anomaly-action-button svg {
+  width: 0.94rem;
+  height: 0.94rem;
+}
+
+.admin-anomaly-action-button:hover {
+  color: #b42318;
+}
+
+.admin-anomaly-action-button.is-blocked {
+  color: #b42318;
+  opacity: 0.56;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-anomaly-side-nav-item {
+    color: var(--ink-subtle);
+  }
+
+  .admin-anomaly-side-nav-item strong {
+    color: var(--ink-base);
+  }
+
+  .admin-anomaly-side-nav-item:hover,
+  .admin-anomaly-side-nav-item.is-selected,
+  .admin-anomaly-side-nav-item:hover strong,
+  .admin-anomaly-side-nav-item.is-selected strong {
+    color: var(--accent-ink);
+  }
+
+  .admin-anomaly-side-nav-item.is-selected {
+    background: rgba(37, 99, 235, 0.12);
+  }
+
+  .admin-anomaly-action-button {
+    color: var(--ink-subtle);
+  }
+
+  .admin-anomaly-custom-range-separator,
+  .admin-anomaly-range-feedback {
+    color: var(--ink-subtle);
+  }
+
+  .admin-anomaly-range-feedback.is-error {
+    color: var(--danger-strong);
+  }
+
+  .admin-anomaly-action-button:hover,
+  .admin-anomaly-action-button.is-blocked {
+    color: var(--danger-strong);
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-anomaly-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-anomaly-range-toolbar {
+    align-items: flex-start;
+  }
+
+  .admin-anomaly-side-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .admin-anomaly-side-nav-item {
+    justify-items: center;
+    text-align: center;
+    padding: 0.42rem 0.62rem 0.5rem;
+  }
+}

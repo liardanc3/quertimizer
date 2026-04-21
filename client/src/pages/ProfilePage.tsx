@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import {
   fetchCommunityCommentsByUser,
@@ -12,8 +12,9 @@ import {
   type ProfileCommunityComment,
   type ProfileCommunityPost,
 } from '../lib/communityApi';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { createEmptySubmitHistoryPlanFilters, getExecutionPlanDetailGroups, getPlanElementButtonLabel } from '../lib/executionPlanFilters';
-import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
+import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
 import {
   fetchMyProfileSummary,
   fetchMySolvedProblems,
@@ -29,7 +30,8 @@ import {
   type UserProfileSolvedRecords,
   type UserProfileSummary,
 } from '../lib/profileApi';
-import { syncSession, useMockSession } from '../lib/session';
+import { showSessionToast, syncSession, useMockSession } from '../lib/session';
+import { fetchAlarms, markAlarmRead, type AlarmEntry, type AlarmPageData } from '../lib/alarmApi';
 import { fetchSubmitHistories } from '../lib/submitHistoryApi';
 import type { DbmsType, SubmitHistoryEntry } from '../types/domain';
 import './SubmitHistoryPage.css';
@@ -112,12 +114,14 @@ interface ProfileCommunityActivityItem {
 }
 
 type ProfileSection = 'summary' | 'solve' | 'community';
+type ProfileTopTab = 'profile' | 'alarms';
 
 const numberFormatter = new Intl.NumberFormat('ko-KR');
 const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 const HEATMAP_DAYS = 365;
 const RECENT_ACTIVITY_PAGE_SIZE = 10;
 const PROFILE_SUBMISSION_PAGE_SIZE = 10;
+const PROFILE_ALARM_PAGE_SIZE = 10;
 const SUBMIT_HISTORY_SQL_HIGHLIGHT_KEYWORDS = new Set([
   'SELECT',
   'FROM',
@@ -250,6 +254,14 @@ const emptySolvedRecords: UserProfileSolvedRecords = {
 const emptyPlanFiltersByDbms = {
   postgresql: createEmptySubmitHistoryPlanFilters(),
   oracle: createEmptySubmitHistoryPlanFilters(),
+};
+const emptyProfileAlarmPage: AlarmPageData = {
+  currentPage: 1,
+  pageSize: PROFILE_ALARM_PAGE_SIZE,
+  totalCount: 0,
+  totalPages: 1,
+  unreadCount: 0,
+  alarms: [],
 };
 
 function createEditDraft(profile: UserProfileSummary): ProfileEditDraft {
@@ -462,6 +474,23 @@ function getDbmsLabel(dbms: DbmsType) {
 
 function buildProblemLabel(problemId: string) {
   return `문제 ${problemId}`;
+}
+
+function readProfileTopTab(search: string, isOwnProfile: boolean): ProfileTopTab {
+  if (!isOwnProfile) {
+    return 'profile';
+  }
+
+  return new URLSearchParams(search).get('tab') === 'alarms' ? 'alarms' : 'profile';
+}
+
+function truncateAlarmHoverText(value: string) {
+  const normalizedValue = value.trim();
+  if (normalizedValue.length <= 15) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, 15)}...`;
 }
 
 function tokenizeSubmitHistorySqlLine(line: string) {
@@ -842,8 +871,12 @@ function ProfileLoadingShell({ label }: { label: string }) {
 
 export default function ProfilePage({ handle }: ProfilePageProps) {
   const { isAuthenticated, isReady, userId } = useMockSession();
+  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const resolvedProfileId = handle ?? userId;
   const isOwnProfile = isAuthenticated && userId != null && resolvedProfileId === userId;
+  const profileBasePath = handle ? getProfilePath(handle) : getProfilePath();
+  const activeTopTab = readProfileTopTab(locationSearch || window.location.search, isOwnProfile);
+  const isAlarmListOpen = activeTopTab === 'alarms';
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
   const [solvedProblems, setSolvedProblems] = useState<UserProfileSolvedProblems>(emptySolvedProblems);
   const [solvedRecords, setSolvedRecords] = useState<UserProfileSolvedRecords>(emptySolvedRecords);
@@ -852,6 +885,12 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
   const [communityComments, setCommunityComments] = useState<ProfileCommunityComment[]>([]);
   const [likedComments, setLikedComments] = useState<ProfileCommunityComment[]>([]);
   const [recentSubmissions, setRecentSubmissions] = useState<SubmitHistoryEntry[]>([]);
+  const [profileAlarmPageData, setProfileAlarmPageData] = useState<AlarmPageData>(emptyProfileAlarmPage);
+  const [isProfileAlarmLoading, setIsProfileAlarmLoading] = useState(false);
+  const [profileAlarmErrorMessage, setProfileAlarmErrorMessage] = useState<string | null>(null);
+  const [profileAlarmPage, setProfileAlarmPage] = useState(1);
+  const [profileAlarmPageDraft, setProfileAlarmPageDraft] = useState('1');
+  const [isProfileAlarmPageEditing, setIsProfileAlarmPageEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ProfileSection>('summary');
@@ -1074,6 +1113,11 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
     setSolveSubmissionPage(1);
     setSolveSubmissionPageDraft('1');
     setIsSolveSubmissionPageEditing(false);
+    setProfileAlarmPage(1);
+    setProfileAlarmPageDraft('1');
+    setIsProfileAlarmPageEditing(false);
+    setProfileAlarmPageData(emptyProfileAlarmPage);
+    setProfileAlarmErrorMessage(null);
   }, [resolvedProfileId]);
 
   useEffect(() => {
@@ -1109,6 +1153,62 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
     setIsRecentActivityPageEditing(false);
   }, [selectedHeatmapYear]);
 
+  useEffect(() => {
+    if (!isOwnProfile) {
+      setProfileAlarmPageData(emptyProfileAlarmPage);
+      setProfileAlarmErrorMessage(null);
+      return;
+    }
+
+    if (!isAlarmListOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsProfileAlarmLoading(true);
+    setProfileAlarmErrorMessage(null);
+
+    fetchAlarms(profileAlarmPage, PROFILE_ALARM_PAGE_SIZE)
+      .then((nextAlarmPage) => {
+        if (cancelled) {
+          return;
+        }
+
+        setProfileAlarmPageData(nextAlarmPage);
+        if (nextAlarmPage.currentPage !== profileAlarmPage) {
+          setProfileAlarmPage(nextAlarmPage.currentPage);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setProfileAlarmErrorMessage(error instanceof Error ? error.message : '알림 목록을 불러오지 못했다.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsProfileAlarmLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAlarmListOpen, isOwnProfile, profileAlarmPage]);
+
+  useEffect(() => {
+    if (!isProfileAlarmPageEditing) {
+      setProfileAlarmPageDraft(String(profileAlarmPageData.currentPage));
+    }
+  }, [isProfileAlarmPageEditing, profileAlarmPageData.currentPage]);
+
+  useEffect(() => {
+    if (profileAlarmPage > profileAlarmPageData.totalPages) {
+      setProfileAlarmPage(profileAlarmPageData.totalPages);
+    }
+  }, [profileAlarmPage, profileAlarmPageData.totalPages]);
+
   if (!isReady || isLoading) {
     return <ProfileLoadingShell label={profileSummary?.userId ?? resolvedProfileId ?? handle ?? '프로필'} />;
   }
@@ -1118,7 +1218,21 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
   }
 
   if (!profileSummary) {
-    return <ProfileStatePage label={resolvedProfileId} title="프로필을 불러오지 못했다." description={errorMessage ?? '프로필을 찾을 수 없다.'} />;
+    return (
+      <div className="page-stack profile-page submit-history-page home-page">
+        <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
+          <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
+            <div className="solve-dbms-tab-row profile-handle-tab-row" aria-hidden="true">
+              <span className="solve-dbms-tab is-selected">{resolvedProfileId}</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel-card profile-empty-panel">
+          <PageLoadFailureState />
+        </section>
+      </div>
+    );
   }
 
   function updateDraft(updater: (draft: ProfileEditDraft) => ProfileEditDraft) {
@@ -1161,6 +1275,119 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
   function cancelSolveSubmissionPageJump() {
     setSolveSubmissionPageDraft(String(Math.min(solveSubmissionPage, solveSubmissionTotalPages)));
     setIsSolveSubmissionPageEditing(false);
+  }
+
+  function markProfileAlarmAsRead(alarm: AlarmEntry) {
+    if (alarm.read) {
+      return;
+    }
+
+    setProfileAlarmPageData((currentAlarmPage) => ({
+      ...currentAlarmPage,
+      unreadCount: Math.max(0, currentAlarmPage.unreadCount - 1),
+      alarms: currentAlarmPage.alarms.map((currentAlarm) =>
+        currentAlarm.alarmId === alarm.alarmId
+          ? {
+              ...currentAlarm,
+              read: true,
+            }
+          : currentAlarm,
+      ),
+    }));
+
+    void markAlarmRead(alarm.alarmId);
+  }
+
+  function handleProfileAlarmClick(alarm: AlarmEntry, path?: string, hash?: string) {
+    markProfileAlarmAsRead(alarm);
+
+    if (!path || path.trim() === '') {
+      return;
+    }
+
+    navigate(`${path}${hash ?? ''}`);
+  }
+
+  function renderProfileAlarmSentence(alarm: AlarmEntry) {
+    const sentence = alarm.sentence.trim();
+
+    if (sentence === '') {
+      if (alarm.targetPath && alarm.targetPath.trim() !== '') {
+        return (
+          <button
+            type="button"
+            className={`submit-history-link-button profile-alarm-link-button ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}
+            onClick={() => handleProfileAlarmClick(alarm, alarm.targetPath, alarm.targetHash)}
+          >
+            {alarm.message}
+          </button>
+        );
+      }
+
+      return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{alarm.message}</span>;
+    }
+
+    const parts: Array<string | JSX.Element> = [];
+    const tokenPattern = /(\{[^{}]+\}|\([^()]+\))/g;
+    let lastIndex = 0;
+
+    for (const tokenMatch of sentence.matchAll(tokenPattern)) {
+      const tokenValue = tokenMatch[0];
+      const tokenIndex = tokenMatch.index ?? 0;
+
+      if (tokenIndex > lastIndex) {
+        parts.push(sentence.slice(lastIndex, tokenIndex));
+      }
+
+      const isBraceToken = tokenValue.startsWith('{');
+      const tokenKey = tokenValue.slice(1, -1).trim();
+      const binding = alarm.bindings[tokenKey];
+      const linkText = isBraceToken
+        ? (binding?.text && binding.text.trim() !== '' ? binding.text : tokenKey)
+        : tokenValue;
+      const tooltipText = !isBraceToken && binding?.text ? truncateAlarmHoverText(binding.text) : undefined;
+      const tokenPath = binding?.path ?? alarm.targetPath;
+      const tokenHash = binding?.hash ?? alarm.targetHash;
+
+      parts.push(
+        <button
+          key={`${alarm.alarmId}:${tokenKey}:${tokenIndex}`}
+          type="button"
+          className={`submit-history-link-button profile-alarm-link-button ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}
+          title={tooltipText}
+          onClick={() => handleProfileAlarmClick(alarm, tokenPath, tokenHash)}
+        >
+          {linkText}
+        </button>,
+      );
+
+      lastIndex = tokenIndex + tokenValue.length;
+    }
+
+    if (lastIndex < sentence.length) {
+      parts.push(sentence.slice(lastIndex));
+    }
+
+    return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{parts.length > 0 ? parts : alarm.message}</span>;
+  }
+
+  function applyProfileAlarmPageJump() {
+    const parsedPage = Number.parseInt(profileAlarmPageDraft, 10);
+    const nextPage = Number.isNaN(parsedPage)
+      ? profileAlarmPageData.currentPage
+      : Math.min(profileAlarmPageData.totalPages, Math.max(1, parsedPage));
+
+    setProfileAlarmPageDraft(String(nextPage));
+    setIsProfileAlarmPageEditing(false);
+
+    if (nextPage !== profileAlarmPageData.currentPage) {
+      setProfileAlarmPage(nextPage);
+    }
+  }
+
+  function cancelProfileAlarmPageJump() {
+    setProfileAlarmPageDraft(String(profileAlarmPageData.currentPage));
+    setIsProfileAlarmPageEditing(false);
   }
 
   function hasExecutionPlanDetails(history: SubmitHistoryEntry) {
@@ -1236,7 +1463,8 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
       setProfileSummary(updatedProfile);
       setEditDraft(createEditDraft(updatedProfile));
       setIsEditOpen(false);
-      setFeedback({ tone: 'success', message: '프로필을 저장했다.' });
+      setFeedback(null);
+      showSessionToast('프로필 저장 완료.');
       void syncSession();
     } catch (error) {
       setFeedback({
@@ -1660,6 +1888,107 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
     );
   }
 
+  function renderAlarmSection() {
+    return (
+      <div className="profile-section-stack">
+        <section className="panel-card profile-summary-card">
+          {profileAlarmErrorMessage ? (
+            <PageLoadFailureState className="submit-history-empty-state profile-inline-empty-state" />
+          ) : profileAlarmPageData.alarms.length === 0 && !isProfileAlarmLoading ? (
+            <div className="submit-history-empty-state profile-inline-empty-state">표시할 알림이 없다.</div>
+          ) : (
+            <>
+              <div className="submit-history-table-shell profile-table-shell">
+                <div className={`submit-history-table profile-alarm-table ${isProfileAlarmLoading ? 'is-loading' : ''}`.trim()} role="table" aria-label="프로필 알림 목록">
+                  <div className="submit-history-row submit-history-head" role="row">
+                    <div role="columnheader" className="submit-history-head-cell">알림 내용</div>
+                    <div role="columnheader" className="submit-history-head-cell">날짜</div>
+                  </div>
+
+                  {profileAlarmPageData.alarms.map((alarm) => (
+                    <article key={alarm.alarmId} className={`submit-history-row submit-history-body profile-alarm-row ${!alarm.read ? 'is-unread' : ''}`.trim()} role="row">
+                      <span className="submit-history-cell profile-alarm-cell" role="cell" data-label="알림 내용">
+                        {renderProfileAlarmSentence(alarm)}
+                      </span>
+                      <span className="submit-history-cell" role="cell" data-label="날짜">{formatDateTime(alarm.createdAt)}</span>
+                    </article>
+                  ))}
+                </div>
+
+                {isProfileAlarmLoading ? (
+                  <div className="submit-history-loading-overlay" aria-hidden="true">
+                    <span className="page-loading-spinner submit-history-loading-badge" />
+                  </div>
+                ) : null}
+              </div>
+
+              {profileAlarmPageData.totalPages > 1 ? (
+                <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="알림 목록 페이지">
+                  <button
+                    type="button"
+                    className="mini-toggle problem-page-button"
+                    onClick={() => setProfileAlarmPage((currentPage) => Math.max(1, currentPage - 1))}
+                    disabled={profileAlarmPageData.currentPage === 1}
+                  >
+                    이전
+                  </button>
+
+                  {isProfileAlarmPageEditing ? (
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="problem-pagination-meta-input"
+                      value={profileAlarmPageDraft}
+                      onChange={(event) => {
+                        const nextValue = event.target.value.replace(/\D+/g, '');
+                        setProfileAlarmPageDraft(nextValue);
+                      }}
+                      onBlur={applyProfileAlarmPageJump}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          applyProfileAlarmPageJump();
+                        }
+
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelProfileAlarmPageJump();
+                        }
+                      }}
+                      aria-label="알림 목록 페이지 번호"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="problem-pagination-meta problem-pagination-meta-button"
+                      onClick={() => {
+                        setProfileAlarmPageDraft(String(profileAlarmPageData.currentPage));
+                        setIsProfileAlarmPageEditing(true);
+                      }}
+                    >
+                      {`${profileAlarmPageData.currentPage} / ${profileAlarmPageData.totalPages}`}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="mini-toggle problem-page-button"
+                    onClick={() => setProfileAlarmPage((currentPage) => Math.min(profileAlarmPageData.totalPages, currentPage + 1))}
+                    disabled={profileAlarmPageData.currentPage >= profileAlarmPageData.totalPages}
+                  >
+                    다음
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+      </div>
+    );
+  }
+
 
   const solveModalContent =
     solveModalState == null || typeof document === 'undefined'
@@ -1778,13 +2107,30 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
           <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label="프로필 Handle">
             <button
               type="button"
-              className={`solve-dbms-tab ${!isEditOpen ? 'is-selected' : ''}`}
+              className={`solve-dbms-tab ${!isEditOpen && !isAlarmListOpen ? 'is-selected' : ''}`}
               role="tab"
-              aria-selected={!isEditOpen}
-              onClick={() => setIsEditOpen(false)}
+              aria-selected={!isEditOpen && !isAlarmListOpen}
+              onClick={() => {
+                setIsEditOpen(false);
+                navigate(profileBasePath, { replace: true });
+              }}
             >
               {profileSummary.userId}
             </button>
+            {isOwnProfile ? (
+              <button
+                type="button"
+                className={`solve-dbms-tab ${isAlarmListOpen ? 'is-selected' : ''}`}
+                role="tab"
+                aria-selected={isAlarmListOpen}
+                onClick={() => {
+                  setIsEditOpen(false);
+                  navigate(`${profileBasePath}?tab=alarms`, { replace: true });
+                }}
+              >
+                알림 목록
+              </button>
+            ) : null}
             {isOwnProfile ? (
               <button
                 type="button"
@@ -1794,7 +2140,8 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                 onClick={() => {
                   setEditDraft(createEditDraft(profileSummary));
                   setFeedback(null);
-                  setIsEditOpen((value) => !value);
+                  setIsEditOpen(true);
+                  navigate(profileBasePath, { replace: true });
                 }}
               >
                 프로필 수정
@@ -1983,35 +2330,39 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
         </section>
       ) : null}
 
-      <section className="panel-card profile-main-shell">
-        <div className="profile-main-grid-next">
-          <aside className="profile-side-nav">
-            {profileSections.map((section) => {
-              const isSelected = activeSection === section.id;
+      {isAlarmListOpen ? (
+        renderAlarmSection()
+      ) : (
+        <section className="panel-card profile-main-shell">
+          <div className="profile-main-grid-next">
+            <aside className="profile-side-nav">
+              {profileSections.map((section) => {
+                const isSelected = activeSection === section.id;
 
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  className={`profile-side-nav-item ${isSelected ? 'is-selected' : ''}`}
-                  onClick={() => setActiveSection(section.id)}
-                >
-                  <span className="profile-side-nav-label">
-                    <span className="profile-side-nav-icon">{renderProfileSectionIcon(section.id)}</span>
-                    <strong>{section.label}</strong>
-                  </span>
-                </button>
-              );
-            })}
-          </aside>
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    className={`profile-side-nav-item ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => setActiveSection(section.id)}
+                  >
+                    <span className="profile-side-nav-label">
+                      <span className="profile-side-nav-icon">{renderProfileSectionIcon(section.id)}</span>
+                      <strong>{section.label}</strong>
+                    </span>
+                  </button>
+                );
+              })}
+            </aside>
 
-          <div className="profile-main-content">
-            {activeSection === 'summary' ? renderSummarySection() : null}
-            {activeSection === 'solve' ? renderSolveSection() : null}
-            {activeSection === 'community' ? renderCommunitySection() : null}
+            <div className="profile-main-content">
+              {activeSection === 'summary' ? renderSummarySection() : null}
+              {activeSection === 'solve' ? renderSolveSection() : null}
+              {activeSection === 'community' ? renderCommunitySection() : null}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
       {solveModalContent}
     </div>
   );

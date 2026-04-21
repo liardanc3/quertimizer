@@ -22,6 +22,7 @@ import {
   type CommunityTagSuggestion,
 } from '../lib/communityApi';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import './CommunityPage.css';
 
 interface CommunityWritePageProps {
@@ -778,7 +779,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
         )}
 
         <div className="community-detail-header">
-          <h1 className="community-detail-title">수정할 게시글을 찾을 수 없다.</h1>
+          <PageLoadFailureState />
         </div>
       </section>
     );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { createUiText, deleteUiText, fetchAdminUiTexts, updateUiText, type UiTextData } from '../lib/uiText';
 
 interface EditableUiTextRow extends UiTextData {
@@ -516,11 +517,23 @@ export function GlobalConfigContent() {
         </button>
       </div>
 
-      {loadErrorMessage ? <p className="admin-config-feedback is-error">{loadErrorMessage}</p> : null}
+      {loadErrorMessage && !isLoading ? <PageLoadFailureState className="admin-config-empty" /> : null}
 
       {isLoading ? (
-        <p className="content-text">UI 텍스트 목록을 불러오는 중이다.</p>
-      ) : uiTextRows.length === 0 ? (
+        <div className="admin-page-loading-shell admin-config-loading-shell is-loading" aria-live="polite" aria-label="로딩 중">
+          <div className="admin-page-loading-body" aria-hidden="true">
+            <div className="admin-page-loading-row is-wide" />
+            <div className="admin-page-loading-row" />
+            <div className="admin-page-loading-row" />
+            <div className="admin-page-loading-row" />
+            <div className="admin-page-loading-row is-narrow" />
+          </div>
+
+          <div className="submit-history-loading-overlay" aria-hidden="true">
+            <span className="page-loading-spinner submit-history-loading-badge" />
+          </div>
+        </div>
+      ) : loadErrorMessage ? null : uiTextRows.length === 0 ? (
         <div className="admin-config-empty">등록된 UI 텍스트가 없다.</div>
       ) : (
         <div className="admin-config-table" ref={gridRef} role="table" aria-label="UI 텍스트 목록">

@@ -54,6 +54,7 @@ public class UserAccountService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final MailService mailService;
+    private final AccountRestrictionService accountRestrictionService;
 
     private final Map<String, String> emailCodeStorage = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> codeExpiredAtStorage = new ConcurrentHashMap<>();
@@ -133,12 +134,15 @@ public class UserAccountService {
 
     public Authentication login(LoginReq request) {
         try {
-            return authenticationManager.authenticate(
+            Authentication authentication = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(
                             normalizeEmail(request.getEmail()),
                             request.getPassword()
                     )
             );
+
+            validateBlockedUser(authentication.getName());
+            return authentication;
         } catch (AuthenticationException exception) {
             throw new BusinessException(INVALID_USER_ID_OR_PASSWORD, HttpStatus.UNAUTHORIZED);
         }
@@ -146,6 +150,7 @@ public class UserAccountService {
 
     public Authentication loginWithOAuth2(String provider, Map<String, Object> attributes) {
         User user = findOrCreateOAuth2User(provider, attributes);
+        validateBlockedUser(user.getEmail());
 
         return UsernamePasswordAuthenticationToken.authenticated(
                 new org.springframework.security.core.userdetails.User(
@@ -156,6 +161,14 @@ public class UserAccountService {
                 user.getPassword(),
                 AuthorityUtils.createAuthorityList("ROLE_" + user.getResolvedRole().name())
         );
+    }
+
+    public void recordAccess(String authenticatedEmail, String accessIp) {
+        if (authenticatedEmail == null || authenticatedEmail.isBlank() || accessIp == null || accessIp.isBlank()) {
+            return;
+        }
+
+        findUserByEmail(authenticatedEmail).ifPresent(user -> user.recordAccess(accessIp.trim(), LocalDateTime.now()));
     }
 
     public void sendFindIdCode(AccountRecoveryEmailReq request) {
@@ -349,6 +362,17 @@ public class UserAccountService {
 
         Object email = attributes.get("email");
         return email != null ? email.toString() : null;
+    }
+
+    private void validateBlockedUser(String authenticatedEmail) {
+        String currentUserId = resolveCurrentUserId(authenticatedEmail);
+        if (currentUserId == null || currentUserId.isBlank()) {
+            return;
+        }
+
+        if (accountRestrictionService.isBlockedUser(currentUserId)) {
+            throw new BusinessException("차단된 계정입니다.", HttpStatus.FORBIDDEN);
+        }
     }
 
     private String normalizeEmail(String email) {

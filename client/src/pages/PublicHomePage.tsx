@@ -160,10 +160,9 @@ function EmailMarkIcon() {
 export default function PublicHomePage() {
   const hash = useSyncExternalStore(subscribe, getSnapshot, () => '');
   const isSignupOpen = hash === '#signup';
-  const isFindUserIdOpen = hash === '#find-user-id';
   const isResetPasswordOpen = hash === '#reset-password';
-  const isOverlayOpen = isSignupOpen || isFindUserIdOpen || isResetPasswordOpen;
-  const overlayPageTitle = isSignupOpen ? '회원가입' : isFindUserIdOpen ? '아이디 찾기' : isResetPasswordOpen ? '비밀번호 찾기' : null;
+  const isOverlayOpen = isSignupOpen || isResetPasswordOpen;
+  const overlayPageTitle = isSignupOpen ? '회원가입' : isResetPasswordOpen ? '비밀번호 찾기' : null;
 
   useHomeSiteTitle(overlayPageTitle);
 
@@ -642,10 +641,8 @@ export default function PublicHomePage() {
             </section>
           </section>
         </div>
-      ) : isFindUserIdOpen ? (
-        <AccountRecoveryOverlay mode="find-user-id" onClose={closeOverlay} />
       ) : isResetPasswordOpen ? (
-        <AccountRecoveryOverlay mode="reset-password" onClose={closeOverlay} />
+        <AccountRecoveryOverlay onClose={closeOverlay} />
       ) : (
         <section className="public-home-content" id="auth-form">
           <img className="mobile-landing-logo" src={logoImage} alt="quertimizer" />

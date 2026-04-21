@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import CommunityWritePage from './CommunityWritePage';
 import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
@@ -473,7 +474,7 @@ export default function CommunityPage() {
       ) : (
       <section className="panel-card problem-board community-board">
         {errorMessage ? (
-          <div className="submit-history-empty-state">{errorMessage}</div>
+          <PageLoadFailureState className="submit-history-empty-state" />
         ) : (
           <div className={`submit-history-table-shell community-table-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
             <div className="submit-history-table community-table" role="table" aria-label="커뮤니티 목록">

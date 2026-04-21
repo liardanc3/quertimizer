@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { getLocationSearchSnapshot, getProfilePath, RANKING_PATH, subscribeLocation, navigate } from '../lib/navigation';
 import { fetchRanks, type RankPage } from '../lib/rankApi';
@@ -343,7 +344,7 @@ export default function RankingPage() {
 
       <section className="panel-card problem-board submit-history-board ranking-board">
         {loadFailed ? (
-          <div className="submit-history-empty-state">랭킹을 불러오지 못했습니다.</div>
+          <PageLoadFailureState className="submit-history-empty-state" />
         ) : (
           <div className={`submit-history-table-shell ranking-table-shell ${isLoading ? 'is-loading' : ''}`}>
             <div className="submit-history-table ranking-table" role="table" aria-label="랭킹 목록">

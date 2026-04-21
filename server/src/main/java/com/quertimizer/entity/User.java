@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Entity
 @Table(name = "user")
@@ -62,6 +63,12 @@ public class User {
     @Column(name = "signup_at", nullable = false)
     private LocalDateTime signupAt;
 
+    @Column(name = "last_access_ip", length = 64)
+    private String lastAccessIp;
+
+    @Column(name = "last_access_at")
+    private LocalDateTime lastAccessAt;
+
     public static User create(String userId, String doubleHashedPassword, String email) {
         return new User(
                 email,
@@ -76,7 +83,9 @@ public class User {
                 true,
                 0,
                 0L,
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                null,
+                null
         );
     }
 
@@ -94,7 +103,9 @@ public class User {
                 true,
                 0,
                 0L,
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                null,
+                null
         );
     }
 
@@ -127,6 +138,21 @@ public class User {
     public void changeSolvedStatistics(int solvedProblemCount, long solvedExecutionTimeSumMs) {
         this.solvedProblemCount = solvedProblemCount;
         this.solvedExecutionTimeSumMs = solvedExecutionTimeSumMs;
+    }
+
+    public void recordAccess(String accessIp, LocalDateTime accessedAt) {
+        if (accessIp == null || accessIp.isBlank()) {
+            return;
+        }
+
+        if (Objects.equals(lastAccessIp, accessIp)
+                && lastAccessAt != null
+                && !lastAccessAt.isBefore(accessedAt.minusMinutes(1))) {
+            return;
+        }
+
+        this.lastAccessIp = accessIp;
+        this.lastAccessAt = accessedAt;
     }
 
     public String getResolvedBio() {
@@ -181,7 +207,9 @@ public class User {
                  Boolean solvedProblemCountPublic,
                  Integer solvedProblemCount,
                  Long solvedExecutionTimeSumMs,
-                 LocalDateTime signupAt) {
+                 LocalDateTime signupAt,
+                 String lastAccessIp,
+                 LocalDateTime lastAccessAt) {
         this.email = email;
         this.userId = userId;
         this.password = password;
@@ -195,6 +223,8 @@ public class User {
         this.solvedProblemCount = solvedProblemCount;
         this.solvedExecutionTimeSumMs = solvedExecutionTimeSumMs;
         this.signupAt = signupAt;
+        this.lastAccessIp = lastAccessIp;
+        this.lastAccessAt = lastAccessAt;
     }
 
 }

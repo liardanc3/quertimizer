@@ -63,11 +63,96 @@
   min-height: 1.72rem;
   width: 8rem;
   min-width: 8rem;
-  padding-top: 0.1rem;
-  padding-bottom: 0.1rem;
   font-size: 0.68rem;
   font-family: inherit;
   font-weight: 700;
+}
+
+.problem-create-select-shell {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.problem-create-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.52rem;
+  padding: 0.18rem 0.58rem;
+  border-radius: 0.52rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.problem-create-select-shell.is-disabled .problem-create-select-trigger {
+  cursor: default;
+  opacity: 0.64;
+}
+
+.problem-create-select-trigger-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.problem-create-select-trigger-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.problem-create-select-trigger-icon svg {
+  width: 0.82rem;
+  height: 0.82rem;
+}
+
+.problem-create-select-menu {
+  position: absolute;
+  top: calc(100% + 0.34rem);
+  left: 0;
+  z-index: 18;
+  display: grid;
+  gap: 0.08rem;
+  min-width: 100%;
+  padding: 0.28rem;
+  border: 1px solid #dbe6f2;
+  background: #fff;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+}
+
+.problem-create-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 1.86rem;
+  padding: 0.22rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: #182433;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.problem-create-select-option:hover,
+.problem-create-select-option:focus-visible {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.problem-create-select-option.is-selected {
+  color: #2563eb;
+}
+
+.problem-create-problem-select {
+  width: 10.6rem;
+  min-width: 10.6rem;
+}
+
+.problem-create-dbms-select {
+  width: 10.6rem;
+  min-width: 10.6rem;
 }
 
 .problem-create-edit-action.is-active {
@@ -176,6 +261,10 @@
   display: grid;
   gap: 0.9rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.problem-create-source-grid-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .problem-create-source-textarea {
@@ -299,5 +388,26 @@
 
   .problem-create-error {
     color: var(--danger-strong);
+  }
+
+  .problem-create-select-trigger {
+    background: var(--surface-muted);
+  }
+
+  .problem-create-select-menu {
+    border-color: var(--line-soft);
+    background: var(--surface-soft);
+    box-shadow: none;
+  }
+
+  .problem-create-select-option {
+    color: var(--ink-base);
+  }
+
+  .problem-create-select-option:hover,
+  .problem-create-select-option:focus-visible,
+  .problem-create-select-option.is-selected {
+    color: var(--ink-strong);
+    background: rgba(96, 165, 250, 0.1);
   }
 }

@@ -19,8 +19,9 @@ public class ProblemGeneratorPermissionMockData {
     @PostConstruct
     public void seed() {
         problemGeneratorPermissionRepository.saveAll(List.of(
-                ProblemGeneratorPermission.create("problemgen01", "00001-00001"),
-                ProblemGeneratorPermission.create("problemgen02", "00001-00001")
+                ProblemGeneratorPermission.create("problemgen01", "NEW"),
+                ProblemGeneratorPermission.create("problemgen01", "P00001"),
+                ProblemGeneratorPermission.create("problemgen02", "P00001-00001")
         ));
     }
 

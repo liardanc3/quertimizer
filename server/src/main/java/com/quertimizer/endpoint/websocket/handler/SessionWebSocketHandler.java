@@ -2,6 +2,7 @@ package com.quertimizer.endpoint.websocket.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.constant.DbmsType;
+import com.quertimizer.endpoint.websocket.dto.AlarmSocketRes;
 import com.quertimizer.endpoint.websocket.dto.ProblemExecuteRes;
 import com.quertimizer.endpoint.websocket.dto.ProblemSubmitProgressRes;
 import com.quertimizer.endpoint.websocket.dto.ProblemSocketReq;
@@ -35,6 +36,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     @Qualifier("problemExecutingExecutor")
     private final TaskExecutor problemExecutingExecutor;
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionSockets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Set<WebSocketSession>> userSockets = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -45,6 +47,10 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         // 같은 HttpSession에서 열린 WebSocket 연결 추적
         if (sessionId != null && !sessionId.isBlank()) {
             sessionSockets.computeIfAbsent(sessionId, key -> ConcurrentHashMap.newKeySet()).add(session);
+        }
+
+        if (userId != null && !userId.isBlank()) {
+            userSockets.computeIfAbsent(userId, key -> ConcurrentHashMap.newKeySet()).add(session);
         }
 
         // 연결 완료 로그 기록 및 초기 연결 메시지 전송
@@ -85,9 +91,14 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String actor = resolveActor(session);
         String sessionId = (String) session.getAttributes().get("sessionId");
+        String userId = (String) session.getAttributes().get("userId");
 
         if (sessionId != null && !sessionId.isBlank()) {
             removeSessionSocket(sessionId, session);
+        }
+
+        if (userId != null && !userId.isBlank()) {
+            removeUserSocket(userId, session);
         }
 
         // 연결 종료 후 문제 작업용 스키마 정리 예약
@@ -111,6 +122,26 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
             try {
                 webSocketSession.close(CloseStatus.NORMAL);
             } catch (IOException ignored) {
+            }
+        }
+    }
+
+    public void sendAlarm(String userId, AlarmSocketRes payload) throws Exception {
+        Set<WebSocketSession> userWebSocketSessions = userSockets.get(userId);
+        if (userWebSocketSessions == null || userWebSocketSessions.isEmpty()) {
+            return;
+        }
+
+        for (WebSocketSession userWebSocketSession : Set.copyOf(userWebSocketSessions)) {
+            if (!userWebSocketSession.isOpen()) {
+                removeUserSocket(userId, userWebSocketSession);
+                continue;
+            }
+
+            try {
+                sendObjectMessage(userWebSocketSession, payload);
+            } catch (Exception exception) {
+                log.warn("알람 WebSocket 전송에 실패했다.", exception);
             }
         }
     }
@@ -195,6 +226,17 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
     private void removeSessionSocket(String sessionId, WebSocketSession session) {
         sessionSockets.computeIfPresent(sessionId, (key, sessions) -> {
+            sessions.remove(session);
+            if (sessions.isEmpty()) {
+                return null;
+            }
+
+            return sessions;
+        });
+    }
+
+    private void removeUserSocket(String userId, WebSocketSession session) {
+        userSockets.computeIfPresent(userId, (key, sessions) -> {
             sessions.remove(session);
             if (sessions.isEmpty()) {
                 return null;

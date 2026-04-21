@@ -1,6 +1,7 @@
 package com.quertimizer.config;
 
 import com.quertimizer.constant.UserRole;
+import com.quertimizer.filter.AccountRestrictionFilter;
 import com.quertimizer.filter.ApiLoggingFilter;
 import com.quertimizer.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.time.Duration;
 public class SecurityConfig {
 
     private final UserRepository userRepository;
+    private final AccountRestrictionFilter accountRestrictionFilter;
     private final ApiLoggingFilter apiLoggingFilter;
 
     @Bean
@@ -52,9 +54,13 @@ public class SecurityConfig {
                 )
                 .securityContext(context -> context.securityContextRepository(securityContextRepository))
                 .rememberMe(rememberMe -> rememberMe.rememberMeServices(rememberMeServices))
-                .addFilterAfter(apiLoggingFilter, SecurityContextHolderFilter.class)
+                .addFilterAfter(accountRestrictionFilter, SecurityContextHolderFilter.class)
+                .addFilterAfter(apiLoggingFilter, AccountRestrictionFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/login", "/login/*", "/logout", "/signup", "/oauth2/**").permitAll()
+                        .requestMatchers("/admin/auth-manage/**").hasRole(UserRole.ADMIN.name())
+                        .requestMatchers("/admin/problem-sets/**", "/admin/problems")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
                         .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().permitAll());
 

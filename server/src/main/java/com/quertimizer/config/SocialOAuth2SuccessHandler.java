@@ -38,6 +38,8 @@ public class SocialOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
                 oauth2Authentication.getPrincipal().getAttributes()
         );
 
+        userAccountService.recordAccess(sessionAuthentication.getName(), resolveClientIp(request));
+
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(sessionAuthentication);
         SecurityContextHolder.setContext(securityContext);
@@ -49,6 +51,15 @@ public class SocialOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
                 response,
                 buildFrontendSuccessUrl(oauth2Authentication.getAuthorizedClientRegistrationId())
         );
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+
+        return request.getRemoteAddr();
     }
 
     private OAuth2AuthenticationToken resolveOAuth2Authentication(Authentication authentication) {

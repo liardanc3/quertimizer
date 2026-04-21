@@ -15,6 +15,7 @@ import {
   type PlanSectionKey,
 } from '../lib/executionPlanFilters';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { fetchSubmitHistories } from '../lib/submitHistoryApi';
 import { getLocationSearchSnapshot, getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, subscribeLocation, navigate } from '../lib/navigation';
@@ -1477,7 +1478,7 @@ export default function SubmitHistoryPage() {
 
       <section className="panel-card problem-board submit-history-board">
         {loadFailed ? (
-          <div className="submit-history-empty-state">제출 이력을 불러오지 못했습니다.</div>
+          <PageLoadFailureState className="submit-history-empty-state" />
         ) : (
           <div className={`submit-history-table-shell ${isLoading ? 'is-loading' : ''}`}>
             <div className="submit-history-table" role="table" aria-label="제출 이력 목록">

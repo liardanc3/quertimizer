@@ -6,6 +6,7 @@ import './ProblemSolvePage.css';
 import './PublicHomePage.css';
 import './SubmitHistoryPage.css';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
@@ -3591,7 +3592,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
-    problemDetail?.title ?? (problem.title || (problemLoadError ? '문제 정보를 불러오지 못했다.' : '문제 정보를 불러오는 중..'));
+    problemDetail?.title ?? problem.title ?? '문제';
   const taggedPostPrimarySearchTerm = displayProblemNumber;
   const taggedPostFallbackSearchTerm = getSolveRelatedCommunitySearchTerm(displayProblemNumber);
 
@@ -5700,7 +5701,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     if (mySubmitLoadError) {
-      return <div className="solve-related-empty-state">{mySubmitLoadError}</div>;
+      return <PageLoadFailureState className="solve-related-empty-state" />;
     }
 
     return (
@@ -5850,7 +5851,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   const renderTaggedPostTabPanel = () => {
     if (taggedPostLoadError) {
-      return <div className="solve-related-empty-state">{taggedPostLoadError}</div>;
+      return <PageLoadFailureState className="solve-related-empty-state" />;
     }
 
     return (
@@ -6008,6 +6009,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         selectedDbms={selectedDbms}
         afterSectionsContent={inlineDetailPanels}
       />
+    ) : problemLoadError ? (
+      <PageLoadFailureState className="solve-related-empty-state" />
     ) : null;
   };
 
@@ -6082,7 +6085,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             <h1 className="solve-problem-title">{displayProblemTitle}</h1>
           </div>
 
-          {problemLoadError ? <p className="content-text solve-problem-description">{problemLoadError}</p> : null}
         </div>
         {renderActiveContentTab()}
       </section>

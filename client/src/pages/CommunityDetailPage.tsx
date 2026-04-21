@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent as ReactChangeEvent, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import CommunityCommentThread from '../components/community/CommunityCommentThread';
 import {
   addCommunityComment,
@@ -11,11 +12,25 @@ import {
   type CommunityPostDetail,
 } from '../lib/communityApi';
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
-import { useMockSession } from '../lib/session';
+import { showSessionToast, useMockSession } from '../lib/session';
 import './CommunityPage.css';
 
 interface CommunityDetailPageProps {
   postId: string;
+}
+
+function subscribeLocationHash(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener('hashchange', callback);
+
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener('hashchange', callback);
+  };
+}
+
+function getLocationHashSnapshot() {
+  return window.location.hash;
 }
 
 const numberFormatter = new Intl.NumberFormat('ko-KR');
@@ -211,6 +226,7 @@ function DisclosureToolIcon() {
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
   const { isAuthenticated } = useMockSession();
+  const locationHash = useSyncExternalStore(subscribeLocationHash, getLocationHashSnapshot, () => '');
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -278,6 +294,25 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }, [lightboxImage]);
 
   useEffect(() => {
+    if (!post || !locationHash.startsWith('#')) {
+      return;
+    }
+
+    const targetId = decodeURIComponent(locationHash.slice(1));
+    if (targetId === '') {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [locationHash, post]);
+
+  useEffect(() => {
     if (!isEditing || !editContentRef.current) {
       return;
     }
@@ -286,15 +321,14 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }, [isEditing]);
 
 
-  async function reloadPost(feedbackMessage?: string) {
+  async function reloadPost() {
     try {
       const nextPost = await fetchCommunityPostDetail(postId);
       setPost(nextPost);
-      if (feedbackMessage) {
-        setFeedback(feedbackMessage);
-      }
+      return true;
     } catch {
       setFeedback('게시글을 새로고침하지 못했다.');
+      return false;
     }
   }
 
@@ -507,7 +541,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         contentHtml: currentHtml,
       });
       setIsEditing(false);
-      await reloadPost('게시글을 수정했다.');
+      setFeedback(null);
+      const didReload = await reloadPost();
+      if (didReload) {
+        showSessionToast('게시글 수정 완료.');
+      }
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '게시글 수정에 실패했다.');
     } finally {
@@ -621,7 +659,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   async function handleCopyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      setFeedback('게시글 링크를 복사했다.');
+      setFeedback(null);
+      showSessionToast('링크 복사 완료.');
     } catch {
       setFeedback('링크 복사에 실패했다.');
     }
@@ -731,9 +770,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   if (!post) {
     return (
       <div className="page-stack community-detail-page">
-        <section className="panel-card community-detail-card">
-          <h1 className="community-detail-title">게시글을 찾을 수 없다.</h1>
-          <p className="muted-text">{errorMessage ?? '삭제되었거나 잘못된 경로다.'}</p>
+        <section id="community-post-detail" className="panel-card community-detail-card">
+          <PageLoadFailureState />
         </section>
       </div>
     );

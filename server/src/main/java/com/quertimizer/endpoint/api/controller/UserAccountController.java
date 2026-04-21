@@ -97,6 +97,7 @@ public class UserAccountController {
         // 로그인 처리, 인증정보 세션 저장
         Authentication authentication = userAccountService.login(request);
         saveAuthenticationToSession(authentication, httpRequest, httpResponse);
+        userAccountService.recordAccess(authentication.getName(), resolveClientIp(httpRequest));
 
         // remember-me 쿠키 처리
         if (request.isRememberLogin()) {
@@ -183,6 +184,15 @@ public class UserAccountController {
         userAccountService.resetPassword(request);
 
         return ResponseEntity.ok().build();
+    }
+
+    private String resolveClientIp(HttpServletRequest httpRequest) {
+        String forwardedFor = httpRequest.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+
+        return httpRequest.getRemoteAddr();
     }
 
     private void saveAuthenticationToSession(Authentication authentication,

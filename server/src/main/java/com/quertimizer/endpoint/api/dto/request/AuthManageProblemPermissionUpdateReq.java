@@ -9,6 +9,6 @@ import java.util.List;
 @NoArgsConstructor
 public class AuthManageProblemPermissionUpdateReq {
 
-    private List<String> problemIds;
+    private List<String> permissionKeys;
 
 }

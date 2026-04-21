@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemList from '../components/home/ProblemList';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { getLocationSearchSnapshot, PROBLEMS_PATH, subscribeLocation } from '../lib/navigation';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
@@ -414,7 +415,7 @@ export default function HomePage() {
       <section className="panel-card problem-board">
         {loadFailed ? (
           <section className="problem-list is-empty">
-            <div className="problem-empty-state">문제 목록을 불러오지 못했습니다.</div>
+            <PageLoadFailureState className="problem-empty-state" />
           </section>
         ) : (
           <ProblemList

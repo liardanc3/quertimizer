@@ -414,7 +414,8 @@ public class ProblemStore {
                 + measureString(problem.getCondition())
                 + measureString(problem.getOutput())
                 + measureString(problem.getOutputSample())
-                + measureString(problem.getAnswer());
+                + measureString(problem.getAnswer())
+                + measureString(problem.getAnswerSql());
     }
 
     private long measureProblemSet(ProblemSet problemSet) {

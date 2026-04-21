@@ -1,14 +1,16 @@
 package com.quertimizer.endpoint.api.dto.response;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
-@AllArgsConstructor
 public class AuthManageRes {
 
-    private final AuthManageRoleGroupRes admins;
-    private final AuthManageRoleGroupRes users;
-    private final AuthManageProblemGeneratorGroupRes problemGenerators;
+    private final List<AuthManageUserRowRes> users;
+
+    public AuthManageRes(List<AuthManageUserRowRes> users) {
+        this.users = users;
+    }
 
 }

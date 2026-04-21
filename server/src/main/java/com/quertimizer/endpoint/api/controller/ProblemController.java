@@ -1,6 +1,7 @@
 package com.quertimizer.endpoint.api.controller;
 
 import com.quertimizer.endpoint.api.dto.request.ProblemCreateReq;
+import com.quertimizer.endpoint.api.dto.response.AdminProblemOptionRes;
 import com.quertimizer.endpoint.api.dto.response.ProblemCreateRes;
 import com.quertimizer.endpoint.api.dto.response.ProblemDetailRes;
 import com.quertimizer.endpoint.api.dto.response.ProblemPageRes;
@@ -63,18 +64,29 @@ public class ProblemController {
     }
 
     @GetMapping("/admin/problem-sets")
-    public ResponseEntity<List<ProblemSetSummaryRes>> getProblemSets() {
-        return ResponseEntity.ok(problemService.getProblemSets());
+    public ResponseEntity<List<ProblemSetSummaryRes>> getProblemSets(Authentication authentication) {
+        return ResponseEntity.ok(problemService.getProblemSets(resolveAuthenticatedEmail(authentication)));
     }
 
     @GetMapping("/admin/problem-sets/{problemSetId}")
-    public ResponseEntity<ProblemSetDetailRes> getProblemSet(@PathVariable String problemSetId) {
-        return ResponseEntity.of(problemService.getProblemSet(problemSetId));
+    public ResponseEntity<ProblemSetDetailRes> getProblemSet(@PathVariable String problemSetId,
+                                                             Authentication authentication) {
+
+        return ResponseEntity.of(problemService.getProblemSet(problemSetId, resolveAuthenticatedEmail(authentication)));
+    }
+
+    @GetMapping("/admin/problem-sets/{problemSetId}/problems")
+    public ResponseEntity<List<AdminProblemOptionRes>> getProblemOptions(@PathVariable String problemSetId,
+                                                                         Authentication authentication) {
+
+        return ResponseEntity.ok(problemService.getProblemOptions(problemSetId, resolveAuthenticatedEmail(authentication)));
     }
 
     @PostMapping("/admin/problems")
-    public ResponseEntity<ProblemCreateRes> createProblem(@Valid @RequestBody ProblemCreateReq request) {
-        ProblemCreateRes response = problemService.createProblem(request);
+    public ResponseEntity<ProblemCreateRes> createProblem(@Valid @RequestBody ProblemCreateReq request,
+                                                          Authentication authentication) {
+
+        ProblemCreateRes response = problemService.createProblem(request, resolveAuthenticatedEmail(authentication));
 
         return ResponseEntity.created(URI.create("/problems/" + response.getProblemId())).body(response);
     }
@@ -87,4 +99,11 @@ public class ProblemController {
         return userAccountService.resolveCurrentUserId(authentication.getName());
     }
 
+    private String resolveAuthenticatedEmail(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return null;
+        }
+
+        return authentication.getName();
+    }
 }

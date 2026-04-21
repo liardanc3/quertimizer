@@ -26,10 +26,19 @@ public class ProblemCreateReq {
 
     private String answer;
 
+    private String answerSql;
+
     @NotBlank
     private String problemSetMode;
 
+    @NotBlank
+    private String problemMode;
+
     private String problemSetId;
+
+    private String problemId;
+
+    private String dbms;
 
     private String ddlPostgresql;
 

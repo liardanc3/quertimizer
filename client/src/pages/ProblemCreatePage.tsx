@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import StatusPopup from '../components/common/StatusPopup';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
 import {
   createProblem,
+  fetchAdminProblemOptions,
+  fetchProblemDetail,
   fetchProblemSetDetail,
   fetchProblemSets,
+  type DbmsType,
   type ProblemDetailData,
   type ProblemSetDetailData,
   type ProblemSetSummary,
@@ -13,6 +16,7 @@ import { navigate } from '../lib/navigation';
 import './ProblemCreatePage.css';
 
 type ProblemSetMode = 'existing' | 'new';
+type ProblemMode = 'existing' | 'new';
 
 interface EditableDraftState<T> {
   appliedValue: T;
@@ -22,6 +26,7 @@ interface EditableDraftState<T> {
   startEditing: () => void;
   cancelEditing: () => void;
   confirmEditing: () => void;
+  replaceValue: (nextValue: T) => void;
 }
 
 interface SourceDraft {
@@ -33,6 +38,11 @@ interface PopupState {
   open: boolean;
   level: 1 | 2 | 3;
   message: string;
+}
+
+interface ProblemCreateSelectOption {
+  value: string;
+  label: string;
 }
 
 type MissingFieldKey =
@@ -57,7 +67,9 @@ const EMPTY_PROBLEM_SET_DETAIL: ProblemSetDetailData = {
   dataPostgresql: '',
   dataOracle: '',
 };
+
 const NEW_PROBLEM_SET_OPTION_VALUE = '__new__';
+const NEW_PROBLEM_OPTION_VALUE = '__new_problem__';
 
 function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
   const [appliedValue, setAppliedValue] = useState(initialValue);
@@ -79,6 +91,12 @@ function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
     setIsEditing(false);
   }
 
+  function replaceValue(nextValue: T) {
+    setAppliedValue(nextValue);
+    setDraftValue(nextValue);
+    setIsEditing(false);
+  }
+
   return {
     appliedValue,
     draftValue,
@@ -87,19 +105,50 @@ function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
     startEditing,
     cancelEditing,
     confirmEditing,
+    replaceValue,
   };
 }
 
 function getProblemSetLabel(problemSetId: string) {
-  return `\uD14C\uC774\uBE14\uC14B ${problemSetId}`;
+  return `테이블셋 ${problemSetId}`;
 }
 
-function getProblemNumberLabel(problemSetMode: ProblemSetMode, problemSetId: string | null) {
-  if (problemSetMode === 'existing' && problemSetId) {
-    return `${problemSetId} - X`;
+function getProblemLabel(problemId: string) {
+  return `문제 ${problemId}`;
+}
+
+function getProblemNumberLabel(problemSetMode: ProblemSetMode, problemMode: ProblemMode, problemSetId: string | null, problemId: string | null) {
+  if (problemSetMode === 'existing' && problemMode === 'existing' && problemId) {
+    return problemId;
   }
 
-  return '\uC2E0\uADDC - X';
+  if (problemSetMode === 'existing' && problemSetId) {
+    return `${problemSetId}-신규`;
+  }
+
+  return '신규 문제';
+}
+
+function resolveScopedDbms(value: string | null | undefined): DbmsType {
+  return value?.trim().startsWith('O') ? 'oracle' : 'postgresql';
+}
+
+function createEmptyProblemDetail(dbms: DbmsType): ProblemDetailData {
+  return {
+    problemId: '',
+    title: '',
+    description: '',
+    ddlPostgresql: '',
+    ddlOracle: '',
+    dataPostgresql: '',
+    dataOracle: '',
+    condition: '',
+    output: '',
+    outputSample: '',
+    answer: '',
+    answerHash: '',
+    dbms,
+  };
 }
 
 function getTableNamesFromDdl(ddl: string) {
@@ -167,6 +216,14 @@ function buildSectionClassName(isMissing: boolean) {
   return `problem-create-validatable-section${isMissing ? ' problem-create-missing-section' : ''}`;
 }
 
+function arraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
 function EditIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -194,13 +251,112 @@ function CheckIcon() {
 function InlineEditActions({ isEditing, onEdit, onCancel, onConfirm }: { isEditing: boolean; onEdit: () => void; onCancel: () => void; onConfirm: () => void }) {
   return (
     <div className="problem-create-inline-toolbar">
-      <button type="button" className={`solve-detail-section-action problem-create-edit-action ${isEditing ? 'is-active' : ''}`.trim()} aria-label={isEditing ? '\uC218\uC815 \uCDE8\uC18C' : '\uC218\uC815'} onClick={isEditing ? onCancel : onEdit}>
+      <button type="button" className={`solve-detail-section-action problem-create-edit-action ${isEditing ? 'is-active' : ''}`.trim()} aria-label={isEditing ? '수정 취소' : '수정'} onClick={isEditing ? onCancel : onEdit}>
         {isEditing ? <CloseIcon /> : <EditIcon />}
       </button>
       {isEditing ? (
-        <button type="button" className="solve-detail-section-action problem-create-confirm-action" aria-label="\uC218\uC815 \uC801\uC6A9" onClick={onConfirm}>
+        <button type="button" className="solve-detail-section-action problem-create-confirm-action" aria-label="수정 적용" onClick={onConfirm}>
           <CheckIcon />
         </button>
+      ) : null}
+    </div>
+  );
+}
+
+function SelectChevronIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="m5.5 7.8 4.5 4.4 4.5-4.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function ProblemCreateSelectMenu({
+  value,
+  options,
+  onChange,
+  className,
+  disabled = false,
+}: {
+  value: string;
+  options: ProblemCreateSelectOption[];
+  onChange: (value: string) => void;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function handleDocumentMouseDown(event: MouseEvent) {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+
+      if (!shellRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={shellRef} className={`problem-create-select-shell ${isOpen ? 'is-open' : ''} ${disabled ? 'is-disabled' : ''}`.trim()}>
+      <button
+        type="button"
+        className={`text-field problem-create-select-trigger ${className ?? ''}`.trim()}
+        onClick={() => {
+          if (!disabled) {
+            setIsOpen((current) => !current);
+          }
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        disabled={disabled}
+      >
+        <span className="problem-create-select-trigger-text">{selectedOption?.label ?? ''}</span>
+        <span className="problem-create-select-trigger-icon" aria-hidden="true">
+          <SelectChevronIcon />
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div className="problem-create-select-menu" role="listbox">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={`problem-create-select-option ${option.value === value ? 'is-selected' : ''}`.trim()}
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -219,14 +375,40 @@ export function ProblemCreateContent() {
   const dataState = useEditableDraft<SourceDraft>({ postgresql: '', oracle: '' });
 
   const [problemSetMode, setProblemSetMode] = useState<ProblemSetMode>('existing');
+  const [problemMode, setProblemMode] = useState<ProblemMode>('new');
   const [problemSets, setProblemSets] = useState<ProblemSetSummary[]>([]);
+  const [problemOptions, setProblemOptions] = useState<string[]>([]);
   const [selectedProblemSetId, setSelectedProblemSetId] = useState<string | null>(null);
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>('postgresql');
   const [loadedProblemSetDetail, setLoadedProblemSetDetail] = useState<ProblemSetDetailData>(EMPTY_PROBLEM_SET_DETAIL);
+  const [loadedProblemDetail, setLoadedProblemDetail] = useState<ProblemDetailData | null>(null);
+  const [answerHash, setAnswerHash] = useState('');
   const [isProblemSetLoading, setIsProblemSetLoading] = useState(false);
+  const [isProblemLoading, setIsProblemLoading] = useState(false);
   const [problemSetErrorMessage, setProblemSetErrorMessage] = useState('');
+  const [problemErrorMessage, setProblemErrorMessage] = useState('');
   const [includedTableNames, setIncludedTableNames] = useState<string[]>([]);
   const [editorSql, setEditorSql] = useState('');
   const [popupState, setPopupState] = useState<PopupState>({ open: false, level: 2, message: '' });
+
+  const currentDbms = useMemo<DbmsType>(() => {
+    if (problemSetMode === 'new') {
+      return selectedDbms;
+    }
+
+    return resolveScopedDbms(selectedProblemId ?? selectedProblemSetId);
+  }, [problemSetMode, selectedDbms, selectedProblemId, selectedProblemSetId]);
+
+  function replaceProblemContent(detail: ProblemDetailData) {
+    heroState.replaceValue({ title: detail.title, description: detail.description });
+    conditionState.replaceValue(detail.condition);
+    outputState.replaceValue(detail.output);
+    outputSampleState.replaceValue(detail.outputSample);
+    answerState.replaceValue(detail.answer);
+    setAnswerHash(detail.answerHash);
+    setEditorSql(detail.answer);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -248,7 +430,7 @@ export function ProblemCreateContent() {
         if (!cancelled) {
           setProblemSetMode('new');
           setSelectedProblemSetId(null);
-          setProblemSetErrorMessage('\uD14C\uC774\uBE14\uC14B \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uB2E4.');
+          setProblemSetErrorMessage('테이블셋 목록을 불러오지 못했다.');
         }
       }
     }
@@ -261,25 +443,54 @@ export function ProblemCreateContent() {
 
   useEffect(() => {
     if (problemSetMode !== 'existing' || !selectedProblemSetId) {
+      setProblemOptions([]);
+      setSelectedProblemId(null);
+      setLoadedProblemSetDetail(EMPTY_PROBLEM_SET_DETAIL);
+      setLoadedProblemDetail(null);
+      setProblemMode('new');
+      setProblemSetErrorMessage('');
+      setProblemErrorMessage('');
+      setAnswerHash('');
+      replaceProblemContent(createEmptyProblemDetail(currentDbms));
       return;
     }
 
     const targetProblemSetId = selectedProblemSetId;
     let cancelled = false;
 
-    async function loadProblemSetDetail() {
+    async function loadProblemManagementTargets() {
       setIsProblemSetLoading(true);
       setProblemSetErrorMessage('');
 
       try {
-        const nextDetail = await fetchProblemSetDetail(targetProblemSetId);
+        const [nextDetail, nextProblemOptions] = await Promise.all([
+          fetchProblemSetDetail(targetProblemSetId),
+          fetchAdminProblemOptions(targetProblemSetId),
+        ]);
+
         if (cancelled) return;
 
         setLoadedProblemSetDetail(nextDetail);
+        setProblemOptions(nextProblemOptions);
+
+        if (nextProblemOptions.length === 0) {
+          setProblemMode('new');
+          setSelectedProblemId(null);
+          setAnswerHash('');
+          replaceProblemContent(createEmptyProblemDetail(resolveScopedDbms(targetProblemSetId)));
+          return;
+        }
+
+        setProblemMode('existing');
+        setSelectedProblemId((current) => (current != null && nextProblemOptions.includes(current) ? current : nextProblemOptions[0]));
       } catch {
         if (!cancelled) {
           setLoadedProblemSetDetail(EMPTY_PROBLEM_SET_DETAIL);
-          setProblemSetErrorMessage('\uD14C\uC774\uBE14\uC14B \uC0C1\uC138 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uB2E4.');
+          setProblemOptions([]);
+          setProblemMode('new');
+          setSelectedProblemId(null);
+          setAnswerHash('');
+          setProblemSetErrorMessage('테이블셋 정보를 불러오지 못했다.');
         }
       } finally {
         if (!cancelled) {
@@ -288,60 +499,118 @@ export function ProblemCreateContent() {
       }
     }
 
-    loadProblemSetDetail();
+    loadProblemManagementTargets();
     return () => {
       cancelled = true;
     };
   }, [problemSetMode, selectedProblemSetId]);
 
+  useEffect(() => {
+    if (problemSetMode !== 'existing' || problemMode !== 'existing' || !selectedProblemId) {
+      setLoadedProblemDetail(null);
+      setProblemErrorMessage('');
+      if (problemSetMode === 'existing') {
+        setAnswerHash('');
+        replaceProblemContent(createEmptyProblemDetail(currentDbms));
+      }
+      return;
+    }
+
+    const targetProblemId = selectedProblemId;
+    let cancelled = false;
+
+    async function loadProblemDetailData() {
+      setIsProblemLoading(true);
+      setProblemErrorMessage('');
+
+      try {
+        const nextProblemDetail = await fetchProblemDetail(targetProblemId);
+        if (cancelled) return;
+
+        setLoadedProblemDetail(nextProblemDetail);
+        replaceProblemContent(nextProblemDetail);
+      } catch {
+        if (!cancelled) {
+          setLoadedProblemDetail(null);
+          setAnswerHash('');
+          setProblemErrorMessage('문제 정보를 불러오지 못했다.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsProblemLoading(false);
+        }
+      }
+    }
+
+    loadProblemDetailData();
+    return () => {
+      cancelled = true;
+    };
+  }, [problemMode, problemSetMode, selectedProblemId]);
+
   const currentProblemSetDetail = problemSetMode === 'existing'
     ? loadedProblemSetDetail
     : {
         problemSetId: '',
-        ddlPostgresql: ddlState.appliedValue.postgresql,
-        ddlOracle: ddlState.appliedValue.oracle,
-        dataPostgresql: dataState.appliedValue.postgresql,
-        dataOracle: dataState.appliedValue.oracle,
+        ddlPostgresql: selectedDbms === 'postgresql' ? ddlState.appliedValue.postgresql : '',
+        ddlOracle: selectedDbms === 'oracle' ? ddlState.appliedValue.oracle : '',
+        dataPostgresql: selectedDbms === 'postgresql' ? dataState.appliedValue.postgresql : '',
+        dataOracle: selectedDbms === 'oracle' ? dataState.appliedValue.oracle : '',
       };
+
   const selectedProblemSetValue = problemSetMode === 'existing' && selectedProblemSetId != null
     ? selectedProblemSetId
     : NEW_PROBLEM_SET_OPTION_VALUE;
-  const previewProblemSetId = problemSetMode === 'existing' && selectedProblemSetId != null
-    ? selectedProblemSetId
-    : '\uC2E0\uADDC';
+  const selectedProblemValue = problemMode === 'existing' && selectedProblemId != null
+    ? selectedProblemId
+    : NEW_PROBLEM_OPTION_VALUE;
 
   const availableTableNames = useMemo(() => {
-    const fallbackDdl = currentProblemSetDetail.ddlPostgresql.trim() !== ''
-      ? currentProblemSetDetail.ddlPostgresql
-      : currentProblemSetDetail.ddlOracle;
+    const targetDdl = currentDbms === 'oracle'
+      ? currentProblemSetDetail.ddlOracle
+      : currentProblemSetDetail.ddlPostgresql;
 
-    return getTableNamesFromDdl(fallbackDdl);
-  }, [currentProblemSetDetail.ddlOracle, currentProblemSetDetail.ddlPostgresql]);
+    return getTableNamesFromDdl(targetDdl);
+  }, [currentDbms, currentProblemSetDetail.ddlOracle, currentProblemSetDetail.ddlPostgresql]);
 
   useEffect(() => {
+    if (availableTableNames.length === 0) {
+      setIncludedTableNames([]);
+      return;
+    }
+
+    if (problemSetMode === 'existing' && problemMode === 'existing' && loadedProblemDetail) {
+      const problemDdl = currentDbms === 'oracle'
+        ? loadedProblemDetail.ddlOracle
+        : loadedProblemDetail.ddlPostgresql;
+      const nextIncludedTableNames = getTableNamesFromDdl(problemDdl).filter((tableName) => availableTableNames.includes(tableName));
+      const normalizedIncludedTableNames = nextIncludedTableNames.length > 0 ? nextIncludedTableNames : availableTableNames;
+
+      setIncludedTableNames((current) => (arraysEqual(current, normalizedIncludedTableNames) ? current : normalizedIncludedTableNames));
+      return;
+    }
+
     setIncludedTableNames((current) => {
       const filtered = current.filter((tableName) => availableTableNames.includes(tableName));
-
-      if (availableTableNames.length === 0) {
-        return [];
-      }
-
-      if (filtered.length > 0) {
-        return filtered;
-      }
-
-      return availableTableNames;
+      const nextIncludedTableNames = filtered.length > 0 ? filtered : availableTableNames;
+      return arraysEqual(current, nextIncludedTableNames) ? current : nextIncludedTableNames;
     });
-  }, [availableTableNames]);
+  }, [availableTableNames, currentDbms, loadedProblemDetail, problemMode, problemSetMode]);
 
   const filteredDdlPostgresql = useMemo(() => filterDdlByTableNames(currentProblemSetDetail.ddlPostgresql, includedTableNames), [currentProblemSetDetail.ddlPostgresql, includedTableNames]);
   const filteredDdlOracle = useMemo(() => filterDdlByTableNames(currentProblemSetDetail.ddlOracle, includedTableNames), [currentProblemSetDetail.ddlOracle, includedTableNames]);
   const filteredDataPostgresql = useMemo(() => filterDataSqlByTableNames(currentProblemSetDetail.dataPostgresql, includedTableNames), [currentProblemSetDetail.dataPostgresql, includedTableNames]);
   const filteredDataOracle = useMemo(() => filterDataSqlByTableNames(currentProblemSetDetail.dataOracle, includedTableNames), [currentProblemSetDetail.dataOracle, includedTableNames]);
 
+  const previewProblemSetId = problemSetMode === 'existing' && selectedProblemSetId != null
+    ? selectedProblemSetId
+    : selectedDbms === 'oracle'
+      ? 'O신규'
+      : 'P신규';
+
   const previewDetail = useMemo<ProblemDetailData>(
     () => ({
-      problemId: `${previewProblemSetId}-X`,
+      problemId: selectedProblemId ?? `${previewProblemSetId}-신규`,
       title: heroState.appliedValue.title,
       description: heroState.appliedValue.description,
       ddlPostgresql: filteredDdlPostgresql,
@@ -351,9 +620,13 @@ export function ProblemCreateContent() {
       condition: conditionState.appliedValue,
       output: outputState.appliedValue,
       outputSample: outputSampleState.appliedValue,
+      answer: answerState.appliedValue,
+      answerHash,
+      dbms: currentDbms,
     }),
     [
       conditionState.appliedValue,
+      currentDbms,
       filteredDataOracle,
       filteredDataPostgresql,
       filteredDdlOracle,
@@ -362,7 +635,10 @@ export function ProblemCreateContent() {
       heroState.appliedValue.title,
       outputSampleState.appliedValue,
       outputState.appliedValue,
+      answerState.appliedValue,
+      answerHash,
       previewProblemSetId,
+      selectedProblemId,
     ],
   );
 
@@ -386,17 +662,30 @@ export function ProblemCreateContent() {
   const isOutputSampleMissing = missingFields.some((field) => field.key === 'outputSample');
   const isAnswerMissing = missingFields.some((field) => field.key === 'answer');
 
-  function handleProblemSetSelectChange(event: ChangeEvent<HTMLSelectElement>) {
-    const nextValue = event.target.value;
+  function handleProblemSetSelectChange(nextValue: string) {
 
     if (nextValue === NEW_PROBLEM_SET_OPTION_VALUE) {
       setProblemSetMode('new');
+      setProblemMode('new');
       setSelectedProblemSetId(null);
+      setSelectedProblemId(null);
       return;
     }
 
     setProblemSetMode('existing');
     setSelectedProblemSetId(nextValue);
+  }
+
+  function handleProblemSelectChange(nextValue: string) {
+
+    if (nextValue === NEW_PROBLEM_OPTION_VALUE) {
+      setProblemMode('new');
+      setSelectedProblemId(null);
+      return;
+    }
+
+    setProblemMode('existing');
+    setSelectedProblemId(nextValue);
   }
 
   function scrollToMissingField(fieldKey: MissingFieldKey) {
@@ -495,6 +784,15 @@ export function ProblemCreateContent() {
     }
 
     try {
+      const normalizedAnswerSql = answerState.appliedValue.trim();
+      const shouldPreserveAnswerHash =
+        problemMode === 'existing' &&
+        loadedProblemDetail != null &&
+        normalizedAnswerSql === loadedProblemDetail.answer.trim();
+      const normalizedAnswerHash = shouldPreserveAnswerHash
+        ? answerHash.trim()
+        : normalizedAnswerSql;
+
       const createdProblemId = await createProblem({
         title: heroState.appliedValue.title.trim(),
         description: heroState.appliedValue.description.trim(),
@@ -503,9 +801,13 @@ export function ProblemCreateContent() {
         condition: conditionState.appliedValue.trim(),
         output: outputState.appliedValue.trim(),
         outputSample: outputSampleState.appliedValue.trim(),
-        answer: answerState.appliedValue.trim(),
+        answer: normalizedAnswerHash,
+        answerSql: normalizedAnswerSql,
         problemSetMode,
+        problemMode,
         problemSetId: problemSetMode === 'existing' ? selectedProblemSetId ?? undefined : undefined,
+        problemId: problemMode === 'existing' ? selectedProblemId ?? undefined : undefined,
+        dbms: problemSetMode === 'new' ? selectedDbms : undefined,
         dataPostgresql: problemSetMode === 'new' ? filteredDataPostgresql : undefined,
         dataOracle: problemSetMode === 'new' ? filteredDataOracle : undefined,
       });
@@ -515,7 +817,7 @@ export function ProblemCreateContent() {
       setPopupState({
         open: true,
         level: 2,
-        message: '\uBB38\uC81C \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uB2E4.',
+        message: '문제 저장에 실패했다.',
       });
     }
   }
@@ -526,40 +828,62 @@ export function ProblemCreateContent() {
         <section ref={heroSectionRef} className="solve-page-hero solve-surface-section problem-create-hero">
           <div className="solve-page-hero-copy solve-page-hero-copy-wide">
             <div className="problem-create-number-row">
-              <div className="tooltip-anchor problem-create-problem-number-tooltip">
-                <span className="solve-problem-number">{getProblemNumberLabel(problemSetMode, selectedProblemSetId)}</span>
-                {problemSetMode === 'existing' && selectedProblemSetId ? (
-                  <div className="ui-tooltip is-passive" role="tooltip">
-                    <span className="ui-tooltip-caption">{'\uD604\uC7AC \uD14C\uC774\uBE14\uC14B\uC758 \uAC00\uC7A5 \uB9C8\uC9C0\uB9C9 \uBB38\uC81C \uBC88\uD638 + 1\uC774 \uBD80\uC5EC\uB429\uB2C8\uB2E4.'}</span>
-                  </div>
-                ) : null}
-              </div>
-              <select className="text-field problem-create-select" value={selectedProblemSetValue} onChange={handleProblemSetSelectChange}>
-                <option value={NEW_PROBLEM_SET_OPTION_VALUE}>{'\uC2E0\uADDC \uD14C\uC774\uBE14\uC14B'}</option>
-                {problemSets.map((problemSet) => (
-                  <option key={problemSet.problemSetId} value={problemSet.problemSetId}>
-                    {getProblemSetLabel(problemSet.problemSetId)}
-                  </option>
-                ))}
-              </select>
+              <span className="solve-problem-number">{getProblemNumberLabel(problemSetMode, problemMode, selectedProblemSetId, selectedProblemId)}</span>
+              <ProblemCreateSelectMenu
+                value={selectedProblemSetValue}
+                className="problem-create-select"
+                options={[
+                  { value: NEW_PROBLEM_SET_OPTION_VALUE, label: '신규 테이블셋' },
+                  ...problemSets.map((problemSet) => ({
+                    value: problemSet.problemSetId,
+                    label: getProblemSetLabel(problemSet.problemSetId),
+                  })),
+                ]}
+                onChange={handleProblemSetSelectChange}
+              />
+              {problemSetMode === 'new' ? (
+                <ProblemCreateSelectMenu
+                  value={selectedDbms}
+                  className="problem-create-select problem-create-problem-select problem-create-dbms-select"
+                  options={[
+                    { value: 'postgresql', label: 'PostgreSQL' },
+                    { value: 'oracle', label: 'Oracle' },
+                  ]}
+                  onChange={(nextValue) => setSelectedDbms(nextValue as DbmsType)}
+                />
+              ) : (
+                <ProblemCreateSelectMenu
+                  value={selectedProblemValue}
+                  className="problem-create-select problem-create-problem-select"
+                  options={[
+                    { value: NEW_PROBLEM_OPTION_VALUE, label: '신규 문제' },
+                    ...problemOptions.map((problemId) => ({
+                      value: problemId,
+                      label: getProblemLabel(problemId),
+                    })),
+                  ]}
+                  onChange={handleProblemSelectChange}
+                  disabled={problemOptions.length === 0}
+                />
+              )}
             </div>
 
             <div className="problem-create-title-edit-row">
               {heroState.isEditing ? (
-                <input className="problem-create-title-input" value={heroState.draftValue.title} onChange={(event) => heroState.setDraftValue((current) => ({ ...current, title: event.target.value }))} placeholder={'\uBB38\uC81C \uC81C\uBAA9'} />
+                <input className="problem-create-title-input" value={heroState.draftValue.title} onChange={(event) => heroState.setDraftValue((current) => ({ ...current, title: event.target.value }))} placeholder="문제 제목" />
               ) : (
                 <h1 className="solve-problem-title">
-                  {heroState.appliedValue.title.trim() !== '' ? heroState.appliedValue.title : <span className="problem-create-placeholder-text">{'\uBB38\uC81C \uC81C\uBAA9'}</span>}
+                  {heroState.appliedValue.title.trim() !== '' ? heroState.appliedValue.title : <span className="problem-create-placeholder-text">문제 제목</span>}
                 </h1>
               )}
               <InlineEditActions isEditing={heroState.isEditing} onEdit={heroState.startEditing} onCancel={heroState.cancelEditing} onConfirm={heroState.confirmEditing} />
             </div>
 
             {heroState.isEditing ? (
-              <textarea className="text-field problem-create-inline-textarea problem-create-description-editor" value={heroState.draftValue.description} onChange={(event) => heroState.setDraftValue((current) => ({ ...current, description: event.target.value }))} placeholder={'\uC124\uBA85'} />
+              <textarea className="text-field problem-create-inline-textarea problem-create-description-editor" value={heroState.draftValue.description} onChange={(event) => heroState.setDraftValue((current) => ({ ...current, description: event.target.value }))} placeholder="설명" />
             ) : (
               <p className="solve-problem-description">
-                {heroState.appliedValue.description.trim() !== '' ? heroState.appliedValue.description : <span className="problem-create-placeholder-text">{'\uC124\uBA85'}</span>}
+                {heroState.appliedValue.description.trim() !== '' ? heroState.appliedValue.description : <span className="problem-create-placeholder-text">설명</span>}
               </p>
             )}
           </div>
@@ -567,7 +891,7 @@ export function ProblemCreateContent() {
 
         <ProblemDetailContent
           detail={previewDetail}
-          selectedDbms="postgresql"
+          selectedDbms={currentDbms}
           sectionClassNames={{
             table: buildSectionClassName(isTableInfoMissing),
             dataSample: buildSectionClassName(isDataSampleMissing),
@@ -586,22 +910,40 @@ export function ProblemCreateContent() {
             <>
               {problemSetMode === 'new' && ddlState.isEditing ? (
                 <div className="problem-create-inline-source">
-                  <div className="problem-create-source-grid">
-                    <textarea className="text-field problem-create-source-textarea" value={ddlState.draftValue.postgresql} onChange={(event) => ddlState.setDraftValue((current) => ({ ...current, postgresql: event.target.value }))} placeholder="PostgreSQL DDL" />
-                    <textarea className="text-field problem-create-source-textarea" value={ddlState.draftValue.oracle} onChange={(event) => ddlState.setDraftValue((current) => ({ ...current, oracle: event.target.value }))} placeholder="Oracle DDL" />
+                  <div className="problem-create-source-grid problem-create-source-grid-single">
+                    <textarea
+                      className="text-field problem-create-source-textarea"
+                      value={selectedDbms === 'postgresql' ? ddlState.draftValue.postgresql : ddlState.draftValue.oracle}
+                      onChange={(event) => ddlState.setDraftValue((current) => (
+                        selectedDbms === 'postgresql'
+                          ? { ...current, postgresql: event.target.value }
+                          : { ...current, oracle: event.target.value }
+                      ))}
+                      placeholder={selectedDbms === 'postgresql' ? 'PostgreSQL DDL' : 'Oracle DDL'}
+                    />
                   </div>
                 </div>
               ) : null}
 
-              {problemSetMode === 'existing' && isProblemSetLoading ? <p className="content-text">{'\uD14C\uC774\uBE14\uC14B \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uB294 \uC911\uC774\uB2E4.'}</p> : null}
+              {problemSetMode === 'existing' && isProblemSetLoading ? <p className="content-text">테이블셋 정보를 불러오는 중이다.</p> : null}
               {problemSetMode === 'existing' && problemSetErrorMessage ? <p className="problem-create-error">{problemSetErrorMessage}</p> : null}
+              {problemSetMode === 'existing' && isProblemLoading ? <p className="content-text">문제 정보를 불러오는 중이다.</p> : null}
+              {problemSetMode === 'existing' && problemErrorMessage ? <p className="problem-create-error">{problemErrorMessage}</p> : null}
 
               {availableTableNames.length > 0 ? (
                 <div className="problem-create-table-selector">
                   <div className="problem-create-table-chip-row">
                     {availableTableNames.map((tableName) => (
                       <label key={tableName} className="problem-create-table-chip">
-                        <input type="checkbox" checked={includedTableNames.includes(tableName)} onChange={() => setIncludedTableNames((current) => (current.includes(tableName) ? current.filter((item) => item !== tableName) : [...current, tableName]))} />
+                        <input
+                          type="checkbox"
+                          checked={includedTableNames.includes(tableName)}
+                          onChange={() => setIncludedTableNames((current) => (
+                            current.includes(tableName)
+                              ? current.filter((item) => item !== tableName)
+                              : [...current, tableName]
+                          ))}
+                        />
                         <span>{tableName}</span>
                       </label>
                     ))}
@@ -613,23 +955,31 @@ export function ProblemCreateContent() {
           dataSampleBeforeContent={
             problemSetMode === 'new' && dataState.isEditing ? (
               <div className="problem-create-inline-source">
-                <div className="problem-create-source-grid">
-                  <textarea className="text-field problem-create-source-textarea" value={dataState.draftValue.postgresql} onChange={(event) => dataState.setDraftValue((current) => ({ ...current, postgresql: event.target.value }))} placeholder="PostgreSQL Data SQL" />
-                  <textarea className="text-field problem-create-source-textarea" value={dataState.draftValue.oracle} onChange={(event) => dataState.setDraftValue((current) => ({ ...current, oracle: event.target.value }))} placeholder="Oracle Data SQL" />
+                <div className="problem-create-source-grid problem-create-source-grid-single">
+                  <textarea
+                    className="text-field problem-create-source-textarea"
+                    value={selectedDbms === 'postgresql' ? dataState.draftValue.postgresql : dataState.draftValue.oracle}
+                    onChange={(event) => dataState.setDraftValue((current) => (
+                      selectedDbms === 'postgresql'
+                        ? { ...current, postgresql: event.target.value }
+                        : { ...current, oracle: event.target.value }
+                    ))}
+                    placeholder={selectedDbms === 'postgresql' ? 'PostgreSQL Data SQL' : 'Oracle Data SQL'}
+                  />
                 </div>
               </div>
             ) : undefined
           }
           conditionContent={
             conditionState.isEditing ? (
-              <textarea className="text-field problem-create-inline-textarea" value={conditionState.draftValue} onChange={(event) => conditionState.setDraftValue(event.target.value)} placeholder={'\uC870\uAC74'} />
+              <textarea className="text-field problem-create-inline-textarea" value={conditionState.draftValue} onChange={(event) => conditionState.setDraftValue(event.target.value)} placeholder="조건" />
             ) : isConditionMissing ? (
               <></>
             ) : undefined
           }
           outputContent={
             outputState.isEditing ? (
-              <textarea className="text-field problem-create-inline-textarea" value={outputState.draftValue} onChange={(event) => outputState.setDraftValue(event.target.value)} placeholder={'\uCD9C\uB825'} />
+              <textarea className="text-field problem-create-inline-textarea" value={outputState.draftValue} onChange={(event) => outputState.setDraftValue(event.target.value)} placeholder="출력" />
             ) : isOutputMissing ? (
               <></>
             ) : undefined
@@ -637,7 +987,7 @@ export function ProblemCreateContent() {
           outputSampleBeforeContent={
             outputSampleState.isEditing ? (
               <div className="problem-create-output-sample-editor">
-                <textarea className="text-field problem-create-inline-textarea" value={outputSampleState.draftValue} onChange={(event) => outputSampleState.setDraftValue(event.target.value)} placeholder={'\uCD9C\uB825 \uC608\uC2DC'} />
+                <textarea className="text-field problem-create-inline-textarea" value={outputSampleState.draftValue} onChange={(event) => outputSampleState.setDraftValue(event.target.value)} placeholder="출력 예시" />
               </div>
             ) : undefined
           }
@@ -646,7 +996,7 @@ export function ProblemCreateContent() {
         <section ref={answerSectionRef} className={`solve-detail-section problem-create-answer-surface ${buildSectionClassName(isAnswerMissing)}`.trim()}>
           <div className="solve-detail-section-header">
             <div className="solve-detail-section-title-row">
-              <h2 className="solve-detail-section-title">{'\uC815\uB2F5 SQL'}</h2>
+              <h2 className="solve-detail-section-title">정답 SQL</h2>
               <InlineEditActions isEditing={answerState.isEditing} onEdit={answerState.startEditing} onCancel={answerState.cancelEditing} onConfirm={answerState.confirmEditing} />
             </div>
           </div>
@@ -655,10 +1005,10 @@ export function ProblemCreateContent() {
           </div>
           <div className="solve-detail-section-body">
             {answerState.isEditing ? (
-              <textarea className="text-field problem-create-answer-textarea" value={answerState.draftValue} onChange={(event) => answerState.setDraftValue(event.target.value)} placeholder={'\uC815\uB2F5 SQL'} />
+              <textarea className="text-field problem-create-answer-textarea" value={answerState.draftValue} onChange={(event) => answerState.setDraftValue(event.target.value)} placeholder="정답 SQL" />
             ) : (
               <pre className="problem-create-answer-preview">
-                {answerState.appliedValue.trim() !== '' ? answerState.appliedValue : <span className="problem-create-placeholder-text">{'\uC815\uB2F5 SQL'}</span>}
+                {answerState.appliedValue.trim() !== '' ? answerState.appliedValue : <span className="problem-create-placeholder-text">정답 SQL</span>}
               </pre>
             )}
           </div>
@@ -667,20 +1017,20 @@ export function ProblemCreateContent() {
         <section className="solve-detail-section problem-create-editor-surface">
           <div className="solve-detail-section-header">
             <div className="solve-detail-section-title-row">
-              <h2 className="solve-detail-section-title">{'\uC5D0\uB514\uD130'}</h2>
+              <h2 className="solve-detail-section-title">에디터</h2>
             </div>
           </div>
           <div className="solve-detail-section-divider">
             <span className="solve-detail-section-divider-line" />
           </div>
           <div className="solve-detail-section-body">
-            <textarea className="text-field problem-create-inline-textarea" value={editorSql} onChange={(event) => setEditorSql(event.target.value)} placeholder={'\uC790\uB3D9\uC644\uC131 \uD655\uC778\uC6A9 SQL\uC744 \uC785\uB825\uD574\uB77C.'} />
+            <textarea className="text-field problem-create-inline-textarea" value={editorSql} onChange={(event) => setEditorSql(event.target.value)} placeholder="자동완성 확인용 SQL을 입력해라." />
           </div>
         </section>
       </div>
 
       <button type="button" className="btn primary problem-create-floating-submit-button" onClick={handleCreateProblem}>
-        {'\uBB38\uC81C \uC0DD\uC131'}
+        문제 저장
       </button>
 
       <StatusPopup open={popupState.open} level={popupState.level} message={popupState.message} onConfirm={() => setPopupState((current) => ({ ...current, open: false }))} />
@@ -706,14 +1056,14 @@ function collectMissingFields(values: {
 }) {
   const missingFields: MissingField[] = [];
 
-  if (values.title.trim() === '') missingFields.push({ key: 'title', label: '\uBB38\uC81C \uC81C\uBAA9' });
-  if (values.description.trim() === '') missingFields.push({ key: 'description', label: '\uC124\uBA85' });
-  if (values.condition.trim() === '') missingFields.push({ key: 'condition', label: '\uC870\uAC74' });
-  if (values.output.trim() === '') missingFields.push({ key: 'output', label: '\uCD9C\uB825' });
-  if (values.outputSample.trim() === '') missingFields.push({ key: 'outputSample', label: '\uCD9C\uB825 \uC608\uC2DC' });
-  if (values.answer.trim() === '') missingFields.push({ key: 'answer', label: '\uC815\uB2F5 SQL' });
-  if (values.ddlPostgresql.trim() === '' && values.ddlOracle.trim() === '') missingFields.push({ key: 'tableInfo', label: '\uD14C\uC774\uBE14 \uC815\uBCF4' });
-  if (values.dataPostgresql.trim() === '' && values.dataOracle.trim() === '') missingFields.push({ key: 'dataSample', label: '\uB370\uC774\uD130 \uC608\uC2DC' });
+  if (values.title.trim() === '') missingFields.push({ key: 'title', label: '문제 제목' });
+  if (values.description.trim() === '') missingFields.push({ key: 'description', label: '설명' });
+  if (values.condition.trim() === '') missingFields.push({ key: 'condition', label: '조건' });
+  if (values.output.trim() === '') missingFields.push({ key: 'output', label: '출력' });
+  if (values.outputSample.trim() === '') missingFields.push({ key: 'outputSample', label: '출력 예시' });
+  if (values.answer.trim() === '') missingFields.push({ key: 'answer', label: '정답 SQL' });
+  if (values.ddlPostgresql.trim() === '' && values.ddlOracle.trim() === '') missingFields.push({ key: 'tableInfo', label: '테이블 정보' });
+  if (values.dataPostgresql.trim() === '' && values.dataOracle.trim() === '') missingFields.push({ key: 'dataSample', label: '데이터 예시' });
 
   return missingFields;
 }

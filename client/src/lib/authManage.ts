@@ -4,94 +4,54 @@ interface ExceptionResponse {
   reasons?: string[];
 }
 
-interface AuthManageMemberResponse {
+interface AuthManageUserRowResponse {
   userId?: string;
-}
-
-interface AuthManageRoleGroupResponse {
-  count?: number;
-  members?: AuthManageMemberResponse[];
-}
-
-interface AuthManageProblemGeneratorMemberResponse {
-  userId?: string;
-  problemIds?: string[];
-}
-
-interface AuthManageProblemGeneratorGroupResponse {
-  count?: number;
-  members?: AuthManageProblemGeneratorMemberResponse[];
+  role?: string;
+  permissionKeys?: string[];
 }
 
 interface AuthManageResponse {
-  admins?: AuthManageRoleGroupResponse;
-  users?: AuthManageRoleGroupResponse;
-  problemGenerators?: AuthManageProblemGeneratorGroupResponse;
+  users?: AuthManageUserRowResponse[];
 }
 
 export type AuthManageRoleValue = 'admin' | 'user' | 'problemGenerator';
 
-export interface AuthManageMemberData {
+export interface AuthManageUserRowData {
   userId: string;
-}
-
-export interface AuthManageRoleGroupData {
-  count: number;
-  members: AuthManageMemberData[];
-}
-
-export interface AuthManageProblemGeneratorMemberData {
-  userId: string;
-  problemIds: string[];
-}
-
-export interface AuthManageProblemGeneratorGroupData {
-  count: number;
-  members: AuthManageProblemGeneratorMemberData[];
+  role: AuthManageRoleValue;
+  permissionKeys: string[];
 }
 
 export interface AuthManageData {
-  admins: AuthManageRoleGroupData;
-  users: AuthManageRoleGroupData;
-  problemGenerators: AuthManageProblemGeneratorGroupData;
+  users: AuthManageUserRowData[];
 }
 
-function parseRoleGroup(data: AuthManageRoleGroupResponse | undefined): AuthManageRoleGroupData {
-  const members = Array.isArray(data?.members)
-    ? data.members
-        .filter((member): member is Required<AuthManageMemberResponse> => typeof member.userId === 'string' && member.userId.trim() !== '')
-        .map((member) => ({
-          userId: member.userId,
-        }))
-    : [];
+function normalizeRole(value: string | undefined): AuthManageRoleValue {
+  if (value === 'admin') {
+    return 'admin';
+  }
 
-  return {
-    count: typeof data?.count === 'number' ? data.count : members.length,
-    members,
-  };
+  if (value === 'problemGenerator') {
+    return 'problemGenerator';
+  }
+
+  return 'user';
 }
 
-function parseProblemGeneratorGroup(
-  data: AuthManageProblemGeneratorGroupResponse | undefined,
-): AuthManageProblemGeneratorGroupData {
-  const members = Array.isArray(data?.members)
-    ? data.members
-        .filter(
-          (member): member is Required<Pick<AuthManageProblemGeneratorMemberResponse, 'userId'>> & AuthManageProblemGeneratorMemberResponse =>
-            typeof member.userId === 'string' && member.userId.trim() !== '',
-        )
-        .map((member) => ({
-          userId: member.userId,
-          problemIds: Array.isArray(member.problemIds)
-            ? member.problemIds.filter((problemId): problemId is string => typeof problemId === 'string' && problemId.trim() !== '')
-            : [],
-        }))
-    : [];
+function parseAuthManageUsers(data: AuthManageUserRowResponse[] | undefined): AuthManageUserRowData[] {
+  if (!Array.isArray(data)) {
+    return [];
+  }
 
-  return {
-    count: typeof data?.count === 'number' ? data.count : members.length,
-    members,
-  };
+  return data
+    .filter((user): user is Required<Pick<AuthManageUserRowResponse, 'userId'>> & AuthManageUserRowResponse => typeof user.userId === 'string' && user.userId.trim() !== '')
+    .map((user) => ({
+      userId: user.userId,
+      role: normalizeRole(user.role),
+      permissionKeys: Array.isArray(user.permissionKeys)
+        ? user.permissionKeys.filter((permissionKey): permissionKey is string => typeof permissionKey === 'string' && permissionKey.trim() !== '')
+        : [],
+    }));
 }
 
 async function getErrorMessage(response: Response, fallbackMessage: string) {
@@ -124,11 +84,8 @@ export async function fetchAuthManage(): Promise<AuthManageData> {
 
   try {
     const data = (await response.json()) as AuthManageResponse;
-
     return {
-      admins: parseRoleGroup(data.admins),
-      users: parseRoleGroup(data.users),
-      problemGenerators: parseProblemGeneratorGroup(data.problemGenerators),
+      users: parseAuthManageUsers(data.users),
     };
   } catch {
     throw new Error('권한 목록을 불러오지 못했다.');
@@ -156,7 +113,7 @@ export async function updateUserRole(userId: string, role: AuthManageRoleValue) 
   }
 }
 
-export async function updateProblemGeneratorPermissions(userId: string, problemIds: string[]) {
+export async function updateProblemGeneratorPermissions(userId: string, permissionKeys: string[]) {
   let response: Response;
 
   try {
@@ -166,7 +123,7 @@ export async function updateProblemGeneratorPermissions(userId: string, problemI
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-      body: JSON.stringify({ problemIds }),
+      body: JSON.stringify({ permissionKeys }),
     });
   } catch {
     throw new Error('문제 권한을 저장하지 못했다.');

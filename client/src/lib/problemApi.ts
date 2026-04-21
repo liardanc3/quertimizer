@@ -1,6 +1,8 @@
 import { getApiBaseUrl } from './authApi';
 import type { DbmsType, ProblemSubmittedHistory, ProblemSummary } from '../types/domain';
 
+export type { DbmsType };
+
 interface ProblemSubmittedHistoryResponse {
   dbms?: string;
   userId?: string;
@@ -40,6 +42,8 @@ interface ProblemDetailResponse {
   condition?: string;
   output?: string;
   outputSample?: string;
+  answer?: string;
+  answerHash?: string;
   dbms?: string;
 }
 
@@ -53,6 +57,10 @@ interface ProblemSetDetailResponse {
   ddlOracle?: string;
   dataPostgresql?: string;
   dataOracle?: string;
+}
+
+interface AdminProblemOptionResponse {
+  problemId?: string;
 }
 
 export interface ProblemSampleTableData {
@@ -77,6 +85,8 @@ export interface ProblemDetailData {
   condition: string;
   output: string;
   outputSample: string;
+  answer: string;
+  answerHash: string;
   dbms: DbmsType;
 }
 
@@ -101,8 +111,12 @@ export interface CreateProblemPayload {
   output: string;
   outputSample: string;
   answer: string;
+  answerSql?: string;
   problemSetMode: 'existing' | 'new';
+  problemMode: 'existing' | 'new';
   problemSetId?: string;
+  problemId?: string;
+  dbms?: DbmsType;
   dataPostgresql?: string;
   dataOracle?: string;
 }
@@ -219,7 +233,9 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       typeof data.dataOracle !== 'string' ||
       typeof data.condition !== 'string' ||
       typeof data.output !== 'string' ||
-      typeof data.outputSample !== 'string'
+      typeof data.outputSample !== 'string' ||
+      typeof data.answer !== 'string' ||
+      typeof data.answerHash !== 'string'
     ) {
       throw new Error();
     }
@@ -235,6 +251,8 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       condition: data.condition,
       output: data.output,
       outputSample: data.outputSample,
+      answer: data.answer,
+      answerHash: data.answerHash,
       dbms: toDbmsType(data.dbms),
     };
   } catch {
@@ -396,6 +414,35 @@ export async function fetchProblemSetDetail(problemSetId: string): Promise<Probl
     };
   } catch {
     throw new Error('테이블셋 상세 조회에 실패했다.');
+  }
+}
+
+export async function fetchAdminProblemOptions(problemSetId: string): Promise<string[]> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/admin/problem-sets/${encodeURIComponent(problemSetId)}/problems`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error('문제 목록 조회에 실패했다.');
+  }
+
+  if (!response.ok) {
+    throw new Error('문제 목록 조회에 실패했다.');
+  }
+
+  try {
+    const data = (await response.json()) as AdminProblemOptionResponse[];
+
+    return Array.isArray(data)
+      ? data
+          .filter((item): item is Required<AdminProblemOptionResponse> => typeof item.problemId === 'string')
+          .map((item) => item.problemId)
+      : [];
+  } catch {
+    throw new Error('문제 목록 조회에 실패했다.');
   }
 }
 

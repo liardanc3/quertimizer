@@ -53,10 +53,6 @@ interface DuplicateCheckResponse {
   reason?: string | null;
 }
 
-interface FindUserIdResponse {
-  userId?: string;
-}
-
 interface SessionMeResponse {
   authenticated?: boolean;
   userId?: string | null;
@@ -104,10 +100,6 @@ export class RecoveryApiError extends Error {
 export interface DuplicateCheckResult {
   available: boolean;
   reason: string | null;
-}
-
-export interface FindUserIdResult {
-  userId: string;
 }
 
 export interface SessionMeResult {
@@ -397,28 +389,6 @@ export async function checkDuplicateUserId(userId: string) {
 
 export async function checkDuplicateEmail(email: string) {
   return requestDuplicateCheck('/duplicate-check/email', 'email', email, '이메일 중복확인 요청에 실패했습니다.');
-}
-
-export async function sendUserIdRecoveryCode(payload: AccountRecoveryEmailPayload) {
-  await requestRecovery('/find-id/send-code', payload, '아이디 찾기 인증코드 발송에 실패했습니다.');
-}
-
-export async function findUserId(payload: AccountRecoveryCodePayload) {
-  const response = await requestRecovery('/find-id/verify-code', payload, '아이디 찾기 요청에 실패했습니다.');
-
-  try {
-    const data = (await response.json()) as FindUserIdResponse;
-
-    if (typeof data.userId !== 'string' || data.userId.trim() === '') {
-      throw new Error();
-    }
-
-    return {
-      userId: data.userId,
-    } satisfies FindUserIdResult;
-  } catch {
-    throw new RecoveryApiError(response.status, ['아이디 찾기 응답을 확인할 수 없습니다.'], '아이디 찾기 요청에 실패했습니다.');
-  }
 }
 
 export async function sendPasswordResetCode(payload: AccountRecoveryEmailPayload) {

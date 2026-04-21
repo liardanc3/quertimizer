@@ -8,10 +8,12 @@ const REMEMBER_AUTH_STORAGE_KEY = 'quertimizer.remember-authenticated';
 const AUTH_CHANGE_EVENT = 'quertimizer:auth-change';
 const SESSION_ALERT_CHANGE_EVENT = 'quertimizer:session-alert-change';
 
-interface SessionAlert {
+export interface SessionAlert {
   level: 1 | 2 | 3;
   message: string;
   confirmLabel: string;
+  display?: 'popup' | 'toast';
+  autoDismissMs?: number;
 }
 
 interface SessionSnapshot {
@@ -280,6 +282,20 @@ export function dismissSessionAlert() {
   }
 
   updateSessionAlert(null);
+}
+
+export function showSessionToast(message: string, autoDismissMs = 2200) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  updateSessionAlert({
+    level: 1,
+    message,
+    confirmLabel: '확인',
+    display: 'toast',
+    autoDismissMs,
+  });
 }
 
 export function useSessionAlert() {

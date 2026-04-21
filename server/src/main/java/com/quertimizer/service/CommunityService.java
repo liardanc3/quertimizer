@@ -1,5 +1,9 @@
 package com.quertimizer.service;
 
+import com.quertimizer.alarm.CommunityPostLikeAlarm;
+import com.quertimizer.alarm.CommunityPostCommentAlarm;
+import com.quertimizer.alarm.CommunityCommentReplyAlarm;
+import com.quertimizer.alarm.CommunityCommentLikeAlarm;
 import com.quertimizer.endpoint.api.dto.request.CommunityCommentCreateReq;
 import com.quertimizer.endpoint.api.dto.request.CommunityPostSaveReq;
 import com.quertimizer.endpoint.api.dto.response.CommunityCommentRes;
@@ -45,6 +49,7 @@ public class CommunityService {
     private final CommunityPostLikeRepository communityPostLikeRepository;
     private final CommunityCommentLikeRepository communityCommentLikeRepository;
     private final CommunitySearchService communitySearchService;
+    private final AlarmService alarmService;
 
     @Transactional(readOnly = true)
     public CommunityPostPageRes getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
@@ -170,6 +175,7 @@ public class CommunityService {
                     communityPostLikeRepository.save(CommunityPostLike.create(postId, userId));
                     post.increaseLikeCount();
                     communitySearchService.syncPost(post, createTags(postId));
+                    publishPostLikeAlarm(post, userId);
                     return new CommunityReactionRes(true, post.getLikeCount());
                 });
     }
@@ -177,6 +183,10 @@ public class CommunityService {
     public Optional<CommunityCommentRes> addComment(String postId, String userId, CommunityCommentCreateReq request) {
         return communityPostRepository.findById(postId)
                 .map(post -> {
+                    Optional<CommunityComment> parentComment = Optional.ofNullable(request.getParentCommentId())
+                            .flatMap(communityCommentRepository::findById)
+                            .filter(currentComment -> currentComment.getPostId().equals(postId));
+
                     // 댓글 저장 후 댓글 수, 검색 인덱스 갱신
                     CommunityComment comment = communityCommentRepository.save(
                             CommunityComment.create(
@@ -188,6 +198,7 @@ public class CommunityService {
                     );
                     post.increaseCommentCount();
                     communitySearchService.syncPost(post, createTags(postId));
+                    publishCommentAlarms(post, comment, parentComment, userId);
                     return new CommunityCommentRes(
                             comment.getCommentId(),
                             comment.getUserId(),
@@ -214,6 +225,7 @@ public class CommunityService {
 
                     communityCommentLikeRepository.save(CommunityCommentLike.create(commentId, userId));
                     comment.increaseLikeCount();
+                    publishCommentLikeAlarm(comment, userId);
                     return new CommunityReactionRes(true, comment.getLikeCount());
                 });
     }
@@ -236,6 +248,56 @@ public class CommunityService {
                 .limit(10)
                 .map(entry -> new CommunityTagSuggestionRes(entry.getKey(), entry.getValue()))
                 .toList();
+    }
+
+    private void publishPostLikeAlarm(CommunityPost post, String actorUserId) {
+        if (post.getUserId().equals(actorUserId)) {
+            return;
+        }
+
+        alarmService.publish(new CommunityPostLikeAlarm(post.getUserId(), actorUserId, post.getPostId(), post.getTitle()));
+    }
+
+    private void publishCommentAlarms(CommunityPost post,
+                                      CommunityComment comment,
+                                      Optional<CommunityComment> parentComment,
+                                      String actorUserId) {
+        boolean isReplyAlarmDelivered = false;
+
+        if (parentComment.isPresent() && !parentComment.get().getUserId().equals(actorUserId)) {
+            alarmService.publish(new CommunityCommentReplyAlarm(
+                    parentComment.get().getUserId(),
+                    actorUserId,
+                    post.getPostId(),
+                    comment.getContent(),
+                    comment.getCommentId()
+            ));
+            isReplyAlarmDelivered = true;
+        }
+
+        if (post.getUserId().equals(actorUserId)) {
+            return;
+        }
+
+        if (isReplyAlarmDelivered && parentComment.map(currentComment -> currentComment.getUserId().equals(post.getUserId())).orElse(false)) {
+            return;
+        }
+
+        alarmService.publish(new CommunityPostCommentAlarm(
+                post.getUserId(),
+                actorUserId,
+                post.getPostId(),
+                comment.getContent(),
+                comment.getCommentId()
+        ));
+    }
+
+    private void publishCommentLikeAlarm(CommunityComment comment, String actorUserId) {
+        if (comment.getUserId().equals(actorUserId)) {
+            return;
+        }
+
+        alarmService.publish(new CommunityCommentLikeAlarm(comment.getUserId(), actorUserId, comment.getPostId(), comment.getContent(), comment.getCommentId()));
     }
 
     private Map<String, List<String>> createTagsByPostId(List<String> postIds) {

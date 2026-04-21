@@ -1,0 +1,17 @@
+.page-load-failure-state {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 10rem;
+  padding: 1rem;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page-load-failure-state {
+    color: var(--ink-subtle);
+  }
+}
