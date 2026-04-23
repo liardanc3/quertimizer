@@ -41,7 +41,7 @@ export default function CommunityPostList({
     <section className="community-board-table" role="table" aria-label="커뮤니티 게시글 목록">
       <div className="community-board-head" role="row">
         <span role="columnheader">제목</span>
-        <span role="columnheader">아이디</span>
+        <span role="columnheader">Handle</span>
         <span role="columnheader">작성일</span>
         <span role="columnheader">조회수</span>
         <span role="columnheader">좋아요</span>

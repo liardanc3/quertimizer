@@ -183,11 +183,11 @@ function parseRoute(pathname: string): AppRoute {
 export default function AppRouter() {
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const route = parseRoute(pathname);
-  const { isAuthenticated, userIdSetupRequired } = useMockSession();
-  const shouldRequireUserIdSetup = isAuthenticated && userIdSetupRequired;
+  const { isAuthenticated, handleSetupRequired } = useMockSession();
+  const shouldRequireHandleSetup = isAuthenticated && handleSetupRequired;
 
   useEffect(() => {
-    if (!shouldRequireUserIdSetup) {
+    if (!shouldRequireHandleSetup) {
       return;
     }
 
@@ -196,9 +196,9 @@ export default function AppRouter() {
     }
 
     navigate(PROBLEMS_PATH, { replace: true });
-  }, [pathname, route.type, shouldRequireUserIdSetup]);
+  }, [pathname, route.type, shouldRequireHandleSetup]);
 
-  if (shouldRequireUserIdSetup) {
+  if (shouldRequireHandleSetup) {
     if (route.type === 'problem') {
       return <ProblemSolvePage key={route.problemId} problemId={route.problemId} />;
     }

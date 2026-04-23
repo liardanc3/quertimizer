@@ -59,7 +59,7 @@ export interface SubmitHistoryPlanFilters {
 
 export interface SubmitHistoryEntry {
   submitId: string;
-  userId: string;
+  handle: string;
   dbms: DbmsType;
   problemId: string;
   submittedAt: string;
@@ -109,7 +109,7 @@ export interface RuntimeLeaderboardEntry {
 
 export interface ProblemSubmittedHistory {
   dbms: DbmsType;
-  userId: string;
+  handle: string;
   executionPlanElement: number;
   executionTimeMs: number;
   cost?: number;
@@ -235,7 +235,7 @@ export interface Profile {
 }
 
 export interface RankingEntry {
-  userId: string;
+  handle: string;
   solvedCount: number;
   avgExecutionPercentile: number;
   monthlyRankDelta: Record<RankingMetricKey, number>;

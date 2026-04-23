@@ -1,0 +1,274 @@
+package com.quertimizer.user.domain.entity;
+
+import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.global.constant.UserRole;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+@Entity
+@Table(name = "user")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class User {
+
+    @Id
+    @Column(nullable = false, unique = true, length = 255)
+    private String email;
+
+    @Column(name = "handle", unique = true, length = 50)
+    private String handle;
+
+    @Column(nullable = false, length = 128)
+    private String password;
+
+    @Column(columnDefinition = "TEXT")
+    private String bio;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_dbms", length = 20)
+    private DbmsType defaultDbms;
+
+    @Column(name = "sql_public")
+    private Boolean sqlPublic;
+
+    @Column(name = "execution_percentile_public")
+    private Boolean executionPercentilePublic;
+
+    @Column(name = "solved_records_public")
+    private Boolean solvedRecordsPublic;
+
+    @Column(name = "solved_problem_count_public")
+    private Boolean solvedProblemCountPublic;
+
+    @Column(name = "solved_problem_count")
+    private Integer solvedProblemCount;
+
+    @Column(name = "solved_execution_time_sum_ms")
+    private Long solvedExecutionTimeSumMs;
+
+    @Column(name = "signup_at", nullable = false)
+    private LocalDateTime signupAt;
+
+    @Column(name = "last_access_ip", length = 64)
+    private String lastAccessIp;
+
+    @Column(name = "last_access_at")
+    private LocalDateTime lastAccessAt;
+
+    @Column(name = "blocked_user")
+    private Boolean blockedUser;
+
+    @Column(name = "blocked_at")
+    private LocalDateTime blockedAt;
+
+    public static User create(String handle, String doubleHashedPassword, String email) {
+        // 일반 회원가입 완료 사용자는 기본 공개 설정과 기본 DBMS를 함께 초기화한다.
+        return new User(
+                email,
+                handle,
+                doubleHashedPassword,
+                "",
+                UserRole.USER,
+                DbmsType.POSTGRESQL,
+                false,
+                true,
+                true,
+                true,
+                0,
+                0L,
+                LocalDateTime.now(),
+                null,
+                null,
+                false,
+                null
+        );
+    }
+
+    public static User createPending(String doubleHashedPassword, String email) {
+        // 소셜 로그인 또는 이메일 가입 직후 Handle 설정 전 사용자는 handle 없이 임시 상태로 생성한다.
+        return new User(
+                email,
+                null,
+                doubleHashedPassword,
+                "",
+                UserRole.USER,
+                DbmsType.POSTGRESQL,
+                false,
+                true,
+                true,
+                true,
+                0,
+                0L,
+                LocalDateTime.now(),
+                null,
+                null,
+                false,
+                null
+        );
+    }
+
+    public void configureHandle(String handle) {
+        // 최초 로그인 직후 강제되는 Handle 설정에서만 handle를 채운다.
+        this.handle = handle;
+    }
+
+    public void changePassword(String password) {
+        // 비밀번호 찾기 완료 후 이중 해시된 비밀번호로 교체한다.
+        this.password = password;
+    }
+
+    public void changeRole(UserRole role) {
+        // 권한 설정 페이지에서 사용자 역할을 변경할 때 사용한다.
+        this.role = role;
+    }
+
+    public void changeProfile(String bio,
+                              DbmsType defaultDbms,
+                              boolean sqlPublic,
+                              boolean executionPercentilePublic,
+                              boolean solvedRecordsPublic,
+                              boolean solvedProblemCountPublic) {
+        // 프로필 공개 설정과 기본 DBMS를 한 번에 갱신한다.
+        this.bio = bio;
+        this.defaultDbms = defaultDbms;
+        this.sqlPublic = sqlPublic;
+        this.executionPercentilePublic = executionPercentilePublic;
+        this.solvedRecordsPublic = solvedRecordsPublic;
+        this.solvedProblemCountPublic = solvedProblemCountPublic;
+    }
+
+    public void changeSolvedStatistics(int solvedProblemCount, long solvedExecutionTimeSumMs) {
+        // 프로필 집계 화면에서 사용하는 해결 수와 실행 시간 누적값을 반영한다.
+        this.solvedProblemCount = solvedProblemCount;
+        this.solvedExecutionTimeSumMs = solvedExecutionTimeSumMs;
+    }
+
+    public void updateLastAccess(String accessIp, LocalDateTime accessedAt) {
+        // 같은 IP에서 짧은 시간 안에 반복 호출된 경우에는 마지막 접속 정보를 과하게 갱신하지 않는다.
+        if (accessIp == null || accessIp.isBlank()) {
+            return;
+        }
+
+        if (Objects.equals(lastAccessIp, accessIp)
+                && lastAccessAt != null
+                && !lastAccessAt.isBefore(accessedAt.minusMinutes(1))) {
+            return;
+        }
+
+        this.lastAccessIp = accessIp;
+        this.lastAccessAt = accessedAt;
+    }
+
+    public void block() {
+        // 사용자 차단 시 차단 여부와 시점을 함께 남긴다.
+        this.blockedUser = true;
+        this.blockedAt = LocalDateTime.now();
+    }
+
+    public void unblock() {
+        // 차단 해제 시 차단 상태와 시점을 함께 초기화한다.
+        this.blockedUser = false;
+        this.blockedAt = null;
+    }
+
+    public String getResolvedBio() {
+        // 프로필 응답에서는 null 대신 빈 문자열을 사용한다.
+        return bio != null ? bio : "";
+    }
+
+    public UserRole getResolvedRole() {
+        return role != null ? role : UserRole.USER;
+    }
+
+    public DbmsType getResolvedDefaultDbms() {
+        // 기본 DBMS가 비어 있는 오래된 데이터는 PostgreSQL로 간주한다.
+        return defaultDbms != null ? defaultDbms : DbmsType.POSTGRESQL;
+    }
+
+    public boolean isSqlPublicEnabled() {
+        return Boolean.TRUE.equals(sqlPublic);
+    }
+
+    public boolean isExecutionPercentilePublicEnabled() {
+        return Boolean.TRUE.equals(executionPercentilePublic);
+    }
+
+    public boolean isSolvedRecordsPublicEnabled() {
+        return Boolean.TRUE.equals(solvedRecordsPublic);
+    }
+
+    public boolean isSolvedProblemCountPublicEnabled() {
+        return Boolean.TRUE.equals(solvedProblemCountPublic);
+    }
+
+    public int getResolvedSolvedProblemCount() {
+        // 통계 응답에서 null-safe 정수 값을 보장한다.
+        return solvedProblemCount != null ? solvedProblemCount : 0;
+    }
+
+    public long getResolvedSolvedExecutionTimeSumMs() {
+        // 통계 응답에서 null-safe 실행 시간 누적값을 보장한다.
+        return solvedExecutionTimeSumMs != null ? solvedExecutionTimeSumMs : 0L;
+    }
+
+    public boolean hasHandle() {
+        // Handle 설정 완료 여부를 판단할 때 사용한다.
+        return handle != null && !handle.isBlank();
+    }
+
+    public boolean isBlocked() {
+        // 차단 여부는 nullable boolean 대신 null-safe 도메인 메서드로 판단한다.
+        return Boolean.TRUE.equals(blockedUser);
+    }
+
+    private User(String email,
+                 String handle,
+                 String password,
+                 String bio,
+                 UserRole role,
+                 DbmsType defaultDbms,
+                 Boolean sqlPublic,
+                 Boolean executionPercentilePublic,
+                 Boolean solvedRecordsPublic,
+                 Boolean solvedProblemCountPublic,
+                 Integer solvedProblemCount,
+                 Long solvedExecutionTimeSumMs,
+                 LocalDateTime signupAt,
+                 String lastAccessIp,
+                 LocalDateTime lastAccessAt,
+                 Boolean blockedUser,
+                 LocalDateTime blockedAt) {
+        this.email = email;
+        this.handle = handle;
+        this.password = password;
+        this.bio = bio;
+        this.role = role;
+        this.defaultDbms = defaultDbms;
+        this.sqlPublic = sqlPublic;
+        this.executionPercentilePublic = executionPercentilePublic;
+        this.solvedRecordsPublic = solvedRecordsPublic;
+        this.solvedProblemCountPublic = solvedProblemCountPublic;
+        this.solvedProblemCount = solvedProblemCount;
+        this.solvedExecutionTimeSumMs = solvedExecutionTimeSumMs;
+        this.signupAt = signupAt;
+        this.lastAccessIp = lastAccessIp;
+        this.lastAccessAt = lastAccessAt;
+        this.blockedUser = blockedUser;
+        this.blockedAt = blockedAt;
+    }
+
+}

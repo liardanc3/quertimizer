@@ -5,7 +5,7 @@ interface ExceptionResponse {
 }
 
 interface AuthManageUserRowResponse {
-  userId?: string;
+  handle?: string;
   role?: string;
   permissionKeys?: string[];
 }
@@ -17,7 +17,7 @@ interface AuthManageResponse {
 export type AuthManageRoleValue = 'admin' | 'user' | 'problemGenerator';
 
 export interface AuthManageUserRowData {
-  userId: string;
+  handle: string;
   role: AuthManageRoleValue;
   permissionKeys: string[];
 }
@@ -44,9 +44,9 @@ function parseAuthManageUsers(data: AuthManageUserRowResponse[] | undefined): Au
   }
 
   return data
-    .filter((user): user is Required<Pick<AuthManageUserRowResponse, 'userId'>> & AuthManageUserRowResponse => typeof user.userId === 'string' && user.userId.trim() !== '')
+    .filter((user): user is Required<Pick<AuthManageUserRowResponse, 'handle'>> & AuthManageUserRowResponse => typeof user.handle === 'string' && user.handle.trim() !== '')
     .map((user) => ({
-      userId: user.userId,
+      handle: user.handle,
       role: normalizeRole(user.role),
       permissionKeys: Array.isArray(user.permissionKeys)
         ? user.permissionKeys.filter((permissionKey): permissionKey is string => typeof permissionKey === 'string' && permissionKey.trim() !== '')
@@ -92,11 +92,11 @@ export async function fetchAuthManage(): Promise<AuthManageData> {
   }
 }
 
-export async function updateUserRole(userId: string, role: AuthManageRoleValue) {
+export async function updateUserRole(handle: string, role: AuthManageRoleValue) {
   let response: Response;
 
   try {
-    response = await fetch(`${getApiBaseUrl()}/admin/auth-manage/users/${encodeURIComponent(userId)}/role`, {
+    response = await fetch(`${getApiBaseUrl()}/admin/auth-manage/users/${encodeURIComponent(handle)}/role`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -113,11 +113,11 @@ export async function updateUserRole(userId: string, role: AuthManageRoleValue) 
   }
 }
 
-export async function updateProblemGeneratorPermissions(userId: string, permissionKeys: string[]) {
+export async function updateProblemGeneratorPermissions(handle: string, permissionKeys: string[]) {
   let response: Response;
 
   try {
-    response = await fetch(`${getApiBaseUrl()}/admin/auth-manage/problem-generators/${encodeURIComponent(userId)}/permissions`, {
+    response = await fetch(`${getApiBaseUrl()}/admin/auth-manage/problem-generators/${encodeURIComponent(handle)}/permissions`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

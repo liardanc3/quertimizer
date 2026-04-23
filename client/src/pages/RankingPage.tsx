@@ -393,7 +393,7 @@ export default function RankingPage() {
                 </div>
               ) : (
                 rankedEntries.map((entry) => (
-                  <article key={`${selectedDbms}-${entry.userId}`} className="submit-history-row submit-history-body ranking-body" role="row">
+                  <article key={`${selectedDbms}-${entry.handle}`} className="submit-history-row submit-history-body ranking-body" role="row">
                     <span className="submit-history-cell" role="cell" data-label="순위">
                       {entry.rank}
                     </span>
@@ -401,10 +401,10 @@ export default function RankingPage() {
                       <button
                         type="button"
                         className="submit-history-link-button"
-                        onClick={(event) => openHandleMenu(entry.userId, event.currentTarget)}
-                        aria-label={`${entry.userId} Handle 메뉴 열기`}
+                        onClick={(event) => openHandleMenu(entry.handle, event.currentTarget)}
+                        aria-label={`${entry.handle} Handle 메뉴 열기`}
                       >
-                        {entry.userId}
+                        {entry.handle}
                       </button>
                     </span>
                     <span className="submit-history-cell" role="cell" data-label="해결한 문제">

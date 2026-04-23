@@ -119,7 +119,7 @@ function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: bool
 
 export default function HomePage() {
   useHomeSiteTitle();
-  const { isAuthenticated, isReady, userId } = useMockSession();
+  const { isAuthenticated, isReady, handle } = useMockSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<HomePageFavoriteSnapshot>('home'), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search));
@@ -241,11 +241,11 @@ export default function HomePage() {
       problemPage.problems.map((problem) => ({
         ...problem,
         isSolved:
-          canShowSolveState && userId != null
-            ? (problem.submittedHistories ?? []).some((submittedHistory) => submittedHistory.userId === userId)
+          canShowSolveState && handle != null
+            ? (problem.submittedHistories ?? []).some((submittedHistory) => submittedHistory.handle === handle)
             : null,
       })),
-    [canShowSolveState, problemPage.problems, userId]
+    [canShowSolveState, problemPage.problems, handle]
   );
 
   function applySearch(value: string) {

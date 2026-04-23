@@ -9,7 +9,7 @@ import type {
 
 interface SubmitHistoryItemResponse {
   submitId?: string;
-  userId?: string;
+  handle?: string;
   dbms?: string;
   problemId?: string;
   submittedAt?: string;
@@ -49,7 +49,7 @@ function toDbmsType(value?: string) {
 function toSubmitHistoryEntry(item: Required<SubmitHistoryItemResponse>): SubmitHistoryEntry {
   return {
     submitId: item.submitId,
-    userId: item.userId,
+    handle: item.handle,
     dbms: toDbmsType(item.dbms),
     problemId: item.problemId,
     submittedAt: item.submittedAt,
@@ -158,7 +158,7 @@ export async function fetchSubmitHistories(params: FetchSubmitHistoriesParams): 
         .filter(
           (history): history is Required<SubmitHistoryItemResponse> =>
             typeof history.submitId === 'string' &&
-            typeof history.userId === 'string' &&
+            typeof history.handle === 'string' &&
             typeof history.problemId === 'string' &&
             typeof history.submittedAt === 'string' &&
             typeof history.success === 'boolean' &&

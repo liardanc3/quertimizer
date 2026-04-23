@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { AuthApiError, SignupApiError, setupUserId } from '../../lib/authApi';
+import { AuthApiError, SignupApiError, setupHandle } from '../../lib/authApi';
 import { completeAuthentication } from '../../lib/authSession';
 import { useMockSession } from '../../lib/session';
 
 const HANDLE_PATTERN = /^[A-Za-z0-9_-]{1,15}$/;
 const HANDLE_HINT = '영문, 숫자, 언더스코어(_)와 하이픈(-)만 사용할 수 있으며 최대 15자까지 입력할 수 있습니다.';
-const HANDLE_NOTICE = 'Handle은 타인에게 노출되는 아이디입니다. 한번 설정 시 변경할 수 없습니다.';
+const HANDLE_NOTICE = 'Handle은 타인에게 노출되는 이름입니다. 한번 설정 시 변경할 수 없습니다.';
 const DUPLICATED_HANDLE_REASON = '사용중인 Handle 입니다.';
 
 function sanitizeHandle(value: string) {
@@ -13,7 +13,7 @@ function sanitizeHandle(value: string) {
 }
 
 export default function HandleSetupGate() {
-  const { userIdSetupRequired } = useMockSession();
+  const { handleSetupRequired } = useMockSession();
   const [handleValue, setHandleValue] = useState('');
   const [errorReasons, setErrorReasons] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,30 +31,30 @@ export default function HandleSetupGate() {
       return;
     }
 
-    document.body.classList.toggle('handle-setup-locked', userIdSetupRequired);
+    document.body.classList.toggle('handle-setup-locked', handleSetupRequired);
 
     return () => {
       document.body.classList.remove('handle-setup-locked');
     };
-  }, [userIdSetupRequired]);
+  }, [handleSetupRequired]);
 
   useEffect(() => {
-    if (userIdSetupRequired) {
+    if (handleSetupRequired) {
       return;
     }
 
     setHandleValue('');
     setErrorReasons([]);
     setIsSubmitting(false);
-  }, [userIdSetupRequired]);
+  }, [handleSetupRequired]);
 
-  if (!userIdSetupRequired) {
+  if (!handleSetupRequired) {
     return null;
   }
 
   function applySetupErrorReasons(reasons: string[]) {
     for (const reason of reasons) {
-      if (reason.includes('아이디')) {
+      if (reason.includes('Handle')) {
         setErrorReasons([DUPLICATED_HANDLE_REASON]);
         return;
       }
@@ -72,8 +72,8 @@ export default function HandleSetupGate() {
       setIsSubmitting(true);
       setErrorReasons([]);
 
-      const session = await setupUserId({
-        userId: normalizedHandle,
+      const session = await setupHandle({
+        handle: normalizedHandle,
       });
 
       await completeAuthentication(session);

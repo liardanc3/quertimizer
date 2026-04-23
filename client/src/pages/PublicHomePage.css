@@ -316,27 +316,6 @@
   color: #0f5db3;
 }
 
-.login-remember-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.34rem;
-  width: fit-content;
-  cursor: pointer;
-}
-
-.login-remember-checkbox {
-  width: 1rem;
-  height: 1rem;
-  margin: 0;
-  accent-color: #2563eb;
-}
-
-.login-remember-label {
-  color: #57739e;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
 .signup-overlay-layout {
   width: min(1024px, 100%);
   display: grid;
@@ -857,13 +836,13 @@
 
   .landing-login-submit.btn.primary:disabled,
   .signup-card .btn.primary:disabled {
-    border-color: rgba(148, 163, 184, 0.16);
+    border-color: rgba(148, 163, 184, 0.32);
     background: rgba(30, 41, 59, 0.78);
-    color: rgba(203, 213, 225, 0.46);
+    color: rgba(203, 213, 225, 0.66);
   }
 
   .account-recovery-overlay .btn.secondary:not(:disabled) {
-    border-color: rgba(148, 163, 184, 0.22);
+    border-color: var(--line-soft);
     background: rgba(15, 23, 42, 0.7);
     color: var(--ink-base);
   }
@@ -876,9 +855,9 @@
   }
 
   .account-recovery-overlay .btn.secondary:disabled {
-    border-color: rgba(148, 163, 184, 0.14);
+    border-color: rgba(148, 163, 184, 0.28);
     background: rgba(15, 23, 42, 0.46);
-    color: rgba(148, 163, 184, 0.54);
+    color: rgba(183, 196, 216, 0.68);
   }
 
   .landing-login-panel .signup-feedback-message,

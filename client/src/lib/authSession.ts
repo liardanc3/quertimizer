@@ -3,8 +3,8 @@ import { connectSessionSocket, disconnectSessionSocket, isSessionSocketOpen } fr
 import type { SessionMeResult } from './authApi';
 import { applyAuthenticatedSession, syncSession, useMockSession } from './session';
 
-export async function completeAuthentication(session: SessionMeResult, rememberLogin = false) {
-  applyAuthenticatedSession(session, rememberLogin);
+export async function completeAuthentication(session: SessionMeResult) {
+  applyAuthenticatedSession(session);
 
   if (!session.authenticated) {
     return;

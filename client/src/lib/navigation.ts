@@ -10,7 +10,7 @@ export const COMMUNITY_WRITE_PATH = '/community/write';
 export const PROFILE_PATH = '/profile';
 export const PROFILE_ACTIVITY_PATH = '/profile/activity';
 export const LANDING_SIGNUP_PATH = '/#signup';
-export const LANDING_SETUP_USER_ID_PATH = '/#setup-user-id';
+export const LANDING_SETUP_HANDLE_PATH = '/#setup-handle';
 export const LANDING_RESET_PASSWORD_PATH = '/#reset-password';
 export const DEFAULT_PROBLEM_PATH = PROBLEMS_PATH;
 

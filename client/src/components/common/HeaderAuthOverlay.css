@@ -219,19 +219,6 @@ body.header-auth-locked {
   height: 100%;
 }
 
-.header-auth-remember-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: #64748b;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.header-auth-remember-checkbox {
-  margin: 0;
-}
-
 .header-auth-login-actions,
 .header-auth-reset-actions {
   display: grid;
@@ -378,7 +365,6 @@ body.header-auth-locked {
   }
 
   .header-auth-modal-description,
-  .header-auth-remember-row,
   .header-auth-reset-link,
   .header-auth-field-hint,
   .header-auth-feedback {

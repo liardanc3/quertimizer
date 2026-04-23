@@ -38,9 +38,9 @@ function readActiveTab(): ActivityTab {
   return tab === 'comments' || tab === 'likes' ? tab : 'posts';
 }
 
-export default function ProfileActivityPage({ handle }: ProfileActivityPageProps) {
-  const { userId } = useMockSession();
-  const resolvedUserId = handle ?? userId;
+export default function ProfileActivityPage({ handle: profileHandle }: ProfileActivityPageProps) {
+  const { handle: currentHandle } = useMockSession();
+  const resolvedHandle = profileHandle ?? currentHandle;
   const [activeTab, setActiveTab] = useState<ActivityTab>(readActiveTab());
   const [posts, setPosts] = useState<ProfileCommunityPost[]>([]);
   const [likedPosts, setLikedPosts] = useState<ProfileCommunityPost[]>([]);
@@ -49,7 +49,7 @@ export default function ProfileActivityPage({ handle }: ProfileActivityPageProps
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!resolvedUserId) {
+    if (!resolvedHandle) {
       setPosts([]);
       setLikedPosts([]);
       setComments([]);
@@ -61,9 +61,9 @@ export default function ProfileActivityPage({ handle }: ProfileActivityPageProps
     setIsLoading(true);
     setErrorMessage(null);
 
-    const loadPosts = handle ? fetchCommunityPostsByUser(resolvedUserId) : fetchMyCommunityPosts();
-    const loadLikedPosts = handle ? fetchLikedPostsByUser(resolvedUserId) : fetchMyLikedPosts();
-    const loadComments = handle ? fetchCommunityCommentsByUser(resolvedUserId) : fetchMyCommunityComments();
+    const loadPosts = profileHandle ? fetchCommunityPostsByUser(resolvedHandle) : fetchMyCommunityPosts();
+    const loadLikedPosts = profileHandle ? fetchLikedPostsByUser(resolvedHandle) : fetchMyLikedPosts();
+    const loadComments = profileHandle ? fetchCommunityCommentsByUser(resolvedHandle) : fetchMyCommunityComments();
 
     Promise.all([loadPosts, loadLikedPosts, loadComments])
       .then(([nextPosts, nextLikedPosts, nextComments]) => {
@@ -91,7 +91,7 @@ export default function ProfileActivityPage({ handle }: ProfileActivityPageProps
     return () => {
       cancelled = true;
     };
-  }, [handle, resolvedUserId]);
+  }, [profileHandle, resolvedHandle]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -108,7 +108,7 @@ export default function ProfileActivityPage({ handle }: ProfileActivityPageProps
     { id: 'likes', label: '좋아요한 글', count: likedPosts.length },
   ], [comments.length, likedPosts.length, posts.length]);
 
-  if (!resolvedUserId) {
+  if (!resolvedHandle) {
     return null;
   }
 
@@ -116,7 +116,7 @@ export default function ProfileActivityPage({ handle }: ProfileActivityPageProps
     <div className="page-stack">
       <section className="panel-card community-activity-hero">
         <div className="community-detail-topbar">
-          <button type="button" className="btn ghost community-back-button" onClick={() => navigate(getProfilePath(handle))}>
+          <button type="button" className="btn ghost community-back-button" onClick={() => navigate(getProfilePath(profileHandle))}>
             뒤로가기
           </button>
           <span className="subtle-chip">활동</span>

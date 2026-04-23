@@ -16,7 +16,7 @@ interface UserProfileSolvedRecordResponse {
 }
 
 interface UserProfileSummaryResponse {
-  userId?: string;
+  handle?: string;
   bio?: string;
   links?: UserProfileLinkResponse[];
   defaultDbms?: string;
@@ -55,7 +55,7 @@ export interface UserProfileSolvedRecord {
 }
 
 export interface UserProfileSummary {
-  userId: string;
+  handle: string;
   bio: string;
   links: UserProfileLink[];
   defaultDbms: DbmsType;
@@ -131,12 +131,12 @@ function normalizeSolvedRecords(records?: UserProfileSolvedRecordResponse[]) {
 }
 
 function normalizeProfileSummary(data: UserProfileSummaryResponse): UserProfileSummary {
-  if (typeof data.userId !== 'string') {
+  if (typeof data.handle !== 'string') {
     throw new Error();
   }
 
   return {
-    userId: data.userId,
+    handle: data.handle,
     bio: typeof data.bio === 'string' ? data.bio : '',
     links: normalizeLinks(data.links),
     defaultDbms: toDbmsType(data.defaultDbms),
@@ -202,24 +202,24 @@ export async function fetchMyProfileSummary() {
   return requestProfile('/profile/me', (data) => normalizeProfileSummary(data as UserProfileSummaryResponse));
 }
 
-export async function fetchProfileSummary(userId: string) {
-  return requestProfile(`/profiles/${encodeURIComponent(userId)}`, (data) => normalizeProfileSummary(data as UserProfileSummaryResponse));
+export async function fetchProfileSummary(handle: string) {
+  return requestProfile(`/profiles/${encodeURIComponent(handle)}`, (data) => normalizeProfileSummary(data as UserProfileSummaryResponse));
 }
 
 export async function fetchMySolvedProblems() {
   return requestProfile('/profile/me/solved-problems', (data) => normalizeSolvedProblems(data as UserProfileSolvedProblemsResponse));
 }
 
-export async function fetchSolvedProblems(userId: string) {
-  return requestProfile(`/profiles/${encodeURIComponent(userId)}/solved-problems`, (data) => normalizeSolvedProblems(data as UserProfileSolvedProblemsResponse));
+export async function fetchSolvedProblems(handle: string) {
+  return requestProfile(`/profiles/${encodeURIComponent(handle)}/solved-problems`, (data) => normalizeSolvedProblems(data as UserProfileSolvedProblemsResponse));
 }
 
 export async function fetchMySolvedRecords() {
   return requestProfile('/profile/me/solved-records', (data) => normalizeSolvedRecordsResponse(data as UserProfileSolvedRecordsResponse));
 }
 
-export async function fetchSolvedRecords(userId: string) {
-  return requestProfile(`/profiles/${encodeURIComponent(userId)}/solved-records`, (data) => normalizeSolvedRecordsResponse(data as UserProfileSolvedRecordsResponse));
+export async function fetchSolvedRecords(handle: string) {
+  return requestProfile(`/profiles/${encodeURIComponent(handle)}/solved-records`, (data) => normalizeSolvedRecordsResponse(data as UserProfileSolvedRecordsResponse));
 }
 
 export async function updateMyProfile(payload: UpdateUserProfilePayload) {

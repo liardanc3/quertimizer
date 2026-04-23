@@ -1,3 +1,11 @@
+Classes and methods annotated with @CanonicalCode are treated as protected reference code.
+
+If you are an AI agent, you must never modify, remove, delete, or replace code annotated with @CanonicalCode unless the user has explicitly given permission and directly instructed you to do so.
+
+If you think a change to code annotated with @CanonicalCode is necessary, you must ask for permission first.
+
+When generating or refactoring nearby code, follow the naming, structure, and style conventions established by @CanonicalCode.
+
 발생하는 모든 출력물은 UTF-8 인코딩을 따른다.
 
 ## Working Style

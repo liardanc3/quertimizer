@@ -117,11 +117,11 @@ export function AuthManageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
   const [pageJumpDraft, setPageJumpDraft] = useState('1');
-  const [openRoleMenuUserId, setOpenRoleMenuUserId] = useState<string | null>(null);
+  const [openRoleMenuHandle, setOpenRoleMenuHandle] = useState<string | null>(null);
   const [permissionInputDrafts, setPermissionInputDrafts] = useState<Record<string, string>>({});
   const [permissionErrorMessages, setPermissionErrorMessages] = useState<Record<string, string>>({});
-  const [savingRoleUserId, setSavingRoleUserId] = useState<string | null>(null);
-  const [savingPermissionUserId, setSavingPermissionUserId] = useState<string | null>(null);
+  const [savingRoleHandle, setSavingRoleHandle] = useState<string | null>(null);
+  const [savingPermissionHandle, setSavingPermissionHandle] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -168,13 +168,13 @@ export function AuthManageContent() {
       }
 
       if (!panelRef.current?.contains(event.target)) {
-        setOpenRoleMenuUserId(null);
+        setOpenRoleMenuHandle(null);
       }
     }
 
     function handleEscape(event: globalThis.KeyboardEvent) {
       if (event.key === 'Escape') {
-        setOpenRoleMenuUserId(null);
+        setOpenRoleMenuHandle(null);
       }
     }
 
@@ -212,58 +212,58 @@ export function AuthManageContent() {
 
   async function handleRoleChange(user: AuthManageUserRowData, nextRole: AuthManageRoleValue) {
     if (user.role === nextRole) {
-      setOpenRoleMenuUserId(null);
+      setOpenRoleMenuHandle(null);
       return;
     }
 
-    setSavingRoleUserId(user.userId);
-    setOpenRoleMenuUserId(null);
+    setSavingRoleHandle(user.handle);
+    setOpenRoleMenuHandle(null);
 
     try {
-      await updateUserRole(user.userId, nextRole);
+      await updateUserRole(user.handle, nextRole);
       setReloadSequence((value) => value + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '역할을 저장하지 못했다.');
     } finally {
-      setSavingRoleUserId((current) => (current === user.userId ? null : current));
+      setSavingRoleHandle((current) => (current === user.handle ? null : current));
     }
   }
 
-  async function handlePermissionChange(userId: string, nextPermissionKeys: string[]) {
-    setSavingPermissionUserId(userId);
-    setPermissionErrorMessages((current) => ({ ...current, [userId]: '' }));
+  async function handlePermissionChange(handle: string, nextPermissionKeys: string[]) {
+    setSavingPermissionHandle(handle);
+    setPermissionErrorMessages((current) => ({ ...current, [handle]: '' }));
 
     try {
-      await updateProblemGeneratorPermissions(userId, sortPermissionKeys(nextPermissionKeys));
+      await updateProblemGeneratorPermissions(handle, sortPermissionKeys(nextPermissionKeys));
       setReloadSequence((value) => value + 1);
     } catch (error) {
       setPermissionErrorMessages((current) => ({
         ...current,
-        [userId]: error instanceof Error ? error.message : '문제 권한을 저장하지 못했다.',
+        [handle]: error instanceof Error ? error.message : '문제 권한을 저장하지 못했다.',
       }));
     } finally {
-      setSavingPermissionUserId((current) => (current === userId ? null : current));
+      setSavingPermissionHandle((current) => (current === handle ? null : current));
     }
   }
 
   async function handlePermissionAdd(user: AuthManageUserRowData) {
-    const draftValue = normalizePermissionKey(permissionInputDrafts[user.userId] ?? '');
+    const draftValue = normalizePermissionKey(permissionInputDrafts[user.handle] ?? '');
     if (draftValue === '') {
       return;
     }
 
     if (user.permissionKeys.includes(draftValue)) {
-      setPermissionInputDrafts((current) => ({ ...current, [user.userId]: '' }));
+      setPermissionInputDrafts((current) => ({ ...current, [user.handle]: '' }));
       return;
     }
 
-    await handlePermissionChange(user.userId, [...user.permissionKeys, draftValue]);
-    setPermissionInputDrafts((current) => ({ ...current, [user.userId]: '' }));
+    await handlePermissionChange(user.handle, [...user.permissionKeys, draftValue]);
+    setPermissionInputDrafts((current) => ({ ...current, [user.handle]: '' }));
   }
 
   async function handlePermissionRemove(user: AuthManageUserRowData, permissionKey: string) {
     await handlePermissionChange(
-      user.userId,
+      user.handle,
       user.permissionKeys.filter((currentPermissionKey) => currentPermissionKey !== permissionKey),
     );
   }
@@ -331,14 +331,14 @@ export function AuthManageContent() {
               </div>
 
               {pagedUsers.map((user) => {
-                const isRoleSaving = savingRoleUserId === user.userId;
-                const isPermissionSaving = savingPermissionUserId === user.userId;
+                const isRoleSaving = savingRoleHandle === user.handle;
+                const isPermissionSaving = savingPermissionHandle === user.handle;
                 const staticNote = resolveStaticNote(user.role);
 
                 return (
-                  <div key={user.userId} className="admin-auth-row admin-auth-user-row" role="row">
+                  <div key={user.handle} className="admin-auth-row admin-auth-user-row" role="row">
                     <div className="admin-auth-user-cell" role="cell">
-                      <span className="admin-auth-user-handle">{user.userId}</span>
+                      <span className="admin-auth-user-handle">{user.handle}</span>
                     </div>
 
                     <div className="admin-auth-role-cell" role="cell">
@@ -347,16 +347,16 @@ export function AuthManageContent() {
                         <button
                           type="button"
                           className="admin-config-icon-button admin-auth-role-menu-button"
-                          onClick={() => setOpenRoleMenuUserId((current) => (current === user.userId ? null : user.userId))}
+                          onClick={() => setOpenRoleMenuHandle((current) => (current === user.handle ? null : user.handle))}
                           aria-label="역할 수정"
-                          aria-expanded={openRoleMenuUserId === user.userId}
+                          aria-expanded={openRoleMenuHandle === user.handle}
                           disabled={isRoleSaving}
                         >
                           <RoleEditIcon />
                         </button>
 
-                        {openRoleMenuUserId === user.userId ? (
-                          <div className="admin-auth-role-menu" role="menu" aria-label={`${user.userId} 역할 선택`}>
+                        {openRoleMenuHandle === user.handle ? (
+                          <div className="admin-auth-role-menu" role="menu" aria-label={`${user.handle} 역할 선택`}>
                             {ROLE_OPTIONS.map((option) => (
                               <button
                                 key={option.value}
@@ -399,8 +399,8 @@ export function AuthManageContent() {
                           <div className="admin-auth-permission-input-row">
                             <input
                               className="text-field admin-auth-permission-input"
-                              value={permissionInputDrafts[user.userId] ?? ''}
-                              onChange={(event) => setPermissionInputDrafts((current) => ({ ...current, [user.userId]: event.target.value }))}
+                              value={permissionInputDrafts[user.handle] ?? ''}
+                              onChange={(event) => setPermissionInputDrafts((current) => ({ ...current, [user.handle]: event.target.value }))}
                               onKeyDown={(event) => handlePermissionInputKeyDown(event, user)}
                               placeholder="NEW, P00001, P00001-00001"
                               disabled={isPermissionSaving}
@@ -417,7 +417,7 @@ export function AuthManageContent() {
                           </div>
 
                           <p className="admin-auth-permission-helper">NEW, 테이블셋 번호, 문제 번호를 태그처럼 관리한다.</p>
-                          {permissionErrorMessages[user.userId] ? <p className="admin-auth-row-feedback is-error">{permissionErrorMessages[user.userId]}</p> : null}
+                          {permissionErrorMessages[user.handle] ? <p className="admin-auth-row-feedback is-error">{permissionErrorMessages[user.handle]}</p> : null}
                         </div>
                       )}
                     </div>

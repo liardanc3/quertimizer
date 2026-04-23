@@ -5,7 +5,7 @@ export type { DbmsType };
 
 interface ProblemSubmittedHistoryResponse {
   dbms?: string;
-  userId?: string;
+  handle?: string;
   executionPlanElement?: number;
   executionTimeMs?: number;
   cost?: number;
@@ -167,14 +167,14 @@ function toSubmittedHistories(submittedHistories: ProblemSubmittedHistoryRespons
 
   return submittedHistories
     .filter(
-      (submittedHistory): submittedHistory is Required<Pick<ProblemSubmittedHistoryResponse, 'userId' | 'executionPlanElement' | 'executionTimeMs'>> & ProblemSubmittedHistoryResponse =>
-        typeof submittedHistory.userId === 'string' &&
+      (submittedHistory): submittedHistory is Required<Pick<ProblemSubmittedHistoryResponse, 'handle' | 'executionPlanElement' | 'executionTimeMs'>> & ProblemSubmittedHistoryResponse =>
+        typeof submittedHistory.handle === 'string' &&
         typeof submittedHistory.executionPlanElement === 'number' &&
         typeof submittedHistory.executionTimeMs === 'number',
     )
     .map((submittedHistory) => ({
       dbms: toDbmsType(submittedHistory.dbms),
-      userId: submittedHistory.userId,
+      handle: submittedHistory.handle,
       executionPlanElement: submittedHistory.executionPlanElement,
       executionTimeMs: submittedHistory.executionTimeMs,
       cost: typeof submittedHistory.cost === 'number' ? submittedHistory.cost : undefined,
@@ -182,7 +182,7 @@ function toSubmittedHistories(submittedHistories: ProblemSubmittedHistoryRespons
 }
 
 function countSolvedUsers(submittedHistories: ProblemSubmittedHistory[]) {
-  return new Set(submittedHistories.map((submittedHistory) => submittedHistory.userId)).size;
+  return new Set(submittedHistories.map((submittedHistory) => submittedHistory.handle)).size;
 }
 
 function toProblemSummary(problem: ProblemListItemResponse) {

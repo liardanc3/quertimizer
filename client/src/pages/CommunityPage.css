@@ -588,12 +588,24 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  .community-page .community-category-text {
+    color: var(--ink-subtle);
+  }
+
   .community-page .community-category-text.is-question {
     color: var(--accent-ink);
   }
 
   .community-page .community-category-text.is-notice {
     color: #fbbf24;
+  }
+
+  .community-page .community-post-title-text {
+    color: var(--ink-strong);
+  }
+
+  .community-page .community-post-title-link:hover .community-post-title-text {
+    color: var(--accent-ink);
   }
 }
 
@@ -1253,7 +1265,7 @@
 
   .community-detail-page .community-comment-branch::before,
   .community-detail-page .community-comment-item.is-reply::after {
-    background: rgba(71, 85, 105, 0.46);
+    background: rgba(148, 163, 184, 0.48);
   }
 
   .community-detail-page .community-detail-menu-panel,
@@ -2173,7 +2185,7 @@
   }
 
   .community-detail-page .community-detail-tab-actions .community-detail-icon-button {
-    color: #a3afbf;
+    color: var(--ink-subtle);
   }
 
   .community-detail-page .community-comment-inline-reply {

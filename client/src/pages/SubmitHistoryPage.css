@@ -1193,7 +1193,7 @@
   .submit-history-plan-group-label,
   .submit-history-empty-state,
   .submit-history-empty-cell {
-    color: #94a3b8;
+    color: var(--ink-subtle);
   }
 
   .submit-history-filter-select-trigger,
@@ -1203,7 +1203,7 @@
   .submit-history-filter-chip,
   .submit-history-plan-button,
   .submit-history-board-chip {
-    border-color: rgba(148, 163, 184, 0.2);
+    border-color: rgba(148, 163, 184, 0.36);
     background: rgba(15, 23, 42, 0.88);
     color: #e2e8f0;
   }
@@ -1213,7 +1213,7 @@
   .submit-history-plan-popover,
   .submit-history-link-menu,
   .submit-history-header-filter-menu {
-    border-color: rgba(148, 163, 184, 0.24);
+    border-color: var(--line-soft);
     background: #0b1322;
     color: #e2e8f0;
     box-shadow: 0 18px 30px rgba(2, 6, 23, 0.5);
@@ -1335,7 +1335,7 @@
   }
 
   .submit-history-empty-value {
-    color: #64748b;
+    color: var(--ink-faint);
   }
 
   .submit-history-empty-row {
@@ -1347,7 +1347,7 @@
   }
 
   .submit-history-loading-badge {
-    border-color: rgba(148, 163, 184, 0.24);
+    border-color: var(--line-soft);
     background: rgba(11, 19, 34, 0.92);
     color: #e2e8f0;
     box-shadow: 0 16px 24px rgba(2, 6, 23, 0.34);
@@ -1445,6 +1445,6 @@
   }
 
   .submit-history-empty-value {
-    color: #64748b;
+    color: var(--ink-faint);
   }
 }

@@ -25,7 +25,7 @@ interface ProblemRuntimeChartProps {
 }
 
 interface RuntimeSample {
-  userId: string;
+  handle: string;
   dbms: DbmsType;
   timeMs: number;
   executionPlanElement: number;
@@ -37,7 +37,7 @@ interface RuntimeMarker {
   label: string;
   value: number;
   tone: MarkerTone;
-  userId?: string;
+  handle?: string;
 }
 
 interface PlacedMarker extends RuntimeMarker {
@@ -253,13 +253,13 @@ function matchesBucketFilter(sample: RuntimeSample, dbms: DbmsType, filterKey: R
   return hasAnyPlanElement(sample.executionPlanElement, BUCKET_PLAN_INDEXES_BY_DBMS[dbms][filterKey][value] ?? []);
 }
 
-function toSamples(problem: ProblemSummary, userId: string | null) {
+function toSamples(problem: ProblemSummary, handle: string | null) {
   return (problem.submittedHistories ?? []).map((submittedHistory) => ({
-    userId: submittedHistory.userId,
+    handle: submittedHistory.handle,
     dbms: submittedHistory.dbms,
     timeMs: submittedHistory.executionTimeMs,
     executionPlanElement: submittedHistory.executionPlanElement,
-    isMine: userId != null && submittedHistory.userId === userId,
+    isMine: handle != null && submittedHistory.handle === handle,
   }));
 }
 
@@ -347,12 +347,12 @@ function buildMarkers(samples: RuntimeSample[]) {
     return [];
   }
 
-  const sortedSamples = [...samples].sort((left, right) => left.timeMs - right.timeMs || left.userId.localeCompare(right.userId));
-  const markers: RuntimeMarker[] = [{ key: 'fastest', label: '1st', value: sortedSamples[0].timeMs, tone: 'fastest', userId: sortedSamples[0].userId }];
+  const sortedSamples = [...samples].sort((left, right) => left.timeMs - right.timeMs || left.handle.localeCompare(right.handle));
+  const markers: RuntimeMarker[] = [{ key: 'fastest', label: '1st', value: sortedSamples[0].timeMs, tone: 'fastest', handle: sortedSamples[0].handle }];
   const mySample = sortedSamples.find((sample) => sample.isMine);
 
   if (mySample) {
-    markers.push({ key: 'mine', label: '내 기록', value: mySample.timeMs, tone: 'mine', userId: mySample.userId });
+    markers.push({ key: 'mine', label: '내 기록', value: mySample.timeMs, tone: 'mine', handle: mySample.handle });
   }
 
   return markers.sort((left, right) => left.value - right.value || (left.key === 'fastest' ? -1 : 1));
@@ -362,17 +362,17 @@ function renderMarkerTooltip(marker: RuntimeMarker, onSearchSelect: (value: stri
   return (
     <>
       <span className="ui-tooltip-title">{formatCostValue(marker.value)}</span>
-      {marker.userId ? (
+      {marker.handle ? (
         <button
           type="button"
           className="tooltip-link tooltip-link-inline"
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
             event.preventDefault();
             event.stopPropagation();
-            onSearchSelect(marker.userId ?? '');
+            onSearchSelect(marker.handle ?? '');
           }}
         >
-          {marker.userId}
+          {marker.handle}
         </button>
       ) : null}
     </>
@@ -420,8 +420,8 @@ function buildPlanSectionRatioItems(args: {
 }
 
 export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelect, onSolvedCountChange }: ProblemRuntimeChartProps) {
-  const { userId, defaultDbms } = useMockSession();
-  const samples = useMemo(() => toSamples(problem, userId), [problem, userId]);
+  const { handle, defaultDbms } = useMockSession();
+  const samples = useMemo(() => toSamples(problem, handle), [problem, handle]);
   const availableDbms = useMemo(() => {
     if (forcedDbms) {
       return DBMS_OPTIONS.filter((option) => option.key === forcedDbms);

@@ -3,7 +3,7 @@ import { getApiBaseUrl } from './authApi';
 export type AdminAnomalyRange = '10m' | '1h' | '24h' | 'all' | 'custom';
 
 interface AdminAnomalyTrendItemResponse {
-  userId?: string;
+  handle?: string;
   actionType?: string;
   count?: number;
 }
@@ -17,7 +17,7 @@ interface AdminAnomalyTrendPageResponse {
 }
 
 interface AdminBlockedUserItemResponse {
-  userId?: string;
+  handle?: string;
   ipAddress?: string;
   blockedAt?: string;
 }
@@ -44,7 +44,7 @@ interface AdminBlockedIpPageResponse {
 }
 
 export interface AdminAnomalyTrendItem {
-  userId: string;
+  handle: string;
   actionType: string;
   count: number;
 }
@@ -58,7 +58,7 @@ export interface AdminAnomalyTrendPageData {
 }
 
 export interface AdminBlockedUserItem {
-  userId: string;
+  handle: string;
   ipAddress: string;
   blockedAt: string;
 }
@@ -86,7 +86,7 @@ export interface AdminBlockedIpPageData {
 
 function normalizeTrendItem(item: AdminAnomalyTrendItemResponse): AdminAnomalyTrendItem {
   return {
-    userId: item.userId ?? '',
+    handle: item.handle ?? '',
     actionType: item.actionType ?? '',
     count: item.count ?? 0,
   };
@@ -104,7 +104,7 @@ function normalizeTrendPage(data: AdminAnomalyTrendPageResponse): AdminAnomalyTr
 
 function normalizeBlockedUserItem(item: AdminBlockedUserItemResponse): AdminBlockedUserItem {
   return {
-    userId: item.userId ?? '',
+    handle: item.handle ?? '',
     ipAddress: item.ipAddress ?? '-',
     blockedAt: item.blockedAt ?? '',
   };
@@ -204,12 +204,12 @@ export function fetchAdminBlockedIps(page: number, pageSize = 10): Promise<Admin
   );
 }
 
-export function blockAdminUser(userId: string): Promise<void> {
-  return requestAdminAnomaly(`/admin/anomaly-accounts/users/${encodeURIComponent(userId)}/block`, { method: 'POST' }, '계정을 차단하지 못했다.', () => undefined);
+export function blockAdminUser(handle: string): Promise<void> {
+  return requestAdminAnomaly(`/admin/anomaly-accounts/users/${encodeURIComponent(handle)}/block`, { method: 'POST' }, '계정을 차단하지 못했다.', () => undefined);
 }
 
-export function unblockAdminUser(userId: string): Promise<void> {
-  return requestAdminAnomaly(`/admin/anomaly-accounts/users/${encodeURIComponent(userId)}/block`, { method: 'DELETE' }, '계정 차단을 해제하지 못했다.', () => undefined);
+export function unblockAdminUser(handle: string): Promise<void> {
+  return requestAdminAnomaly(`/admin/anomaly-accounts/users/${encodeURIComponent(handle)}/block`, { method: 'DELETE' }, '계정 차단을 해제하지 못했다.', () => undefined);
 }
 
 export function unblockAdminIp(ipAddress: string): Promise<void> {

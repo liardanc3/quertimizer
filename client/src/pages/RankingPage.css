@@ -70,3 +70,9 @@
     min-width: 30rem;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .ranking-head {
+    border-bottom-color: var(--line-soft);
+  }
+}

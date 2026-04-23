@@ -146,7 +146,7 @@ export default function CommunityPostCard({
         ) : null}
       </div>
 
-      <div className="community-board-cell community-board-author" data-label="아이디">
+      <div className="community-board-cell community-board-author" data-label="Handle">
         <button
           type="button"
           className="community-author-button"

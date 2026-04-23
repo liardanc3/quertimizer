@@ -561,30 +561,30 @@ export function fetchMyCommunityPosts() {
   return fetchProfileCommunityPosts('/profile/me/community/posts');
 }
 
-export function fetchCommunityPostsByUser(userId: string) {
-  return fetchProfileCommunityPosts(`/profiles/${encodeURIComponent(userId)}/community/posts`);
+export function fetchCommunityPostsByUser(handle: string) {
+  return fetchProfileCommunityPosts(`/profiles/${encodeURIComponent(handle)}/community/posts`);
 }
 
 export function fetchMyLikedPosts() {
   return fetchProfileCommunityPosts('/profile/me/community/liked-posts');
 }
 
-export function fetchLikedPostsByUser(userId: string) {
-  return fetchProfileCommunityPosts(`/profiles/${encodeURIComponent(userId)}/community/liked-posts`);
+export function fetchLikedPostsByUser(handle: string) {
+  return fetchProfileCommunityPosts(`/profiles/${encodeURIComponent(handle)}/community/liked-posts`);
 }
 
 export function fetchMyCommunityComments() {
   return fetchProfileCommunityComments('/profile/me/community/comments');
 }
 
-export function fetchCommunityCommentsByUser(userId: string) {
-  return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(userId)}/community/comments`);
+export function fetchCommunityCommentsByUser(handle: string) {
+  return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(handle)}/community/comments`);
 }
 
 export function fetchMyLikedComments() {
   return fetchProfileCommunityComments('/profile/me/community/liked-comments');
 }
 
-export function fetchLikedCommentsByUser(userId: string) {
-  return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(userId)}/community/liked-comments`);
+export function fetchLikedCommentsByUser(handle: string) {
+  return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(handle)}/community/liked-comments`);
 }

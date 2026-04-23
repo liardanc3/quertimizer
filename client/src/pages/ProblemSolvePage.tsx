@@ -2247,7 +2247,6 @@ function SolvePageAuthOverlay({
 }) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(false);
   const [loginErrors, setLoginErrors] = useState<string[]>([]);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [isSocialLoginSubmitting, setIsSocialLoginSubmitting] = useState(false);
@@ -2389,7 +2388,7 @@ function SolvePageAuthOverlay({
             return;
           }
 
-          await completeAuthentication(session, false);
+          await completeAuthentication(session);
           popup.close();
           stopPolling();
           onAuthenticated();
@@ -2436,7 +2435,7 @@ function SolvePageAuthOverlay({
           return;
         }
 
-        await completeAuthentication(session, false);
+        await completeAuthentication(session);
         popup.close();
         stopPolling();
         onAuthenticated();
@@ -2540,10 +2539,9 @@ function SolvePageAuthOverlay({
       const session = await login({
         email: normalizedLoginEmail,
         password: loginPassword,
-        rememberLogin,
       });
 
-      await completeAuthentication(session, rememberLogin);
+      await completeAuthentication(session);
       if (!session.authenticated) {
         setLoginErrors(['로그인에 실패했습니다.']);
         return;
@@ -2585,7 +2583,7 @@ function SolvePageAuthOverlay({
       });
 
       const session = await fetchSessionMe();
-      await completeAuthentication(session, false);
+      await completeAuthentication(session);
 
       if (!session.authenticated) {
         setSignupErrors(['회원가입 후 세션을 확인하지 못했습니다.']);
@@ -2763,16 +2761,6 @@ function SolvePageAuthOverlay({
                       ))}
                     </div>
                   ) : null}
-
-                  <label className="login-remember-row">
-                    <input
-                      type="checkbox"
-                      className="login-remember-checkbox"
-                      checked={rememberLogin}
-                      onChange={(event) => setRememberLogin(event.target.checked)}
-                    />
-                    <span className="login-remember-label">로그인 유지</span>
-                  </label>
 
                   <div className="auth-actions minimal">
                     <button
@@ -3441,7 +3429,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const executionStopRequestedRef = useRef(false);
   const ignoredExecutionResponseCountRef = useRef(0);
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
-  const { defaultDbms, isAuthenticated, isReady, userId } = useMockSession();
+  const { defaultDbms, isAuthenticated, isReady, handle } = useMockSession();
   const previousAuthenticationStateRef = useRef(isAuthenticated);
   const fallbackProblem = createFallbackProblemDetail(problemId);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
@@ -3815,7 +3803,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
-    if (!isAuthenticated || !userId) {
+    if (!isAuthenticated || !handle) {
       setMySubmitHistoryPage(createEmptySolveSubmitHistoryPage());
       setIsMySubmitLoading(false);
       setMySubmitLoadError(null);
@@ -3829,7 +3817,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     void fetchSubmitHistories({
       page: mySubmitRequestedPage,
       submitId: '',
-      query: userId,
+      query: handle,
       dbms: selectedDbms,
       problemId: displayProblemNumber,
       judge: 'all',
@@ -3862,7 +3850,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     return () => {
       cancelled = true;
     };
-  }, [contentTab, displayProblemNumber, isAuthenticated, isReady, mySubmitRequestedPage, selectedDbms, userId]);
+  }, [contentTab, displayProblemNumber, isAuthenticated, isReady, mySubmitRequestedPage, selectedDbms, handle]);
 
   useEffect(() => {
     if (contentTab !== 'community') {
@@ -4306,27 +4294,28 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }, [problemId, selectedDbms]);
 
   const updateAutocompleteState = (nextSql: string, caretIndex: number) => {
-    const tokenRange = getAutocompleteTokenRange(nextSql, caretIndex);
-    if (!tokenRange) {
-      setAutocompleteState(null);
-      return;
-    }
+    try {
+      const tokenRange = getAutocompleteTokenRange(nextSql, caretIndex);
+      if (!tokenRange) {
+        setAutocompleteState(null);
+        return;
+      }
 
-    const suggestions = createAutocompleteSuggestions(autocompleteItems, tokenRange.typedToken);
-    if (suggestions.length === 0) {
-      setAutocompleteState(null);
-      return;
-    }
+      const suggestions = createAutocompleteSuggestions(autocompleteItems, tokenRange.typedToken);
+      if (suggestions.length === 0) {
+        setAutocompleteState(null);
+        return;
+      }
 
-    if (
-      tokenRange.currentToken.toLowerCase() === tokenRange.typedToken.toLowerCase() &&
-      suggestions.some((item) => item.value.toLowerCase() === tokenRange.currentToken.toLowerCase())
-    ) {
-      setAutocompleteState(null);
-      return;
-    }
+      if (
+        tokenRange.currentToken.toLowerCase() === tokenRange.typedToken.toLowerCase() &&
+        suggestions.some((item) => item.value.toLowerCase() === tokenRange.currentToken.toLowerCase())
+      ) {
+        setAutocompleteState(null);
+        return;
+      }
 
-    const autocompleteAnchor = sqlEditorRef.current
+      const autocompleteAnchor = sqlEditorRef.current
         ? measureAutocompleteAnchor(sqlEditorRef.current, nextSql, caretIndex, suggestions.length)
         : {
             left: 12,
@@ -4335,21 +4324,24 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             maxHeight: 180,
           };
 
-    if (autocompleteAnchor.maxHeight < 40) {
-      setAutocompleteState(null);
-      return;
-    }
+      if (autocompleteAnchor.maxHeight < 40) {
+        setAutocompleteState(null);
+        return;
+      }
 
-    setAutocompleteState(() => ({
-      items: suggestions,
-      selectedIndex: 0,
-      tokenStart: tokenRange.tokenStart,
+      setAutocompleteState(() => ({
+        items: suggestions,
+        selectedIndex: 0,
+        tokenStart: tokenRange.tokenStart,
         tokenEnd: tokenRange.tokenEnd,
         left: autocompleteAnchor.left,
         top: autocompleteAnchor.top,
         maxWidth: autocompleteAnchor.maxWidth,
         maxHeight: autocompleteAnchor.maxHeight,
       }));
+    } catch {
+      setAutocompleteState(null);
+    }
   };
 
   const refreshAutocompleteFromEditor = () => {
@@ -5623,7 +5615,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                         {relatedModalState.history.success ? '정답' : '오답'}
                       </span>
                     </div>
-                    <span>{`${relatedModalState.history.submitId} · ${relatedModalState.history.userId} · 문제 ${relatedModalState.history.problemId}`}</span>
+                    <span>{`${relatedModalState.history.submitId} · ${relatedModalState.history.handle} · 문제 ${relatedModalState.history.problemId}`}</span>
                     <div className="submit-history-modal-meta">
                       <div className="submit-history-modal-meta-stack">
                         <span className="submit-history-modal-meta-line">{getDbmsLabel(relatedModalState.history.dbms)}</span>
@@ -5659,7 +5651,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
                     <strong>실행계획 요소</strong>
-                    <span>{`${relatedModalState.history.userId} · ${getDbmsLabel(relatedModalState.history.dbms)} · 문제 ${relatedModalState.history.problemId}`}</span>
+                    <span>{`${relatedModalState.history.handle} · ${getDbmsLabel(relatedModalState.history.dbms)} · 문제 ${relatedModalState.history.problemId}`}</span>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
                     닫기
@@ -5696,7 +5688,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return null;
     }
 
-    if (!isAuthenticated || !userId) {
+    if (!isAuthenticated || !handle) {
       return <div className="solve-related-empty-state">로그인 후 내 제출을 확인할 수 있습니다.</div>;
     }
 
@@ -5730,10 +5722,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     <button
                       type="button"
                       className="submit-history-link-button"
-                      onClick={() => navigate(getProfilePath(history.userId))}
-                      aria-label={`${history.userId} 프로필로 이동`}
+                      onClick={() => navigate(getProfilePath(history.handle))}
+                      aria-label={`${history.handle} 프로필로 이동`}
                     >
-                      {history.userId}
+                      {history.handle}
                     </button>
                   </span>
                   <span className="submit-history-cell" role="cell" data-label="문제 번호">

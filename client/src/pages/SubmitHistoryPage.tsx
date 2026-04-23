@@ -1041,7 +1041,7 @@ export default function SubmitHistoryPage() {
                     </div>
                     <div className="submit-history-modal-meta submit-history-modal-meta-stack">
                       <span className="submit-history-modal-meta-line">{modalState.history.submitId}</span>
-                      <span className="submit-history-modal-meta-line">{modalState.history.userId}</span>
+                      <span className="submit-history-modal-meta-line">{modalState.history.handle}</span>
                       <span className="submit-history-modal-meta-line">{modalState.history.problemId}</span>
                       <span className="submit-history-modal-meta-line">{getDbmsLabel(modalState.history.dbms)}</span>
                       <span
@@ -1088,7 +1088,7 @@ export default function SubmitHistoryPage() {
                   <div className="submit-history-modal-copy">
                     <strong>실행계획 요소</strong>
                     <span>
-                      {modalState.history.userId} · {getDbmsLabel(modalState.history.dbms)} · {buildProblemLabel(modalState.history.problemId)}
+                      {modalState.history.handle} · {getDbmsLabel(modalState.history.dbms)} · {buildProblemLabel(modalState.history.problemId)}
                     </span>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setModalState(null)}>
@@ -1540,10 +1540,10 @@ export default function SubmitHistoryPage() {
                       <button
                         type="button"
                         className="submit-history-link-button"
-                        onClick={(event) => openHandleMenu(history.userId, event.currentTarget)}
-                        aria-label={`${history.userId} Handle 메뉴 열기`}
+                        onClick={(event) => openHandleMenu(history.handle, event.currentTarget)}
+                        aria-label={`${history.handle} Handle 메뉴 열기`}
                       >
-                        {history.userId}
+                        {history.handle}
                       </button>
                     </span>
                     <span className="submit-history-cell" role="cell" data-label="문제 번호">

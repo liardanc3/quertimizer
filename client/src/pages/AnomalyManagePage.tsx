@@ -392,7 +392,7 @@ export function AnomalyManageContent() {
     setIsTrendPageEditing(false);
   }, [activeRange, customRangeEnd, customRangeStart]);
 
-  const blockedUserIds = useMemo(() => new Set(blockedUserPageData.items.map((item) => item.userId)), [blockedUserPageData.items]);
+  const blockedHandles = useMemo(() => new Set(blockedUserPageData.items.map((item) => item.handle)), [blockedUserPageData.items]);
 
   function applyTrendPageJump() {
     const parsedPage = Number.parseInt(trendPageDraft, 10);
@@ -427,27 +427,27 @@ export function AnomalyManageContent() {
     }
   }
 
-  async function handleBlockUser(userId: string) {
-    setActingKey(`block:${userId}`);
+  async function handleBlockUser(handle: string) {
+    setActingKey(`block:${handle}`);
 
     try {
-      await blockAdminUser(userId);
+      await blockAdminUser(handle);
       setBlockedUserReloadSequence((value) => value + 1);
       setBlockedIpReloadSequence((value) => value + 1);
     } finally {
-      setActingKey((currentKey) => (currentKey === `block:${userId}` ? null : currentKey));
+      setActingKey((currentKey) => (currentKey === `block:${handle}` ? null : currentKey));
     }
   }
 
-  async function handleUnblockUser(userId: string) {
-    setActingKey(`unblock-user:${userId}`);
+  async function handleUnblockUser(handle: string) {
+    setActingKey(`unblock-user:${handle}`);
 
     try {
-      await unblockAdminUser(userId);
+      await unblockAdminUser(handle);
       setBlockedUserReloadSequence((value) => value + 1);
       setBlockedIpReloadSequence((value) => value + 1);
     } finally {
-      setActingKey((currentKey) => (currentKey === `unblock-user:${userId}` ? null : currentKey));
+      setActingKey((currentKey) => (currentKey === `unblock-user:${handle}` ? null : currentKey));
     }
   }
 
@@ -558,21 +558,21 @@ export function AnomalyManageContent() {
               </div>
 
               {trendPageData.items.map((item: AdminAnomalyTrendItem) => {
-                const isBlocked = blockedUserIds.has(item.userId);
-                const isActing = actingKey === `block:${item.userId}`;
+                const isBlocked = blockedHandles.has(item.handle);
+                const isActing = actingKey === `block:${item.handle}`;
                 return (
-                  <article key={`${item.userId}-${item.actionType}`} className="submit-history-row submit-history-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="Handle">{item.userId}</span>
+                  <article key={`${item.handle}-${item.actionType}`} className="submit-history-row submit-history-body" role="row">
+                    <span className="submit-history-cell" role="cell" data-label="Handle">{item.handle}</span>
                     <span className="submit-history-cell" role="cell" data-label="실행/제출">{item.actionType}</span>
                     <span className="submit-history-cell" role="cell" data-label="횟수">{item.count}</span>
                     <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label="차단">
                       <button
                         type="button"
                         className={`submit-history-detail-button admin-anomaly-action-button ${isBlocked ? 'is-blocked' : ''}`.trim()}
-                        aria-label={isBlocked ? '이미 차단된 계정' : `${item.userId} 차단`}
+                        aria-label={isBlocked ? '이미 차단된 계정' : `${item.handle} 차단`}
                         title={isBlocked ? '이미 차단됨' : '계정 차단'}
                         onClick={() => {
-                          void handleBlockUser(item.userId);
+                          void handleBlockUser(item.handle);
                         }}
                         disabled={isBlocked || isActing}
                       >
@@ -634,20 +634,20 @@ export function AnomalyManageContent() {
               </div>
 
               {blockedUserPageData.items.map((item: AdminBlockedUserItem) => {
-                const isActing = actingKey === `unblock-user:${item.userId}`;
+                const isActing = actingKey === `unblock-user:${item.handle}`;
                 return (
-                  <article key={item.userId} className="submit-history-row submit-history-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="Handle">{item.userId}</span>
+                  <article key={item.handle} className="submit-history-row submit-history-body" role="row">
+                    <span className="submit-history-cell" role="cell" data-label="Handle">{item.handle}</span>
                     <span className="submit-history-cell" role="cell" data-label="IP">{item.ipAddress || '-'}</span>
                     <span className="submit-history-cell" role="cell" data-label="차단 일시">{formatDateTime(item.blockedAt)}</span>
                     <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label="차단 해제">
                       <button
                         type="button"
                         className="submit-history-detail-button admin-anomaly-action-button"
-                        aria-label={`${item.userId} 차단 해제`}
+                        aria-label={`${item.handle} 차단 해제`}
                         title="차단 해제"
                         onClick={() => {
-                          void handleUnblockUser(item.userId);
+                          void handleUnblockUser(item.handle);
                         }}
                         disabled={isActing}
                       >

@@ -1,0 +1,39 @@
+package com.quertimizer.alarm.domain.model;
+
+import java.util.Map;
+
+public record CommunityCommentLikeAlarm(String recipientHandle,
+                                        String actorHandle,
+                                        String postId,
+                                        String commentContent,
+                                        Long commentId) implements AlarmSpec {
+
+    @Override
+    public String alarmType() {
+        return AlarmType.LIKE_MY_COMMENT.getValue();
+    }
+
+    @Override
+    public String title() {
+        return AlarmType.LIKE_MY_COMMENT.getTitle();
+    }
+
+    @Override
+    public String message() {
+        return AlarmType.LIKE_MY_COMMENT.formatDefaultMessage(actorHandle);
+    }
+
+    @Override
+    public AlarmTarget target() {
+        return AlarmTarget.of("/community/" + postId, "#community-comment-" + commentId);
+    }
+
+    @Override
+    public Map<String, AlarmBinding> bindings() {
+        return Map.of(
+                "handle", AlarmBinding.of(actorHandle, "/profile/" + actorHandle),
+                "comment", AlarmBinding.of(commentContent, "/community/" + postId, "#community-comment-" + commentId)
+        );
+    }
+
+}

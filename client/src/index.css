@@ -67,11 +67,11 @@
     --ink-strong: #f8fafc;
     --ink-base: #e2e8f0;
     --ink-soft: #cbd5e1;
-    --ink-subtle: #94a3b8;
-    --ink-faint: #64748b;
-    --line-soft: rgba(148, 163, 184, 0.24);
-    --line-muted: rgba(148, 163, 184, 0.18);
-    --line-strong: rgba(148, 163, 184, 0.3);
+    --ink-subtle: #b7c4d8;
+    --ink-faint: #9aa9bd;
+    --line-soft: rgba(148, 163, 184, 0.38);
+    --line-muted: rgba(148, 163, 184, 0.3);
+    --line-strong: rgba(148, 163, 184, 0.52);
     --shadow-soft: 0 10px 24px rgba(2, 6, 23, 0.26);
     --shadow-card: 0 16px 32px rgba(2, 6, 23, 0.34);
     --shadow-elevated: 0 20px 40px rgba(2, 6, 23, 0.42);
@@ -89,7 +89,7 @@
     --danger-surface: rgba(127, 29, 29, 0.32);
     --ui-toggle-bg: rgba(15, 23, 42, 0.74);
     --ui-toggle-hover-bg: rgba(96, 165, 250, 0.14);
-    --ui-toggle-border: rgba(148, 163, 184, 0.24);
+    --ui-toggle-border: rgba(148, 163, 184, 0.42);
     --ui-toggle-text: #cbd5e1;
     --ui-selection-bg: linear-gradient(180deg, rgba(59, 130, 246, 0.24), rgba(37, 99, 235, 0.14));
     --ui-selection-border: rgba(96, 165, 250, 0.56);
@@ -2372,15 +2372,15 @@ button {
     --solve-editor-bg: #0f172a;
     --solve-editor-fg: #e2e8f0;
     --solve-editor-header: transparent;
-    --solve-editor-border: rgba(148, 163, 184, 0.24);
+    --solve-editor-border: rgba(148, 163, 184, 0.38);
     --solve-editor-autocomplete-bg: #0b1322;
     --solve-editor-autocomplete-item-fg: #f8fafc;
-    --solve-editor-autocomplete-item-secondary: #94a3b8;
+    --solve-editor-autocomplete-item-secondary: var(--ink-subtle);
     --solve-editor-autocomplete-selected-bg: rgba(37, 99, 235, 0.18);
-    --solve-editor-chip-border: rgba(148, 163, 184, 0.24);
+    --solve-editor-chip-border: rgba(148, 163, 184, 0.38);
     --solve-editor-chip-bg: rgba(148, 163, 184, 0.14);
     --solve-editor-chip-fg: #cbd5e1;
-    --solve-editor-ghost-border: rgba(148, 163, 184, 0.24);
+    --solve-editor-ghost-border: rgba(148, 163, 184, 0.38);
     --solve-editor-ghost-bg: rgba(15, 23, 42, 0.52);
     --solve-editor-ghost-fg: #e2e8f0;
     color-scheme: dark;
@@ -2424,7 +2424,7 @@ button {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 3;
 }
 
 .solve-editor-statement-status {
@@ -2629,6 +2629,8 @@ button {
 }
 
 .solve-sql-editor {
+  position: relative;
+  z-index: 2;
   width: 100%;
   min-height: 16rem;
   border: 0;
@@ -2641,6 +2643,7 @@ button {
   caret-color: var(--solve-editor-fg);
   resize: none;
   overflow: hidden;
+  pointer-events: auto;
   tab-size: 4;
 }
 
@@ -2658,6 +2661,8 @@ button {
 }
 
 .solve-sql-highlight {
+  position: relative;
+  z-index: 1;
   margin: 0;
   min-height: 16rem;
   padding: 1rem 1.05rem;
@@ -6348,7 +6353,7 @@ button {
   }
 
   .problem-empty-state {
-    border-color: rgba(148, 163, 184, 0.2);
+    border-color: rgba(148, 163, 184, 0.34);
     background: rgba(15, 23, 42, 0.68);
     color: #e2e8f0;
   }
@@ -6552,19 +6557,19 @@ button {
   }
 
   .solve-erd-node {
-    border-color: rgba(148, 163, 184, 0.22);
+    border-color: rgba(148, 163, 184, 0.36);
     background: rgba(15, 23, 42, 0.92);
     box-shadow: 0 12px 28px rgba(2, 6, 23, 0.34);
   }
 
   .solve-erd-node-header {
-    border-bottom-color: rgba(148, 163, 184, 0.18);
+    border-bottom-color: rgba(148, 163, 184, 0.3);
     background: rgba(20, 32, 52, 0.96);
     color: var(--ink-strong);
   }
 
   .solve-erd-node-row {
-    border-bottom-color: rgba(148, 163, 184, 0.14);
+    border-bottom-color: rgba(148, 163, 184, 0.26);
     color: var(--ink-soft);
   }
 
@@ -6577,13 +6582,13 @@ button {
   }
 
   .solve-erd-zoom-button {
-    border-color: rgba(148, 163, 184, 0.18);
+    border-color: rgba(148, 163, 184, 0.32);
     background: rgba(15, 23, 42, 0.88);
     color: var(--ink-strong);
   }
 
   .solve-detail-grid-row {
-    border-bottom-color: rgba(148, 163, 184, 0.18);
+    border-bottom-color: rgba(148, 163, 184, 0.3);
     background: rgba(15, 23, 42, 0.36);
   }
 
@@ -6628,7 +6633,7 @@ button {
 
   .solve-detail-table-drag-handle,
   .solve-detail-table-toggle {
-    border-color: rgba(148, 163, 184, 0.24);
+    border-color: rgba(148, 163, 184, 0.38);
     background: rgba(15, 23, 42, 0.82);
   }
 
@@ -6666,7 +6671,7 @@ button {
   .solve-pane-result-table td,
   .solve-detail-data-table td,
   .solve-detail-data-table th {
-    border-color: rgba(148, 163, 184, 0.16);
+    border-color: rgba(148, 163, 184, 0.28);
   }
 
   .solve-floating-pane-shell.is-editor .solve-editor-surface,

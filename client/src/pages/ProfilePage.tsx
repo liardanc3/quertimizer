@@ -604,12 +604,12 @@ function renderSubmitHistoryHighlightedSql(sql: string) {
   });
 }
 
-async function fetchAllSubmitHistoriesForUser(userId: string) {
+async function fetchAllSubmitHistoriesForUser(handle: string) {
   const requestPage = (page: number) =>
     fetchSubmitHistories({
       page,
       submitId: '',
-      query: userId,
+      query: handle,
       dbms: 'all',
       problemId: '',
       judge: 'all',
@@ -618,7 +618,7 @@ async function fetchAllSubmitHistoriesForUser(userId: string) {
     });
 
   const firstPage = await requestPage(1);
-  const histories = [...firstPage.histories.filter((history) => history.userId === userId)];
+  const histories = [...firstPage.histories.filter((history) => history.handle === handle)];
 
   if (firstPage.totalPages > 1) {
     const remainingPages = await Promise.all(
@@ -626,7 +626,7 @@ async function fetchAllSubmitHistoriesForUser(userId: string) {
     );
 
     remainingPages.forEach((pageData) => {
-      histories.push(...pageData.histories.filter((history) => history.userId === userId));
+      histories.push(...pageData.histories.filter((history) => history.handle === handle));
     });
   }
 
@@ -869,12 +869,12 @@ function ProfileLoadingShell({ label }: { label: string }) {
   );
 }
 
-export default function ProfilePage({ handle }: ProfilePageProps) {
-  const { isAuthenticated, isReady, userId } = useMockSession();
+export default function ProfilePage({ handle: profileHandle }: ProfilePageProps) {
+  const { isAuthenticated, isReady, handle: currentHandle } = useMockSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
-  const resolvedProfileId = handle ?? userId;
-  const isOwnProfile = isAuthenticated && userId != null && resolvedProfileId === userId;
-  const profileBasePath = handle ? getProfilePath(handle) : getProfilePath();
+  const resolvedProfileId = profileHandle ?? currentHandle;
+  const isOwnProfile = isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle;
+  const profileBasePath = profileHandle ? getProfilePath(profileHandle) : getProfilePath();
   const activeTopTab = readProfileTopTab(locationSearch || window.location.search, isOwnProfile);
   const isAlarmListOpen = activeTopTab === 'alarms';
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
@@ -1210,7 +1210,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
   }, [profileAlarmPage, profileAlarmPageData.totalPages]);
 
   if (!isReady || isLoading) {
-    return <ProfileLoadingShell label={profileSummary?.userId ?? resolvedProfileId ?? handle ?? '프로필'} />;
+    return <ProfileLoadingShell label={profileSummary?.handle ?? resolvedProfileId ?? currentHandle ?? '프로필'} />;
   }
 
   if (!resolvedProfileId) {
@@ -2012,7 +2012,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                     </div>
                     <div className="submit-history-modal-meta submit-history-modal-meta-stack">
                       <span className="submit-history-modal-meta-line">{solveModalState.history.submitId}</span>
-                      <span className="submit-history-modal-meta-line">{solveModalState.history.userId}</span>
+                      <span className="submit-history-modal-meta-line">{solveModalState.history.handle}</span>
                       <span className="submit-history-modal-meta-line">{solveModalState.history.problemId}</span>
                       <span className="submit-history-modal-meta-line">{getDbmsLabel(solveModalState.history.dbms)}</span>
                       <span
@@ -2054,7 +2054,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                   <div className="submit-history-modal-copy">
                     <strong>실행계획 요소</strong>
                     <span>
-                      {solveModalState.history.userId} · {getDbmsLabel(solveModalState.history.dbms)} · {buildProblemLabel(solveModalState.history.problemId)}
+                      {solveModalState.history.handle} · {getDbmsLabel(solveModalState.history.dbms)} · {buildProblemLabel(solveModalState.history.problemId)}
                     </span>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setSolveModalState(null)}>
@@ -2115,7 +2115,7 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
                 navigate(profileBasePath, { replace: true });
               }}
             >
-              {profileSummary.userId}
+              {profileSummary.handle}
             </button>
             {isOwnProfile ? (
               <button
@@ -2154,12 +2154,12 @@ export default function ProfilePage({ handle }: ProfilePageProps) {
       <section className="panel-card profile-hero-panel">
         <div className="profile-hero-layout-next">
           <div className="profile-hero-avatar-shell">
-            <div className="profile-hero-avatar">{createFallbackAvatarLabel(profileSummary.userId)}</div>
+            <div className="profile-hero-avatar">{createFallbackAvatarLabel(profileSummary.handle)}</div>
           </div>
 
           <div className="profile-hero-copy-next">
             <div className="profile-hero-title-row">
-              <h1 className="page-title profile-page-title">{profileSummary.userId}</h1>
+              <h1 className="page-title profile-page-title">{profileSummary.handle}</h1>
 
               {heroLinks.length > 0 ? (
                 <div className="profile-hero-inline-link-list" aria-label="외부 링크">

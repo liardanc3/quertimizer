@@ -17,7 +17,6 @@ const API_BASE_URL =
 export interface LoginPayload {
   email: string;
   password: string;
-  rememberLogin: boolean;
 }
 
 export interface SignupPayload {
@@ -25,8 +24,8 @@ export interface SignupPayload {
   email: string;
 }
 
-export interface SetupUserIdPayload {
-  userId: string;
+export interface SetupHandlePayload {
+  handle: string;
 }
 
 export interface AccountRecoveryEmailPayload {
@@ -55,10 +54,10 @@ interface DuplicateCheckResponse {
 
 interface SessionMeResponse {
   authenticated?: boolean;
-  userId?: string | null;
+  handle?: string | null;
   defaultDbms?: string | null;
   role?: string | null;
-  userIdSetupRequired?: boolean | null;
+  handleSetupRequired?: boolean | null;
 }
 
 export class SignupApiError extends Error {
@@ -104,10 +103,10 @@ export interface DuplicateCheckResult {
 
 export interface SessionMeResult {
   authenticated: boolean;
-  userId: string | null;
+  handle: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
-  userIdSetupRequired: boolean;
+  handleSetupRequired: boolean;
 }
 
 export function getApiBaseUrl() {
@@ -166,7 +165,7 @@ async function requestAuth(path: '/signup' | '/login', payload: LoginPayload | S
       body: JSON.stringify({
         password: await sha512Hex(payload.password),
         ...(path === '/login' && 'email' in payload ? { email: payload.email } : {}),
-        ...(path === '/login' && 'rememberLogin' in payload ? { rememberLogin: payload.rememberLogin } : {}),
+        ...(path === '/login' ? { rememberLogin: true } : {}),
         ...(path === '/signup' && 'email' in payload ? { email: payload.email } : {}),
       }),
     });
@@ -185,7 +184,7 @@ async function requestAuth(path: '/signup' | '/login', payload: LoginPayload | S
 function parseSessionMeResult(data: SessionMeResponse) {
   return {
     authenticated: data.authenticated === true,
-    userId: typeof data.userId === 'string' && data.userId.trim() !== '' ? data.userId : null,
+    handle: typeof data.handle === 'string' && data.handle.trim() !== '' ? data.handle : null,
     defaultDbms: data.defaultDbms === 'oracle' ? 'oracle' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
     role:
       data.role === 'admin'
@@ -195,13 +194,13 @@ function parseSessionMeResult(data: SessionMeResponse) {
           : data.role === 'problem_generator'
             ? 'problemGenerator'
             : null,
-    userIdSetupRequired: data.userIdSetupRequired === true,
+    handleSetupRequired: data.handleSetupRequired === true,
   } satisfies SessionMeResult;
 }
 
 async function requestDuplicateCheck(
-  path: '/duplicate-check/userId' | '/duplicate-check/email',
-  queryKey: 'userId' | 'email',
+  path: '/duplicate-check/handle' | '/duplicate-check/email',
+  queryKey: 'handle' | 'email',
   value: string,
   fallbackMessage: string
 ) {
@@ -275,11 +274,11 @@ export async function signup(payload: SignupPayload) {
   }
 }
 
-export async function setupUserId(payload: SetupUserIdPayload) {
+export async function setupHandle(payload: SetupHandlePayload) {
   let response: Response;
 
   try {
-    response = await fetch(`${getApiBaseUrl()}/signup/user-id`, {
+    response = await fetch(`${getApiBaseUrl()}/signup/handle`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -288,11 +287,11 @@ export async function setupUserId(payload: SetupUserIdPayload) {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new SignupApiError(0, ['ID \uC124\uC815 \uC694\uCCAD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.']);
+    throw new SignupApiError(0, ['Handle 설정 요청에 실패했습니다.']);
   }
 
   if (!response.ok) {
-    const reasons = await getErrorReasons(response, 'ID \uC124\uC815 \uC694\uCCAD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.');
+    const reasons = await getErrorReasons(response, 'Handle 설정 요청에 실패했습니다.');
     throw new SignupApiError(response.status, reasons);
   }
 
@@ -300,7 +299,7 @@ export async function setupUserId(payload: SetupUserIdPayload) {
     const data = (await response.json()) as SessionMeResponse;
     return parseSessionMeResult(data);
   } catch {
-    throw new SignupApiError(response.status, ['ID \uC124\uC815 \uC751\uB2F5 \uCC98\uB9AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.']);
+    throw new SignupApiError(response.status, ['Handle 설정 응답 처리에 실패했습니다.']);
   }
 }
 
@@ -383,8 +382,8 @@ export async function fetchSessionMe() {
   }
 }
 
-export async function checkDuplicateUserId(userId: string) {
-  return requestDuplicateCheck('/duplicate-check/userId', 'userId', userId, '아이디 중복확인 요청에 실패했습니다.');
+export async function checkDuplicateHandle(handle: string) {
+  return requestDuplicateCheck('/duplicate-check/handle', 'handle', handle, 'Handle 중복확인 요청에 실패했습니다.');
 }
 
 export async function checkDuplicateEmail(email: string) {

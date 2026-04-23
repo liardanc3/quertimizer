@@ -1513,7 +1513,7 @@ body.handle-setup-locked {
   }
 
   .home-page .problem-card-action {
-    color: var(--ink-faint);
+    color: var(--ink-subtle);
   }
 }
 

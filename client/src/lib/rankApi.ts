@@ -7,7 +7,7 @@ interface RankMonthlyDeltaResponse {
 }
 
 interface RankListItemResponse {
-  userId?: string;
+  handle?: string;
   solvedCount?: number;
   avgExecutionPercentile?: number;
   monthlyRankDelta?: RankMonthlyDeltaResponse;
@@ -38,7 +38,7 @@ export interface RankPage {
 
 function toRankingEntry(rank: RankListItemResponse) {
   return {
-    userId: rank.userId!,
+    handle: rank.handle!,
     solvedCount: rank.solvedCount!,
     avgExecutionPercentile: rank.avgExecutionPercentile!,
     monthlyRankDelta: {
@@ -93,8 +93,8 @@ export async function fetchRanks(params: FetchRanksParams): Promise<RankPage> {
       totalPages: data.totalPages,
       ranks: data.ranks
         .filter(
-          (rank): rank is Required<Pick<RankListItemResponse, 'userId' | 'solvedCount' | 'avgExecutionPercentile'>> & RankListItemResponse =>
-            typeof rank.userId === 'string' &&
+          (rank): rank is Required<Pick<RankListItemResponse, 'handle' | 'solvedCount' | 'avgExecutionPercentile'>> & RankListItemResponse =>
+            typeof rank.handle === 'string' &&
             typeof rank.solvedCount === 'number' &&
             typeof rank.avgExecutionPercentile === 'number',
         )

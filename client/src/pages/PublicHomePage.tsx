@@ -168,7 +168,6 @@ export default function PublicHomePage() {
 
   const [loginEmail, setLoginEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(false);
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
   const [email, setEmail] = useState('');
@@ -305,7 +304,7 @@ export default function PublicHomePage() {
           return;
         }
 
-        await handleAuthenticatedUser(session, false, { useSolveReturnPath: true });
+        await handleAuthenticatedUser(session, { useSolveReturnPath: true });
       } catch {
         if (!isDisposed) {
           setLoginErrorReasons([getSocialLoginErrorMessage(socialLoginSuccess)]);
@@ -397,12 +396,8 @@ export default function PublicHomePage() {
     }
   }
 
-  async function handleAuthenticatedUser(
-    session: SessionMeResult,
-    shouldRememberLogin = false,
-    options: { useSolveReturnPath?: boolean } = {},
-  ) {
-    await completeAuthentication(session, shouldRememberLogin);
+  async function handleAuthenticatedUser(session: SessionMeResult, options: { useSolveReturnPath?: boolean } = {}) {
+    await completeAuthentication(session);
 
     if (!session.authenticated) {
       return;
@@ -424,10 +419,9 @@ export default function PublicHomePage() {
       const session = await login({
         email: normalizedLoginEmail,
         password,
-        rememberLogin,
       });
 
-      await handleAuthenticatedUser(session, rememberLogin);
+      await handleAuthenticatedUser(session);
     } catch (error) {
       if (error instanceof AuthApiError) {
         setLoginErrorReasons(error.reasons);
@@ -709,16 +703,6 @@ export default function PublicHomePage() {
                     ))}
                   </div>
                 ) : null}
-
-                <label className="login-remember-row">
-                  <input
-                    type="checkbox"
-                    className="login-remember-checkbox"
-                    checked={rememberLogin}
-                    onChange={(event) => setRememberLogin(event.target.checked)}
-                  />
-                  <span className="login-remember-label">로그인 유지</span>
-                </label>
 
                 <div className="auth-actions minimal">
                   <button

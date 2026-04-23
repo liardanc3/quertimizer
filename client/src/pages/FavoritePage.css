@@ -65,11 +65,11 @@
 
 @media (prefers-color-scheme: dark) {
   .favorite-empty-shell {
-    border-top-color: rgba(71, 85, 105, 0.62);
+    border-top-color: var(--line-soft);
   }
 
   .favorite-empty-copy {
-    color: #94a3b8;
+    color: var(--ink-subtle);
   }
 
   .favorite-empty-title {

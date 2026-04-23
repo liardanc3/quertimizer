@@ -103,7 +103,6 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
   const [mode, setMode] = useState<HeaderAuthOverlayMode>('login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(false);
   const [loginErrors, setLoginErrors] = useState<string[]>([]);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [isSocialLoginSubmitting, setIsSocialLoginSubmitting] = useState(false);
@@ -213,7 +212,7 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
             return;
           }
 
-          await completeAuthentication(session, false);
+          await completeAuthentication(session);
           popup.close();
           stopPolling();
           onAuthenticated();
@@ -260,7 +259,7 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
           return;
         }
 
-        await completeAuthentication(session, false);
+        await completeAuthentication(session);
         popup.close();
         stopPolling();
         onAuthenticated();
@@ -290,10 +289,9 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
       const session = await login({
         email: normalizedLoginEmail,
         password: loginPassword,
-        rememberLogin,
       });
 
-      await completeAuthentication(session, rememberLogin);
+      await completeAuthentication(session);
       if (!session.authenticated) {
         setLoginErrors(['로그인에 실패했습니다.']);
         return;
@@ -471,16 +469,6 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
                     ))}
                   </div>
                 ) : null}
-
-                <label className="header-auth-remember-row">
-                  <input
-                    type="checkbox"
-                    className="header-auth-remember-checkbox"
-                    checked={rememberLogin}
-                    onChange={(event) => setRememberLogin(event.target.checked)}
-                  />
-                  <span className="header-auth-remember-label">로그인 유지</span>
-                </label>
 
                 <div className="header-auth-login-actions">
                   <button type="submit" className="btn primary" disabled={!isLoginReady || isLoginSubmitting}>

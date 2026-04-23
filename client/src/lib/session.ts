@@ -3,7 +3,6 @@ import { fetchSessionMe, type SessionMeResult } from './authApi';
 import { handleFavoriteTabsSessionState } from './favoriteTabs';
 import { disconnectSessionSocket } from './sessionSocket';
 
-const SESSION_AUTH_STORAGE_KEY = 'quertimizer.session-authenticated';
 const REMEMBER_AUTH_STORAGE_KEY = 'quertimizer.remember-authenticated';
 const AUTH_CHANGE_EVENT = 'quertimizer:auth-change';
 const SESSION_ALERT_CHANGE_EVENT = 'quertimizer:session-alert-change';
@@ -19,19 +18,19 @@ export interface SessionAlert {
 interface SessionSnapshot {
   isAuthenticated: boolean;
   isReady: boolean;
-  userId: string | null;
+  handle: string | null;
   defaultDbms: 'postgresql' | 'oracle' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
-  userIdSetupRequired: boolean;
+  handleSetupRequired: boolean;
 }
 
 let sessionSnapshot: SessionSnapshot = {
   isAuthenticated: readPersistedAuthentication(),
   isReady: false,
-  userId: null,
+  handle: null,
   defaultDbms: null,
   role: null,
-  userIdSetupRequired: false,
+  handleSetupRequired: false,
 };
 let sessionAlert: SessionAlert | null = null;
 let syncSessionPromise: Promise<boolean> | null = null;
@@ -81,10 +80,10 @@ function subscribe(callback: () => void) {
     sessionSnapshot = {
       isAuthenticated,
       isReady: sessionSnapshot.isReady,
-      userId: isAuthenticated ? sessionSnapshot.userId : null,
+      handle: isAuthenticated ? sessionSnapshot.handle : null,
       defaultDbms: isAuthenticated ? sessionSnapshot.defaultDbms : null,
       role: isAuthenticated ? sessionSnapshot.role : null,
-      userIdSetupRequired: isAuthenticated ? sessionSnapshot.userIdSetupRequired : false,
+      handleSetupRequired: isAuthenticated ? sessionSnapshot.handleSetupRequired : false,
     };
     callback();
   }
@@ -118,24 +117,16 @@ function getSessionAlertSnapshot() {
   return sessionAlert;
 }
 
-function persistAuthentication(rememberLogin: boolean) {
-  if (rememberLogin) {
-    window.sessionStorage.removeItem(SESSION_AUTH_STORAGE_KEY);
-    window.localStorage.setItem(
-      REMEMBER_AUTH_STORAGE_KEY,
-      JSON.stringify({
-        expiredAt: Date.now() + 1000 * 60 * 60 * 24 * 30 * 6,
-      })
-    );
-    return;
-  }
-
-  window.localStorage.removeItem(REMEMBER_AUTH_STORAGE_KEY);
-  window.sessionStorage.setItem(SESSION_AUTH_STORAGE_KEY, 'true');
+function persistAuthentication() {
+  window.localStorage.setItem(
+    REMEMBER_AUTH_STORAGE_KEY,
+    JSON.stringify({
+      expiredAt: Date.now() + 1000 * 60 * 60 * 24 * 30 * 6,
+    })
+  );
 }
 
 function clearPersistedAuthentication() {
-  window.sessionStorage.removeItem(SESSION_AUTH_STORAGE_KEY);
   window.localStorage.removeItem(REMEMBER_AUTH_STORAGE_KEY);
 }
 
@@ -144,40 +135,40 @@ function readPersistedAuthentication() {
     return false;
   }
 
-  return window.sessionStorage.getItem(SESSION_AUTH_STORAGE_KEY) === 'true' || hasRememberedAuth();
+  return hasRememberedAuth();
 }
 
-export function loginMock(rememberLogin = false) {
+export function loginMock() {
   if (typeof window === 'undefined') {
     return;
   }
 
-  persistAuthentication(rememberLogin);
+  persistAuthentication();
   updateSessionAlert(null);
   updateSessionSnapshot({
     isAuthenticated: true,
     isReady: true,
-    userId: sessionSnapshot.userId,
+    handle: sessionSnapshot.handle,
     defaultDbms: sessionSnapshot.defaultDbms,
     role: sessionSnapshot.role,
-    userIdSetupRequired: sessionSnapshot.userIdSetupRequired,
+    handleSetupRequired: sessionSnapshot.handleSetupRequired,
   });
 }
 
-export function applyAuthenticatedSession(session: SessionMeResult, rememberLogin = false) {
+export function applyAuthenticatedSession(session: SessionMeResult) {
   if (typeof window === 'undefined') {
     return;
   }
 
-  persistAuthentication(rememberLogin);
+  persistAuthentication();
   updateSessionAlert(null);
   updateSessionSnapshot({
     isAuthenticated: session.authenticated,
     isReady: true,
-    userId: session.userId,
+    handle: session.handle,
     defaultDbms: session.defaultDbms,
     role: session.role,
-    userIdSetupRequired: session.userIdSetupRequired,
+    handleSetupRequired: session.handleSetupRequired,
   });
 }
 
@@ -200,24 +191,24 @@ export async function syncSession() {
         updateSessionSnapshot({
           isAuthenticated: false,
           isReady: true,
-          userId: null,
+          handle: null,
           defaultDbms: null,
           role: null,
-          userIdSetupRequired: false,
+          handleSetupRequired: false,
         });
         updateSessionAlert(null);
 
         return false;
       }
 
-      window.sessionStorage.setItem(SESSION_AUTH_STORAGE_KEY, 'true');
+      persistAuthentication();
       updateSessionSnapshot({
         isAuthenticated: true,
         isReady: true,
-        userId: session.userId,
+        handle: session.handle,
         defaultDbms: session.defaultDbms,
         role: session.role,
-        userIdSetupRequired: session.userIdSetupRequired,
+        handleSetupRequired: session.handleSetupRequired,
       });
       return true;
     } catch {
@@ -245,30 +236,30 @@ export function logoutMock() {
   updateSessionSnapshot({
     isAuthenticated: false,
     isReady: true,
-    userId: null,
+    handle: null,
     defaultDbms: null,
     role: null,
-    userIdSetupRequired: false,
+    handleSetupRequired: false,
   });
 }
 
 export function useMockSession() {
-  const { isAuthenticated, isReady, userId, defaultDbms, role, userIdSetupRequired } = useSyncExternalStore(subscribe, getSnapshot, () => ({
+  const { isAuthenticated, isReady, handle, defaultDbms, role, handleSetupRequired } = useSyncExternalStore(subscribe, getSnapshot, () => ({
     isAuthenticated: false,
     isReady: false,
-    userId: null,
+    handle: null,
     defaultDbms: null,
     role: null,
-    userIdSetupRequired: false,
+    handleSetupRequired: false,
   }));
 
   return {
     isAuthenticated,
     isReady,
-    userId,
+    handle,
     defaultDbms,
     role,
-    userIdSetupRequired,
+    handleSetupRequired,
     isAdmin: role === 'admin',
     isProblemGenerator: role === 'problemGenerator',
     login: loginMock,

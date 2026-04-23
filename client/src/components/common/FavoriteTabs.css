@@ -252,7 +252,7 @@
 
 @media (prefers-color-scheme: dark) {
   .favorite-tab-toggle {
-    color: #7d8da7;
+    color: var(--ink-subtle);
   }
 
   .favorite-tab-toggle:hover,
@@ -275,14 +275,14 @@
   }
 
   .header-favorite-panel {
-    border-color: rgba(71, 85, 105, 0.48);
+    border-color: var(--line-soft);
     background: rgba(9, 17, 29, 0.96);
     box-shadow: 0 16px 34px rgba(2, 6, 23, 0.45);
   }
 
   .header-favorite-panel::before {
-    border-top-color: rgba(71, 85, 105, 0.48);
-    border-left-color: rgba(71, 85, 105, 0.48);
+    border-top-color: var(--line-soft);
+    border-left-color: var(--line-soft);
     background: rgba(9, 17, 29, 0.96);
   }
 
@@ -292,7 +292,7 @@
 
   .header-favorite-panel-meta,
   .header-favorite-empty {
-    color: #94a3b8;
+    color: var(--ink-subtle);
   }
 
   .header-favorite-item {
