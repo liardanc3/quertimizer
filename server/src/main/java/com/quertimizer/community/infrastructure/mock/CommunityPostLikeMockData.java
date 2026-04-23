@@ -42,6 +42,20 @@ public class CommunityPostLikeMockData {
     }
 
     private List<String> resolveLikerHandles(int postNumber) {
+        if (postNumber > 30) {
+            return List.of(
+                    "liardanc3",
+                    "admin",
+                    "problemgen01",
+                    "beginner01",
+                    "beginner04",
+                    "intermediate03",
+                    "intermediate07",
+                    "advanced03",
+                    "advanced08"
+            );
+        }
+
         if (postNumber <= 10) {
             return List.of(
                     "intermediate%02d".formatted(postNumber),

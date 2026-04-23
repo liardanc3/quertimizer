@@ -7,6 +7,7 @@ import {
   type FavoriteTabEntry,
   type FavoriteTabSnapshot,
 } from '../../lib/favoriteTabs';
+import { useMockSession } from '../../lib/session';
 import './FavoriteTabs.css';
 
 export function FavoriteStarIcon({ filled = false, className = '' }: { filled?: boolean; className?: string }) {
@@ -32,6 +33,7 @@ interface FavoriteTabButtonProps {
 }
 
 export default function FavoriteTabButton({ label, path, className = '', snapshot = null, getSnapshot }: FavoriteTabButtonProps) {
+  const { isAuthenticated } = useMockSession();
   const favoriteTabs = useSyncExternalStore(subscribeFavoriteTabs, getFavoriteTabsSnapshot, () => []);
   const isSelected = favoriteTabs.some((entry) => entry.path === path);
 
@@ -44,12 +46,16 @@ export default function FavoriteTabButton({ label, path, className = '', snapsho
   }
 
   useEffect(() => {
-    if (!isSelected) {
+    if (!isAuthenticated || !isSelected) {
       return;
     }
 
     saveFavoriteTab(buildFavoriteEntry());
-  }, [getSnapshot, isSelected, label, path, snapshot]);
+  }, [getSnapshot, isAuthenticated, isSelected, label, path, snapshot]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <button

@@ -845,6 +845,17 @@
   line-height: 1.35;
 }
 
+.community-detail-page .community-detail-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.community-detail-page .community-detail-metric svg {
+  width: 0.86rem;
+  height: 0.86rem;
+}
+
 .community-detail-page .community-author-button {
   padding: 0;
   border: 0;
@@ -1447,7 +1458,8 @@
 }
 
 .community-detail-page .community-detail-icon-button svg,
-.community-detail-page .community-meta-like-button svg {
+.community-detail-page .community-meta-like-button svg,
+.community-detail-page .community-detail-metric svg {
   width: 0.94rem;
   height: 0.94rem;
 }

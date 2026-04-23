@@ -22,6 +22,8 @@ import {
   type CommunityTagSuggestion,
 } from '../lib/communityApi';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
+import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
+import { useMockSession } from '../lib/session';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import './CommunityPage.css';
 
@@ -124,6 +126,7 @@ function createEmptyValues(): EditorValues {
 }
 
 export default function CommunityWritePage({ postId, embedded = false }: CommunityWritePageProps) {
+  const { isAuthenticated } = useMockSession();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityWriteFavoriteSnapshot>('communityWrite'), []);
   const draftKey = postId ? `community-edit-${postId}` : 'community-write';
   const pageChip = postId ? '글 수정' : '글쓰기';
@@ -144,6 +147,13 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
 
   const normalizedDraftTag = normalizeKeyword(draftTag);
   const isEditorEmpty = !hasMeaningfulHtml(editorHtml);
+  const hasPostDraft = title.trim() !== '' || draftTag.trim() !== '' || selectedTags.length > 0 || !isEditorEmpty;
+
+  useEffect(() => {
+    setLoginOverlayDescription(hasPostDraft ? '작성 중인 게시글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.' : null);
+
+    return () => setLoginOverlayDescription(null);
+  }, [hasPostDraft]);
 
   useEffect(() => {
     clearFavoriteRestoreSnapshot('communityWrite');
@@ -500,6 +510,11 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
 
   async function handleSubmit() {
     if (isSubmitting) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      openLoginOverlay();
       return;
     }
 

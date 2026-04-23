@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSPro
 import {
   ADMIN_PATH,
   COMMUNITY_PATH,
+  DASHBOARD_PATH,
   FAVORITES_PATH,
   GUIDE_PATH,
   PROBLEMS_PATH,
@@ -15,6 +16,7 @@ import { fetchAlarms, markAlarmRead, markAllAlarmsRead, type AlarmEntry, type Al
 import { subscribeSessionSocketMessages, type SessionSocketMessage } from '../../lib/sessionSocket';
 import logoImage from '../../assets/logo.png';
 import { useMockSession } from '../../lib/session';
+import { getLoginOverlayDescription, OPEN_LOGIN_OVERLAY_EVENT, type OpenLoginOverlayEventDetail } from '../../lib/authOverlay';
 import {
   DEFAULT_NOTIFICATION_TEXT,
   NOTIFICATION_UI_TEXT_KEY,
@@ -33,24 +35,6 @@ function subscribe(callback: () => void) {
 
 function getSnapshot() {
   return window.location.pathname;
-}
-
-function focusAuthForm() {
-  if (window.location.pathname !== '/' || window.location.hash) {
-    navigate('/', { replace: true });
-  }
-
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      const form = document.getElementById('auth-form');
-      form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      const firstInput = form?.querySelector('input');
-      if (firstInput instanceof HTMLInputElement) {
-        firstInput.focus();
-      }
-    });
-  });
 }
 
 function formatAlarmTime(value: string) {
@@ -118,6 +102,7 @@ export default function Header() {
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const [isAlarmOpen, setIsAlarmOpen] = useState(false);
   const [isHeaderAuthOverlayOpen, setIsHeaderAuthOverlayOpen] = useState(false);
+  const [headerAuthOverlayDescription, setHeaderAuthOverlayDescription] = useState<string | null>(null);
   const [incomingAlarm, setIncomingAlarm] = useState<AlarmEntry | null>(null);
   const [isFavoriteOpen, setIsFavoriteOpen] = useState(false);
   const [alarmPage, setAlarmPage] = useState<AlarmPageData>(EMPTY_ALARM_PAGE);
@@ -168,7 +153,23 @@ export default function Header() {
     setIsAlarmOpen(false);
     setIsFavoriteOpen(false);
     setIsHeaderAuthOverlayOpen(false);
+    setHeaderAuthOverlayDescription(null);
   }, [pathname]);
+
+  useEffect(() => {
+    function handleOpenLoginOverlay(event: Event) {
+      if (isAuthenticated) {
+        return;
+      }
+
+      const { description = null } = (event as CustomEvent<OpenLoginOverlayEventDetail>).detail ?? {};
+      setHeaderAuthOverlayDescription(description);
+      setIsHeaderAuthOverlayOpen(true);
+    }
+
+    window.addEventListener(OPEN_LOGIN_OVERLAY_EVENT, handleOpenLoginOverlay);
+    return () => window.removeEventListener(OPEN_LOGIN_OVERLAY_EVENT, handleOpenLoginOverlay);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isReady) {
@@ -589,7 +590,7 @@ export default function Header() {
             <button
               type="button"
               className="brand-button"
-              onClick={() => navigate(isAuthenticated ? PROBLEMS_PATH : '/')}
+              onClick={() => navigate(DASHBOARD_PATH)}
               aria-label="Quertimizer 홈으로 이동"
             >
               <img className="brand-logo" src={logoImage} alt="quertimizer" />
@@ -943,11 +944,7 @@ export default function Header() {
                 type="button"
                 className="header-link-button"
                 onClick={() => {
-                  if (pathname === '/') {
-                    focusAuthForm();
-                    return;
-                  }
-
+                  setHeaderAuthOverlayDescription(getLoginOverlayDescription());
                   setIsHeaderAuthOverlayOpen(true);
                 }}
               >
@@ -959,6 +956,7 @@ export default function Header() {
       </div>
       {(!isAuthenticated && isHeaderAuthOverlayOpen) ? (
         <HeaderAuthOverlay
+          description={headerAuthOverlayDescription}
           onClose={() => setIsHeaderAuthOverlayOpen(false)}
           onAuthenticated={() => setIsHeaderAuthOverlayOpen(false)}
         />

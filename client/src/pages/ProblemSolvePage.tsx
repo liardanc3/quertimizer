@@ -2692,10 +2692,10 @@ function SolvePageAuthOverlay({
   const overlayTitle = mode === 'signup' ? '이메일로 가입하기' : mode === 'reset-password' ? '비밀번호 찾기' : '로그인';
   const overlayDescription =
     mode === 'signup'
-      ? '입력 중인 SQL은 유지됩니다. 가입 후 이어서 실행할 수 있습니다.'
+      ? '작성 중인 SQL은 유지됩니다. 가입 후 이어서 작성할 수 있습니다.'
       : mode === 'reset-password'
         ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
-        : '입력 중인 SQL은 유지됩니다. 로그인 후 이어서 실행할 수 있습니다.';
+        : '작성 중인 SQL은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
 
   return (
     <div className="solve-auth-overlay" role="presentation">

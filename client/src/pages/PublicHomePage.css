@@ -440,6 +440,19 @@
   line-height: 1.16;
 }
 
+
+.public-home-shell.is-signup .signup-card {
+  gap: 0.84rem;
+}
+
+.public-home-shell.is-signup .signup-card .field-stack {
+  gap: 0.28rem;
+}
+
+.public-home-shell.is-signup .signup-card .btn.primary.full-width {
+  margin-top: 0.08rem;
+}
+
 .signup-card .text-field {
   min-height: var(--landing-control-height);
   padding: 0.48rem 0.78rem;

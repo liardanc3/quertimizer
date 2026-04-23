@@ -3,16 +3,16 @@ import AdminPage from './pages/AdminPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
 import CommunityPage from './pages/CommunityPage';
 import CommunityWritePage from './pages/CommunityWritePage';
+import DashboardPage from './pages/DashboardPage';
 import FavoritePage from './pages/FavoritePage';
 import GuidePage from './pages/GuidePage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import ProfileActivityPage from './pages/ProfileActivityPage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
-import PublicHomePage from './pages/PublicHomePage';
 import RankingPage from './pages/RankingPage';
 import SubmitHistoryPage from './pages/SubmitHistoryPage';
-import { FAVORITES_PATH, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from './lib/navigation';
+import { DASHBOARD_PATH, FAVORITES_PATH, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from './lib/navigation';
 import { useMockSession } from './lib/session';
 
 interface ProblemRoute {
@@ -22,6 +22,10 @@ interface ProblemRoute {
 
 interface HomeRoute {
   type: 'home';
+}
+
+interface DashboardRoute {
+  type: 'dashboard';
 }
 
 interface ProblemsRoute {
@@ -78,6 +82,7 @@ interface ProfileActivityRoute {
 
 type AppRoute =
   | HomeRoute
+  | DashboardRoute
   | ProblemsRoute
   | SubmitHistoryRoute
   | FavoritesRoute
@@ -106,6 +111,10 @@ function parseRoute(pathname: string): AppRoute {
 
   if (normalizedPathname === '/') {
     return { type: 'home' };
+  }
+
+  if (normalizedPathname === DASHBOARD_PATH) {
+    return { type: 'dashboard' };
   }
 
   if (normalizedPathname === '/problems') {
@@ -187,6 +196,12 @@ export default function AppRouter() {
   const shouldRequireHandleSetup = isAuthenticated && handleSetupRequired;
 
   useEffect(() => {
+    if (route.type === 'home') {
+      navigate(DASHBOARD_PATH, { replace: true });
+    }
+  }, [pathname, route.type]);
+
+  useEffect(() => {
     if (!shouldRequireHandleSetup) {
       return;
     }
@@ -208,6 +223,14 @@ export default function AppRouter() {
 
   if (route.type === 'problem') {
     return <ProblemSolvePage key={route.problemId} problemId={route.problemId} />;
+  }
+
+  if (route.type === 'dashboard') {
+    return <DashboardPage />;
+  }
+
+  if (route.type === 'home') {
+    return <DashboardPage />;
   }
 
   if (route.type === 'ranking') {
@@ -258,5 +281,5 @@ export default function AppRouter() {
     return <HomePage />;
   }
 
-  return isAuthenticated ? <HomePage /> : <PublicHomePage />;
+  return <DashboardPage />;
 }

@@ -10,6 +10,7 @@ import {
   verifyPasswordResetCode,
 } from '../../lib/authApi';
 import { completeAuthentication } from '../../lib/authSession';
+import { LANDING_SIGNUP_PATH, navigate } from '../../lib/navigation';
 import logoImage from '../../assets/logo.png';
 import './HeaderAuthOverlay.css';
 
@@ -17,6 +18,7 @@ type HeaderAuthOverlayMode = 'login' | 'reset-password';
 type HeaderAuthSocialProvider = 'google' | 'github' | 'kakao';
 
 interface HeaderAuthOverlayProps {
+  description?: string | null;
   onClose: () => void;
   onAuthenticated: () => void;
 }
@@ -99,7 +101,29 @@ function KakaoMarkIcon() {
   );
 }
 
-export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAuthOverlayProps) {
+function EmailMarkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4.5 6.75h15a1.5 1.5 0 0 1 1.5 1.5v7.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 15.75v-7.5a1.5 1.5 0 0 1 1.5-1.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m4 8 8 5.5L20 8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export default function HeaderAuthOverlay({ description = null, onClose, onAuthenticated }: HeaderAuthOverlayProps) {
   const [mode, setMode] = useState<HeaderAuthOverlayMode>('login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -405,7 +429,7 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
   const overlayDescription =
     mode === 'reset-password'
       ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
-      : '로그인 후 현재 페이지에서 이어서 이용할 수 있습니다.';
+      : description?.trim() ?? '';
 
   return (
     <div className="header-auth-overlay" role="presentation">
@@ -418,99 +442,125 @@ export default function HeaderAuthOverlay({ onClose, onAuthenticated }: HeaderAu
         <div className="header-auth-modal-header">
           <div className="header-auth-modal-copy">
             <h2 className="header-auth-modal-title">{overlayTitle}</h2>
-            <p className="header-auth-modal-description">{overlayDescription}</p>
+            {overlayDescription ? <p className="header-auth-modal-description">{overlayDescription}</p> : null}
           </div>
         </div>
 
         {mode === 'login' ? (
           <div className="header-auth-landing-body">
-            <div className="header-auth-layout">
-              <form className="header-auth-login-panel" aria-label="로그인 입력" onSubmit={(event) => void handleLoginSubmit(event)}>
-                <div className="field-stack header-auth-field-stack">
-                  <label className="field-label" htmlFor="header-auth-email">
-                    이메일
-                  </label>
-                  <input
-                    id="header-auth-email"
-                    type="email"
-                    className="text-field"
-                    autoComplete="email"
-                    value={loginEmail}
-                    onChange={(event) => {
-                      setLoginEmail(event.target.value);
-                      setLoginErrors([]);
-                    }}
-                    placeholder="이메일을 입력해 주세요."
-                  />
-                </div>
-
-                <div className="field-stack header-auth-field-stack">
-                  <label className="field-label" htmlFor="header-auth-password">
-                    비밀번호
-                  </label>
-                  <input
-                    id="header-auth-password"
-                    type="password"
-                    className="text-field"
-                    autoComplete="current-password"
-                    value={loginPassword}
-                    onChange={(event) => {
-                      setLoginPassword(event.target.value);
-                      setLoginErrors([]);
-                    }}
-                    placeholder="비밀번호를 입력해 주세요."
-                  />
-                </div>
-
-                {loginErrors.length > 0 ? (
-                  <div className="header-auth-feedback is-error" role="alert">
-                    {loginErrors.map((reason) => (
-                      <p key={reason}>{reason}</p>
-                    ))}
+            <div className="minimal-auth-form header-auth-minimal-form">
+              <div className="landing-auth-layout">
+                <form className="landing-login-panel" aria-label="로그인 입력" onSubmit={(event) => void handleLoginSubmit(event)}>
+                  <div className="field-stack">
+                    <label className="field-label" htmlFor="header-auth-email">
+                      이메일
+                    </label>
+                    <input
+                      id="header-auth-email"
+                      type="email"
+                      className="text-field"
+                      autoComplete="email"
+                      value={loginEmail}
+                      onChange={(event) => {
+                        setLoginEmail(event.target.value);
+                        setLoginErrors([]);
+                      }}
+                      placeholder="이메일을 입력하세요"
+                      inputMode="email"
+                    />
                   </div>
-                ) : null}
 
-                <div className="header-auth-login-actions">
-                  <button type="submit" className="btn primary" disabled={!isLoginReady || isLoginSubmitting}>
-                    {isLoginSubmitting ? '로그인 중' : '로그인'}
+                  <div className="field-stack">
+                    <label className="field-label" htmlFor="header-auth-password">
+                      비밀번호
+                    </label>
+                    <input
+                      id="header-auth-password"
+                      type="password"
+                      className="text-field"
+                      autoComplete="current-password"
+                      value={loginPassword}
+                      onChange={(event) => {
+                        setLoginPassword(event.target.value);
+                        setLoginErrors([]);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        void handleLoginSubmit();
+                      }}
+                      placeholder="비밀번호를 입력하세요"
+                    />
+                  </div>
+
+                  {loginErrors.length > 0 ? (
+                    <div className="signup-feedback-box" role="alert" aria-live="polite">
+                      {loginErrors.map((reason) => (
+                        <p key={reason} className="signup-feedback-message">
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="auth-actions minimal">
+                    <button
+                      type="submit"
+                      className="btn primary landing-login-submit"
+                      disabled={!isLoginReady || isLoginSubmitting}
+                    >
+                      {isLoginSubmitting ? '로그인 중...' : '로그인'}
+                    </button>
+                  </div>
+
+                  <button type="button" className="btn text landing-password-reset-link" onClick={() => setMode('reset-password')}>
+                    비밀번호를 잊으셨나요?
                   </button>
+                </form>
+
+                <div className="landing-auth-divider" aria-hidden="true">
+                  <span className="landing-auth-divider-line" />
+                  <img className="landing-auth-divider-mark" src={logoImage} alt="" />
+                  <span className="landing-auth-divider-line" />
                 </div>
 
-                <button type="button" className="btn text header-auth-reset-link" onClick={() => setMode('reset-password')}>
-                  비밀번호를 잊으셨나요?
-                </button>
-              </form>
+                <aside className="landing-access-panel" aria-label="계정 지원">
+                  <div className="landing-access-group landing-access-group-social">
+                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <GoogleMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">Google로 계속하기</span>
+                    </button>
 
-              <div className="header-auth-divider" aria-hidden="true">
-                <span className="header-auth-divider-line" />
-                <img className="header-auth-divider-mark" src={logoImage} alt="" />
-                <span className="header-auth-divider-line" />
+                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <GithubMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">Github로 계속하기</span>
+                    </button>
+
+                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <KakaoMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">Kakao로 계속하기</span>
+                    </button>
+                  </div>
+
+                  <div className="landing-access-group landing-access-group-support">
+                    <button type="button" className="landing-access-card is-social is-email" onClick={() => navigate(LANDING_SIGNUP_PATH)}>
+                      <span className="landing-access-card-icon" aria-hidden="true">
+                        <EmailMarkIcon />
+                      </span>
+                      <span className="landing-access-card-title">이메일로 계속하기</span>
+                    </button>
+                  </div>
+                </aside>
               </div>
-
-              <aside className="header-auth-access-panel" aria-label="소셜 로그인">
-                <div className="header-auth-access-group">
-                  <button type="button" className="header-auth-social-button" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
-                    <span className="header-auth-social-icon" aria-hidden="true">
-                      <GoogleMarkIcon />
-                    </span>
-                    <span>Google로 계속하기</span>
-                  </button>
-
-                  <button type="button" className="header-auth-social-button" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
-                    <span className="header-auth-social-icon" aria-hidden="true">
-                      <GithubMarkIcon />
-                    </span>
-                    <span>Github로 계속하기</span>
-                  </button>
-
-                  <button type="button" className="header-auth-social-button" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
-                    <span className="header-auth-social-icon" aria-hidden="true">
-                      <KakaoMarkIcon />
-                    </span>
-                    <span>Kakao로 계속하기</span>
-                  </button>
-                </div>
-              </aside>
             </div>
           </div>
         ) : (

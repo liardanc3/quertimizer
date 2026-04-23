@@ -1,4 +1,5 @@
 export const PROBLEMS_PATH = '/problems';
+export const DASHBOARD_PATH = '/dashboard';
 export const PROBLEM_CREATE_PATH = '/problems/create';
 export const SUBMIT_HISTORY_PATH = '/submissions';
 export const FAVORITES_PATH = '/favorites';

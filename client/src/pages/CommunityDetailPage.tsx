@@ -12,6 +12,7 @@ import {
   type CommunityPostDetail,
 } from '../lib/communityApi';
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
+import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
 import { showSessionToast, useMockSession } from '../lib/session';
 import './CommunityPage.css';
 
@@ -34,6 +35,7 @@ function getLocationHashSnapshot() {
 }
 
 const numberFormatter = new Intl.NumberFormat('ko-KR');
+const COMMENT_LOGIN_DESCRIPTION = '작성 중인 댓글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
 
 function formatBoardDate(value: string) {
   const date = new Date(value);
@@ -154,6 +156,23 @@ function LikeIcon() {
   );
 }
 
+function ViewIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.4 8s1.9-3.7 5.6-3.7S13.6 8 13.6 8 11.7 11.7 8 11.7 2.4 8 2.4 8Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 9.75A1.75 1.75 0 1 0 8 6.25a1.75 1.75 0 0 0 0 3.5Z" stroke="currentColor" strokeWidth="1.35" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.5 3.9h9v6.1H7.4l-3.1 2.35V10h-.8V3.9Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function SendIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -245,6 +264,13 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   const editContentRef = useRef<HTMLDivElement | null>(null);
   const editImageInputRef = useRef<HTMLInputElement | null>(null);
   const savedEditRangeRef = useRef<Range | null>(null);
+  const hasCommentDraft = commentDraft.trim() !== '' || Object.values(replyDrafts).some((replyDraft) => replyDraft.trim() !== '');
+
+  useEffect(() => {
+    setLoginOverlayDescription(hasCommentDraft ? COMMENT_LOGIN_DESCRIPTION : null);
+
+    return () => setLoginOverlayDescription(null);
+  }, [hasCommentDraft]);
 
   useEffect(() => {
     let cancelled = false;
@@ -555,7 +581,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
   async function handleToggleLike() {
     if (!isAuthenticated) {
-      setFeedback('로그인 후 이용할 수 있다.');
+      setFeedback(null);
+      openLoginOverlay();
       return;
     }
 
@@ -584,7 +611,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
   async function handleSubmitComment() {
     if (!isAuthenticated) {
-      setFeedback('로그인 후 이용할 수 있다.');
+      setFeedback(null);
+      openLoginOverlay(commentDraft.trim() ? COMMENT_LOGIN_DESCRIPTION : undefined);
       return;
     }
 
@@ -616,7 +644,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
   async function handleSubmitReply(commentId: string) {
     if (!isAuthenticated) {
-      setFeedback('로그인 후 이용할 수 있다.');
+      setFeedback(null);
+      openLoginOverlay(replyDrafts[commentId]?.trim() ? COMMENT_LOGIN_DESCRIPTION : undefined);
       return;
     }
 
@@ -644,7 +673,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
   async function handleToggleCommentLike(commentId: string) {
     if (!isAuthenticated) {
-      setFeedback('로그인 후 이용할 수 있다.');
+      setFeedback(null);
+      openLoginOverlay();
       return;
     }
 
@@ -917,7 +947,10 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <span>{post.authorHandle}</span>
             </button>
             <span>{formatBoardDate(post.createdAt)}</span>
-            <span>조회수 {numberFormatter.format(post.views)}</span>
+            <span className="community-detail-metric" aria-label={`조회수 ${numberFormatter.format(post.views)}`}>
+              <ViewIcon />
+              <span>{numberFormatter.format(post.views)}</span>
+            </span>
             <button
               type="button"
               className={`community-meta-like-button ${post.likedByCurrentUser ? 'is-liked' : ''}`.trim()}
@@ -928,7 +961,10 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <LikeIcon />
               <span>{numberFormatter.format(post.likes)}</span>
             </button>
-            <span>댓글 {numberFormatter.format(post.comments)}</span>
+            <span className="community-detail-metric" aria-label={`댓글 ${numberFormatter.format(post.comments)}`}>
+              <CommentIcon />
+              <span>{numberFormatter.format(post.comments)}</span>
+            </span>
             {post.updatedAt ? <span>수정 {formatBoardDate(post.updatedAt)}</span> : null}
           </div>
 
