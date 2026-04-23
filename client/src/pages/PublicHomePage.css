@@ -420,6 +420,7 @@
 }
 
 .account-recovery-overlay.is-reset-password-stage .signup-card .text-field {
+  height: 2.18rem;
   min-height: 2.18rem;
   padding: 0.38rem 0.72rem;
   font-size: 0.8rem;
@@ -427,6 +428,7 @@
 
 .account-recovery-overlay.is-reset-password-stage .signup-card .btn,
 .account-recovery-overlay.is-reset-password-stage .fixed-action {
+  height: 2.18rem;
   min-height: 2.18rem;
   font-size: 0.78rem;
 }
@@ -454,6 +456,7 @@
 }
 
 .signup-card .text-field {
+  height: var(--landing-control-height);
   min-height: var(--landing-control-height);
   padding: 0.48rem 0.78rem;
   border-radius: 0;
@@ -466,6 +469,7 @@
 
 .signup-card .btn,
 .fixed-action {
+  height: var(--landing-control-height);
   min-height: var(--landing-control-height);
   border-radius: 0;
 }
@@ -751,6 +755,7 @@
   .account-recovery-overlay.is-reset-password-stage .signup-card .text-field,
   .account-recovery-overlay.is-reset-password-stage .signup-card .btn,
   .account-recovery-overlay.is-reset-password-stage .fixed-action {
+    height: 2rem;
     min-height: 2rem;
   }
 

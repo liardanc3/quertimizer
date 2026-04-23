@@ -22,6 +22,7 @@ export interface LoginPayload {
 export interface SignupPayload {
   password: string;
   email: string;
+  code: string;
 }
 
 export interface SetupHandlePayload {
@@ -167,6 +168,7 @@ async function requestAuth(path: '/signup' | '/login', payload: LoginPayload | S
         ...(path === '/login' && 'email' in payload ? { email: payload.email } : {}),
         ...(path === '/login' ? { rememberLogin: true } : {}),
         ...(path === '/signup' && 'email' in payload ? { email: payload.email } : {}),
+        ...(path === '/signup' && 'code' in payload ? { code: payload.code } : {}),
       }),
     });
   } catch {
@@ -262,6 +264,30 @@ async function requestRecovery(path: string, payload: object, fallbackMessage: s
   throw new RecoveryApiError(response.status, reasons, fallbackMessage);
 }
 
+async function requestSignupVerification(path: '/signup/send-code' | '/signup/verify-code', payload: object, fallbackMessage: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new SignupApiError(0, [fallbackMessage]);
+  }
+
+  if (response.ok) {
+    return response;
+  }
+
+  const reasons = await getErrorReasons(response, fallbackMessage);
+  throw new SignupApiError(response.status, reasons);
+}
+
 export async function signup(payload: SignupPayload) {
   try {
     await requestAuth('/signup', payload, '회원가입 요청에 실패했습니다.');
@@ -272,6 +298,14 @@ export async function signup(payload: SignupPayload) {
 
     throw error;
   }
+}
+
+export async function sendSignupVerificationCode(payload: AccountRecoveryEmailPayload) {
+  await requestSignupVerification('/signup/send-code', payload, '이메일 가입 인증코드 발송에 실패했습니다.');
+}
+
+export async function verifySignupVerificationCode(payload: AccountRecoveryCodePayload) {
+  await requestSignupVerification('/signup/verify-code', payload, '이메일 가입 인증코드 확인에 실패했습니다.');
 }
 
 export async function setupHandle(payload: SetupHandlePayload) {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import StatusPopup from '../common/StatusPopup';
 import { RecoveryApiError, resetPassword, sendPasswordResetCode, verifyPasswordResetCode } from '../../lib/authApi';
 
@@ -18,7 +18,8 @@ const VERIFICATION_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const VERIFICATION_CODE_HINT = '이메일로 받은 인증코드 6자를 5분 내에 입력해 주세요.';
 const PASSWORD_HINT = '비밀번호는 특수문자를 포함해 8자 이상이어야 합니다.';
 const PASSWORD_CONFIRM_HINT = '비밀번호 확인은 비밀번호와 동일하게 입력해 주세요.';
-const CODE_SENT_MESSAGE = '인증코드를 전송했습니다. 5분 내에 입력해 주세요.';
+const CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
+const CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.';
 
 const resetPasswordGuideLines = [
   '가입할 때 사용한 이메일을 입력하면 인증코드를 보내드립니다.',
@@ -34,6 +35,9 @@ function hasRequiredPasswordFormat(value: string) {
 }
 
 export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverlayProps) {
+  const verificationCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const newPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const newPasswordConfirmInputRef = useRef<HTMLInputElement | null>(null);
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -69,7 +73,9 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
       : !isEmailValid
         ? '올바른 이메일 형식으로 입력해 주세요.'
         : '인증코드를 받을 수 있는 이메일입니다.';
-  const verificationCodeHintMessage = statusMessage ?? VERIFICATION_CODE_HINT;
+  const emailHintMessageAfterSendCode = statusMessage === CODE_SENT_MESSAGE ? CODE_SENT_MESSAGE : emailHintMessage;
+  const verificationCodeHintMessage = statusMessage && statusMessage !== CODE_SENT_MESSAGE ? statusMessage : VERIFICATION_CODE_HINT;
+  const isVerificationCodeStatusSuccess = statusMessage !== null && statusMessage !== CODE_SENT_MESSAGE;
 
   function resetRecoveryState() {
     setVerificationCode('');
@@ -84,7 +90,7 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
 
   async function handleSendCode() {
     if (!canSendCode) {
-      return;
+      return false;
     }
 
     try {
@@ -97,8 +103,10 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
       setIsCodeSent(true);
       setVerificationCode('');
       setStatusMessage(CODE_SENT_MESSAGE);
+      return true;
     } catch (error) {
       setErrorReasons(error instanceof RecoveryApiError ? error.reasons : ['인증코드 발송 중 알 수 없는 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsSendingCode(false);
     }
@@ -106,7 +114,7 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
 
   async function handleVerifyCode() {
     if (!canVerifyCode) {
-      return;
+      return false;
     }
 
     try {
@@ -118,10 +126,12 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
         code: normalizedVerificationCode,
       });
       setIsResetPasswordVerified(true);
-      setStatusMessage('인증코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+      setStatusMessage(CODE_VERIFIED_MESSAGE);
+      return true;
     } catch (error) {
       setIsResetPasswordVerified(false);
       setErrorReasons(error instanceof RecoveryApiError ? error.reasons : ['인증코드 확인 중 알 수 없는 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsVerifyingCode(false);
     }
@@ -129,7 +139,7 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
 
   async function handleResetPassword() {
     if (!canResetPassword) {
-      return;
+      return false;
     }
 
     try {
@@ -149,11 +159,19 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
         level: 1,
         message: '비밀번호 변경이 완료되었습니다.',
       });
+      return true;
     } catch (error) {
       setErrorReasons(error instanceof RecoveryApiError ? error.reasons : ['비밀번호 재설정 중 알 수 없는 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsResettingPassword(false);
     }
+  }
+
+  function focusNextInput(nextInputRef: RefObject<HTMLInputElement | null>) {
+    window.requestAnimationFrame(() => {
+      nextInputRef.current?.focus();
+    });
   }
 
   function handlePopupConfirm() {
@@ -203,6 +221,19 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
                 id="reset-password-email"
                 type="email"
                 className="text-field"
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void (async () => {
+                    const isCodeSent = await handleSendCode();
+                    if (isCodeSent) {
+                      focusNextInput(verificationCodeInputRef);
+                    }
+                  })();
+                }}
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value);
@@ -222,8 +253,12 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
                 {isSendingCode ? '전송 중...' : '코드 전송'}
               </button>
             </div>
-            <p className={`hint-text signup-field-hint ${normalizedEmail !== '' && !isEmailValid ? 'is-error' : ''}`}>
-              {emailHintMessage}
+            <p
+              className={`hint-text signup-field-hint ${
+                normalizedEmail !== '' && !isEmailValid ? 'is-error' : statusMessage === CODE_SENT_MESSAGE ? 'is-success' : ''
+              }`}
+            >
+              {emailHintMessageAfterSendCode}
             </p>
           </div>
 
@@ -235,11 +270,25 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
               <input
                 id="reset-password-verification-code"
                 className="text-field"
+                ref={verificationCodeInputRef}
                 value={verificationCode}
                 onChange={(event) => {
                   setVerificationCode(sanitizeVerificationCode(event.target.value));
                   setErrorReasons([]);
                   setIsResetPasswordVerified(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void (async () => {
+                    const isCodeVerified = await handleVerifyCode();
+                    if (isCodeVerified) {
+                      focusNextInput(newPasswordInputRef);
+                    }
+                  })();
                 }}
                 placeholder="인증코드 6자를 입력하세요"
                 inputMode="text"
@@ -256,7 +305,7 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
                 {isVerifyingCode ? '확인 중...' : '코드 확인'}
               </button>
             </div>
-            <p className={`hint-text signup-field-hint ${errorReasons.length > 0 ? 'is-error' : statusMessage ? 'is-success' : ''}`}>
+            <p className={`hint-text signup-field-hint ${errorReasons.length > 0 ? 'is-error' : isVerificationCodeStatusSuccess ? 'is-success' : ''}`}>
               {verificationCodeHintMessage}
             </p>
           </div>
@@ -271,11 +320,20 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
                   id="reset-password"
                   type="password"
                   className="text-field"
+                  ref={newPasswordInputRef}
                   value={newPassword}
                   onChange={(event) => {
                     setNewPassword(event.target.value);
                     setErrorReasons([]);
                     setPopupState(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    focusNextInput(newPasswordConfirmInputRef);
                   }}
                   placeholder="새 비밀번호를 입력하세요"
                   autoComplete="new-password"
@@ -294,11 +352,20 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
                   id="reset-password-confirm"
                   type="password"
                   className="text-field"
+                  ref={newPasswordConfirmInputRef}
                   value={newPasswordConfirm}
                   onChange={(event) => {
                     setNewPasswordConfirm(event.target.value);
                     setErrorReasons([]);
                     setPopupState(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void handleResetPassword();
                   }}
                   placeholder="새 비밀번호를 다시 입력하세요"
                   autoComplete="new-password"

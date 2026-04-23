@@ -872,12 +872,8 @@ function ProfileLoadingShell({ label }: { label: string }) {
 export default function ProfilePage({ handle: profileHandle }: ProfilePageProps) {
   const { isAuthenticated, isReady, handle: currentHandle } = useMockSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
-  const resolvedProfileId = profileHandle ?? currentHandle;
-  const isOwnProfile = isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle;
-  const profileBasePath = profileHandle ? getProfilePath(profileHandle) : getProfilePath();
-  const activeTopTab = readProfileTopTab(locationSearch || window.location.search, isOwnProfile);
-  const isAlarmListOpen = activeTopTab === 'alarms';
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
+  const [lastViewedHandle, setLastViewedHandle] = useState<string | null>(profileHandle ?? null);
   const [solvedProblems, setSolvedProblems] = useState<UserProfileSolvedProblems>(emptySolvedProblems);
   const [solvedRecords, setSolvedRecords] = useState<UserProfileSolvedRecords>(emptySolvedRecords);
   const [authoredPosts, setAuthoredPosts] = useState<ProfileCommunityPost[]>([]);
@@ -907,6 +903,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<ProfileEditDraft | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const resolvedProfileId = profileHandle ?? currentHandle ?? lastViewedHandle;
+  const isOwnProfile = isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle;
+  const profileBasePath =
+    profileHandle != null
+      ? getProfilePath(profileHandle)
+      : isOwnProfile
+        ? getProfilePath()
+        : resolvedProfileId != null
+          ? getProfilePath(resolvedProfileId)
+          : getProfilePath();
+  const activeTopTab = readProfileTopTab(locationSearch || window.location.search, isOwnProfile);
+  const isAlarmListOpen = activeTopTab === 'alarms';
 
   useEffect(() => {
     if (!isReady) {
@@ -984,6 +992,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       }
 
       setProfileSummary(summaryResult.value);
+      setLastViewedHandle(summaryResult.value.handle);
       setEditDraft(createEditDraft(summaryResult.value));
       setSolvedProblems(solvedProblemsResult.status === 'fulfilled' ? solvedProblemsResult.value : emptySolvedProblems);
       setSolvedRecords(solvedRecordsResult.status === 'fulfilled' ? solvedRecordsResult.value : emptySolvedRecords);

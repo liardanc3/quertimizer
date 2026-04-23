@@ -1,21 +1,26 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import {
   AuthApiError,
   RecoveryApiError,
+  SignupApiError,
+  checkDuplicateEmail,
   fetchSessionMe,
   getApiBaseUrl,
   login,
   resetPassword,
   sendPasswordResetCode,
+  sendSignupVerificationCode,
+  signup,
   verifyPasswordResetCode,
+  verifySignupVerificationCode,
 } from '../../lib/authApi';
 import { completeAuthentication } from '../../lib/authSession';
-import { LANDING_SIGNUP_PATH, navigate } from '../../lib/navigation';
 import logoImage from '../../assets/logo.png';
 import './HeaderAuthOverlay.css';
 
-type HeaderAuthOverlayMode = 'login' | 'reset-password';
+type HeaderAuthOverlayMode = 'login' | 'signup' | 'reset-password';
 type HeaderAuthSocialProvider = 'google' | 'github' | 'kakao';
+type SignupEmailCheckStatus = 'idle' | 'checking' | 'available' | 'duplicated';
 
 interface HeaderAuthOverlayProps {
   description?: string | null;
@@ -25,6 +30,18 @@ interface HeaderAuthOverlayProps {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_RESET_CODE_PATTERN = /^[A-Z0-9]{6}$/;
+const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.';
+const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 사용 가능 여부를 확인하는 중입니다.';
+const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
+const SIGNUP_EMAIL_DUPLICATED_MESSAGE = '이미 사용 중인 이메일입니다.';
+const SIGNUP_CODE_HINT = '이메일로 받은 인증코드 6자를 입력해 주세요.';
+const SIGNUP_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
+const SIGNUP_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.';
+const SIGNUP_PASSWORD_HINT = '특수문자를 포함해 8자 이상 입력해 주세요.';
+const SIGNUP_PASSWORD_CONFIRM_HINT = '비밀번호를 다시 입력해 주세요.';
+const RESET_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
+const RESET_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.';
+const RESET_PASSWORD_CHANGED_MESSAGE = '비밀번호가 변경되었습니다. 다시 로그인해 주세요.';
 
 function hasRequiredPasswordFormat(value: string) {
   return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
@@ -130,6 +147,20 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
   const [loginErrors, setLoginErrors] = useState<string[]>([]);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [isSocialLoginSubmitting, setIsSocialLoginSubmitting] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
+  const [signupErrors, setSignupErrors] = useState<string[]>([]);
+  const [signupStatusMessage, setSignupStatusMessage] = useState<string | null>(null);
+  const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
+  const [isSendingSignupCode, setIsSendingSignupCode] = useState(false);
+  const [isVerifyingSignupCode, setIsVerifyingSignupCode] = useState(false);
+  const [isSignupCodeSent, setIsSignupCodeSent] = useState(false);
+  const [isSignupCodeVerified, setIsSignupCodeVerified] = useState(false);
+  const [signupEmailCheckStatus, setSignupEmailCheckStatus] = useState<SignupEmailCheckStatus>('idle');
+  const [signupEmailCheckReason, setSignupEmailCheckReason] = useState<string | null>(null);
+  const [signupEmailLastCheckedValue, setSignupEmailLastCheckedValue] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -143,15 +174,65 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
   const [isResetCodeVerified, setIsResetCodeVerified] = useState(false);
   const socialLoginPopupPollIdRef = useRef<number | null>(null);
   const returnToLoginTimeoutRef = useRef<number | null>(null);
+  const signupEmailCheckSequenceRef = useRef(0);
+  const signupCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordConfirmInputRef = useRef<HTMLInputElement | null>(null);
+  const resetCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const resetPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const resetPasswordConfirmInputRef = useRef<HTMLInputElement | null>(null);
 
   const normalizedLoginEmail = loginEmail.trim();
+  const normalizedSignupEmail = signupEmail.trim();
+  const normalizedSignupCode = signupCode.trim().toUpperCase();
   const normalizedResetEmail = resetEmail.trim();
   const normalizedResetCode = resetCode.trim().toUpperCase();
   const isLoginReady = normalizedLoginEmail !== '' && loginPassword.trim() !== '';
+  const isSignupEmailValid = EMAIL_PATTERN.test(normalizedSignupEmail);
+  const isSignupCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedSignupCode);
+  const isSignupPasswordValid = hasRequiredPasswordFormat(signupPassword);
+  const isSignupPasswordConfirmValid = signupPasswordConfirm !== '' && signupPasswordConfirm === signupPassword;
+  const isSignupReady =
+    isSignupEmailValid &&
+    isSignupCodeVerified &&
+    isSignupPasswordValid &&
+    isSignupPasswordConfirmValid &&
+    signupEmailCheckStatus !== 'checking';
   const isResetEmailValid = EMAIL_PATTERN.test(normalizedResetEmail);
   const isResetCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedResetCode);
   const isResetPasswordValid = hasRequiredPasswordFormat(newPassword);
   const isResetPasswordConfirmValid = newPasswordConfirm !== '' && newPasswordConfirm === newPassword;
+  const resetCodeSentStatusMessage = resetStatusMessage === RESET_CODE_SENT_MESSAGE ? resetStatusMessage : null;
+  const resetCodeVerifiedStatusMessage = resetStatusMessage === RESET_CODE_VERIFIED_MESSAGE ? resetStatusMessage : null;
+  const resetPasswordChangedStatusMessage = resetStatusMessage === RESET_PASSWORD_CHANGED_MESSAGE ? resetStatusMessage : null;
+  const signupCodeSentStatusMessage = signupStatusMessage === SIGNUP_CODE_SENT_MESSAGE ? signupStatusMessage : null;
+  const signupCodeVerifiedStatusMessage = signupStatusMessage === SIGNUP_CODE_VERIFIED_MESSAGE ? signupStatusMessage : null;
+  const signupEmailHintMessage =
+    signupCodeSentStatusMessage ??
+    (normalizedSignupEmail === ''
+      ? SIGNUP_EMAIL_HINT
+      : !isSignupEmailValid
+        ? SIGNUP_EMAIL_HINT
+        : signupEmailCheckStatus === 'checking'
+          ? SIGNUP_EMAIL_CHECKING_MESSAGE
+          : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'
+            ? (signupEmailCheckReason ?? SIGNUP_EMAIL_DUPLICATED_MESSAGE)
+            : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available'
+              ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
+              : SIGNUP_EMAIL_HINT);
+  const hasSignupEmailError =
+    normalizedSignupEmail !== '' &&
+    (!isSignupEmailValid || (signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'));
+  const hasSignupEmailSuccess =
+    normalizedSignupEmail !== '' &&
+    !hasSignupEmailError &&
+    ((signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available') || signupCodeSentStatusMessage != null);
+
+  const focusNextInput = (nextInputRef: RefObject<HTMLInputElement | null>) => {
+    window.requestAnimationFrame(() => {
+      nextInputRef.current?.focus();
+    });
+  };
 
   useEffect(() => {
     document.body.classList.add('header-auth-locked');
@@ -241,6 +322,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
           stopPolling();
           onAuthenticated();
         } catch {
+          // 팝업 세션 확인 실패는 polling 재시도로 처리
         }
       })();
     };
@@ -276,6 +358,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
             }
           }
         } catch {
+          // 크로스 오리진 팝업은 location 접근을 허용하지 않음
         }
 
         const session = await fetchSessionMe();
@@ -288,6 +371,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         stopPolling();
         onAuthenticated();
       } catch {
+        // 팝업 상태 확인 실패는 다음 polling 주기에서 다시 확인
       } finally {
         isChecking = false;
       }
@@ -297,6 +381,86 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
       void pollPopupState();
     }, 500);
     void pollPopupState();
+  };
+
+  const resetSignupEmailCheck = () => {
+    setSignupEmailCheckStatus('idle');
+    setSignupEmailCheckReason(null);
+    setSignupEmailLastCheckedValue('');
+  };
+
+  const resetSignupVerification = () => {
+    setSignupCode('');
+    setSignupStatusMessage(null);
+    setIsSignupCodeSent(false);
+    setIsSignupCodeVerified(false);
+  };
+
+  const applySignupErrorReasons = (reasons: string[]) => {
+    const nextErrors: string[] = [];
+
+    for (const reason of reasons) {
+      if (reason.includes('이메일') && (reason.includes('중복') || reason.includes('사용 중'))) {
+        setSignupEmailCheckStatus('duplicated');
+        setSignupEmailCheckReason(reason);
+        setSignupEmailLastCheckedValue(normalizedSignupEmail);
+        continue;
+      }
+
+      nextErrors.push(reason);
+    }
+
+    setSignupErrors(nextErrors);
+  };
+
+  const checkSignupEmailDuplication = async () => {
+    if (normalizedSignupEmail === '') {
+      resetSignupEmailCheck();
+      return false;
+    }
+
+    if (!isSignupEmailValid) {
+      resetSignupEmailCheck();
+      return false;
+    }
+
+    if (signupEmailLastCheckedValue === normalizedSignupEmail) {
+      return signupEmailCheckStatus === 'available';
+    }
+
+    const requestSequence = signupEmailCheckSequenceRef.current + 1;
+    signupEmailCheckSequenceRef.current = requestSequence;
+    setSignupEmailCheckStatus('checking');
+    setSignupEmailCheckReason(null);
+    setSignupErrors([]);
+
+    try {
+      const result = await checkDuplicateEmail(normalizedSignupEmail);
+
+      if (requestSequence !== signupEmailCheckSequenceRef.current) {
+        return false;
+      }
+
+      setSignupEmailCheckStatus(result.available ? 'available' : 'duplicated');
+      setSignupEmailCheckReason(result.reason);
+      setSignupEmailLastCheckedValue(normalizedSignupEmail);
+      return result.available;
+    } catch (error) {
+      if (requestSequence !== signupEmailCheckSequenceRef.current) {
+        return false;
+      }
+
+      setSignupEmailCheckStatus('idle');
+      setSignupEmailLastCheckedValue(normalizedSignupEmail);
+
+      if (error instanceof SignupApiError) {
+        setSignupErrors(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '이메일 중복 확인 중 오류가 발생했습니다.']);
+      return false;
+    }
   };
 
   const handleLoginSubmit = async (event?: FormEvent<HTMLFormElement>) => {
@@ -334,9 +498,119 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
     }
   };
 
+  const handleSendSignupCode = async () => {
+    if (!isSignupEmailValid || isSendingSignupCode) {
+      return false;
+    }
+
+    try {
+      setIsSendingSignupCode(true);
+      setSignupErrors([]);
+      setSignupStatusMessage(null);
+
+      const isEmailAvailable = await checkSignupEmailDuplication();
+      if (!isEmailAvailable) {
+        return false;
+      }
+
+      await sendSignupVerificationCode({ email: normalizedSignupEmail });
+      setSignupCode('');
+      setIsSignupCodeSent(true);
+      setIsSignupCodeVerified(false);
+      setSignupStatusMessage(SIGNUP_CODE_SENT_MESSAGE);
+      return true;
+    } catch (error) {
+      if (error instanceof SignupApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsSendingSignupCode(false);
+    }
+  };
+
+  const handleVerifySignupCode = async () => {
+    if (!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode) {
+      return false;
+    }
+
+    try {
+      setIsVerifyingSignupCode(true);
+      setSignupErrors([]);
+      setSignupStatusMessage(null);
+
+      await verifySignupVerificationCode({
+        email: normalizedSignupEmail,
+        code: normalizedSignupCode,
+      });
+      setIsSignupCodeVerified(true);
+      setSignupStatusMessage(SIGNUP_CODE_VERIFIED_MESSAGE);
+      return true;
+    } catch (error) {
+      setIsSignupCodeVerified(false);
+      if (error instanceof SignupApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsVerifyingSignupCode(false);
+    }
+  };
+
+  const handleSignupSubmit = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
+    if (!isSignupReady) {
+      return false;
+    }
+
+    try {
+      setIsSignupSubmitting(true);
+      setSignupErrors([]);
+
+      const isEmailAvailable = await checkSignupEmailDuplication();
+      if (!isEmailAvailable) {
+        return false;
+      }
+
+      await signup({
+        email: normalizedSignupEmail,
+        password: signupPassword,
+        code: normalizedSignupCode,
+      });
+
+      const session = await fetchSessionMe();
+      await completeAuthentication(session);
+
+      if (!session.authenticated) {
+        setSignupErrors(['회원가입 후 세션을 확인하지 못했습니다.']);
+        return false;
+      }
+
+      onAuthenticated();
+      return true;
+    } catch (error) {
+      if (error instanceof SignupApiError || error instanceof AuthApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsSignupSubmitting(false);
+    }
+  };
+
   const handleSendResetCode = async () => {
     if (!isResetEmailValid || isSendingResetCode) {
-      return;
+      return false;
     }
 
     try {
@@ -349,14 +623,16 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
       setIsResetCodeVerified(false);
       setNewPassword('');
       setNewPasswordConfirm('');
-      setResetStatusMessage('인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+      setResetStatusMessage(RESET_CODE_SENT_MESSAGE);
+      return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
         setResetErrors(error.reasons);
-        return;
+        return false;
       }
 
       setResetErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsSendingResetCode(false);
     }
@@ -364,7 +640,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
   const handleVerifyResetCode = async () => {
     if (!isResetCodeSent || !isResetCodeValid || isVerifyingResetCode) {
-      return;
+      return false;
     }
 
     try {
@@ -376,15 +652,17 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         code: normalizedResetCode,
       });
       setIsResetCodeVerified(true);
-      setResetStatusMessage('인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+      setResetStatusMessage(RESET_CODE_VERIFIED_MESSAGE);
+      return true;
     } catch (error) {
       setIsResetCodeVerified(false);
       if (error instanceof RecoveryApiError) {
         setResetErrors(error.reasons);
-        return;
+        return false;
       }
 
       setResetErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsVerifyingResetCode(false);
     }
@@ -394,7 +672,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
     event?.preventDefault();
 
     if (!isResetCodeVerified || !isResetPasswordValid || !isResetPasswordConfirmValid || isResettingPassword) {
-      return;
+      return false;
     }
 
     try {
@@ -406,34 +684,39 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         code: normalizedResetCode,
         password: newPassword,
       });
-      setResetStatusMessage('비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
+      setResetStatusMessage(RESET_PASSWORD_CHANGED_MESSAGE);
       setNewPassword('');
       setNewPasswordConfirm('');
       returnToLoginTimeoutRef.current = window.setTimeout(() => {
         setMode('login');
         setResetErrors([]);
       }, 300);
+      return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
         setResetErrors(error.reasons);
-        return;
+        return false;
       }
 
       setResetErrors([error instanceof Error ? error.message : '비밀번호 변경 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsResettingPassword(false);
     }
   };
 
-  const overlayTitle = mode === 'reset-password' ? '비밀번호 찾기' : '로그인';
+  const overlayTitle = mode === 'signup' ? '이메일로 가입하기' : mode === 'reset-password' ? '비밀번호 찾기' : '로그인';
+  const signupDescription = description?.trim().replace('로그인 후', '가입 후') ?? '';
   const overlayDescription =
-    mode === 'reset-password'
-      ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
-      : description?.trim() ?? '';
+    mode === 'signup'
+      ? signupDescription
+      : mode === 'reset-password'
+        ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
+        : description?.trim() ?? '';
 
   return (
     <div className="header-auth-overlay" role="presentation">
-      <div className="header-auth-overlay-backdrop" onClick={onClose} />
+      <div className="header-auth-overlay-backdrop" />
       <section className="header-auth-modal" role="dialog" aria-modal="true" aria-label={overlayTitle}>
         <button type="button" className="header-auth-modal-close" aria-label="로그인 팝업 닫기" onClick={onClose}>
           <CloseIcon />
@@ -552,7 +835,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   </div>
 
                   <div className="landing-access-group landing-access-group-support">
-                    <button type="button" className="landing-access-card is-social is-email" onClick={() => navigate(LANDING_SIGNUP_PATH)}>
+                    <button type="button" className="landing-access-card is-social is-email" onClick={() => setMode('signup')}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <EmailMarkIcon />
                       </span>
@@ -563,6 +846,178 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
               </div>
             </div>
           </div>
+        ) : mode === 'signup' ? (
+          <form className="header-auth-signup-form" onSubmit={(event) => void handleSignupSubmit(event)}>
+            <div className="field-stack header-auth-field-stack">
+              <label className="field-label" htmlFor="header-signup-email">
+                이메일
+              </label>
+              <div className="header-auth-inline-row">
+                <input
+                  id="header-signup-email"
+                  type="email"
+                  className="text-field"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeSent = await handleSendSignupCode();
+                      if (isCodeSent) {
+                        focusNextInput(signupCodeInputRef);
+                      }
+                    })();
+                  }}
+                  autoComplete="email"
+                  value={signupEmail}
+                  onChange={(event) => {
+                    setSignupEmail(event.target.value);
+                    setSignupErrors([]);
+                    resetSignupEmailCheck();
+                    resetSignupVerification();
+                  }}
+                  onBlur={() => {
+                    void checkSignupEmailDuplication();
+                  }}
+                  placeholder="이메일을 입력해 주세요."
+                  aria-invalid={hasSignupEmailError}
+                />
+                <button type="button" className="btn secondary" onClick={handleSendSignupCode} disabled={!isSignupEmailValid || isSendingSignupCode}>
+                  {isSendingSignupCode ? '전송 중' : '코드 전송'}
+                </button>
+              </div>
+              <p className={`header-auth-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
+                {signupEmailHintMessage}
+              </p>
+            </div>
+
+            <div className="field-stack header-auth-field-stack">
+              <label className="field-label" htmlFor="header-signup-code">
+                인증 코드
+              </label>
+              <div className="header-auth-inline-row">
+                <input
+                  id="header-signup-code"
+                  type="text"
+                  className="text-field"
+                  ref={signupCodeInputRef}
+                  value={signupCode}
+                  onChange={(event) => {
+                    setSignupCode(sanitizeVerificationCode(event.target.value));
+                    setSignupErrors([]);
+                    setSignupStatusMessage(null);
+                    setIsSignupCodeVerified(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeVerified = await handleVerifySignupCode();
+                      if (isCodeVerified) {
+                        focusNextInput(signupPasswordInputRef);
+                      }
+                    })();
+                  }}
+                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                  disabled={!isSignupCodeSent}
+                />
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={handleVerifySignupCode}
+                  disabled={!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode}
+                >
+                  {isVerifyingSignupCode ? '확인 중' : '코드 확인'}
+                </button>
+              </div>
+              {signupCodeVerifiedStatusMessage ? <p className="header-auth-field-hint is-success">{signupCodeVerifiedStatusMessage}</p> : null}
+              {!signupCodeVerifiedStatusMessage ? <p className="header-auth-field-hint">{SIGNUP_CODE_HINT}</p> : null}
+            </div>
+
+            <div className="field-stack header-auth-field-stack">
+              <label className="field-label" htmlFor="header-signup-password">
+                비밀번호
+              </label>
+              <input
+                id="header-signup-password"
+                type="password"
+                className="text-field"
+                ref={signupPasswordInputRef}
+                autoComplete="new-password"
+                value={signupPassword}
+                onChange={(event) => {
+                  setSignupPassword(event.target.value);
+                  setSignupErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  focusNextInput(signupPasswordConfirmInputRef);
+                }}
+                placeholder="비밀번호를 입력해 주세요."
+                aria-invalid={signupPassword.length > 0 && !isSignupPasswordValid}
+              />
+              <p className={`header-auth-field-hint ${signupPassword.length > 0 && !isSignupPasswordValid ? 'is-error' : signupPassword.length > 0 ? 'is-success' : ''}`}>
+                {SIGNUP_PASSWORD_HINT}
+              </p>
+            </div>
+
+            <div className="field-stack header-auth-field-stack">
+              <label className="field-label" htmlFor="header-signup-password-confirm">
+                비밀번호 확인
+              </label>
+              <input
+                id="header-signup-password-confirm"
+                type="password"
+                className="text-field"
+                ref={signupPasswordConfirmInputRef}
+                autoComplete="new-password"
+                value={signupPasswordConfirm}
+                onChange={(event) => {
+                  setSignupPasswordConfirm(event.target.value);
+                  setSignupErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void handleSignupSubmit();
+                }}
+                placeholder="비밀번호를 다시 입력해 주세요."
+                aria-invalid={signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid}
+              />
+              <p className={`header-auth-field-hint ${signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid ? 'is-error' : signupPasswordConfirm.length > 0 ? 'is-success' : ''}`}>
+                {SIGNUP_PASSWORD_CONFIRM_HINT}
+              </p>
+            </div>
+
+            {signupErrors.length > 0 ? (
+              <div className="header-auth-feedback is-error" role="alert">
+                {signupErrors.map((reason) => (
+                  <p key={reason}>{reason}</p>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="header-auth-signup-actions">
+              <button type="submit" className="btn primary" disabled={!isSignupReady || isSignupSubmitting}>
+                {isSignupSubmitting ? '가입 중' : '가입하기'}
+              </button>
+              <button type="button" className="header-auth-reset-link" onClick={() => setMode('login')}>
+                로그인으로 돌아가기
+              </button>
+            </div>
+          </form>
         ) : (
           <form className="header-auth-reset-form" onSubmit={(event) => void handleResetPassword(event)}>
             <div className="field-stack header-auth-field-stack">
@@ -574,6 +1029,19 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   id="header-reset-email"
                   type="email"
                   className="text-field"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeSent = await handleSendResetCode();
+                      if (isCodeSent) {
+                        focusNextInput(resetCodeInputRef);
+                      }
+                    })();
+                  }}
                   autoComplete="email"
                   value={resetEmail}
                   onChange={(event) => {
@@ -587,6 +1055,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   {isSendingResetCode ? '전송 중' : '코드 전송'}
                 </button>
               </div>
+              {resetCodeSentStatusMessage ? <p className="header-auth-field-hint is-success">{resetCodeSentStatusMessage}</p> : null}
             </div>
 
             <div className="field-stack header-auth-field-stack">
@@ -598,11 +1067,25 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   id="header-reset-code"
                   type="text"
                   className="text-field"
+                  ref={resetCodeInputRef}
                   value={resetCode}
                   onChange={(event) => {
                     setResetCode(sanitizeVerificationCode(event.target.value));
                     setResetErrors([]);
                     setResetStatusMessage(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeVerified = await handleVerifyResetCode();
+                      if (isCodeVerified) {
+                        focusNextInput(resetPasswordInputRef);
+                      }
+                    })();
                   }}
                   placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
                 />
@@ -615,6 +1098,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   {isVerifyingResetCode ? '확인 중' : '코드 확인'}
                 </button>
               </div>
+              {resetCodeVerifiedStatusMessage ? <p className="header-auth-field-hint is-success">{resetCodeVerifiedStatusMessage}</p> : null}
             </div>
 
             <div className="field-stack header-auth-field-stack">
@@ -625,10 +1109,19 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                 id="header-reset-password"
                 type="password"
                 className="text-field"
+                ref={resetPasswordInputRef}
                 value={newPassword}
                 onChange={(event) => {
                   setNewPassword(event.target.value);
                   setResetErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  focusNextInput(resetPasswordConfirmInputRef);
                 }}
                 placeholder="특수문자를 포함해 8자 이상 입력해 주세요."
                 disabled={!isResetCodeVerified}
@@ -646,10 +1139,19 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                 id="header-reset-password-confirm"
                 type="password"
                 className="text-field"
+                ref={resetPasswordConfirmInputRef}
                 value={newPasswordConfirm}
                 onChange={(event) => {
                   setNewPasswordConfirm(event.target.value);
                   setResetErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void handleResetPassword();
                 }}
                 placeholder="비밀번호를 다시 입력해 주세요."
                 disabled={!isResetCodeVerified}
@@ -657,9 +1159,9 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
               <p className={`header-auth-field-hint ${newPasswordConfirm.length > 0 && !isResetPasswordConfirmValid ? 'is-error' : newPasswordConfirm.length > 0 ? 'is-success' : ''}`}>
                 비밀번호 확인은 비밀번호와 동일해야 합니다.
               </p>
+              {resetPasswordChangedStatusMessage ? <p className="header-auth-field-hint is-success">{resetPasswordChangedStatusMessage}</p> : null}
             </div>
 
-            {resetStatusMessage ? <div className="header-auth-feedback is-info">{resetStatusMessage}</div> : null}
             {resetErrors.length > 0 ? (
               <div className="header-auth-feedback is-error" role="alert">
                 {resetErrors.map((reason) => (

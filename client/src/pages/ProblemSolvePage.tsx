@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
 import { Fragment } from 'react';
@@ -23,8 +23,10 @@ import {
   login,
   resetPassword,
   sendPasswordResetCode,
+  sendSignupVerificationCode,
   signup,
   verifyPasswordResetCode,
+  verifySignupVerificationCode,
 } from '../lib/authApi';
 import { completeAuthentication } from '../lib/authSession';
 import {
@@ -446,8 +448,14 @@ const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.
 const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 사용 가능 여부를 확인하는 중입니다.';
 const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
 const SIGNUP_EMAIL_DUPLICATED_MESSAGE = '이미 사용 중인 이메일입니다.';
+const SIGNUP_CODE_HINT = '이메일로 받은 인증코드 6자를 입력해 주세요.';
+const SIGNUP_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
+const SIGNUP_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.';
 const SIGNUP_PASSWORD_HINT = '특수문자를 포함해 8자 이상 입력해 주세요.';
 const SIGNUP_PASSWORD_CONFIRM_HINT = '비밀번호를 다시 입력해 주세요.';
+const RESET_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
+const RESET_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.';
+const RESET_PASSWORD_CHANGED_MESSAGE = '비밀번호가 변경되었습니다. 다시 로그인해 주세요.';
 
 const SQL_AUTOCOMPLETE_KEYWORDS = [
   'SELECT',
@@ -2252,10 +2260,16 @@ function SolvePageAuthOverlay({
   const [isSocialLoginSubmitting, setIsSocialLoginSubmitting] = useState(false);
 
   const [signupEmail, setSignupEmail] = useState('');
+  const [signupCode, setSignupCode] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
   const [signupErrors, setSignupErrors] = useState<string[]>([]);
+  const [signupStatusMessage, setSignupStatusMessage] = useState<string | null>(null);
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
+  const [isSendingSignupCode, setIsSendingSignupCode] = useState(false);
+  const [isVerifyingSignupCode, setIsVerifyingSignupCode] = useState(false);
+  const [isSignupCodeSent, setIsSignupCodeSent] = useState(false);
+  const [isSignupCodeVerified, setIsSignupCodeVerified] = useState(false);
   const [signupEmailCheckStatus, setSignupEmailCheckStatus] = useState<'idle' | 'checking' | 'available' | 'duplicated'>('idle');
   const [signupEmailCheckReason, setSignupEmailCheckReason] = useState<string | null>(null);
   const [signupEmailLastCheckedValue, setSignupEmailLastCheckedValue] = useState('');
@@ -2273,17 +2287,31 @@ function SolvePageAuthOverlay({
   const [resetStatusMessage, setResetStatusMessage] = useState<string | null>(null);
   const [resetErrors, setResetErrors] = useState<string[]>([]);
   const socialLoginPopupPollIdRef = useRef<number | null>(null);
+  const signupCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordConfirmInputRef = useRef<HTMLInputElement | null>(null);
+  const resetCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const resetPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const resetPasswordConfirmInputRef = useRef<HTMLInputElement | null>(null);
 
   const normalizedLoginEmail = loginEmail.trim();
   const normalizedSignupEmail = signupEmail.trim();
+  const normalizedSignupCode = signupCode.trim().toUpperCase();
   const normalizedResetEmail = resetEmail.trim();
   const normalizedResetCode = resetCode.trim().toUpperCase();
+  const resetCodeSentStatusMessage = resetStatusMessage === RESET_CODE_SENT_MESSAGE ? resetStatusMessage : null;
+  const resetCodeVerifiedStatusMessage = resetStatusMessage === RESET_CODE_VERIFIED_MESSAGE ? resetStatusMessage : null;
+  const resetPasswordChangedStatusMessage = resetStatusMessage === RESET_PASSWORD_CHANGED_MESSAGE ? resetStatusMessage : null;
+  const signupCodeSentStatusMessage = signupStatusMessage === SIGNUP_CODE_SENT_MESSAGE ? signupStatusMessage : null;
+  const signupCodeVerifiedStatusMessage = signupStatusMessage === SIGNUP_CODE_VERIFIED_MESSAGE ? signupStatusMessage : null;
   const isLoginReady = normalizedLoginEmail !== '' && loginPassword.trim() !== '';
   const isSignupEmailValid = EMAIL_PATTERN.test(normalizedSignupEmail);
+  const isSignupCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedSignupCode);
   const isSignupPasswordValid = hasRequiredPasswordFormat(signupPassword);
   const isSignupPasswordConfirmValid = signupPasswordConfirm !== '' && signupPasswordConfirm === signupPassword;
   const isSignupReady =
     isSignupEmailValid &&
+    isSignupCodeVerified &&
     isSignupPasswordValid &&
     isSignupPasswordConfirmValid &&
     signupEmailCheckStatus !== 'checking';
@@ -2292,7 +2320,8 @@ function SolvePageAuthOverlay({
   const isResetPasswordValid = hasRequiredPasswordFormat(newPassword);
   const isResetPasswordConfirmValid = newPasswordConfirm !== '' && newPasswordConfirm === newPassword;
   const signupEmailHintMessage =
-    normalizedSignupEmail === ''
+    signupCodeSentStatusMessage ??
+    (normalizedSignupEmail === ''
       ? SIGNUP_EMAIL_HINT
       : !isSignupEmailValid
         ? SIGNUP_EMAIL_HINT
@@ -2302,15 +2331,20 @@ function SolvePageAuthOverlay({
             ? (signupEmailCheckReason ?? SIGNUP_EMAIL_DUPLICATED_MESSAGE)
             : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available'
               ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
-              : SIGNUP_EMAIL_HINT;
+              : SIGNUP_EMAIL_HINT);
   const hasSignupEmailError =
     normalizedSignupEmail !== '' &&
     (!isSignupEmailValid || (signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'));
   const hasSignupEmailSuccess =
     normalizedSignupEmail !== '' &&
     !hasSignupEmailError &&
-    signupEmailLastCheckedValue === normalizedSignupEmail &&
-    signupEmailCheckStatus === 'available';
+    ((signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available') || signupCodeSentStatusMessage != null);
+
+  const focusNextInput = (nextInputRef: RefObject<HTMLInputElement | null>) => {
+    window.requestAnimationFrame(() => {
+      nextInputRef.current?.focus();
+    });
+  };
 
   useEffect(() => {
     return () => {
@@ -2393,6 +2427,7 @@ function SolvePageAuthOverlay({
           stopPolling();
           onAuthenticated();
         } catch {
+          // 팝업 세션 확인 실패는 polling 재시도로 처리
         }
       })();
     };
@@ -2428,6 +2463,7 @@ function SolvePageAuthOverlay({
             }
           }
         } catch {
+          // 크로스 오리진 팝업은 location 접근을 허용하지 않음
         }
 
         const session = await fetchSessionMe();
@@ -2440,6 +2476,7 @@ function SolvePageAuthOverlay({
         stopPolling();
         onAuthenticated();
       } catch {
+        // 팝업 상태 확인 실패는 다음 polling 주기에서 다시 확인
       } finally {
         isChecking = false;
       }
@@ -2455,6 +2492,13 @@ function SolvePageAuthOverlay({
     setSignupEmailCheckStatus('idle');
     setSignupEmailCheckReason(null);
     setSignupEmailLastCheckedValue('');
+  };
+
+  const resetSignupVerification = () => {
+    setSignupCode('');
+    setSignupStatusMessage(null);
+    setIsSignupCodeSent(false);
+    setIsSignupCodeVerified(false);
   };
 
   const applySignupErrorReasons = (reasons: string[]) => {
@@ -2560,11 +2604,76 @@ function SolvePageAuthOverlay({
     }
   };
 
+  const handleSendSignupCode = async () => {
+    if (!isSignupEmailValid || isSendingSignupCode) {
+      return false;
+    }
+
+    try {
+      setIsSendingSignupCode(true);
+      setSignupErrors([]);
+      setSignupStatusMessage(null);
+
+      const isEmailAvailable = await checkSignupEmailDuplication();
+      if (!isEmailAvailable) {
+        return false;
+      }
+
+      await sendSignupVerificationCode({ email: normalizedSignupEmail });
+      setSignupCode('');
+      setIsSignupCodeSent(true);
+      setIsSignupCodeVerified(false);
+      setSignupStatusMessage(SIGNUP_CODE_SENT_MESSAGE);
+      return true;
+    } catch (error) {
+      if (error instanceof SignupApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsSendingSignupCode(false);
+    }
+  };
+
+  const handleVerifySignupCode = async () => {
+    if (!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode) {
+      return false;
+    }
+
+    try {
+      setIsVerifyingSignupCode(true);
+      setSignupErrors([]);
+      setSignupStatusMessage(null);
+
+      await verifySignupVerificationCode({
+        email: normalizedSignupEmail,
+        code: normalizedSignupCode,
+      });
+      setIsSignupCodeVerified(true);
+      setSignupStatusMessage(SIGNUP_CODE_VERIFIED_MESSAGE);
+      return true;
+    } catch (error) {
+      setIsSignupCodeVerified(false);
+      if (error instanceof SignupApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsVerifyingSignupCode(false);
+    }
+  };
+
   const handleSignupSubmit = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
 
     if (!isSignupReady) {
-      return;
+      return false;
     }
 
     try {
@@ -2574,12 +2683,13 @@ function SolvePageAuthOverlay({
 
       const isEmailAvailable = await checkSignupEmailDuplication();
       if (!isEmailAvailable) {
-        return;
+        return false;
       }
 
       await signup({
         email: normalizedSignupEmail,
         password: signupPassword,
+        code: normalizedSignupCode,
       });
 
       const session = await fetchSessionMe();
@@ -2587,17 +2697,19 @@ function SolvePageAuthOverlay({
 
       if (!session.authenticated) {
         setSignupErrors(['회원가입 후 세션을 확인하지 못했습니다.']);
-        return;
+        return false;
       }
 
       onAuthenticated();
+      return true;
     } catch (error) {
       if (error instanceof SignupApiError || error instanceof AuthApiError) {
         applySignupErrorReasons(error.reasons);
-        return;
+        return false;
       }
 
       setSignupErrors([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsSignupSubmitting(false);
     }
@@ -2605,7 +2717,7 @@ function SolvePageAuthOverlay({
 
   const handleSendResetCode = async () => {
     if (!isResetEmailValid || isSendingResetCode) {
-      return;
+      return false;
     }
 
     try {
@@ -2615,14 +2727,16 @@ function SolvePageAuthOverlay({
       await sendPasswordResetCode({ email: normalizedResetEmail });
       setIsResetCodeSent(true);
       setIsResetCodeVerified(false);
-      setResetStatusMessage('인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+      setResetStatusMessage(RESET_CODE_SENT_MESSAGE);
+      return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
         setResetErrors(error.reasons);
-        return;
+        return false;
       }
 
       setResetErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsSendingResetCode(false);
     }
@@ -2630,7 +2744,7 @@ function SolvePageAuthOverlay({
 
   const handleVerifyResetCode = async () => {
     if (!isResetEmailValid || !isResetCodeValid || !isResetCodeSent || isVerifyingResetCode) {
-      return;
+      return false;
     }
 
     try {
@@ -2642,14 +2756,16 @@ function SolvePageAuthOverlay({
         code: normalizedResetCode,
       });
       setIsResetCodeVerified(true);
-      setResetStatusMessage('인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+      setResetStatusMessage(RESET_CODE_VERIFIED_MESSAGE);
+      return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
         setResetErrors(error.reasons);
-        return;
+        return false;
       }
 
       setResetErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsVerifyingResetCode(false);
     }
@@ -2659,7 +2775,7 @@ function SolvePageAuthOverlay({
     event?.preventDefault();
 
     if (!isResetCodeVerified || !isResetPasswordValid || !isResetPasswordConfirmValid || isResettingPassword) {
-      return;
+      return false;
     }
 
     try {
@@ -2671,19 +2787,21 @@ function SolvePageAuthOverlay({
         code: normalizedResetCode,
         password: newPassword,
       });
-      setResetStatusMessage('비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
+      setResetStatusMessage(RESET_PASSWORD_CHANGED_MESSAGE);
       setNewPassword('');
       setNewPasswordConfirm('');
       setTimeout(() => {
         onReturnToLogin();
       }, 300);
+      return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
         setResetErrors(error.reasons);
-        return;
+        return false;
       }
 
       setResetErrors([error instanceof Error ? error.message : '비밀번호 변경 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsResettingPassword(false);
     }
@@ -2825,26 +2943,91 @@ function SolvePageAuthOverlay({
               <label className="field-label" htmlFor="solve-signup-email">
                 이메일
               </label>
-              <input
-                id="solve-signup-email"
-                type="email"
-                className="text-field"
-                autoComplete="email"
-                value={signupEmail}
-                onChange={(event) => {
-                  setSignupEmail(event.target.value);
-                  setSignupErrors([]);
-                  resetSignupEmailCheck();
-                }}
-                onBlur={() => {
-                  void checkSignupEmailDuplication();
-                }}
-                placeholder="이메일을 입력해 주세요."
-                aria-invalid={hasSignupEmailError}
-              />
+              <div className="solve-auth-inline-row">
+                <input
+                  id="solve-signup-email"
+                  type="email"
+                  className="text-field"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeSent = await handleSendSignupCode();
+                      if (isCodeSent) {
+                        focusNextInput(signupCodeInputRef);
+                      }
+                    })();
+                  }}
+                  autoComplete="email"
+                  value={signupEmail}
+                  onChange={(event) => {
+                    setSignupEmail(event.target.value);
+                    setSignupErrors([]);
+                    resetSignupEmailCheck();
+                    resetSignupVerification();
+                  }}
+                  onBlur={() => {
+                    void checkSignupEmailDuplication();
+                  }}
+                  placeholder="이메일을 입력해 주세요."
+                  aria-invalid={hasSignupEmailError}
+                />
+                <button type="button" className="btn secondary" onClick={handleSendSignupCode} disabled={!isSignupEmailValid || isSendingSignupCode}>
+                  {isSendingSignupCode ? '전송 중' : '코드 전송'}
+                </button>
+              </div>
               <p className={`solve-auth-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
                 {signupEmailHintMessage}
               </p>
+            </div>
+
+            <div className="field-stack solve-auth-field-stack">
+              <label className="field-label" htmlFor="solve-signup-code">
+                인증 코드
+              </label>
+              <div className="solve-auth-inline-row">
+                <input
+                  id="solve-signup-code"
+                  type="text"
+                  className="text-field"
+                  ref={signupCodeInputRef}
+                  value={signupCode}
+                  onChange={(event) => {
+                    setSignupCode(sanitizeVerificationCode(event.target.value));
+                    setSignupErrors([]);
+                    setSignupStatusMessage(null);
+                    setIsSignupCodeVerified(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeVerified = await handleVerifySignupCode();
+                      if (isCodeVerified) {
+                        focusNextInput(signupPasswordInputRef);
+                      }
+                    })();
+                  }}
+                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                  disabled={!isSignupCodeSent}
+                />
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={handleVerifySignupCode}
+                  disabled={!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode}
+                >
+                  {isVerifyingSignupCode ? '확인 중' : '코드 확인'}
+                </button>
+              </div>
+              {signupCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint is-success">{signupCodeVerifiedStatusMessage}</p> : null}
+              {!signupCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint">{SIGNUP_CODE_HINT}</p> : null}
             </div>
 
             <div className="field-stack solve-auth-field-stack">
@@ -2855,11 +3038,20 @@ function SolvePageAuthOverlay({
                 id="solve-signup-password"
                 type="password"
                 className="text-field"
+                ref={signupPasswordInputRef}
                 autoComplete="new-password"
                 value={signupPassword}
                 onChange={(event) => {
                   setSignupPassword(event.target.value);
                   setSignupErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  focusNextInput(signupPasswordConfirmInputRef);
                 }}
                 placeholder="비밀번호를 입력해 주세요."
                 aria-invalid={signupPassword.length > 0 && !isSignupPasswordValid}
@@ -2877,6 +3069,7 @@ function SolvePageAuthOverlay({
                 id="solve-signup-password-confirm"
                 type="password"
                 className="text-field"
+                ref={signupPasswordConfirmInputRef}
                 autoComplete="new-password"
                 value={signupPasswordConfirm}
                 onChange={(event) => {
@@ -2927,6 +3120,19 @@ function SolvePageAuthOverlay({
                   id="solve-reset-email"
                   type="email"
                   className="text-field"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeSent = await handleSendResetCode();
+                      if (isCodeSent) {
+                        focusNextInput(resetCodeInputRef);
+                      }
+                    })();
+                  }}
                   autoComplete="email"
                   value={resetEmail}
                   onChange={(event) => {
@@ -2940,6 +3146,7 @@ function SolvePageAuthOverlay({
                   {isSendingResetCode ? '전송 중' : '코드 전송'}
                 </button>
               </div>
+              {resetCodeSentStatusMessage ? <p className="solve-auth-field-hint is-success">{resetCodeSentStatusMessage}</p> : null}
             </div>
 
             <div className="field-stack solve-auth-field-stack">
@@ -2951,11 +3158,25 @@ function SolvePageAuthOverlay({
                   id="solve-reset-code"
                   type="text"
                   className="text-field"
+                  ref={resetCodeInputRef}
                   value={resetCode}
                   onChange={(event) => {
                     setResetCode(sanitizeVerificationCode(event.target.value));
                     setResetErrors([]);
                     setResetStatusMessage(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    void (async () => {
+                      const isCodeVerified = await handleVerifyResetCode();
+                      if (isCodeVerified) {
+                        focusNextInput(resetPasswordInputRef);
+                      }
+                    })();
                   }}
                   placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
                 />
@@ -2968,6 +3189,7 @@ function SolvePageAuthOverlay({
                   {isVerifyingResetCode ? '확인 중' : '코드 확인'}
                 </button>
               </div>
+              {resetCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint is-success">{resetCodeVerifiedStatusMessage}</p> : null}
             </div>
 
             <div className="field-stack solve-auth-field-stack">
@@ -2978,10 +3200,19 @@ function SolvePageAuthOverlay({
                 id="solve-reset-password"
                 type="password"
                 className="text-field"
+                ref={resetPasswordInputRef}
                 value={newPassword}
                 onChange={(event) => {
                   setNewPassword(event.target.value);
                   setResetErrors([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  focusNextInput(resetPasswordConfirmInputRef);
                 }}
                 placeholder="특수문자를 포함해 8자 이상 입력해 주세요."
                 disabled={!isResetCodeVerified}
@@ -2996,17 +3227,26 @@ function SolvePageAuthOverlay({
                 id="solve-reset-password-confirm"
                 type="password"
                 className="text-field"
+                ref={resetPasswordConfirmInputRef}
                 value={newPasswordConfirm}
                 onChange={(event) => {
                   setNewPasswordConfirm(event.target.value);
                   setResetErrors([]);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void handleResetPassword();
+                }}
                 placeholder="비밀번호를 다시 입력해 주세요."
                 disabled={!isResetCodeVerified}
               />
+              {resetPasswordChangedStatusMessage ? <p className="solve-auth-field-hint is-success">{resetPasswordChangedStatusMessage}</p> : null}
             </div>
 
-            {resetStatusMessage ? <p className="solve-auth-feedback is-info">{resetStatusMessage}</p> : null}
             {resetErrors.length > 0 ? (
               <div className="solve-auth-feedback is-error" role="alert">
                 {resetErrors.map((reason) => (

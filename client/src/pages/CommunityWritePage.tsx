@@ -43,6 +43,8 @@ interface CommunityWriteFavoriteSnapshot extends EditorValues {
   postId?: string;
 }
 
+const POST_DRAFT_LOGIN_DESCRIPTION = '작성 중인 게시글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
+
 function normalizeKeyword(value: string) {
   return value
     .toLowerCase()
@@ -150,7 +152,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
   const hasPostDraft = title.trim() !== '' || draftTag.trim() !== '' || selectedTags.length > 0 || !isEditorEmpty;
 
   useEffect(() => {
-    setLoginOverlayDescription(hasPostDraft ? '작성 중인 게시글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.' : null);
+    setLoginOverlayDescription(hasPostDraft ? POST_DRAFT_LOGIN_DESCRIPTION : null);
 
     return () => setLoginOverlayDescription(null);
   }, [hasPostDraft]);
@@ -514,7 +516,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
     }
 
     if (!isAuthenticated) {
-      openLoginOverlay();
+      openLoginOverlay(POST_DRAFT_LOGIN_DESCRIPTION);
       return;
     }
 

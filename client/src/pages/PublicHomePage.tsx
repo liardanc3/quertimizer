@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore, useState } from 'react';
+import { useEffect, useRef, useSyncExternalStore, useState, type RefObject } from 'react';
 import AccountRecoveryOverlay from '../components/home/AccountRecoveryOverlay';
 import logoImage from '../assets/logo.png';
 import './PublicHomePage.css';
@@ -8,10 +8,12 @@ import {
   checkDuplicateEmail,
   fetchSessionMe,
   login,
+  sendSignupVerificationCode,
   startGoogleLogin,
   startGithubLogin,
   startKakaoLogin,
   signup,
+  verifySignupVerificationCode,
 } from '../lib/authApi';
 import type { DuplicateCheckResult, SessionMeResult } from '../lib/authApi';
 import { completeAuthentication } from '../lib/authSession';
@@ -24,10 +26,14 @@ import {
 import { useHomeSiteTitle } from '../lib/uiText';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VERIFICATION_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 
 const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.';
 const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 중복을 확인하고 있습니다.';
 const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
+const SIGNUP_CODE_HINT = '이메일로 받은 인증코드 6자를 입력해 주세요.';
+const SIGNUP_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
+const SIGNUP_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.';
 const DUPLICATED_EMAIL_REASON = '이미 사용 중인 이메일입니다.';
 
 type DuplicateCheckStatus = 'idle' | 'checking' | 'available' | 'duplicated';
@@ -49,6 +55,10 @@ function getSnapshot() {
 
 function hasRequiredPasswordFormat(value: string) {
   return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
+}
+
+function sanitizeVerificationCode(value: string) {
+  return value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
 }
 
 function getSocialLoginErrorMessage(provider: string | null) {
@@ -168,17 +178,26 @@ export default function PublicHomePage() {
 
   const [loginEmail, setLoginEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [signupCode, setSignupCode] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
   const [email, setEmail] = useState('');
   const [loginErrorReasons, setLoginErrorReasons] = useState<string[]>([]);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [signupErrorReasons, setSignupErrorReasons] = useState<string[]>([]);
+  const [signupStatusMessage, setSignupStatusMessage] = useState<string | null>(null);
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
+  const [isSendingSignupCode, setIsSendingSignupCode] = useState(false);
+  const [isVerifyingSignupCode, setIsVerifyingSignupCode] = useState(false);
+  const [isSignupCodeSent, setIsSignupCodeSent] = useState(false);
+  const [isSignupCodeVerified, setIsSignupCodeVerified] = useState(false);
   const [signupEmailCheckStatus, setSignupEmailCheckStatus] = useState<DuplicateCheckStatus>('idle');
   const [signupEmailCheckReason, setSignupEmailCheckReason] = useState<string | null>(null);
   const [signupEmailLastCheckedValue, setSignupEmailLastCheckedValue] = useState('');
   const signupEmailCheckSequenceRef = useRef(0);
+  const signupCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordConfirmInputRef = useRef<HTMLInputElement | null>(null);
 
   const prefilledLoginEmail =
     typeof window.history.state?.prefillLoginEmail === 'string'
@@ -188,20 +207,26 @@ export default function PublicHomePage() {
 
   const normalizedLoginEmail = loginEmail.trim();
   const normalizedEmail = email.trim();
+  const normalizedSignupCode = signupCode.trim().toUpperCase();
 
   const isLoginReady = normalizedLoginEmail !== '' && password.trim() !== '';
   const isSignupPasswordValid = hasRequiredPasswordFormat(signupPassword);
   const isSignupPasswordConfirmValid = signupPasswordConfirm !== '' && signupPassword === signupPasswordConfirm;
   const isSignupEmailValid = EMAIL_PATTERN.test(normalizedEmail);
+  const isSignupCodeValid = VERIFICATION_CODE_PATTERN.test(normalizedSignupCode);
 
   const isEmailSignupReady =
     isSignupPasswordValid &&
     isSignupPasswordConfirmValid &&
     isSignupEmailValid &&
+    isSignupCodeVerified &&
     signupEmailCheckStatus !== 'checking';
 
+  const signupCodeSentStatusMessage = signupStatusMessage === SIGNUP_CODE_SENT_MESSAGE ? signupStatusMessage : null;
+  const signupCodeVerifiedStatusMessage = signupStatusMessage === SIGNUP_CODE_VERIFIED_MESSAGE ? signupStatusMessage : null;
   const signupEmailHintMessage =
-    normalizedEmail === ''
+    signupCodeSentStatusMessage ??
+    (normalizedEmail === ''
       ? SIGNUP_EMAIL_HINT
       : !isSignupEmailValid
         ? SIGNUP_EMAIL_HINT
@@ -211,7 +236,7 @@ export default function PublicHomePage() {
             ? signupEmailCheckReason
             : signupEmailLastCheckedValue === normalizedEmail && signupEmailCheckStatus === 'available'
               ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
-              : SIGNUP_EMAIL_HINT;
+              : SIGNUP_EMAIL_HINT);
 
   const hasSignupEmailError =
     normalizedEmail !== '' &&
@@ -219,10 +244,15 @@ export default function PublicHomePage() {
   const hasSignupEmailSuccess =
     normalizedEmail !== '' &&
     !hasSignupEmailError &&
-    signupEmailLastCheckedValue === normalizedEmail &&
-    signupEmailCheckStatus === 'available';
+    ((signupEmailLastCheckedValue === normalizedEmail && signupEmailCheckStatus === 'available') || signupCodeSentStatusMessage != null);
   const hasSignupPasswordSuccess = signupPassword.length > 0 && isSignupPasswordValid;
   const hasSignupPasswordConfirmSuccess = signupPasswordConfirm.length > 0 && isSignupPasswordConfirmValid;
+
+  function focusNextInput(nextInputRef: RefObject<HTMLInputElement | null>) {
+    window.requestAnimationFrame(() => {
+      nextInputRef.current?.focus();
+    });
+  }
 
   useEffect(() => {
     if (prefilledLoginEmail === '') {
@@ -325,6 +355,13 @@ export default function PublicHomePage() {
     setSignupEmailCheckStatus('idle');
     setSignupEmailCheckReason(null);
     setSignupEmailLastCheckedValue('');
+  }
+
+  function resetSignupVerification() {
+    setSignupCode('');
+    setSignupStatusMessage(null);
+    setIsSignupCodeSent(false);
+    setIsSignupCodeVerified(false);
   }
 
   function applySignupErrorReasons(reasons: string[]) {
@@ -434,9 +471,74 @@ export default function PublicHomePage() {
     }
   }
 
+  async function handleSendSignupCode() {
+    if (!isSignupEmailValid || isSendingSignupCode) {
+      return false;
+    }
+
+    try {
+      setIsSendingSignupCode(true);
+      setSignupErrorReasons([]);
+      setSignupStatusMessage(null);
+
+      const isEmailAvailable = await checkSignupEmailDuplication();
+      if (!isEmailAvailable) {
+        return false;
+      }
+
+      await sendSignupVerificationCode({ email: normalizedEmail });
+      setSignupCode('');
+      setIsSignupCodeSent(true);
+      setIsSignupCodeVerified(false);
+      setSignupStatusMessage(SIGNUP_CODE_SENT_MESSAGE);
+      return true;
+    } catch (error) {
+      if (error instanceof SignupApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrorReasons([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsSendingSignupCode(false);
+    }
+  }
+
+  async function handleVerifySignupCode() {
+    if (!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode) {
+      return false;
+    }
+
+    try {
+      setIsVerifyingSignupCode(true);
+      setSignupErrorReasons([]);
+      setSignupStatusMessage(null);
+
+      await verifySignupVerificationCode({
+        email: normalizedEmail,
+        code: normalizedSignupCode,
+      });
+      setIsSignupCodeVerified(true);
+      setSignupStatusMessage(SIGNUP_CODE_VERIFIED_MESSAGE);
+      return true;
+    } catch (error) {
+      setIsSignupCodeVerified(false);
+      if (error instanceof SignupApiError) {
+        applySignupErrorReasons(error.reasons);
+        return false;
+      }
+
+      setSignupErrorReasons([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      return false;
+    } finally {
+      setIsVerifyingSignupCode(false);
+    }
+  }
+
   async function handleSignup() {
     if (!isEmailSignupReady) {
-      return;
+      return false;
     }
 
     try {
@@ -445,23 +547,26 @@ export default function PublicHomePage() {
 
       const isEmailAvailable = await checkSignupEmailDuplication();
       if (!isEmailAvailable) {
-        return;
+        return false;
       }
 
       await signup({
         password: signupPassword,
         email: normalizedEmail,
+        code: normalizedSignupCode,
       });
 
       const session = await fetchSessionMe();
       await handleAuthenticatedUser(session);
+      return true;
     } catch (error) {
       if (error instanceof SignupApiError || error instanceof AuthApiError) {
         applySignupErrorReasons(error.reasons);
-        return;
+        return false;
       }
 
       setSignupErrorReasons([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+      return false;
     } finally {
       setIsSignupSubmitting(false);
     }
@@ -470,6 +575,7 @@ export default function PublicHomePage() {
   function openSignup() {
     setLoginErrorReasons([]);
     setSignupErrorReasons([]);
+    resetSignupVerification();
     navigate(LANDING_SIGNUP_PATH);
   }
 
@@ -482,6 +588,7 @@ export default function PublicHomePage() {
   function closeOverlay() {
     setLoginErrorReasons([]);
     setSignupErrorReasons([]);
+    resetSignupVerification();
     navigate('/', { replace: true });
   }
 
@@ -526,27 +633,95 @@ export default function PublicHomePage() {
                     <label className="field-label" htmlFor="signup-email">
                       이메일
                     </label>
-                    <input
-                      id="signup-email"
-                      type="email"
-                      className="text-field"
-                      value={email}
-                      onChange={(event) => {
-                        setEmail(event.target.value);
-                        setSignupErrorReasons([]);
-                        resetSignupEmailCheck();
-                      }}
-                      onBlur={() => {
-                        void checkSignupEmailDuplication();
-                      }}
-                      placeholder="이메일을 입력하세요"
-                      autoComplete="email"
-                      inputMode="email"
-                      aria-invalid={hasSignupEmailError}
-                    />
+                    <div className="inline-field-row">
+                      <input
+                        id="signup-email"
+                        type="email"
+                        className="text-field"
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          void (async () => {
+                            const isCodeSent = await handleSendSignupCode();
+                            if (isCodeSent) {
+                              focusNextInput(signupCodeInputRef);
+                            }
+                          })();
+                        }}
+                        value={email}
+                        onChange={(event) => {
+                          setEmail(event.target.value);
+                          setSignupErrorReasons([]);
+                          resetSignupEmailCheck();
+                          resetSignupVerification();
+                        }}
+                        onBlur={() => {
+                          void checkSignupEmailDuplication();
+                        }}
+                        placeholder="이메일을 입력하세요"
+                        autoComplete="email"
+                        inputMode="email"
+                        aria-invalid={hasSignupEmailError}
+                      />
+                      <button type="button" className="btn secondary fixed-action" onClick={handleSendSignupCode} disabled={!isSignupEmailValid || isSendingSignupCode}>
+                        {isSendingSignupCode ? '전송 중' : '코드 전송'}
+                      </button>
+                    </div>
                     <p className={`hint-text signup-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
                       {signupEmailHintMessage}
                     </p>
+                  </div>
+
+                  <div className="field-stack">
+                    <label className="field-label" htmlFor="signup-code">
+                      인증 코드
+                    </label>
+                    <div className="inline-field-row">
+                      <input
+                        id="signup-code"
+                        type="text"
+                        className="text-field"
+                        ref={signupCodeInputRef}
+                        value={signupCode}
+                        onChange={(event) => {
+                          setSignupCode(sanitizeVerificationCode(event.target.value));
+                          setSignupErrorReasons([]);
+                          setSignupStatusMessage(null);
+                          setIsSignupCodeVerified(false);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          void (async () => {
+                            const isCodeVerified = await handleVerifySignupCode();
+                            if (isCodeVerified) {
+                              focusNextInput(signupPasswordInputRef);
+                            }
+                          })();
+                        }}
+                        placeholder="인증코드 6자를 입력하세요"
+                        inputMode="text"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        disabled={!isSignupCodeSent}
+                      />
+                      <button
+                        type="button"
+                        className="btn secondary fixed-action"
+                        onClick={handleVerifySignupCode}
+                        disabled={!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode}
+                      >
+                        {isVerifyingSignupCode ? '확인 중' : '코드 확인'}
+                      </button>
+                    </div>
+                    {signupCodeVerifiedStatusMessage ? <p className="hint-text signup-field-hint is-success">{signupCodeVerifiedStatusMessage}</p> : null}
+                    {!signupCodeVerifiedStatusMessage ? <p className="hint-text signup-field-hint">{SIGNUP_CODE_HINT}</p> : null}
                   </div>
 
                   <div className="field-stack">
@@ -557,10 +732,19 @@ export default function PublicHomePage() {
                       id="signup-password"
                       type="password"
                       className="text-field"
+                      ref={signupPasswordInputRef}
                       value={signupPassword}
                       onChange={(event) => {
                         setSignupPassword(event.target.value);
                         setSignupErrorReasons([]);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        focusNextInput(signupPasswordConfirmInputRef);
                       }}
                       placeholder="비밀번호를 입력하세요"
                       autoComplete="new-password"
@@ -583,6 +767,7 @@ export default function PublicHomePage() {
                       id="signup-password-confirm"
                       type="password"
                       className="text-field"
+                      ref={signupPasswordConfirmInputRef}
                       value={signupPasswordConfirm}
                       onChange={(event) => {
                         setSignupPasswordConfirm(event.target.value);
