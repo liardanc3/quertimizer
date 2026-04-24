@@ -65,6 +65,7 @@ public class LockAspect {
     }
 
     private String buildLockKey(LockKey prefix, String key) {
+        // 락 키 구성
         if (key == null || key.isBlank()) {
             return prefix.toString();
         }
@@ -73,6 +74,7 @@ public class LockAspect {
     }
 
     private String resolveKey(Method method, Object[] args, String expression) {
+        // 키 결정
         if (expression == null || expression.isBlank()) {
             return "";
         }

@@ -27,10 +27,12 @@ public class BlockedIp {
     private LocalDateTime blockedAt;
 
     public static BlockedIp create(String ipAddress, String blockedHandle) {
+        // 차단된 IP를 새로 저장할 때 사용한다.
         return new BlockedIp(ipAddress.trim(), blockedHandle, LocalDateTime.now());
     }
 
     public void refresh(String blockedHandle) {
+        // 같은 IP가 다시 차단되면 대상 handle과 시각을 최신 상태로 갱신한다.
         this.blockedHandle = blockedHandle;
         this.blockedAt = LocalDateTime.now();
     }
@@ -40,5 +42,4 @@ public class BlockedIp {
         this.blockedHandle = blockedHandle;
         this.blockedAt = blockedAt;
     }
-
 }

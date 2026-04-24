@@ -1,5 +1,8 @@
 package com.quertimizer.auth.domain.model;
 
+import lombok.Getter;
+
+@Getter
 public enum AccountRecoveryFailReason {
 
     EMAIL_NOT_FOUND("등록되지 않은 이메일입니다."),
@@ -13,9 +16,4 @@ public enum AccountRecoveryFailReason {
     AccountRecoveryFailReason(String message) {
         this.message = message;
     }
-
-    public String getMessage() {
-        return message;
-    }
-
 }

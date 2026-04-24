@@ -1,5 +1,6 @@
 package com.quertimizer.user.presentation.dto.response;
 
+import com.quertimizer.user.application.output.UserProfileCommunityCommentsOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -11,4 +12,9 @@ public class UserProfileCommunityCommentsRes {
 
     private final List<UserProfileCommunityCommentRes> comments;
 
+    public static UserProfileCommunityCommentsRes from(UserProfileCommunityCommentsOutput result) {
+        return new UserProfileCommunityCommentsRes(result.getComments().stream()
+                .map(UserProfileCommunityCommentRes::from)
+                .toList());
+    }
 }

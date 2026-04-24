@@ -1,9 +1,8 @@
 package com.quertimizer.problem.application.usecase;
 
-import com.quertimizer.problem.application.result.ProblemSetDetailResult;
+import com.quertimizer.problem.application.output.ProblemSetDetailOutput;
 import com.quertimizer.problem.application.service.ProblemService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -14,16 +13,8 @@ public class GetProblemSet {
 
     private final ProblemService problemService;
 
-    public Optional<ProblemSetDetailResult> execute(String problemSetId, Authentication authentication) {
-        return problemService.getProblemSet(problemSetId, resolveAuthenticatedEmail(authentication));
+    public Optional<ProblemSetDetailOutput> execute(String problemSetId, String authenticatedEmail) {
+        // 문제 테이블셋 상세를 조회
+        return problemService.getProblemSet(problemSetId, authenticatedEmail);
     }
-
-    private String resolveAuthenticatedEmail(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
-            return null;
-        }
-
-        return authentication.getName();
-    }
-
 }

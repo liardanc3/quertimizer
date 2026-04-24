@@ -27,6 +27,7 @@ public class UserExternalLinkId implements Serializable {
     private String link;
 
     public static UserExternalLinkId create(String handle, String type, String link) {
+        // 외부 링크 식별자 생성
         return new UserExternalLinkId(handle, type, link);
     }
 

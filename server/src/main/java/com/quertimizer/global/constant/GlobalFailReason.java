@@ -1,5 +1,8 @@
 package com.quertimizer.global.constant;
 
+import lombok.Getter;
+
+@Getter
 public enum GlobalFailReason {
 
     UNEXPECTED_ERROR("잠시 후 다시 시도해 주세요."),
@@ -14,11 +17,8 @@ public enum GlobalFailReason {
         this.message = message;
     }
 
-    public String getMessage() {
-        return message;
-    }
-
     public String format(Object... args) {
+        // 메시지 포맷 적용
         return message.formatted(args);
     }
 

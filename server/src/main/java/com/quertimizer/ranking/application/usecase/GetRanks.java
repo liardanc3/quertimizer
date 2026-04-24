@@ -2,10 +2,10 @@ package com.quertimizer.ranking.application.usecase;
 
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryRepository;
-import com.quertimizer.ranking.application.result.RankListItemResult;
-import com.quertimizer.ranking.application.result.RankMonthlyDeltaResult;
-import com.quertimizer.ranking.application.result.RankPageResult;
+import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
+import com.quertimizer.ranking.application.output.RankListItemOutput;
+import com.quertimizer.ranking.application.output.RankMonthlyDeltaOutput;
+import com.quertimizer.ranking.application.output.RankPageOutput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +24,12 @@ import java.util.Map;
 public class GetRanks {
 
     private static final int RANK_PAGE_SIZE = 100;
-    private static final RankMonthlyDeltaResult EMPTY_MONTHLY_DELTA = new RankMonthlyDeltaResult(0, 0);
+    private static final RankMonthlyDeltaOutput EMPTY_MONTHLY_DELTA = new RankMonthlyDeltaOutput(0, 0);
 
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
 
-    public RankPageResult execute(int requestedPage, String dbms, String query, String sortKey) {
+    public RankPageOutput execute(int requestedPage, String dbms, String query, String sortKey) {
+        // 랭킹 페이지 데이터를 조회
         DbmsType dbmsType = resolveDbmsType(dbms);
         RankSortKey rankSortKey = resolveRankSortKey(sortKey);
         LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
@@ -45,14 +46,14 @@ public class GetRanks {
         Map<String, RankMetrics> baselineMetricsByHandle = createRankMetricsByHandle(baselineBestHistories);
 
         // 이번달 1일 대비 순위 변화 계산
-        Map<String, RankMonthlyDeltaResult> monthlyDeltaByHandle = createMonthlyDeltaByHandle(
+        Map<String, RankMonthlyDeltaOutput> monthlyDeltaByHandle = createMonthlyDeltaByHandle(
                 currentMetricsByHandle,
                 baselineMetricsByHandle
         );
 
         // 검색, 정렬 반영 랭킹 목록 구성
-        List<RankListItemResult> filteredRanks = currentMetricsByHandle.values().stream()
-                .map(metrics -> new RankListItemResult(
+        List<RankListItemOutput> filteredRanks = currentMetricsByHandle.values().stream()
+                .map(metrics -> new RankListItemOutput(
                         metrics.handle(),
                         metrics.solvedCount(),
                         metrics.avgExecutionPercentile(),
@@ -69,7 +70,7 @@ public class GetRanks {
         int fromIndex = Math.min((currentPage - 1) * RANK_PAGE_SIZE, totalCount);
         int toIndex = Math.min(fromIndex + RANK_PAGE_SIZE, totalCount);
 
-        return new RankPageResult(
+        return new RankPageOutput(
                 currentPage,
                 RANK_PAGE_SIZE,
                 totalCount,
@@ -101,6 +102,7 @@ public class GetRanks {
     }
 
     private Map<String, RankMetrics> createRankMetricsByHandle(List<ProblemSolveHistory> bestHistories) {
+        // Handle별 Rank 지표 생성
         Map<String, List<ProblemSolveHistory>> historiesByProblemId = createHistoriesByProblemId(bestHistories);
         Map<UserSolvedHistoryKey, Integer> executionPercentileByHistoryKey =
                 createExecutionPercentileByHistoryKey(historiesByProblemId);
@@ -152,6 +154,7 @@ public class GetRanks {
     }
 
     private Map<String, List<ProblemSolveHistory>> createHistoriesByProblemId(List<ProblemSolveHistory> bestHistories) {
+        // 문제 번호별 목록 생성
         Map<String, List<ProblemSolveHistory>> historiesByProblemId = new HashMap<>();
 
         // 문제별 최고 제출 목록 구성
@@ -204,7 +207,7 @@ public class GetRanks {
         return executionPercentileByHistoryKey;
     }
 
-    private Map<String, RankMonthlyDeltaResult> createMonthlyDeltaByHandle(Map<String, RankMetrics> currentMetricsByHandle,
+    private Map<String, RankMonthlyDeltaOutput> createMonthlyDeltaByHandle(Map<String, RankMetrics> currentMetricsByHandle,
                                                                            Map<String, RankMetrics> baselineMetricsByHandle) {
         Map<String, Integer> currentSolvedCountRankByHandle =
                 createRankByHandle(currentMetricsByHandle.values().stream().toList(), RankSortKey.SOLVED_COUNT);
@@ -215,13 +218,13 @@ public class GetRanks {
         Map<String, Integer> baselineExecutionPercentileRankByHandle =
                 createRankByHandle(baselineMetricsByHandle.values().stream().toList(), RankSortKey.AVG_EXECUTION_PERCENTILE);
 
-        Map<String, RankMonthlyDeltaResult> monthlyDeltaByHandle = new HashMap<>();
+        Map<String, RankMonthlyDeltaOutput> monthlyDeltaByHandle = new HashMap<>();
         for (RankMetrics currentMetrics : currentMetricsByHandle.values()) {
             String handle = currentMetrics.handle();
 
             monthlyDeltaByHandle.put(
                     handle,
-                    new RankMonthlyDeltaResult(
+                    new RankMonthlyDeltaOutput(
                             calculateRankDelta(
                                     currentSolvedCountRankByHandle.get(handle),
                                     baselineSolvedCountRankByHandle.get(handle)
@@ -238,6 +241,7 @@ public class GetRanks {
     }
 
     private Map<String, Integer> createRankByHandle(List<RankMetrics> metrics, RankSortKey rankSortKey) {
+        // Handle별 Rank 생성
         Map<String, Integer> rankByHandle = new HashMap<>();
         List<RankMetrics> sortedMetrics = metrics.stream()
                 .sorted(createRankMetricsComparator(rankSortKey))
@@ -252,6 +256,7 @@ public class GetRanks {
     }
 
     private int calculateRankDelta(Integer currentRank, Integer baselineRank) {
+        // Rank 변동폭 계산
         if (currentRank == null || baselineRank == null) {
             return 0;
         }
@@ -259,7 +264,8 @@ public class GetRanks {
         return baselineRank - currentRank;
     }
 
-    private boolean matchesHandle(RankListItemResult rank, String query) {
+    private boolean matchesHandle(RankListItemOutput rank, String query) {
+        // Handle 일치 여부 확인
         if (query == null || query.isBlank()) {
             return true;
         }
@@ -268,20 +274,22 @@ public class GetRanks {
         return rank.handle().toLowerCase().contains(normalizedQuery);
     }
 
-    private Comparator<RankListItemResult> createRankComparator(RankSortKey rankSortKey) {
+    private Comparator<RankListItemOutput> createRankComparator(RankSortKey rankSortKey) {
+        // Rank 비교 기준 생성
         if (rankSortKey == RankSortKey.AVG_EXECUTION_PERCENTILE) {
-            return Comparator.comparingDouble(RankListItemResult::avgExecutionPercentile)
-                    .thenComparing(Comparator.comparingInt(RankListItemResult::solvedCount).reversed())
-                    .thenComparing(RankListItemResult::handle);
+            return Comparator.comparingDouble(RankListItemOutput::avgExecutionPercentile)
+                    .thenComparing(Comparator.comparingInt(RankListItemOutput::solvedCount).reversed())
+                    .thenComparing(RankListItemOutput::handle);
         }
 
-        return Comparator.comparingInt(RankListItemResult::solvedCount)
+        return Comparator.comparingInt(RankListItemOutput::solvedCount)
                 .reversed()
-                .thenComparingDouble(RankListItemResult::avgExecutionPercentile)
-                .thenComparing(RankListItemResult::handle);
+                .thenComparingDouble(RankListItemOutput::avgExecutionPercentile)
+                .thenComparing(RankListItemOutput::handle);
     }
 
     private Comparator<RankMetrics> createRankMetricsComparator(RankSortKey rankSortKey) {
+        // Rank 지표 비교 기준 생성
         if (rankSortKey == RankSortKey.AVG_EXECUTION_PERCENTILE) {
             return Comparator.comparingDouble(RankMetrics::avgExecutionPercentile)
                     .thenComparing(Comparator.comparingInt(RankMetrics::solvedCount).reversed())
@@ -295,6 +303,7 @@ public class GetRanks {
     }
 
     private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+        // 더 나은 기록 선택
         if (candidateHistory.getCost() < currentHistory.getCost()) {
             return candidateHistory;
         }
@@ -319,6 +328,7 @@ public class GetRanks {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
+        // DBMS 유형 결정
         if ("oracle".equalsIgnoreCase(dbms)) {
             return DbmsType.ORACLE;
         }
@@ -327,10 +337,12 @@ public class GetRanks {
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
+        // DBMS 유형 결정
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
     private RankSortKey resolveRankSortKey(String sortKey) {
+        // Rank 정렬 키 결정
         if ("avgExecutionPercentile".equalsIgnoreCase(sortKey)) {
             return RankSortKey.AVG_EXECUTION_PERCENTILE;
         }
@@ -339,9 +351,11 @@ public class GetRanks {
     }
 
     private record UserSolvedHistoryKey(String handle, String problemId) {
+        // 사용자 해결한 기록 키 처리
     }
 
     private record RankMetrics(String handle, int solvedCount, double avgExecutionPercentile) {
+        // Rank 지표 처리
     }
 
     private enum RankSortKey {

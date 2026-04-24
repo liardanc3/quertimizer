@@ -358,6 +358,10 @@
   margin-top: 0;
 }
 
+.community-page .community-table-loading-shell {
+  position: relative;
+}
+
 .community-page .community-table {
   min-width: 54rem;
 }
@@ -2217,11 +2221,24 @@
 }
 
 .community-page .community-loading-placeholder {
+  position: relative;
   display: inline-flex;
+  overflow: hidden;
   width: 100%;
   height: 0.62rem;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.28);
+}
+
+.community-page .community-loading-placeholder::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -38%;
+  width: 38%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.34) 50%, transparent 100%);
+  animation: community-loading-placeholder-wave 1.4s ease-in-out infinite;
 }
 
 .community-page .community-loading-placeholder.is-short {
@@ -2236,9 +2253,56 @@
   width: min(20rem, 100%);
 }
 
+.community-page .community-table-loading-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.community-page .community-table-loading-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
+  animation: community-table-loading-wave 1.8s ease-in-out infinite;
+}
+
+@keyframes community-loading-placeholder-wave {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(365%);
+  }
+}
+
+@keyframes community-table-loading-wave {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(520%);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   .community-page .community-loading-placeholder {
     background: rgba(100, 116, 139, 0.34);
+  }
+
+  .community-page .community-loading-placeholder::after {
+    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.18) 50%, transparent 100%);
+  }
+
+  .community-page .community-table-loading-overlay::before {
+    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
   }
 }
 

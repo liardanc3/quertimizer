@@ -2,11 +2,11 @@ package com.quertimizer.dashboard.application.service;
 
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostTagRepository;
-import com.quertimizer.dashboard.application.result.DashboardCommunityPostResult;
-import com.quertimizer.dashboard.application.result.DashboardProblemRecommendationResult;
-import com.quertimizer.dashboard.application.result.DashboardResult;
+import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostTagRepository;
+import com.quertimizer.dashboard.application.output.DashboardCommunityPostOutput;
+import com.quertimizer.dashboard.application.output.DashboardProblemRecommendationOutput;
+import com.quertimizer.dashboard.application.output.DashboardOutput;
 import com.quertimizer.dashboard.domain.policy.DashboardHotPostPolicy;
 import com.quertimizer.dashboard.domain.policy.DashboardProblemRecommendationPolicy;
 import com.quertimizer.global.constant.DbmsType;
@@ -37,8 +37,9 @@ public class DashboardService {
     private final DashboardHotPostPolicy hotPostPolicy;
     private final DashboardProblemRecommendationPolicy problemRecommendationPolicy;
 
-    public DashboardResult getDashboard(String currentHandle) {
-        return new DashboardResult(
+    public DashboardOutput getDashboard(String currentHandle) {
+        // 대시보드에 필요한 게시글과 추천 문제를 조회
+        return new DashboardOutput(
                 currentHandle != null,
                 currentHandle,
                 getHotCommunityPosts(),
@@ -46,18 +47,20 @@ public class DashboardService {
         );
     }
 
-    private List<DashboardCommunityPostResult> getHotCommunityPosts() {
+    private List<DashboardCommunityPostOutput> getHotCommunityPosts() {
+        // 인기 커뮤니티 게시글 목록 조회
         List<CommunityPost> posts = communityPostRepository.findAll();
         Map<String, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
         return posts.stream()
                 .sorted(hotPostPolicy.createHotPostComparator())
                 .limit(hotPostPolicy.getDisplayLimit())
-                .map(post -> toCommunityPostResult(post, tagsByPostId.getOrDefault(post.getPostId(), List.of())))
+                .map(post -> toCommunityPostOutput(post, tagsByPostId.getOrDefault(post.getPostId(), List.of())))
                 .toList();
     }
 
-    private List<DashboardProblemRecommendationResult> getRecommendedProblems(String currentHandle) {
+    private List<DashboardProblemRecommendationOutput> getRecommendedProblems(String currentHandle) {
+        // 추천 문제 목록 조회
         Map<String, ProblemStore.ProblemListEntry> candidatesByProblemId = new LinkedHashMap<>();
 
         addProblemCandidates(candidatesByProblemId, DbmsType.POSTGRESQL, currentHandle);
@@ -68,7 +71,7 @@ public class DashboardService {
                 .limit(problemRecommendationPolicy.getCandidateLimitPerDbms() * 2L)
                 .sorted(problemRecommendationPolicy.createDailyShuffleComparator(LocalDate.now()))
                 .limit(problemRecommendationPolicy.getDisplayLimit())
-                .map(this::toProblemRecommendationResult)
+                .map(this::toProblemRecommendationOutput)
                 .toList();
     }
 
@@ -115,6 +118,7 @@ public class DashboardService {
     }
 
     private Map<String, List<String>> createTagsByPostId(List<String> postIds) {
+        // 게시글 번호별 태그 목록 생성
         Map<String, List<String>> tagsByPostId = new LinkedHashMap<>();
 
         if (postIds.isEmpty()) {
@@ -129,8 +133,9 @@ public class DashboardService {
         return tagsByPostId;
     }
 
-    private DashboardCommunityPostResult toCommunityPostResult(CommunityPost post, List<String> tags) {
-        return new DashboardCommunityPostResult(
+    private DashboardCommunityPostOutput toCommunityPostOutput(CommunityPost post, List<String> tags) {
+        // 커뮤니티 게시글 응답으로 변환
+        return new DashboardCommunityPostOutput(
                 post.getPostId(),
                 post.getTitle(),
                 post.getHandle(),
@@ -145,8 +150,9 @@ public class DashboardService {
         );
     }
 
-    private DashboardProblemRecommendationResult toProblemRecommendationResult(ProblemStore.ProblemListEntry problemEntry) {
-        return new DashboardProblemRecommendationResult(
+    private DashboardProblemRecommendationOutput toProblemRecommendationOutput(ProblemStore.ProblemListEntry problemEntry) {
+        // 문제 추천 응답으로 변환
+        return new DashboardProblemRecommendationOutput(
                 problemEntry.problem().getProblemId(),
                 problemEntry.problem().getTitle(),
                 problemEntry.problem().getDbmsType().getValue(),
@@ -159,6 +165,7 @@ public class DashboardService {
     }
 
     private String createExcerpt(String contentHtml, String contentText) {
+        // 요약문 생성
         String normalizedContentText = StringUtils.hasText(contentHtml) ? stripContentHtmlForExcerpt(contentHtml) : normalizeContentText(contentText);
 
         if (!StringUtils.hasText(normalizedContentText)) {
@@ -171,6 +178,7 @@ public class DashboardService {
     }
 
     private String stripContentHtmlForExcerpt(String contentHtml) {
+        // 요약문용 본문 HTML 제거
         return normalizeExcerptWhitespace(stripLeadingHeadingBlocks(contentHtml).trim()
                 .replaceAll("(?i)<img[^>]*>", " [이미지] ")
                 .replaceAll("(?i)<br\\s*/?>", "\n")
@@ -180,6 +188,7 @@ public class DashboardService {
     }
 
     private String stripLeadingHeadingBlocks(String contentHtml) {
+        // 선행 제목 블록 제거
         String strippedContentHtml = contentHtml;
         String nextContentHtml = strippedContentHtml.replaceFirst(LEADING_DETAIL_HEADING_BLOCK_PATTERN, "");
 
@@ -192,10 +201,12 @@ public class DashboardService {
     }
 
     private String normalizeContentText(String contentText) {
+        // 본문 텍스트 정규화
         return StringUtils.hasText(contentText) ? normalizeExcerptWhitespace(contentText) : "";
     }
 
     private String normalizeExcerptWhitespace(String content) {
+        // 요약문 공백 정규화
         return content.replace("\r\n", "\n")
                 .replace('\r', '\n')
                 .replaceAll("[\\t\\x0B\\f ]+", " ")
@@ -205,6 +216,7 @@ public class DashboardService {
     }
 
     private String resolveCategory(CommunityPost post) {
+        // 구분 결정
         int postNumber = extractPostNumber(post.getPostId());
 
         if (postNumber > 0) {
@@ -219,6 +231,7 @@ public class DashboardService {
     }
 
     private int extractPostNumber(String postId) {
+        // 게시글 번호 추출
         if (!StringUtils.hasText(postId)) {
             return 0;
         }

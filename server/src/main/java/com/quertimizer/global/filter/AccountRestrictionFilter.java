@@ -1,7 +1,6 @@
 package com.quertimizer.global.filter;
 
 import com.quertimizer.auth.application.service.AccountRestrictionService;
-import com.quertimizer.auth.application.service.LoginService;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
 import com.quertimizer.global.exception.BusinessException;
 import jakarta.servlet.FilterChain;
@@ -22,7 +21,6 @@ import java.io.IOException;
 public class AccountRestrictionFilter extends OncePerRequestFilter {
 
     private final AccountRestrictionService accountRestrictionService;
-    private final LoginService loginService;
     private final LoginPolicy loginPolicy;
 
     @Override
@@ -40,13 +38,11 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
 
-            // 인증된 사용자는 차단 계정 여부를 다시 확인하고, 통과한 경우 마지막 접속 정보를 갱신한다.
+            // 인증된 사용자는 차단 계정 여부를 다시 확인
             if (isBlockedUser(authentication)) {
                 response.sendError(HttpStatus.FORBIDDEN.value());
                 return;
             }
-
-            loginService.updateLastAccess(authentication.getName(), clientIp);
         }
 
         // 차단 대상이 아니면 다음 필터 또는 실제 endpoint 로직으로 넘긴다.
@@ -61,6 +57,7 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
     }
 
     private boolean isBlockedUser(Authentication authentication) {
+        // 차단 사용자 여부 확인
         try {
             loginPolicy.validateBlockedUser(authentication.getName());
             return false;

@@ -1,6 +1,6 @@
 package com.quertimizer.dashboard.presentation.dto.response;
 
-import com.quertimizer.dashboard.application.result.DashboardCommunityPostResult;
+import com.quertimizer.dashboard.application.output.DashboardCommunityPostOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -23,7 +23,7 @@ public class DashboardCommunityPostRes {
     private final int commentCount;
     private final double hotScore;
 
-    public static DashboardCommunityPostRes from(DashboardCommunityPostResult result) {
+    public static DashboardCommunityPostRes from(DashboardCommunityPostOutput result) {
         return new DashboardCommunityPostRes(
                 result.postId(),
                 result.title(),

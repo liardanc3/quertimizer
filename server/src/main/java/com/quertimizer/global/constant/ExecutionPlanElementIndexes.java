@@ -78,6 +78,7 @@ public final class ExecutionPlanElementIndexes {
     }
 
     private static int[] getIndexes(DbmsType dbmsType) {
+        // Indexes 조회
         return dbmsType == DbmsType.ORACLE ? ORACLE_INDEXES : POSTGRESQL_INDEXES;
     }
 

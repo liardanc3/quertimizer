@@ -4,9 +4,9 @@ import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSetRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemJpaRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemSetJpaRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryJpaRepository;
 import com.quertimizer.problem.application.store.ProblemStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,13 +28,13 @@ class ProblemStoreTest {
     private ProblemStore problemStore;
 
     @Mock
-    private ProblemRepository problemRepository;
+    private ProblemJpaRepository problemRepository;
 
     @Mock
-    private ProblemSolveHistoryRepository problemSolveHistoryRepository;
+    private ProblemSolveHistoryJpaRepository problemSolveHistoryRepository;
 
     @Mock
-    private ProblemSetRepository problemSetRepository;
+    private ProblemSetJpaRepository problemSetRepository;
 
     @Test
     @DisplayName("findProblemPage : 문제 목록 필터링 + 유저별 최고 제출 유지")

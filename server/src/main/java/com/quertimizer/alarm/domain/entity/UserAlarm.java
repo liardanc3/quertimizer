@@ -52,6 +52,7 @@ public class UserAlarm {
     private LocalDateTime createdAt;
 
     public static UserAlarm create(AlarmSpec alarmSpec, String bindingsJson) {
+        // 사용자 알람 생성
         return new UserAlarm(
                 alarmSpec.recipientHandle(),
                 alarmSpec.alarmType(),
@@ -66,6 +67,7 @@ public class UserAlarm {
     }
 
     public void markRead() {
+        // 사용자 알람 읽음 처리
         this.read = true;
     }
 

@@ -733,6 +733,10 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  .submit-history-loading-overlay::before {
+    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
+  }
+
   .admin-page-tab-row,
   .admin-config-header,
   .admin-auth-row,
@@ -972,20 +976,30 @@
 .submit-history-loading-overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
   pointer-events: none;
+  z-index: 4;
+}
+
+.submit-history-loading-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
+  animation: admin-loading-wave 1.8s ease-in-out infinite;
 }
 
 .submit-history-loading-badge {
-  width: 1.8rem;
-  height: 1.8rem;
-  min-width: 1.8rem;
-  min-height: 1.8rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  display: none;
+}
+
+@keyframes admin-loading-wave {
+  to {
+    transform: translateX(520%);
+  }
 }
 
 

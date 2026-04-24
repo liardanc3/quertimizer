@@ -1,6 +1,6 @@
 package com.quertimizer.submit.presentation.dto.response;
 
-import com.quertimizer.submit.application.result.SubmitHistoryListItemResult;
+import com.quertimizer.submit.application.output.SubmitHistoryListItemOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -19,7 +19,7 @@ public class SubmitHistoryListItemRes {
     private final double cost;
     private final long executionPlanElement;
 
-    public static SubmitHistoryListItemRes from(SubmitHistoryListItemResult result) {
+    public static SubmitHistoryListItemRes from(SubmitHistoryListItemOutput result) {
         return new SubmitHistoryListItemRes(
                 result.submitId(),
                 result.handle(),

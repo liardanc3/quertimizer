@@ -24,6 +24,7 @@ public class UiTextId implements Serializable {
     private String language;
 
     public static UiTextId create(String key, String language) {
+        // UI 텍스트 식별자 생성
         return new UiTextId(key, language);
     }
 

@@ -1,6 +1,6 @@
 package com.quertimizer.dashboard.presentation.dto.response;
 
-import com.quertimizer.dashboard.application.result.DashboardResult;
+import com.quertimizer.dashboard.application.output.DashboardOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -15,7 +15,7 @@ public class DashboardRes {
     private final List<DashboardCommunityPostRes> communityPosts;
     private final List<DashboardProblemRecommendationRes> problems;
 
-    public static DashboardRes from(DashboardResult result) {
+    public static DashboardRes from(DashboardOutput result) {
         return new DashboardRes(
                 result.authenticated(),
                 result.currentHandle(),

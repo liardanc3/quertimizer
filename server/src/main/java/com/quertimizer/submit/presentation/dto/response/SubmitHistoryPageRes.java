@@ -1,6 +1,6 @@
 package com.quertimizer.submit.presentation.dto.response;
 
-import com.quertimizer.submit.application.result.SubmitHistoryPageResult;
+import com.quertimizer.submit.application.output.SubmitHistoryPageOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -17,7 +17,7 @@ public class SubmitHistoryPageRes {
     private final List<String> problemIds;
     private final List<SubmitHistoryListItemRes> histories;
 
-    public static SubmitHistoryPageRes from(SubmitHistoryPageResult result) {
+    public static SubmitHistoryPageRes from(SubmitHistoryPageOutput result) {
         return new SubmitHistoryPageRes(
                 result.currentPage(),
                 result.pageSize(),

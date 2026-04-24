@@ -8,7 +8,7 @@ import com.quertimizer.auth.presentation.dto.request.DuplicateCheckHandleReq;
 import com.quertimizer.auth.presentation.dto.request.LoginReq;
 import com.quertimizer.auth.presentation.dto.request.SignupReq;
 import com.quertimizer.user.domain.entity.User;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.user.infrastructure.repository.UserJpaRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -53,7 +53,7 @@ class AuthControllerTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserJpaRepository userRepository;
 
     @Nested
     @DisplayName("/signup")
@@ -210,7 +210,7 @@ class AuthControllerTest {
         class Normal {
 
             @Test
-            @DisplayName("200 OK + true (handle 사용 가능)")
+            @DisplayName("200 OK 반환 (handle 사용 가능)")
             void okWhenHandleAvailable() throws Exception {
                 // given
                 DuplicateCheckHandleReq request = DuplicateCheckHandleReq.builder()
@@ -223,9 +223,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(true))
-                        .andExpect(jsonPath("$.reason").doesNotExist());
+                result.andExpect(status().isOk());
             }
         }
 
@@ -234,8 +232,8 @@ class AuthControllerTest {
         class ExceptionCase {
 
             @Test
-            @DisplayName("200 OK + false (handle 중복)")
-            void okWhenHandleDuplicated() throws Exception {
+            @DisplayName("409 Conflict 반환 (handle 중복)")
+            void conflictWhenHandleDuplicated() throws Exception {
                 // given
                 String handle = uniqueHandle();
                 DuplicateCheckHandleReq request = DuplicateCheckHandleReq.builder()
@@ -249,9 +247,8 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(false))
-                        .andExpect(jsonPath("$.reason").value(SignupFailReason.DUPLICATED_HANDLE.getMessage()));
+                result.andExpect(status().isConflict())
+                        .andExpect(jsonPath("$.reasons[0]").value(SignupFailReason.DUPLICATED_HANDLE.getMessage()));
             }
         }
     }
@@ -267,7 +264,7 @@ class AuthControllerTest {
         class Normal {
 
             @Test
-            @DisplayName("200 OK + true (email 사용 가능)")
+            @DisplayName("200 OK 반환 (email 사용 가능)")
             void okWhenEmailAvailable() throws Exception {
                 // given
                 DuplicateCheckEmailReq request = DuplicateCheckEmailReq.builder()
@@ -280,9 +277,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(true))
-                        .andExpect(jsonPath("$.reason").doesNotExist());
+                result.andExpect(status().isOk());
             }
         }
 
@@ -291,8 +286,8 @@ class AuthControllerTest {
         class ExceptionCase {
 
             @Test
-            @DisplayName("200 OK + false (email 중복)")
-            void okWhenEmailDuplicated() throws Exception {
+            @DisplayName("409 Conflict 반환 (email 중복)")
+            void conflictWhenEmailDuplicated() throws Exception {
                 // given
                 String email = uniqueEmail();
                 DuplicateCheckEmailReq request = DuplicateCheckEmailReq.builder()
@@ -306,9 +301,8 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(false))
-                        .andExpect(jsonPath("$.reason").value(SignupFailReason.DUPLICATED_EMAIL.getMessage()));
+                result.andExpect(status().isConflict())
+                        .andExpect(jsonPath("$.reasons[0]").value(SignupFailReason.DUPLICATED_EMAIL.getMessage()));
             }
         }
     }

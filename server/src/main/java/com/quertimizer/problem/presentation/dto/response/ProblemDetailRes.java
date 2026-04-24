@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemDetailResult;
+import com.quertimizer.problem.application.output.ProblemDetailOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -22,7 +22,7 @@ public class ProblemDetailRes {
     private final String answerHash;
     private final String dbms;
 
-    public static ProblemDetailRes from(ProblemDetailResult result) {
+    public static ProblemDetailRes from(ProblemDetailOutput result) {
         return new ProblemDetailRes(
                 result.problemId(),
                 result.title(),

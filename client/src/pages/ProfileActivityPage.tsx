@@ -20,6 +20,7 @@ interface ProfileActivityPageProps {
 type ActivityTab = 'posts' | 'comments' | 'likes';
 
 const numberFormatter = new Intl.NumberFormat('ko-KR');
+const communityActivityLoadingRows = Array.from({ length: 5 }, (_, index) => index);
 
 function formatBoardDate(value: string) {
   const date = new Date(value);
@@ -153,7 +154,29 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
           ))}
         </div>
 
-        {isLoading ? <div className="community-activity-empty">불러오는 중이다.</div> : null}
+        {isLoading ? (
+          <div className="community-activity-loading-shell is-loading">
+            <div className="community-activity-list" aria-hidden="true">
+              {communityActivityLoadingRows.map((rowIndex) => (
+                <div key={`community-activity-loading-${rowIndex}`} className="community-activity-item community-activity-loading-item">
+                  <div className="community-activity-item-head">
+                    <span className="wave-loading-placeholder is-long" />
+                    <span className="wave-loading-placeholder is-medium" />
+                  </div>
+                  <p>
+                    <span className="wave-loading-placeholder is-long" />
+                  </p>
+                  <div className="community-activity-item-meta community-activity-loading-meta">
+                    <span className="wave-loading-placeholder is-short" />
+                    <span className="wave-loading-placeholder is-short" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="submit-history-loading-overlay" aria-hidden="true" />
+          </div>
+        ) : null}
         {!isLoading && errorMessage ? <PageLoadFailureState className="community-activity-empty" /> : null}
 
         {!isLoading && !errorMessage && activeTab === 'posts' ? (

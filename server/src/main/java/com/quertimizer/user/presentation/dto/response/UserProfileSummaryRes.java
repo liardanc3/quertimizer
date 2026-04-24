@@ -1,5 +1,6 @@
 package com.quertimizer.user.presentation.dto.response;
 
+import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -23,4 +24,23 @@ public class UserProfileSummaryRes {
     private final long likedPostCount;
     private final long commentCount;
 
+    public static UserProfileSummaryRes from(UserProfileSummaryOutput result) {
+        return new UserProfileSummaryRes(
+                result.getHandle(),
+                result.getBio(),
+                result.getLinks().stream()
+                        .map(UserProfileLinkRes::from)
+                        .toList(),
+                result.getDefaultDbms(),
+                result.isSqlPublic(),
+                result.isExecutionPercentilePublic(),
+                result.isSolvedRecordsPublic(),
+                result.isSolvedProblemCountPublic(),
+                result.getAverageExecutionPercentilePostgresql(),
+                result.getAverageExecutionPercentileOracle(),
+                result.getAuthoredPostCount(),
+                result.getLikedPostCount(),
+                result.getCommentCount()
+        );
+    }
 }

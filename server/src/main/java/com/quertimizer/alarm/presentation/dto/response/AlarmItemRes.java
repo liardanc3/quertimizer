@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.presentation.dto.response;
 
+import com.quertimizer.alarm.application.output.AlarmItemOutput;
 import com.quertimizer.alarm.domain.model.AlarmBinding;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -23,4 +24,19 @@ public class AlarmItemRes {
     private final boolean read;
     private final LocalDateTime createdAt;
 
+    public static AlarmItemRes from(AlarmItemOutput result) {
+        return new AlarmItemRes(
+                result.getAlarmId(),
+                result.getAlarmType(),
+                result.getTitle(),
+                result.getMessage(),
+                result.getSentence(),
+                result.getDescription(),
+                result.getBindings(),
+                result.getTargetPath(),
+                result.getTargetHash(),
+                result.isRead(),
+                result.getCreatedAt()
+        );
+    }
 }

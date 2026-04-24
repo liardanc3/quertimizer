@@ -11,8 +11,8 @@ public class SetupHandle {
 
     private final AuthService authService;
 
-    public void execute(String authenticatedEmail, SetupHandleInput input) {
-        authService.configureHandle(authenticatedEmail, input);
+    public void execute(SetupHandleInput input) {
+        // 가입 직후 Handle을 설정
+        authService.configureHandle(input.getAuthenticatedEmail(), input);
     }
-
 }

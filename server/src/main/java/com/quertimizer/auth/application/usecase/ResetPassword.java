@@ -12,7 +12,7 @@ public class ResetPassword {
     private final AuthService authService;
 
     public void execute(ResetPasswordInput input) {
+        // 비밀번호를 재설정
         authService.resetPassword(input);
     }
-
 }

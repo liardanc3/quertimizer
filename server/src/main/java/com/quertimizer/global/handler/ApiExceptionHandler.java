@@ -67,19 +67,23 @@ public class ApiExceptionHandler {
         }
 
         public static ExceptionResponse reasons(List<String> reasons) {
+            // reasons 처리
             return new ExceptionResponse(reasons);
         }
 
         public static ExceptionResponse reasons(String... reasons) {
+            // reasons 처리
             return new ExceptionResponse(Arrays.asList(reasons));
         }
 
         public static ExceptionResponse reason(String reason) {
+            // reason 처리
             return new ExceptionResponse(List.of(reason));
         }
     }
 
     private List<String> extractReasons(BindingResult bindingResult) {
+        // Reasons 추출
         List<String> reasons = bindingResult
                 .getFieldErrors()
                 .stream()

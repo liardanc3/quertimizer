@@ -20,7 +20,7 @@ When generating or refactoring nearby code, follow the naming, structure, and st
 - In such cases, extracted methods should use the `private` access modifier. Within a class, keep all `public` methods above all `private` methods, and grow each section downward instead of moving a newly added `public` method to the top of the class.
 - Do not force extraction when the logic is already short and clear.
 - Keep code that reads as a single action grouped into a single line or a single block when possible.
-- In Spring Boot controller methods, add a blank line between the end of the parameter list and the first comment or action in the method body when that separation improves readability.
+- Do not add a blank line between a method declaration and the first comment or first action in the method body.
 - Use blank lines to separate conceptually distinct steps in a method, such as service execution, session or authentication handling, and HTTP response creation.
 - Do not add blank lines between lines that together express a single action, such as alternative return branches of the same validation or decision.
 - Prefer inline calls by default, and introduce a clearly named local variable only when it makes the meaning of the returned value or the following action easier to understand.
@@ -28,10 +28,34 @@ When generating or refactoring nearby code, follow the naming, structure, and st
 - Name methods after the exact action they perform, and prefer explicit names that reveal the concrete effect of the code.
 - Do not increase vertical length unnecessarily with avoidable line breaks or temporary variables.
 - Keep method parameter lists on a single line when they still fit comfortably in the IDE without requiring horizontal scrolling, and split them into multiple lines only when that improves readability.
+- When a parameter or argument list becomes long, do not mechanically put one argument on each line. Keep it reasonably horizontal first, then split only when the line starts getting too long.
+- When splitting a long parameter or argument list, group adjacent arguments so each line keeps a reasonably similar visual width instead of creating a tall narrow stack.
+- When splitting parameters or arguments across lines, keep semantically close items together while also keeping the visual width of each line reasonably balanced.
+- For wrapped calls such as `.formatted(...)`, constructor calls, or long method calls, keep the opening call line and the closing `);` visually aligned on the same horizontal axis when that matches the surrounding style.
 - Treat the visual appearance of code in the IDE as highly important, and follow the existing conventions for single-line versus multi-line parameters, indentation, tab usage, and line wrapping when arguments become long.
 - When updating file names or folder names, keep them consistent with the existing naming and folder organization patterns.
 - When adding new UI messages, data, or other visible elements, ensure they do not break, shift, collapse, or otherwise alter the existing layout or screen structure.
 - When composing UI, avoid unnecessary section splits and unnecessary background styling unless they are clearly needed to preserve or improve the existing layout.
+- When following `@CanonicalCode`, place the annotation immediately above the protected class or method so it stands out first in the IDE.
+- Prefer layer-revealing names such as `Req/Res`, `Input`, `Policy`, `Service`, and action-named use case classes.
+- Keep use case class names as actions and standardize their public entry method on `execute`. Outside use cases, prefer explicit action names that reveal the exact effect.
+- Group code under each comment by logical unit. Keep lines in the same block only when they are the same logical work, and split blocks when the work itself changes even if one step happens right after another.
+- When multiple lines exist only to prepare and execute one purpose, keep them in the same logical block instead of splitting them into smaller technical steps.
+- When a temporary value exists only as a one-time ingredient for the next action, keep its extraction in the same logical block as that final action instead of giving it an independent comment block.
+- Write comments around the final effect of the block rather than the intermediate technical step used inside the block.
+- Do not split a logical block just because the code can be separated into smaller mechanical steps. If the purpose is still one, keep it as one block.
+- Write comments around the whole job performed by the logical block instead of narrowing the comment to a return value or one internal line.
+- Do not separate value conversion or response creation just to expose a layer boundary. Keep it inline when it still reads cleanly, and split it into variables or multiple lines only when line length or comment readability starts to suffer.
+- When deciding whether to keep consecutive lines together or split them, prioritize IDE readability and horizontal length first, then use meaning as the grouping rule inside that readability boundary.
+- Keep comments short, direct, and focused on the purpose or effect of the block instead of narrating each line.
+- Keep each logical block comment to a single line. If the core idea does not fit cleanly in one line, split the code into smaller logical blocks instead of extending the comment.
+- Use blank lines only between distinct logical units, and avoid adding blank lines inside one logical unit.
+- When method chaining improves readability, keep the `.` attached to the end of the previous line instead of using dot-leading alignment, and keep the entire chain as one visual block.
+- Prefer local variables only when they clarify a value that is reused or needs to stay visible for a following step.
+- Normalize or prepare external input in request or input classes so downstream layers can assume already-shaped values.
+- When converting a web `Req` DTO into an application `Input`, choose between inline construction and a `to...Input()` helper based on parameter length and readability. If the parameter list stays short and clear, build it inline in the controller. If the parameter list becomes long enough to make the controller noisy, move that conversion into the `Req` DTO with a `to...Input()` style method.
+- If a use case defines an `Input` type, make the use case entry method accept only that `Input` instead of splitting the same input data across extra parameters.
+- Keep code horizontally compact when it still reads comfortably in the IDE, and wrap lines only when that clearly improves readability.
 
 ## Project Context
 

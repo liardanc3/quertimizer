@@ -1,5 +1,6 @@
 package com.quertimizer.ui.presentation.dto.request;
 
+import com.quertimizer.ui.application.input.UiTextInput;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -23,4 +24,7 @@ public class UiTextSaveReq {
     @NotBlank
     private String description;
 
+    public UiTextInput toUiTextInput() {
+        return new UiTextInput(key, value, language, description);
+    }
 }

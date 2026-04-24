@@ -5,8 +5,8 @@ import com.quertimizer.global.constant.OracleExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemJpaRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryJpaRepository;
 import com.quertimizer.problem.application.store.ProblemStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,10 +34,10 @@ class ProblemControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private ProblemRepository problemRepository;
+    private ProblemJpaRepository problemRepository;
 
     @Autowired
-    private ProblemSolveHistoryRepository problemSolveHistoryRepository;
+    private ProblemSolveHistoryJpaRepository problemSolveHistoryRepository;
 
     @Autowired
     private ProblemStore problemStore;

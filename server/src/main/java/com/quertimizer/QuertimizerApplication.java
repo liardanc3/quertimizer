@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class QuertimizerApplication {
 
 	public static void main(String[] args) {
+	    // 애플리케이션 실행
 		SpringApplication.run(QuertimizerApplication.class, args);
 	}
 

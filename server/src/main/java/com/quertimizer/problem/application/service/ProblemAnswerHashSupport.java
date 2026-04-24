@@ -18,6 +18,7 @@ public final class ProblemAnswerHashSupport {
     }
 
     public static String hashRows(List<List<String>> rows) {
+        // 정답 비교용 행 집합 해시를 생성
         List<String> normalizedRows = new ArrayList<>(rows.size());
 
         for (List<String> row : rows) {
@@ -36,6 +37,7 @@ public final class ProblemAnswerHashSupport {
     }
 
     private static String sha512(String value) {
+        // SHA-512 해시 계산
         try {
             MessageDigest messageDigest = MessageDigest.getInstance("SHA-512");
             byte[] hashBytes = messageDigest.digest(value.getBytes(StandardCharsets.UTF_8));

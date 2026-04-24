@@ -23,6 +23,7 @@ public class CommunityPostLike {
     private LocalDateTime createdAt;
 
     public static CommunityPostLike create(String postId, String handle) {
+        // 게시글 좋아요 생성
         return new CommunityPostLike(new CommunityPostLikeId(postId, handle), LocalDateTime.now());
     }
 

@@ -50,6 +50,7 @@ public class ProblemSet {
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
+        // supports DBMS 처리
         if (dbmsType == DbmsType.ORACLE) {
             return isOracle;
         }
@@ -58,14 +59,17 @@ public class ProblemSet {
     }
 
     public boolean hasSupportedDbms() {
+        // Supported DBMS 여부 확인
         return isPostgresql || isOracle;
     }
 
     public DbmsType getDbmsType() {
+        // DBMS 유형 조회
         return isOracle ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
     }
 
     public String getBaseProblemSetId() {
+        // 기준 문제 테이블셋 번호 조회
         if (problemSetId == null || problemSetId.isBlank()) {
             return "";
         }

@@ -11,6 +11,7 @@ public enum UiTextLanguage {
     }
 
     public String getValue() {
+        // 값 조회
         return value;
     }
 

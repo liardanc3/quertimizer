@@ -1,6 +1,6 @@
 package com.quertimizer.ranking.presentation.dto.response;
 
-import com.quertimizer.ranking.application.result.RankMonthlyDeltaResult;
+import com.quertimizer.ranking.application.output.RankMonthlyDeltaOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -11,7 +11,7 @@ public class RankMonthlyDeltaRes {
     private final int solvedCount;
     private final int avgExecutionPercentile;
 
-    public static RankMonthlyDeltaRes from(RankMonthlyDeltaResult result) {
+    public static RankMonthlyDeltaRes from(RankMonthlyDeltaOutput result) {
         return new RankMonthlyDeltaRes(result.solvedCount(), result.avgExecutionPercentile());
     }
 

@@ -9,9 +9,9 @@ import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.problem.infrastructure.repository.ProblemGeneratorPermissionRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemGeneratorPermissionJpaRepository;
+import com.quertimizer.problem.infrastructure.repository.ProblemJpaRepository;
+import com.quertimizer.user.infrastructure.repository.UserJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,13 +36,13 @@ class AuthManageServiceTest {
     private AuthManageService authManageService;
 
     @Mock
-    private UserRepository userRepository;
+    private UserJpaRepository userRepository;
 
     @Mock
-    private ProblemRepository problemRepository;
+    private ProblemJpaRepository problemRepository;
 
     @Mock
-    private ProblemGeneratorPermissionRepository problemGeneratorPermissionRepository;
+    private ProblemGeneratorPermissionJpaRepository problemGeneratorPermissionRepository;
 
     @Test
     @DisplayName("권한 그룹별 사용자 수와 ProblemGenerator 문제 권한을 묶어서 반환한다.")

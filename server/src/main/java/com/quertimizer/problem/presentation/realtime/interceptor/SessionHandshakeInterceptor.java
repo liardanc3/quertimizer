@@ -86,6 +86,7 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private String resolveActor(ServerHttpRequest request) {
+        // 주체 결정
         if (!(request instanceof ServletServerHttpRequest servletRequest)) {
             return "unknown";
         }
@@ -101,6 +102,7 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private Authentication resolveAuthentication(HttpServletRequest httpServletRequest, HttpSession session) {
+        // Authentication 결정
         if (session != null) {
             Object context = session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
             if (context instanceof SecurityContext securityContext) {
@@ -119,10 +121,12 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private boolean isAuthenticatedUser(Authentication authentication) {
+        // 인증 사용자 여부 확인
         return authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName());
     }
 
     private boolean isBlockedUser(Authentication authentication) {
+        // 차단 사용자 여부 확인
         try {
             loginPolicy.validateBlockedUser(authentication.getName());
             return false;
@@ -133,6 +137,7 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private void logLines(java.util.List<String> logLines) {
+        // 로그 라인 생성
         for (String logLine : logLines) {
             log.info("{}", logLine);
         }

@@ -40,17 +40,11 @@ export interface AccountRecoveryCodePayload {
 
 export interface ResetPasswordPayload {
   email: string;
-  code: string;
   password: string;
 }
 
 interface ExceptionResponse {
   reasons?: string[];
-}
-
-interface DuplicateCheckResponse {
-  available?: boolean;
-  reason?: string | null;
 }
 
 interface SessionMeResponse {
@@ -223,21 +217,22 @@ async function requestDuplicateCheck(
     throw new SignupApiError(0, [fallbackMessage]);
   }
 
-  if (!response.ok) {
-    const reasons = await getErrorReasons(response, fallbackMessage);
-    throw new SignupApiError(response.status, reasons);
-  }
-
-  try {
-    const data = (await response.json()) as DuplicateCheckResponse;
-
+  if (response.ok) {
     return {
-      available: data.available === true,
-      reason: typeof data.reason === 'string' ? data.reason : null,
+      available: true,
+      reason: null,
     };
-  } catch {
-    throw new SignupApiError(response.status, [fallbackMessage]);
   }
+
+  const reasons = await getErrorReasons(response, fallbackMessage);
+  if (response.status === 409) {
+    return {
+      available: false,
+      reason: reasons[0] ?? fallbackMessage,
+    };
+  }
+
+  throw new SignupApiError(response.status, reasons);
 }
 
 async function requestRecovery(path: string, payload: object, fallbackMessage: string) {
@@ -435,7 +430,6 @@ export async function verifyPasswordResetCode(payload: AccountRecoveryCodePayloa
 export async function resetPassword(payload: ResetPasswordPayload) {
   await requestRecovery('/find-password/reset', {
     email: payload.email,
-    code: payload.code,
     password: await sha512Hex(payload.password),
   }, '비밀번호 재설정에 실패했습니다.');
 }

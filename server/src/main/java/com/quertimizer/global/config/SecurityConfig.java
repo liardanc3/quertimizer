@@ -3,7 +3,7 @@ package com.quertimizer.global.config;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.filter.AccountRestrictionFilter;
 import com.quertimizer.global.filter.ApiLoggingFilter;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.user.application.port.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
 import java.time.Duration;
@@ -38,35 +39,31 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    SecurityContextRepository securityContextRepository,
                                                    TokenBasedRememberMeServices rememberMeServices) throws Exception {
-
         // 세션, remember-me, API 로그 필터 구성
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(Customizer.withDefaults())
-                .httpBasic(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable)
-                .logout(AbstractHttpConfigurer::disable)
-                .oauth2Login(oauth2 -> oauth2
-                        // 소셜 로그인 완료 후에는 controller에서 세션 저장, 접근 기록, redirect를 한 번에 처리한다.
-                        .redirectionEndpoint(redirection -> redirection.baseUri("/login/*"))
-                        .successHandler((request, response, authentication) -> response.sendRedirect("/login/social/success"))
-                        .failureHandler((request, response, exception) ->
-                                response.sendRedirect("/login/social/failure?provider=" + resolveSocialLoginProvider(request)))
-                )
-                .securityContext(context -> context.securityContextRepository(securityContextRepository))
-                .rememberMe(rememberMe -> rememberMe.rememberMeServices(rememberMeServices))
-                .addFilterAfter(accountRestrictionFilter, SecurityContextHolderFilter.class)
-                .addFilterAfter(apiLoggingFilter, AccountRestrictionFilter.class)
-                .authorizeHttpRequests(auth -> auth
-                        // 로그인, 회원가입, OAuth2 진입점은 비로그인 상태에서도 접근 가능해야 한다.
-                        .requestMatchers("/login", "/login/*", "/logout", "/signup", "/oauth2/**").permitAll()
-                        .requestMatchers("/admin/auth-manage/**").hasRole(UserRole.ADMIN.name())
-                        .requestMatchers("/admin/problem-sets/**", "/admin/problems")
-                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
-                        .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
-                        .anyRequest().permitAll());
-
-        return http.build();
+        return http.csrf(AbstractHttpConfigurer::disable)
+                   .cors(Customizer.withDefaults())
+                   .httpBasic(AbstractHttpConfigurer::disable)
+                   .formLogin(AbstractHttpConfigurer::disable)
+                   .logout(AbstractHttpConfigurer::disable)
+                   .oauth2Login(oauth2 -> oauth2
+                           // 소셜 로그인 완료 후에는 controller에서 세션 저장, 접근 기록, redirect를 한 번에 처리한다.
+                           .redirectionEndpoint(redirection -> redirection.baseUri("/login/*"))
+                           .successHandler((request, response, authentication) -> response.sendRedirect("/login/social/success"))
+                           .failureHandler((request, response, exception) ->
+                                   response.sendRedirect("/login/social/failure?provider=" + resolveSocialLoginProvider(request)))
+                   )
+                   .securityContext(context -> context.securityContextRepository(securityContextRepository))
+                   .rememberMe(rememberMe -> rememberMe.rememberMeServices(rememberMeServices))
+                   .addFilterAfter(accountRestrictionFilter, SecurityContextHolderFilter.class)
+                   .addFilterAfter(apiLoggingFilter, AccountRestrictionFilter.class)
+                   .authorizeHttpRequests(auth -> auth
+                           // 로그인, 회원가입, OAuth2 진입점은 비로그인 상태에서도 접근 가능해야 한다.
+                           .requestMatchers("/login", "/login/*", "/logout", "/signup", "/signup/*", "/oauth2/**").permitAll()
+                           .requestMatchers("/admin/auth-manage/**").hasRole(UserRole.ADMIN.name())
+                           .requestMatchers("/admin/problem-sets/**", "/admin/problems").hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
+                           .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
+                           .anyRequest().permitAll())
+                   .build();
     }
 
     private String resolveSocialLoginProvider(HttpServletRequest request) {
@@ -100,6 +97,7 @@ public class SecurityConfig {
 
     @Bean
     public TokenBasedRememberMeServices rememberMeServices(UserDetailsService userDetailsService) {
+        // remember-me 서비스 생성
         TokenBasedRememberMeServices rememberMeServices =
                 new TokenBasedRememberMeServices("quertimizer-remember-me-key", userDetailsService);
 
@@ -110,7 +108,15 @@ public class SecurityConfig {
     }
 
     @Bean
+    public SecurityContextRepository securityContextRepository() {
+
+        // Spring Session JDBC가 관리하는 HttpSession에 SecurityContext를 저장한다.
+        return new HttpSessionSecurityContextRepository();
+    }
+
+    @Bean
     public PasswordEncoder passwordEncoder() {
+        // 비밀번호 인코더 생성
         return new PasswordEncoder() {
             @Override
             public String encode(CharSequence rawPassword) {
@@ -120,6 +126,7 @@ public class SecurityConfig {
 
             @Override
             public boolean matches(CharSequence rawPassword, String encodedPassword) {
+                // 비밀번호 일치 여부 확인
                 return encode(rawPassword).equals(encodedPassword);
             }
         };

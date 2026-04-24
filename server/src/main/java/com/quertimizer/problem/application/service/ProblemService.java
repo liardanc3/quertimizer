@@ -4,23 +4,23 @@ import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.problem.application.input.ProblemCreateInput;
-import com.quertimizer.problem.application.result.AdminProblemOptionResult;
-import com.quertimizer.problem.application.result.ProblemCreateResult;
-import com.quertimizer.problem.application.result.ProblemDetailResult;
-import com.quertimizer.problem.application.result.ProblemListItemResult;
-import com.quertimizer.problem.application.result.ProblemPageResult;
-import com.quertimizer.problem.application.result.ProblemSetDetailResult;
-import com.quertimizer.problem.application.result.ProblemSetSummaryResult;
-import com.quertimizer.problem.application.result.ProblemSubmittedHistoryResult;
+import com.quertimizer.problem.application.output.AdminProblemOptionOutput;
+import com.quertimizer.problem.application.output.ProblemCreateOutput;
+import com.quertimizer.problem.application.output.ProblemDetailOutput;
+import com.quertimizer.problem.application.output.ProblemListItemOutput;
+import com.quertimizer.problem.application.output.ProblemPageOutput;
+import com.quertimizer.problem.application.output.ProblemSetDetailOutput;
+import com.quertimizer.problem.application.output.ProblemSetSummaryOutput;
+import com.quertimizer.problem.application.output.ProblemSubmittedHistoryOutput;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
 import com.quertimizer.problem.domain.entity.ProblemSet;
 import com.quertimizer.problem.domain.policy.ProblemManagementPolicy;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.problem.infrastructure.repository.ProblemGeneratorPermissionRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSetRepository;
+import com.quertimizer.problem.application.port.ProblemGeneratorPermissionRepository;
+import com.quertimizer.problem.application.port.ProblemRepository;
+import com.quertimizer.problem.application.port.ProblemSetRepository;
 import com.quertimizer.problem.application.store.ProblemStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -53,7 +53,7 @@ public class ProblemService {
     private final AuthService authService;
     private final ProblemManagementPolicy problemManagementPolicy;
 
-    public ProblemPageResult getProblems(int page,
+    public ProblemPageOutput getProblems(int page,
                                          String query,
                                          String dbms,
                                          String solveState,
@@ -64,7 +64,7 @@ public class ProblemService {
                                          String spreadRateSort,
                                          Double spreadRateMin,
                                          Double spreadRateMax) {
-
+        // 문제 목록 페이지를 조회
         ProblemStore.ProblemPage problemPage = problemStore.findProblemPage(
                 page,
                 query,
@@ -79,8 +79,8 @@ public class ProblemService {
                 spreadRateMax
         );
 
-        List<ProblemListItemResult> problems = problemPage.problems().stream()
-                .map(problemEntry -> new ProblemListItemResult(
+        List<ProblemListItemOutput> problems = problemPage.problems().stream()
+                .map(problemEntry -> new ProblemListItemOutput(
                         problemEntry.problem().getProblemId(),
                         problemEntry.problem().getTitle(),
                         problemEntry.problem().getDescription(),
@@ -88,12 +88,12 @@ public class ProblemService {
                         problemEntry.successSubmitCount(),
                         problemEntry.spreadRate(),
                         problemEntry.submittedHistories().stream()
-                                .map(this::toProblemSubmittedHistoryResult)
+                                .map(this::toProblemSubmittedHistoryOutput)
                                 .toList()
                 ))
                 .toList();
 
-        return new ProblemPageResult(
+        return new ProblemPageOutput(
                 problemPage.currentPage(),
                 problemPage.pageSize(),
                 problemPage.totalCount(),
@@ -104,14 +104,16 @@ public class ProblemService {
         );
     }
 
-    public Optional<ProblemDetailResult> getProblem(String problemId) {
+    public Optional<ProblemDetailOutput> getProblem(String problemId) {
+        // 문제 상세를 조회
         return problemStore.findProblem(problemId)
                 .map(problem -> problemStore.findProblemSet(problem.getResolvedProblemSetId())
-                        .map(problemSet -> toProblemDetailResult(problem, problemSet))
-                        .orElseGet(() -> toProblemDetailResult(problem)));
+                        .map(problemSet -> toProblemDetailOutput(problem, problemSet))
+                        .orElseGet(() -> toProblemDetailOutput(problem)));
     }
 
-    public List<ProblemSetSummaryResult> getProblemSets(String authenticatedEmail) {
+    public List<ProblemSetSummaryOutput> getProblemSets(String authenticatedEmail) {
+        // 문제 관리 가능한 테이블셋 목록을 조회
         User currentUser = requireProblemManagementUser(authenticatedEmail);
 
         if (currentUser.getResolvedRole() == UserRole.ADMIN) {
@@ -119,7 +121,7 @@ public class ProblemService {
                     .map(ProblemSet::getProblemSetId)
                     .distinct()
                     .sorted()
-                    .map(ProblemSetSummaryResult::new)
+                    .map(ProblemSetSummaryOutput::new)
                     .toList();
         }
 
@@ -130,11 +132,12 @@ public class ProblemService {
                 .filter(permissionKey -> !permissionKey.isBlank())
                 .distinct()
                 .sorted()
-                .map(ProblemSetSummaryResult::new)
+                .map(ProblemSetSummaryOutput::new)
                 .toList();
     }
 
-    public Optional<ProblemSetDetailResult> getProblemSet(String problemSetId, String authenticatedEmail) {
+    public Optional<ProblemSetDetailOutput> getProblemSet(String problemSetId, String authenticatedEmail) {
+        // 문제 테이블셋 상세를 조회
         User currentUser = requireProblemManagementUser(authenticatedEmail);
         String normalizedProblemSetId = normalizeProblemSetId(problemSetId);
 
@@ -149,7 +152,7 @@ public class ProblemService {
             return Optional.empty();
         }
 
-        return Optional.of(new ProblemSetDetailResult(
+        return Optional.of(new ProblemSetDetailOutput(
                 normalizedProblemSetId,
                 problemSetPair.postgresqlProblemSet() != null ? normalizeOptionalText(problemSetPair.postgresqlProblemSet().getDdl()) : "",
                 problemSetPair.oracleProblemSet() != null ? normalizeOptionalText(problemSetPair.oracleProblemSet().getDdl()) : "",
@@ -158,32 +161,34 @@ public class ProblemService {
         ));
     }
 
-    public List<AdminProblemOptionResult> getProblemOptions(String problemSetId, String authenticatedEmail) {
+    public List<AdminProblemOptionOutput> getProblemOptions(String problemSetId, String authenticatedEmail) {
+        // 문제 관리 가능한 문제 옵션 목록을 조회
         User currentUser = requireProblemManagementUser(authenticatedEmail);
         String scopedProblemSetId = normalizeScopedProblemSetId(problemSetId, null);
         validateProblemSetAccess(currentUser, scopedProblemSetId);
 
         if (currentUser.getResolvedRole() == UserRole.ADMIN) {
             return problemRepository.findAllByProblemSetIdOrderByProblemIdAsc(scopedProblemSetId).stream()
-                    .map(problem -> new AdminProblemOptionResult(problem.getProblemId()))
+                    .map(problem -> new AdminProblemOptionOutput(problem.getProblemId()))
                     .toList();
         }
 
         Set<String> permissionKeys = findPermissionKeys(currentUser.getHandle());
         if (permissionKeys.contains(scopedProblemSetId)) {
             return problemRepository.findAllByProblemSetIdOrderByProblemIdAsc(scopedProblemSetId).stream()
-                    .map(problem -> new AdminProblemOptionResult(problem.getProblemId()))
+                    .map(problem -> new AdminProblemOptionOutput(problem.getProblemId()))
                     .toList();
         }
 
         return problemRepository.findAllByProblemSetIdOrderByProblemIdAsc(scopedProblemSetId).stream()
                 .filter(problem -> permissionKeys.contains(problem.getProblemId()))
-                .map(problem -> new AdminProblemOptionResult(problem.getProblemId()))
+                .map(problem -> new AdminProblemOptionOutput(problem.getProblemId()))
                 .toList();
     }
 
     @Transactional
-    public ProblemCreateResult createProblem(ProblemCreateInput request, String authenticatedEmail) {
+    public ProblemCreateOutput createProblem(ProblemCreateInput request, String authenticatedEmail) {
+        // 문제 생성 또는 수정을 수행
         User currentUser = requireProblemManagementUser(authenticatedEmail);
         boolean useExistingProblemSet = "existing".equalsIgnoreCase(request.getProblemSetMode());
         boolean useExistingProblem = "existing".equalsIgnoreCase(request.getProblemMode());
@@ -225,10 +230,11 @@ public class ProblemService {
 
         addCreatedProblemPermissionIfNeeded(currentUser, problemId);
         problemStore.loadProblems();
-        return new ProblemCreateResult(problemId);
+        return new ProblemCreateOutput(problemId);
     }
 
     private DbmsType resolveDbmsType(String dbms) {
+        // DBMS 유형 결정
         return "oracle".equalsIgnoreCase(dbms) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
     }
 
@@ -246,9 +252,10 @@ public class ProblemService {
         return resolveDbmsType(request.getDbms());
     }
 
-    private ProblemSetDetailResult createScopedProblemSetDetail(ProblemSet problemSet) {
+    private ProblemSetDetailOutput createScopedProblemSetDetail(ProblemSet problemSet) {
+        // 스코프 문제 테이블셋 상세 생성
         if (problemSet.getDbmsType() == DbmsType.ORACLE) {
-            return new ProblemSetDetailResult(
+            return new ProblemSetDetailOutput(
                     problemSet.getProblemSetId(),
                     "",
                     normalizeOptionalText(problemSet.getDdl()),
@@ -257,7 +264,7 @@ public class ProblemService {
             );
         }
 
-        return new ProblemSetDetailResult(
+        return new ProblemSetDetailOutput(
                 problemSet.getProblemSetId(),
                 normalizeOptionalText(problemSet.getDdl()),
                 "",
@@ -267,11 +274,13 @@ public class ProblemService {
     }
 
     private ProblemSet requireExistingProblemSet(String problemSetId) {
+        // 기존 문제 테이블셋 필수값 검증
         return problemSetRepository.findById(problemSetId)
                 .orElseThrow(() -> new BusinessException(PROBLEM_SET_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST));
     }
 
     private ProblemSet createProblemSet(String problemSetId, ProblemCreateInput request, DbmsType dbmsType) {
+        // 문제 테이블셋 생성
         return problemSetRepository.save(ProblemSet.create(
                 problemSetId,
                 resolveScopedDdl(request, dbmsType),
@@ -281,7 +290,7 @@ public class ProblemService {
         ));
     }
 
-    private ProblemCreateResult updateProblem(ProblemCreateInput request,
+    private ProblemCreateOutput updateProblem(ProblemCreateInput request,
                                               String problemSetId,
                                               String scopedDdl,
                                               DbmsType dbmsType) {
@@ -307,13 +316,14 @@ public class ProblemService {
         );
 
         problemStore.loadProblems();
-        return new ProblemCreateResult(problem.getProblemId());
+        return new ProblemCreateOutput(problem.getProblemId());
     }
 
-    private ProblemSubmittedHistoryResult toProblemSubmittedHistoryResult(com.quertimizer.problem.domain.entity.ProblemSolveHistory history) {
+    private ProblemSubmittedHistoryOutput toProblemSubmittedHistoryOutput(com.quertimizer.problem.domain.entity.ProblemSolveHistory history) {
+        // 문제 제출 기록 응답으로 변환
         DbmsType dbmsType = history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
 
-        return new ProblemSubmittedHistoryResult(
+        return new ProblemSubmittedHistoryOutput(
                 dbmsType.getValue(),
                 history.getHandle(),
                 com.quertimizer.global.constant.ExecutionPlanElementIndexes.normalize(dbmsType, history.getExecutionPlanElement()),
@@ -322,8 +332,9 @@ public class ProblemService {
         );
     }
 
-    private ProblemDetailResult toProblemDetailResult(Problem problem, ProblemSet problemSet) {
-        return new ProblemDetailResult(
+    private ProblemDetailOutput toProblemDetailOutput(Problem problem, ProblemSet problemSet) {
+        // 문제 상세 응답으로 변환
+        return new ProblemDetailOutput(
                 problem.getProblemId(),
                 problem.getTitle(),
                 normalizeOptionalText(problem.getDescription()),
@@ -340,8 +351,9 @@ public class ProblemService {
         );
     }
 
-    private ProblemDetailResult toProblemDetailResult(Problem problem) {
-        return new ProblemDetailResult(
+    private ProblemDetailOutput toProblemDetailOutput(Problem problem) {
+        // 문제 상세 응답으로 변환
+        return new ProblemDetailOutput(
                 problem.getProblemId(),
                 problem.getTitle(),
                 normalizeOptionalText(problem.getDescription()),
@@ -359,6 +371,7 @@ public class ProblemService {
     }
 
     private String normalizeAnswerSql(Problem problem) {
+        // 정답 SQL 정규화
         if (problem.getAnswerSql() != null && !problem.getAnswerSql().isBlank()) {
             return problem.getAnswerSql();
         }
@@ -367,6 +380,7 @@ public class ProblemService {
     }
 
     private String resolveScopedDdl(ProblemCreateInput request, DbmsType dbmsType) {
+        // 스코프 DDL 결정
         if (dbmsType == DbmsType.ORACLE) {
             return requireText(request.getDdlOracle(), "Oracle DDL이 필요하다.");
         }
@@ -375,6 +389,7 @@ public class ProblemService {
     }
 
     private String resolveScopedData(ProblemCreateInput request, DbmsType dbmsType) {
+        // 스코프 데이터 결정
         if (dbmsType == DbmsType.ORACLE) {
             return requireText(request.getDataOracle(), "Oracle 데이터 SQL이 필요하다.");
         }
@@ -383,6 +398,7 @@ public class ProblemService {
     }
 
     private ProblemSetPair findProblemSetPair(String problemSetId) {
+        // 문제 테이블셋 쌍 조회
         return new ProblemSetPair(
                 problemSetRepository.findById(createProblemSetId(DbmsType.POSTGRESQL, problemSetId)).orElse(null),
                 problemSetRepository.findById(createProblemSetId(DbmsType.ORACLE, problemSetId)).orElse(null)
@@ -390,6 +406,7 @@ public class ProblemService {
     }
 
     private String createNextProblemSetBaseId() {
+        // 다음 문제 테이블셋 기준 번호 생성
         return problemSetRepository.findAll().stream()
                 .map(ProblemSet::getBaseProblemSetId)
                 .filter(problemSetId -> !problemSetId.isBlank())
@@ -406,6 +423,7 @@ public class ProblemService {
     }
 
     private int createNextProblemSequence(String baseProblemSetId) {
+        // 다음 문제 Sequence 생성
         return problemRepository.findAll().stream()
                 .map(Problem::getProblemId)
                 .filter(problemId -> extractBaseProblemSetId(problemId).equals(baseProblemSetId))
@@ -424,14 +442,17 @@ public class ProblemService {
     }
 
     private String createProblemSetId(DbmsType dbmsType, String baseProblemSetId) {
+        // 문제 테이블셋 번호 생성
         return (dbmsType == DbmsType.POSTGRESQL ? "P" : "O") + normalizeBaseProblemSetId(baseProblemSetId);
     }
 
     private String createProblemId(DbmsType dbmsType, String baseProblemSetId, int sequence) {
+        // 문제 번호 생성
         return createProblemSetId(dbmsType, baseProblemSetId) + "-" + formatFiveDigits(sequence);
     }
 
     private String normalizeProblemSetId(String problemSetId) {
+        // 문제 테이블셋 번호 정규화
         return Optional.ofNullable(problemSetId)
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
@@ -439,6 +460,7 @@ public class ProblemService {
     }
 
     private String normalizeScopedProblemSetId(String problemSetId, DbmsType dbmsType) {
+        // 스코프 문제 테이블셋 번호 정규화
         String normalizedProblemSetId = normalizeProblemSetId(problemSetId);
         if (problemManagementPolicy.isScopedProblemSetId(normalizedProblemSetId)) {
             return normalizedProblemSetId;
@@ -452,10 +474,12 @@ public class ProblemService {
     }
 
     private DbmsType resolveScopedDbmsType(String scopedId) {
+        // 스코프 DBMS 유형 결정
         return scopedId != null && scopedId.trim().startsWith("O") ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
     }
 
     private String extractBaseProblemSetId(String scopedValue) {
+        // 기준 문제 테이블셋 번호 추출
         if (scopedValue == null || scopedValue.isBlank()) {
             return "";
         }
@@ -466,15 +490,18 @@ public class ProblemService {
     }
 
     private String normalizeBaseProblemSetId(String problemSetId) {
+        // 기준 문제 테이블셋 번호 정규화
         String normalizedProblemSetId = normalizeProblemSetId(problemSetId);
         return normalizedProblemSetId.matches("^[PO]\\d{5}$") ? normalizedProblemSetId.substring(1) : normalizedProblemSetId;
     }
 
     private String formatFiveDigits(int value) {
+        // Five Digits 포맷
         return "%05d".formatted(value);
     }
 
     private User requireProblemManagementUser(String authenticatedEmail) {
+        // 문제 관리 사용자 필수값 검증
         User user = authService.findAuthenticatedUser(authenticatedEmail)
                 .orElseThrow(() -> new BusinessException(PROBLEM_MANAGEMENT_ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN));
 
@@ -483,6 +510,7 @@ public class ProblemService {
     }
 
     private void validateProblemSetAccess(User currentUser, String scopedProblemSetId) {
+        // 문제 테이블셋 접근 검증
         problemManagementPolicy.validateProblemSetAccess(currentUser, findPermissionKeys(currentUser.getHandle()), scopedProblemSetId);
     }
 
@@ -502,6 +530,7 @@ public class ProblemService {
     }
 
     private Set<String> findPermissionKeys(String handle) {
+        // 권한 키 목록 조회
         return problemGeneratorPermissionRepository.findAllByIdHandleOrderByIdProblemIdAsc(handle).stream()
                 .map(ProblemGeneratorPermission::getProblemId)
                 .map(problemManagementPolicy::normalizePermissionKey)
@@ -510,6 +539,7 @@ public class ProblemService {
     }
 
     private void addCreatedProblemPermissionIfNeeded(User currentUser, String problemId) {
+        // Created 문제 권한 If Needed 추가
         if (currentUser.getResolvedRole() != UserRole.PROBLEM_GENERATOR) {
             return;
         }
@@ -525,6 +555,7 @@ public class ProblemService {
     }
 
     private String requireText(String value, String message) {
+        // 텍스트 필수값 검증
         if (value == null || value.isBlank()) {
             throw new BusinessException(message, HttpStatus.BAD_REQUEST);
         }
@@ -533,12 +564,15 @@ public class ProblemService {
     }
 
     private String normalizeOptionalText(String value) {
+        // Optional 텍스트 정규화
         return value != null ? value.trim() : "";
     }
 
     private record ProblemSetPair(ProblemSet postgresqlProblemSet, ProblemSet oracleProblemSet) {
+        // 문제 테이블셋 쌍 처리
 
         private boolean isEmpty() {
+            // Empty 여부 확인
             return postgresqlProblemSet == null && oracleProblemSet == null;
         }
     }

@@ -1,7 +1,7 @@
 package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityPost;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -63,10 +63,12 @@ public class CommunityPostMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 게시글 Mock 데이터 적재
         communityPostRepository.saveAll(createPosts());
     }
 
     private List<CommunityPost> createPosts() {
+        // 게시글 목록 생성
         List<CommunityPost> posts = new ArrayList<>();
 
         for (int postNumber = 1; postNumber <= 34; postNumber++) {
@@ -90,10 +92,12 @@ public class CommunityPostMockData {
     }
 
     private String createPostId(int postNumber) {
+        // 게시글 번호 생성
         return "community-seed-%02d".formatted(postNumber);
     }
 
     private String createAuthorId(int postNumber) {
+        // Author 번호 생성
         if (postNumber > 30) {
             return switch (postNumber) {
                 case 31 -> "liardanc3";
@@ -115,6 +119,7 @@ public class CommunityPostMockData {
     }
 
     private String createTitle(int postNumber) {
+        // 제목 생성
         if (postNumber > 30) {
             return HOT_POST_TITLES[postNumber - 31];
         }
@@ -125,6 +130,7 @@ public class CommunityPostMockData {
     }
 
     private String createContentHtml(int postNumber) {
+        // 본문 HTML 생성
         if (postNumber > 30) {
             return createHotContentHtml(postNumber);
         }
@@ -147,6 +153,7 @@ public class CommunityPostMockData {
     }
 
     private String createContentText(int postNumber) {
+        // 본문 텍스트 생성
         if (postNumber > 30) {
             return createHotContentText(postNumber);
         }
@@ -161,6 +168,7 @@ public class CommunityPostMockData {
     }
 
     private int createInitialViewCount(int postNumber) {
+        // Initial View Count 생성
         if (postNumber > 30) {
             return switch (postNumber) {
                 case 31 -> 7200;
@@ -174,6 +182,7 @@ public class CommunityPostMockData {
     }
 
     private String createHotContentHtml(int postNumber) {
+        // 인기 본문 HTML 생성
         return switch (postNumber) {
             case 31 -> """
                     <h2>%s</h2>
@@ -207,6 +216,7 @@ public class CommunityPostMockData {
     }
 
     private String createHotContentText(int postNumber) {
+        // 인기 본문 텍스트 생성
         return switch (postNumber) {
             case 31 -> """
                     처음에는 Cost가 내려가면 무조건 좋은 방향이라고 생각했지만, 실제로 여러 번 실행해 보니 버퍼 접근 패턴과 정렬 위치가 같이 바뀌면서 체감 시간이 달라졌다. WHERE 조건을 먼저 좁히는 쿼리와 JOIN 이후에 필터가 적용되는 쿼리를 나란히 비교했고, 데이터가 늘어날수록 작은 계획 차이가 크게 벌어지는 과정을 정리했다.

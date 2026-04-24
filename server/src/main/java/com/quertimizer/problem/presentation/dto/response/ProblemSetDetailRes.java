@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemSetDetailResult;
+import com.quertimizer.problem.application.output.ProblemSetDetailOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -14,7 +14,7 @@ public class ProblemSetDetailRes {
     private final String dataPostgresql;
     private final String dataOracle;
 
-    public static ProblemSetDetailRes from(ProblemSetDetailResult result) {
+    public static ProblemSetDetailRes from(ProblemSetDetailOutput result) {
         return new ProblemSetDetailRes(
                 result.problemSetId(),
                 result.ddlPostgresql(),

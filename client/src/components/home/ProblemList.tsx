@@ -65,6 +65,8 @@ type ProblemListProps = {
   onApplySpreadRateRange: (range?: RangeSelection) => void;
 };
 
+const problemLoadingRows = Array.from({ length: 8 }, (_, index) => index);
+
 export default function ProblemList({
   problems,
   currentDbms,
@@ -279,7 +281,20 @@ export default function ProblemList({
             </div>
           </div>
 
-          {problems.length === 0 && !isLoading ? (
+          {isLoading && problems.length === 0 ? (
+            problemLoadingRows.map((rowIndex) => (
+              <div key={`problem-loading-${rowIndex}`} className="problem-table-row problem-table-entry" role="row" aria-hidden="true">
+                <span className="problem-status-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                <span className="problem-number" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                <span className="problem-title" role="cell"><span className="wave-loading-placeholder is-long" /></span>
+                <span className="problem-metric" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                <span className="problem-metric" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                <span className="problem-metric" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                <span className="problem-metric problem-spread-rate-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                <span className="problem-stats-toggle-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+              </div>
+            ))
+          ) : problems.length === 0 ? (
             <div className="problem-table-empty-row" role="row">
               <span className="problem-empty-state problem-empty-state-inline" role="cell">선택한 조건에 맞는 문제가 없습니다.</span>
             </div>

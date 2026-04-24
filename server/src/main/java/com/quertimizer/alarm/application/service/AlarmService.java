@@ -1,21 +1,21 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.alarm.application.port.AlarmNotifier;
+import com.quertimizer.alarm.application.output.AlarmCreatedOutput;
+import com.quertimizer.alarm.application.output.AlarmItemOutput;
+import com.quertimizer.alarm.application.output.AlarmPageOutput;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.alarm.domain.model.AdminDirectAlarm;
 import com.quertimizer.alarm.domain.model.AlarmBinding;
 import com.quertimizer.alarm.domain.model.AlarmSpec;
 import com.quertimizer.alarm.domain.model.AlarmType;
-import com.quertimizer.alarm.presentation.dto.response.AlarmItemRes;
-import com.quertimizer.alarm.presentation.dto.response.AlarmPageRes;
 import com.quertimizer.alarm.domain.entity.UserAlarm;
-import com.quertimizer.alarm.presentation.realtime.dto.AlarmSocketRes;
-import com.quertimizer.problem.presentation.realtime.handler.SessionWebSocketHandler;
 import com.quertimizer.alarm.domain.entity.AlarmTemplate;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.alarm.infrastructure.repository.UserAlarmRepository;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.alarm.application.port.UserAlarmRepository;
+import com.quertimizer.user.application.port.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -46,12 +46,13 @@ public class AlarmService {
 
     private final UserAlarmRepository userAlarmRepository;
     private final UserRepository userRepository;
-    private final SessionWebSocketHandler sessionWebSocketHandler;
+    private final AlarmNotifier alarmNotifier;
     private final AlarmTemplateService alarmTemplateService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public AlarmPageRes getAlarms(String handle, int requestedPage, Integer requestedPageSize) {
+    public AlarmPageOutput getAlarms(String handle, int requestedPage, Integer requestedPageSize) {
+        // 사용자 알람 페이지를 조회
         int normalizedPage = Math.max(1, requestedPage);
         int pageSize = normalizePageSize(requestedPageSize);
         Page<UserAlarm> alarmPage = findAlarmPage(handle, normalizedPage, pageSize);
@@ -62,19 +63,20 @@ public class AlarmService {
             alarmPage = findAlarmPage(handle, currentPage, pageSize);
         }
 
-        return new AlarmPageRes(
+        return new AlarmPageOutput(
                 currentPage,
                 pageSize,
                 alarmPage.getTotalElements(),
                 Math.max(1, alarmPage.getTotalPages()),
                 userAlarmRepository.countByHandleAndReadFalse(handle),
                 alarmPage.getContent().stream()
-                        .map(this::toAlarmItemResponse)
+                        .map(this::toAlarmItemOutput)
                         .toList()
         );
     }
 
     public void markAllRead(String handle) {
+        // 사용자 알람을 모두 읽음 처리
         List<UserAlarm> unreadAlarms = userAlarmRepository.findAllByHandleAndReadFalseOrderByCreatedAtDescAlarmIdDesc(handle);
 
         if (unreadAlarms.isEmpty()) {
@@ -85,6 +87,7 @@ public class AlarmService {
     }
 
     public boolean markRead(Long alarmId, String handle) {
+        // 단일 알람을 읽음 처리
         return userAlarmRepository.findByAlarmIdAndHandle(alarmId, handle)
                 .map(alarm -> {
                     if (!alarm.isRead()) {
@@ -98,6 +101,7 @@ public class AlarmService {
 
     @Transactional(readOnly = true)
     public List<String> searchRecipientHandles(String keyword) {
+        // 관리자 알람 수신 Handle 후보를 조회
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
 
         if (normalizedKeyword.isBlank()) {
@@ -112,6 +116,7 @@ public class AlarmService {
     }
 
     public int sendAdminAlarm(List<String> recipientHandles, String message) {
+        // 관리자 공지 알람을 전송
         List<String> normalizedRecipientHandles = normalizeRecipientHandles(recipientHandles);
         String normalizedMessage = requireMessage(message);
         List<User> recipientUsers = userRepository.findAllByHandleIn(normalizedRecipientHandles);
@@ -130,6 +135,7 @@ public class AlarmService {
     }
 
     public void publish(AlarmSpec alarmSpec) {
+        // 알람 명세를 저장하고 실시간 알림을 발행
         if (alarmSpec.recipientHandle() == null || alarmSpec.recipientHandle().isBlank()) {
             return;
         }
@@ -138,13 +144,14 @@ public class AlarmService {
         long unreadCount = userAlarmRepository.countByHandleAndReadFalse(alarm.getHandle());
 
         try {
-            sessionWebSocketHandler.sendAlarm(alarm.getHandle(), AlarmSocketRes.created(toAlarmItemResponse(alarm), unreadCount));
+            alarmNotifier.notifyCreated(alarm.getHandle(), AlarmCreatedOutput.created(toAlarmItemOutput(alarm), unreadCount));
         } catch (Exception exception) {
             log.warn(SOCKET_SEND_FAILED.getMessage(), exception);
         }
     }
 
     private Page<UserAlarm> findAlarmPage(String handle, int page, int pageSize) {
+        // 알람 페이지 조회
         return userAlarmRepository.findAllByHandleOrderByCreatedAtDescAlarmIdDesc(
                 handle,
                 PageRequest.of(
@@ -155,9 +162,10 @@ public class AlarmService {
         );
     }
 
-    private AlarmItemRes toAlarmItemResponse(UserAlarm alarm) {
+    private AlarmItemOutput toAlarmItemOutput(UserAlarm alarm) {
+        // 알람 항목 응답으로 변환
         if (AlarmType.FROM_ADMIN.getValue().equals(alarm.getAlarmType())) {
-            return new AlarmItemRes(
+            return new AlarmItemOutput(
                     alarm.getAlarmId(),
                     alarm.getAlarmType(),
                     alarm.getTitle(),
@@ -174,7 +182,7 @@ public class AlarmService {
 
         AlarmTemplate alarmTemplate = alarmTemplateService.getAlarmTemplate(alarm.getAlarmType());
 
-        return new AlarmItemRes(
+        return new AlarmItemOutput(
                 alarm.getAlarmId(),
                 alarmTemplate.getAlarmType(),
                 alarm.getTitle(),
@@ -190,6 +198,7 @@ public class AlarmService {
     }
 
     private int normalizePageSize(Integer requestedPageSize) {
+        // 페이지 크기 정규화
         if (requestedPageSize == null) {
             return DEFAULT_ALARM_PAGE_SIZE;
         }
@@ -198,6 +207,7 @@ public class AlarmService {
     }
 
     private String serializeBindings(Map<String, AlarmBinding> bindings) {
+        // 바인딩 직렬화
         try {
             return objectMapper.writeValueAsString(bindings);
         } catch (Exception exception) {
@@ -207,6 +217,7 @@ public class AlarmService {
     }
 
     private List<String> normalizeRecipientHandles(List<String> recipientHandles) {
+        // 수신 Handle 목록 정규화
         if (recipientHandles == null) {
             throw new BusinessException(RECIPIENT_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
         }
@@ -225,6 +236,7 @@ public class AlarmService {
     }
 
     private String requireMessage(String message) {
+        // 메시지 필수값 검증
         if (message == null || message.isBlank()) {
             throw new BusinessException(MESSAGE_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
         }
@@ -233,6 +245,7 @@ public class AlarmService {
     }
 
     private Map<String, AlarmBinding> deserializeBindings(String bindingsJson) {
+        // 바인딩 역직렬화
         if (bindingsJson == null || bindingsJson.isBlank()) {
             return Map.of();
         }

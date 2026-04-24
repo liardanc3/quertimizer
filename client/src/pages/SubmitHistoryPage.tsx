@@ -118,6 +118,7 @@ interface SubmitHistoryFavoriteSnapshot {
   activePlanDetailDbms: DbmsType;
 }
 
+const submitHistoryLoadingRows = Array.from({ length: 8 }, (_, index) => index);
 const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
@@ -1524,7 +1525,19 @@ export default function SubmitHistoryPage() {
                 </div>
               </div>
 
-              {historyPage.histories.length === 0 && !isLoading ? (
+              {isLoading && historyPage.histories.length === 0 ? (
+                submitHistoryLoadingRows.map((rowIndex) => (
+                  <div key={`submit-history-loading-${rowIndex}`} className="submit-history-row submit-history-body" role="row" aria-hidden="true">
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                  </div>
+                ))
+              ) : historyPage.histories.length === 0 ? (
                 <div className="submit-history-row submit-history-empty-row" role="row">
                   <span className="submit-history-empty-cell" role="cell">
                     조건에 맞는 제출 이력이 없습니다.

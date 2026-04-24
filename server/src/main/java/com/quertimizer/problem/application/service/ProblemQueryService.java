@@ -6,9 +6,9 @@ import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistoryId;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSubmitHistoryRepository;
+import com.quertimizer.problem.application.port.ProblemRepository;
+import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
+import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
 import com.quertimizer.problem.application.store.ProblemStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -388,6 +388,7 @@ public class ProblemQueryService {
     }
 
     public void cancelInteractiveExecution(String socketId) {
+        // 진행 중인 인터랙티브 실행을 취소
         Statement activeStatement = activeStatements.remove(socketId);
         if (activeStatement == null) {
             return;
@@ -405,6 +406,7 @@ public class ProblemQueryService {
     }
 
     private void validateSql(String sql, String handle) {
+        // SQL 검증
         validateSqlText(sql);
 
         if (MULTI_STATEMENT_PATTERN.matcher(sql).find()) {
@@ -415,6 +417,7 @@ public class ProblemQueryService {
     }
 
     private void validateSqlText(String sql) {
+        // SQL 텍스트 검증
         if (sql.isBlank()) {
             throw new IllegalArgumentException(SQL_REQUIRED.getMessage());
         }
@@ -425,6 +428,7 @@ public class ProblemQueryService {
     }
 
     private void validateSqlStatement(String sql, String handle) {
+        // SQL 구문 검증
         validateSqlText(sql);
         String normalizedSql = normalizeSql(sql);
         validateForbiddenKeyword(normalizedSql, "ALTER SYSTEM", ALTER_SYSTEM_UNAVAILABLE.getMessage());
@@ -463,6 +467,7 @@ public class ProblemQueryService {
     }
 
     private void configureExecutionConnection(Connection connection, String schemaName) throws SQLException {
+        // 실행용 세션 설정 적용
         try (Statement statement = connection.createStatement()) {
             statement.execute("SET LOCAL search_path TO " + quoteIdentifier(schemaName) + ", public");
             statement.execute("SET LOCAL statement_timeout TO '" + QUERY_TIMEOUT_SECONDS + "s'");
@@ -533,6 +538,7 @@ public class ProblemQueryService {
     }
 
     private long fetchSelectRowCount(String socketId, Connection connection, String sql) throws SQLException {
+        // 전체 조회 건수 계산
         Statement statement = createTrackedStatement(socketId, connection);
         try (statement) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
@@ -641,6 +647,7 @@ public class ProblemQueryService {
     }
 
     private ExecutionMode resolveExecutionMode(String sql) {
+        // 실행 모드 결정
         String normalizedSql = normalizeSql(sql);
 
         if (EXPLAIN_ANALYZE_PATTERN.matcher(normalizedSql).find()) {
@@ -914,28 +921,34 @@ public class ProblemQueryService {
     }
 
     private void validateForbiddenKeyword(String normalizedSql, String keyword, String message) {
+        // 금지 키워드 검증
         if (normalizedSql.contains(keyword)) {
             throw new IllegalArgumentException(message);
         }
     }
 
     private String trimTrailingSemicolon(String sql) {
+        // 끝 세미콜론 정리
         return sql.trim().replaceFirst(";\\s*$", "");
     }
 
     private String normalizeProblemId(String problemId) {
+        // 문제 번호 정규화
         return problemId != null ? problemId.trim() : "";
     }
 
     private String normalizeSubmittedSql(String sql) {
+        // 제출 SQL 정규화
         return sql != null ? trimTrailingSemicolon(sql) : "";
     }
 
     private String preserveSubmittedSql(String sql) {
+        // 제출 SQL 원문 보존
         return sql != null ? sql.replace("\r\n", "\n") : "";
     }
 
     private List<SubmittedStatement> parseSubmittedStatements(String sql) {
+        // 제출 구문 목록 파싱
         validateSqlText(sql);
 
         List<String> normalizedStatements = splitSqlStatements(sql);
@@ -986,6 +999,7 @@ public class ProblemQueryService {
     }
 
     private List<String> splitSqlStatements(String sql) {
+        // split SQL 구문 목록 처리
         List<String> statements = new ArrayList<>();
         int statementStart = 0;
         boolean inSingleQuote = false;
@@ -1069,6 +1083,7 @@ public class ProblemQueryService {
     }
 
     private SubmittedStatement resolveReferenceStatement(List<SubmittedStatement> statements) {
+        // 기준 구문 결정
         for (SubmittedStatement statement : statements) {
             if (statement.referenceSelect()) {
                 return statement;
@@ -1079,6 +1094,7 @@ public class ProblemQueryService {
     }
 
     private List<SubmittedStatement> resolveDdlStatements(List<SubmittedStatement> statements) {
+        // DDL 구문 목록 결정
         List<SubmittedStatement> ddlStatements = new ArrayList<>();
         for (SubmittedStatement statement : statements) {
             if (statement.mode() == ExecutionMode.INDEX_COMMAND) {
@@ -1090,6 +1106,7 @@ public class ProblemQueryService {
     }
 
     private void collectSqlStatement(String sql, int statementStart, int statementEnd, List<String> statements) {
+        // SQL 구문 수집
         String rawStatement = sql.substring(statementStart, statementEnd);
         int firstContentOffset = findFirstContentOffset(rawStatement);
         if (firstContentOffset < 0) {
@@ -1107,6 +1124,7 @@ public class ProblemQueryService {
     }
 
     private int findFirstContentOffset(String sql) {
+        // First 본문 Offset 조회
         for (int index = 0; index < sql.length(); index++) {
             if (!Character.isWhitespace(sql.charAt(index))) {
                 return index;
@@ -1117,6 +1135,7 @@ public class ProblemQueryService {
     }
 
     private ExecutionMode resolveSubmitExecutionMode(String sql) {
+        // 제출 실행 모드 결정
         ExecutionMode executionMode = resolveExecutionMode(sql);
         if (executionMode == ExecutionMode.EXPLAIN || executionMode == ExecutionMode.EXPLAIN_ANALYZE) {
             throw new IllegalArgumentException(SUBMIT_SELECT_AND_INDEX_DDL_ONLY.getMessage());
@@ -1126,16 +1145,19 @@ public class ProblemQueryService {
     }
 
     private String createSubmittedStatementKey(int statementIndex) {
+        // 제출 구문 키 생성
         return "submit-statement-" + statementIndex;
     }
 
     private String normalizeSql(String sql) {
+        // SQL 정규화
         return sql.trim()
                 .replaceAll("\\s+", " ")
                 .toUpperCase(Locale.ROOT);
     }
 
     private int normalizeExecutionPage(Integer page) {
+        // 실행 페이지 정규화
         if (page == null || page < 1) {
             return 1;
         }
@@ -1144,6 +1166,7 @@ public class ProblemQueryService {
     }
 
     private int normalizeExecutionPageSize(Integer pageSize) {
+        // 실행 페이지 크기 정규화
         if (pageSize == null || pageSize < 1) {
             return DEFAULT_SELECT_PAGE_SIZE;
         }
@@ -1152,6 +1175,7 @@ public class ProblemQueryService {
     }
 
     private String sanitizeWorkspacePrefix(String handle) {
+        // sanitize 작업 스키마 Prefix 처리
         String sanitizedHandle = handle.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
         if (sanitizedHandle.isBlank()) {
             sanitizedHandle = "user";
@@ -1168,10 +1192,12 @@ public class ProblemQueryService {
     }
 
     private String quoteIdentifier(String identifier) {
+        // SQL 식별자 인용
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
     private Double estimateQueryCost(String socketId, Connection connection, String sql) throws SQLException {
+        // 실행 계획 기준 예상 Cost 계산
         Statement statement = createTrackedStatement(socketId, connection);
         try (statement) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
@@ -1195,6 +1221,7 @@ public class ProblemQueryService {
     }
 
     private Double extractEstimatedCost(List<String> planLines) {
+        // 실행 계획 예상 Cost 추출
         for (String planLine : planLines) {
             if (planLine == null || planLine.isBlank()) {
                 continue;
@@ -1214,6 +1241,7 @@ public class ProblemQueryService {
     }
 
     private boolean isCorrectAnswer(String problemId, List<List<String>> rows) {
+        // Correct 정답 여부 확인
         Problem problem = problemRepository.findById(problemId)
                 .orElseThrow(() -> new IllegalArgumentException(PROBLEM_INFO_NOT_FOUND.getMessage()));
 
@@ -1318,6 +1346,7 @@ public class ProblemQueryService {
     }
 
     private String formatCost(Double cost) {
+        // Cost 포맷
         return cost == null ? "-" : "%.1f".formatted(cost);
     }
 
@@ -1337,6 +1366,7 @@ public class ProblemQueryService {
     }
 
     private List<String> resolvePlanElementDetailLines(long executionPlanElement) {
+        // 실행 계획 Element 상세 Lines 결정
         LinkedHashSet<String> detailLines = new LinkedHashSet<>();
 
         if (hasAnyPlanElement(
@@ -1425,6 +1455,7 @@ public class ProblemQueryService {
     }
 
     private boolean hasAnyPlanElement(long executionPlanElement, int... indexes) {
+        // Any 실행 계획 Element 여부 확인
         for (int index : indexes) {
             if (hasPlanElement(executionPlanElement, index)) {
                 return true;
@@ -1435,10 +1466,12 @@ public class ProblemQueryService {
     }
 
     private boolean hasPlanElement(long executionPlanElement, int index) {
+        // 실행 계획 Element 여부 확인
         return (executionPlanElement & (1L << index)) != 0;
     }
 
     private PlanAnalysisResult analyzePostgreSqlPlan(List<String> planLines, String submittedSql) {
+        // analyze Postgre SQL 실행 계획 처리
         long executionPlanElement = 0L;
         LinkedHashSet<String> summaryLines = new LinkedHashSet<>();
 
@@ -1597,10 +1630,12 @@ public class ProblemQueryService {
     }
 
     private long appendPlanElement(long executionPlanElement, int index) {
+        // append 실행 계획 Element 처리
         return executionPlanElement | (1L << index);
     }
 
     private boolean containsAny(String normalizedLine, Set<String> tokens) {
+        // contains Any 처리
         for (String token : tokens) {
             if (normalizedLine.contains(token)) {
                 return true;
@@ -1611,6 +1646,7 @@ public class ProblemQueryService {
     }
 
     private long extractExplainAnalyzeExecutionTimeMs(List<String> planLines) {
+        // Explain Analyze 실행 시간 Ms 추출
         Double executionTimeMs = null;
 
         for (String planLine : planLines) {
@@ -1632,6 +1668,7 @@ public class ProblemQueryService {
     }
 
     private boolean isRetriableConnectionError(RuntimeException exception) {
+        // Retriable Connection Error 여부 확인
         Throwable cause = exception;
         while (cause != null) {
             if (cause instanceof SQLException sqlException) {
@@ -1664,6 +1701,7 @@ public class ProblemQueryService {
     }
 
     private void sleepForRetryDelay() {
+        // 재시도 대기
         try {
             Thread.sleep(CONNECTION_RETRY_DELAY_MS);
         } catch (InterruptedException exception) {
@@ -1673,6 +1711,7 @@ public class ProblemQueryService {
     }
 
     private Statement createTrackedStatement(String socketId, Connection connection) throws SQLException {
+        // 실행 추적용 구문 생성
         Statement statement = connection.createStatement();
         activeStatements.put(socketId, statement);
         return statement;
@@ -1687,10 +1726,12 @@ public class ProblemQueryService {
     }
 
     private void clearTrackedStatement(String socketId, Statement statement) {
+        // 실행 추적 구문 정리
         activeStatements.remove(socketId, statement);
     }
 
     private String resolveProblemSubmitErrorMessage(Exception exception) {
+        // 문제 제출 Error 메시지 결정
         Throwable cause = exception;
         while (cause != null) {
             if (cause instanceof SQLException sqlException) {
@@ -1708,6 +1749,7 @@ public class ProblemQueryService {
     }
 
     private String resolveSqlErrorMessage(SQLException exception) {
+        // SQL Error 메시지 결정
         String message = exception.getMessage();
         String sqlState = exception.getSQLState();
         String normalizedMessage = message != null ? message.toLowerCase(Locale.ROOT) : "";
@@ -1730,6 +1772,7 @@ public class ProblemQueryService {
     }
 
     private String buildSubmittedDdlPreview(String sql) {
+        // 제출 DDL Preview 구성
         String preview = sql.replaceAll("\\s+", " ").trim();
         if (preview.length() <= 20) {
             return preview;
@@ -1799,6 +1842,7 @@ public class ProblemQueryService {
         }
 
         private static QueryExecutionResult command(String problemId, String message) {
+            // command 처리
             return new QueryExecutionResult(
                     problemId,
                     "command",
@@ -1815,6 +1859,7 @@ public class ProblemQueryService {
         }
 
         private QueryExecutionResult withExecutionTimeMs(long executionTimeMs) {
+            // with 실행 시간 Ms 처리
             return new QueryExecutionResult(
                     problemId,
                     mode,
@@ -1837,10 +1882,12 @@ public class ProblemQueryService {
                                       Long executionTimeMs) {
 
         private static ProblemSubmitResult success(String problemId, String message, long executionTimeMs) {
+            // success 처리
             return new ProblemSubmitResult(problemId, true, message, executionTimeMs);
         }
 
         private static ProblemSubmitResult failure(String problemId, String message) {
+            // failure 처리
             return new ProblemSubmitResult(problemId, false, message, null);
         }
     }
@@ -1857,42 +1904,52 @@ public class ProblemQueryService {
                                         Boolean statementReference) {
 
         private static ProblemSubmitProgress running(String problemId, String stepKey, String message) {
+            // running 처리
             return new ProblemSubmitProgress(problemId, stepKey, "running", message, List.of(), null, null, null, null, null);
         }
 
         private static ProblemSubmitProgress success(String problemId, String stepKey, String message) {
+            // success 처리
             return new ProblemSubmitProgress(problemId, stepKey, "success", message, List.of(), null, null, null, null, null);
         }
 
         private static ProblemSubmitProgress success(String problemId, String stepKey, String message, List<String> detailLines) {
+            // success 처리
             return new ProblemSubmitProgress(problemId, stepKey, "success", message, detailLines != null ? detailLines : List.of(), null, null, null, null, null);
         }
 
         private static ProblemSubmitProgress incorrect(String problemId, String stepKey, String message) {
+            // incorrect 처리
             return new ProblemSubmitProgress(problemId, stepKey, "incorrect", message, List.of(), null, null, null, null, null);
         }
 
         private static ProblemSubmitProgress error(String problemId, String stepKey, String message) {
+            // error 처리
             return new ProblemSubmitProgress(problemId, stepKey, "error", message, List.of(), null, null, null, null, null);
         }
 
         private static ProblemSubmitProgress error(String problemId, String stepKey, String message, List<String> detailLines) {
+            // error 처리
             return new ProblemSubmitProgress(problemId, stepKey, "error", message, detailLines != null ? detailLines : List.of(), null, null, null, null, null);
         }
 
         private static ProblemSubmitProgress runningStatement(String problemId, SubmittedStatement statement, String message) {
+            // running 구문 처리
             return statement(problemId, statement, "running", message);
         }
 
         private static ProblemSubmitProgress successStatement(String problemId, SubmittedStatement statement, String message) {
+            // success 구문 처리
             return statement(problemId, statement, "success", message);
         }
 
         private static ProblemSubmitProgress errorStatement(String problemId, SubmittedStatement statement, String message) {
+            // error 구문 처리
             return statement(problemId, statement, "error", message);
         }
 
         private static ProblemSubmitProgress statement(String problemId, SubmittedStatement statement, String status, String message) {
+            // statement 처리
             return new ProblemSubmitProgress(
                     problemId,
                     statement.key(),
@@ -1916,12 +1973,15 @@ public class ProblemQueryService {
     }
 
     private record SubmittedExecutionContext(QueryExecutionResult referenceResult, String referenceSql) {
+        // 제출 실행 Context 처리
     }
 
     private record SelectPageResult(List<String> columns, List<List<String>> rows) {
+        // Select 페이지 Result 처리
     }
 
     private record PlanAnalysisResult(long executionPlanElement, List<String> summaryLines) {
+        // 실행 계획 Analysis Result 처리
     }
 
     private static final class SubmittedDdlExecutionException extends RuntimeException {
@@ -1934,6 +1994,7 @@ public class ProblemQueryService {
         }
 
         private List<String> detailLines() {
+            // detail Lines 처리
             return detailLines;
         }
     }

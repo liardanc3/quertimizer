@@ -17,6 +17,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public boolean tryLock(String key) {
+        // try 락 처리
         LockEntry entry = retainEntry(key);
         boolean locked = entry.lock.tryLock();
 
@@ -29,6 +30,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public boolean tryLock(String key, long timeoutMillis) {
+        // try 락 처리
         LockEntry entry = retainEntry(key);
         boolean locked = false;
 
@@ -47,6 +49,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public void lock(String key) {
+        // lock 처리
         LockEntry entry = retainEntry(key);
         boolean success = false;
 
@@ -62,6 +65,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public void unlock(String key) {
+        // unlock 처리
         LockEntry entry = locks.get(key);
 
         if (entry == null) {
@@ -76,6 +80,7 @@ public class InMemoryLockManager implements LockManager {
     }
 
     private LockEntry retainEntry(String key) {
+        // 락 엔트리 유지 여부 확인
         return locks.compute(key, (ignored, current) -> {
             if (current == null) {
                 current = new LockEntry();
@@ -87,6 +92,7 @@ public class InMemoryLockManager implements LockManager {
     }
 
     private void releaseEntry(String key, LockEntry entry) {
+        // release Entry 처리
         locks.computeIfPresent(key, (ignored, current) -> {
             if (current != entry) {
                 return current;

@@ -62,6 +62,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        // 필터 제외 여부 확인
         return request.getRequestURI().startsWith("/ws/")
                 || "OPTIONS".equalsIgnoreCase(request.getMethod());
     }
@@ -89,10 +90,12 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private String requestPath(HttpServletRequest request) {
+        // 요청 경로 조회
         return request.getRequestURI();
     }
 
     private String responseStatus(HttpServletResponse response) {
+        // 응답 상태 조회
         HttpStatus httpStatus = HttpStatus.resolve(response.getStatus());
         if (httpStatus == null) {
             return Integer.toString(response.getStatus());
@@ -102,6 +105,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private String extractRequestBody(ContentCachingRequestWrapper request) {
+        // 요청 본문 추출
         byte[] content = request.getContentAsByteArray();
         if (content.length == 0) {
             return "";
@@ -115,6 +119,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private String extractResponseBody(ContentCachingResponseWrapper response) {
+        // 응답 본문 추출
         byte[] content = response.getContentAsByteArray();
         if (content.length == 0) {
             return "";
@@ -128,6 +133,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private boolean isTextPayload(String contentType) {
+        // 텍스트 페이로드 여부 확인
         if (contentType == null || contentType.isBlank()) {
             return true;
         }
@@ -141,6 +147,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private Charset resolveCharset(String contentType, String characterEncoding) {
+        // 문자셋 결정
 
         Charset contentTypeCharset = extractCharset(contentType);
         if (contentTypeCharset != null) {
@@ -160,6 +167,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private Charset extractCharset(String contentType) {
+        // 문자셋 추출
         if (contentType == null || contentType.isBlank()) {
             return null;
         }
@@ -177,6 +185,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private boolean isUtf8PreferredPayload(String contentType) {
+        // UTF-8 우선 페이로드 여부 확인
         if (contentType == null || contentType.isBlank()) {
             return true;
         }
@@ -190,6 +199,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private void logLines(List<String> logLines) {
+        // 로그 라인 생성
         for (String logLine : logLines) {
             log.info("{}", logLine);
         }

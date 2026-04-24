@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemPageResult;
+import com.quertimizer.problem.application.output.ProblemPageOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -18,7 +18,7 @@ public class ProblemPageRes {
     private final double spreadRateMax;
     private final List<ProblemListItemRes> problems;
 
-    public static ProblemPageRes from(ProblemPageResult result) {
+    public static ProblemPageRes from(ProblemPageOutput result) {
         return new ProblemPageRes(
                 result.currentPage(),
                 result.pageSize(),

@@ -1,5 +1,6 @@
 package com.quertimizer.community.presentation.dto.response;
 
+import com.quertimizer.community.application.output.CommunityPostSummaryOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -22,4 +23,19 @@ public class CommunityPostSummaryRes {
     private final int likeCount;
     private final int commentCount;
 
+    public static CommunityPostSummaryRes from(CommunityPostSummaryOutput result) {
+        return new CommunityPostSummaryRes(
+                result.getPostId(),
+                result.getTitle(),
+                result.getAuthorId(),
+                result.getExcerpt(),
+                result.getTags(),
+                result.getCategory(),
+                result.getCreatedAt(),
+                result.getUpdatedAt(),
+                result.getViewCount(),
+                result.getLikeCount(),
+                result.getCommentCount()
+        );
+    }
 }

@@ -18,10 +18,12 @@ public class DashboardHotPostPolicy {
     private static final long RECENCY_BONUS_HOURS = 72L;
 
     public int getDisplayLimit() {
+        // 표시 개수 조회
         return DISPLAY_LIMIT;
     }
 
     public Comparator<CommunityPost> createHotPostComparator() {
+        // 인기 게시글 비교 기준 생성
         return Comparator.comparingDouble(this::calculateHotScore)
                 .reversed()
                 .thenComparing(CommunityPost::getCreatedAt, Comparator.reverseOrder())
@@ -29,6 +31,7 @@ public class DashboardHotPostPolicy {
     }
 
     public double calculateHotScore(CommunityPost post) {
+        // 인기 점수 계산
         long elapsedHours = Math.max(0L, Duration.between(post.getCreatedAt(), LocalDateTime.now()).toHours());
         double recencyBonus = Math.max(0L, RECENCY_BONUS_HOURS - elapsedHours) * RECENCY_WEIGHT;
 

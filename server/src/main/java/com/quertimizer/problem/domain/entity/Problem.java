@@ -53,6 +53,7 @@ public class Problem {
     private String answerSql;
 
     public static Problem create(String problemId, String title, String description) {
+        // 문제 생성
         DbmsType dbmsType = problemId != null && problemId.startsWith("O") ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
         return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType == DbmsType.POSTGRESQL, dbmsType == DbmsType.ORACLE, "", "", "", "", "");
     }
@@ -95,6 +96,7 @@ public class Problem {
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
+        // 지원 DBMS 여부 확인
         if (dbmsType == DbmsType.ORACLE) {
             return isOracle;
         }
@@ -103,14 +105,17 @@ public class Problem {
     }
 
     public boolean hasSupportedDbms() {
+        // 지원 DBMS 보유 여부 확인
         return isPostgresql || isOracle;
     }
 
     public DbmsType getDbmsType() {
+        // DBMS 유형 조회
         return isOracle ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
     }
 
     public String getResolvedProblemSetId() {
+        // 문제 테이블셋 번호 조회
         if (problemSetId != null && !problemSetId.isBlank()) {
             return problemSetId;
         }
@@ -119,15 +124,18 @@ public class Problem {
     }
 
     public String getBaseProblemSetId() {
+        // 기준 문제 테이블셋 번호 조회
         return extractBaseProblemSetId(getResolvedProblemSetId());
     }
 
     private static String resolveProblemSetId(String problemId) {
+        // 문제 테이블셋 번호 결정
         String[] tokens = problemId != null ? problemId.split("-") : new String[0];
         return tokens.length > 0 ? tokens[0] : "";
     }
 
     private static String extractBaseProblemSetId(String problemSetId) {
+        // 기준 문제 테이블셋 번호 추출
         if (problemSetId == null || problemSetId.isBlank()) {
             return "";
         }

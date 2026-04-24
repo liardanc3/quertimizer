@@ -1,17 +1,17 @@
 package com.quertimizer.user.application.service;
 
 import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.user.presentation.dto.request.UserProfileLinkReq;
-import com.quertimizer.user.presentation.dto.request.UserProfileUpdateReq;
-import com.quertimizer.user.presentation.dto.response.UserProfileLinkRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileCommunityCommentRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileCommunityCommentsRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileCommunityPostRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileCommunityPostsRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileSolvedProblemsRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileSolvedRecordRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileSolvedRecordsRes;
-import com.quertimizer.user.presentation.dto.response.UserProfileSummaryRes;
+import com.quertimizer.user.application.input.UserProfileLinkInput;
+import com.quertimizer.user.application.input.UserProfileUpdateInput;
+import com.quertimizer.user.application.output.UserProfileLinkOutput;
+import com.quertimizer.user.application.output.UserProfileCommunityCommentOutput;
+import com.quertimizer.user.application.output.UserProfileCommunityCommentsOutput;
+import com.quertimizer.user.application.output.UserProfileCommunityPostOutput;
+import com.quertimizer.user.application.output.UserProfileCommunityPostsOutput;
+import com.quertimizer.user.application.output.UserProfileSolvedProblemsOutput;
+import com.quertimizer.user.application.output.UserProfileSolvedRecordOutput;
+import com.quertimizer.user.application.output.UserProfileSolvedRecordsOutput;
+import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityCommentLike;
 import com.quertimizer.community.domain.entity.CommunityPost;
@@ -20,14 +20,14 @@ import com.quertimizer.community.domain.entity.CommunityPostTag;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.user.domain.entity.UserExternalLink;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentLikeRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostLikeRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostTagRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryRepository;
-import com.quertimizer.user.infrastructure.repository.UserExternalLinkRepository;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
+import com.quertimizer.community.application.port.CommunityCommentRepository;
+import com.quertimizer.community.application.port.CommunityPostLikeRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostTagRepository;
+import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
+import com.quertimizer.user.application.port.UserExternalLinkRepository;
+import com.quertimizer.user.application.port.UserRepository;
 import com.quertimizer.problem.application.store.ProblemStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -56,35 +56,40 @@ public class UserProfileService {
     private final CommunityPostLikeRepository communityPostLikeRepository;
     private final ProblemStore problemStore;
 
-    public Optional<UserProfileSummaryRes> getProfileSummary(String targetHandle, String currentHandle) {
+    public Optional<UserProfileSummaryOutput> getProfileSummary(String targetHandle, String currentHandle) {
+        // 프로필 요약 정보를 조회
         boolean isOwnProfile = targetHandle.equals(currentHandle);
 
         return userRepository.findByHandle(targetHandle)
                 .map(user -> buildUserProfileSummary(user, isOwnProfile));
     }
 
-    public Optional<UserProfileSolvedProblemsRes> getSolvedProblems(String targetHandle, String currentHandle) {
+    public Optional<UserProfileSolvedProblemsOutput> getSolvedProblems(String targetHandle, String currentHandle) {
+        // 해결한 문제 목록을 조회
         boolean isOwnProfile = targetHandle.equals(currentHandle);
 
         return userRepository.findByHandle(targetHandle)
                 .map(user -> buildSolvedProblems(user, isOwnProfile));
     }
 
-    public Optional<UserProfileSolvedRecordsRes> getSolvedRecords(String targetHandle, String currentHandle) {
+    public Optional<UserProfileSolvedRecordsOutput> getSolvedRecords(String targetHandle, String currentHandle) {
+        // 제출 기록 목록을 조회
         boolean isOwnProfile = targetHandle.equals(currentHandle);
 
         return userRepository.findByHandle(targetHandle)
                 .map(user -> buildSolvedRecords(user, isOwnProfile));
     }
 
-    public Optional<UserProfileCommunityPostsRes> getCommunityPosts(String targetHandle) {
+    public Optional<UserProfileCommunityPostsOutput> getCommunityPosts(String targetHandle) {
+        // 작성한 게시글 목록을 조회
         return userRepository.findByHandle(targetHandle)
-                .map(user -> new UserProfileCommunityPostsRes(
+                .map(user -> new UserProfileCommunityPostsOutput(
                         createCommunityPostResponses(communityPostRepository.findAllByHandleOrderByCreatedAtDesc(targetHandle))
                 ));
     }
 
-    public Optional<UserProfileCommunityPostsRes> getLikedPosts(String targetHandle) {
+    public Optional<UserProfileCommunityPostsOutput> getLikedPosts(String targetHandle) {
+        // 좋아요한 게시글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
                     List<CommunityPostLike> likedPosts = communityPostLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(targetHandle);
@@ -97,7 +102,7 @@ public class UserProfileService {
                             ).stream()
                             .collect(java.util.stream.Collectors.toMap(CommunityPost::getPostId, post -> post));
 
-                    return new UserProfileCommunityPostsRes(
+                    return new UserProfileCommunityPostsOutput(
                             likedPosts.stream()
                                     .map(postLike -> createLikedCommunityPostResponse(postLike, postById))
                                     .flatMap(Optional::stream)
@@ -106,7 +111,8 @@ public class UserProfileService {
                 });
     }
 
-    public Optional<UserProfileCommunityCommentsRes> getCommunityComments(String targetHandle) {
+    public Optional<UserProfileCommunityCommentsOutput> getCommunityComments(String targetHandle) {
+        // 작성한 댓글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
                     List<CommunityComment> comments = communityCommentRepository.findAllByHandleOrderByCreatedAtDesc(targetHandle);
@@ -115,7 +121,7 @@ public class UserProfileService {
                             .distinct()
                             .toList());
 
-                    return new UserProfileCommunityCommentsRes(
+                    return new UserProfileCommunityCommentsOutput(
                             comments.stream()
                                     .map(comment -> createCommunityCommentResponse(comment, postTitleByPostId, comment.getCreatedAt()))
                                     .toList()
@@ -123,7 +129,8 @@ public class UserProfileService {
                 });
     }
 
-    public Optional<UserProfileCommunityCommentsRes> getLikedComments(String targetHandle) {
+    public Optional<UserProfileCommunityCommentsOutput> getLikedComments(String targetHandle) {
+        // 좋아요한 댓글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
                     List<CommunityCommentLike> likedComments = communityCommentLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(targetHandle);
@@ -140,7 +147,7 @@ public class UserProfileService {
                             .distinct()
                             .toList());
 
-                    return new UserProfileCommunityCommentsRes(
+                    return new UserProfileCommunityCommentsOutput(
                             likedComments.stream()
                                     .map(commentLike -> createLikedCommunityCommentResponse(commentLike, commentById, postTitleByPostId))
                                     .flatMap(Optional::stream)
@@ -149,27 +156,29 @@ public class UserProfileService {
                 });
     }
 
-    public Optional<UserProfileSummaryRes> updateProfile(String handle, UserProfileUpdateReq request) {
+    public Optional<UserProfileSummaryOutput> updateProfile(String handle, UserProfileUpdateInput input) {
+        // 프로필 정보를 수정
         return userRepository.findByHandle(handle)
                 .map(user -> {
                     // 소개글, 기본 설정 수정
                     user.changeProfile(
-                            normalizeBio(request.getBio()),
-                            request.getDefaultDbms(),
-                            request.isSqlPublic(),
-                            request.isExecutionPercentilePublic(),
-                            request.isSolvedRecordsPublic(),
-                            request.isSolvedProblemCountPublic()
+                            normalizeBio(input.getBio()),
+                            input.getDefaultDbms(),
+                            input.isSqlPublic(),
+                            input.isExecutionPercentilePublic(),
+                            input.isSolvedRecordsPublic(),
+                            input.isSolvedProblemCountPublic()
                     );
 
                     // 프로필 링크를 입력값으로 교체
-                    replaceExternalLinks(user.getHandle(), request.getLinks());
+                    replaceExternalLinks(user.getHandle(), input.getLinks());
 
                     return buildUserProfileSummary(user, true);
                 });
     }
 
-    private UserProfileSummaryRes buildUserProfileSummary(User user, boolean isOwnProfile) {
+    private UserProfileSummaryOutput buildUserProfileSummary(User user, boolean isOwnProfile) {
+        // 사용자 프로필 요약 구성
         List<ProblemSolveHistory> histories = problemSolveHistoryRepository.findAllByHandleOrderBySubmittedAtDesc(user.getHandle());
         List<UserExternalLink> externalLinks = userExternalLinkRepository.findAllByIdHandleOrderByIdTypeAscIdLinkAsc(user.getHandle());
 
@@ -183,7 +192,7 @@ public class UserProfileService {
         long likedPostCount = communityPostLikeRepository.countByIdHandle(user.getHandle());
         long commentCount = communityCommentRepository.countByHandle(user.getHandle());
 
-        return new UserProfileSummaryRes(
+        return new UserProfileSummaryOutput(
                 user.getHandle(),
                 user.getResolvedBio(),
                 createProfileLinkResponses(externalLinks),
@@ -200,33 +209,34 @@ public class UserProfileService {
         );
     }
 
-    private UserProfileSolvedProblemsRes buildSolvedProblems(User user, boolean isOwnProfile) {
+    private UserProfileSolvedProblemsOutput buildSolvedProblems(User user, boolean isOwnProfile) {
         // 해결한 문제 공개 여부 확인
         if (!isOwnProfile && !user.isSolvedProblemCountPublicEnabled()) {
-            return new UserProfileSolvedProblemsRes(0, List.of());
+            return new UserProfileSolvedProblemsOutput(0, List.of());
         }
 
         List<String> solvedProblemIds = createSolvedProblemIds(createBestSolvedHistories(
                 problemSolveHistoryRepository.findAllByHandleOrderBySubmittedAtDesc(user.getHandle())
         ));
 
-        return new UserProfileSolvedProblemsRes(solvedProblemIds.size(), solvedProblemIds);
+        return new UserProfileSolvedProblemsOutput(solvedProblemIds.size(), solvedProblemIds);
     }
 
-    private UserProfileSolvedRecordsRes buildSolvedRecords(User user, boolean isOwnProfile) {
+    private UserProfileSolvedRecordsOutput buildSolvedRecords(User user, boolean isOwnProfile) {
         // 해결 기록 공개 여부 확인
         if (!isOwnProfile && !user.isSolvedRecordsPublicEnabled()) {
-            return new UserProfileSolvedRecordsRes(List.of());
+            return new UserProfileSolvedRecordsOutput(List.of());
         }
 
-        List<UserProfileSolvedRecordRes> solvedRecordResponses = createSolvedRecordResponses(createBestSolvedHistories(
+        List<UserProfileSolvedRecordOutput> solvedRecordResponses = createSolvedRecordResponses(createBestSolvedHistories(
                 problemSolveHistoryRepository.findAllByHandleOrderBySubmittedAtDesc(user.getHandle())
         ));
 
-        return new UserProfileSolvedRecordsRes(solvedRecordResponses);
+        return new UserProfileSolvedRecordsOutput(solvedRecordResponses);
     }
 
     private void syncSolvedStatistics(User user, List<ProblemSolveHistory> histories) {
+        // 해결한 통계 동기화
         Map<String, ProblemSolveHistory> fastestHistoryByProblemId = new HashMap<>();
 
         // 문제별 최고 기록 기준 누적 통계 계산
@@ -248,6 +258,7 @@ public class UserProfileService {
     }
 
     private List<ProblemSolveHistory> createBestSolvedHistories(List<ProblemSolveHistory> histories) {
+        // 최고 해결한 목록 생성
         Map<UserSolvedHistoryKey, ProblemSolveHistory> bestHistoryByKey = new HashMap<>();
 
         // 문제, DBMS별 최고 기록만 추출
@@ -267,6 +278,7 @@ public class UserProfileService {
     }
 
     private List<String> createSolvedProblemIds(List<ProblemSolveHistory> histories) {
+        // 해결한 문제 번호 목록 생성
         return histories.stream()
                 .map(ProblemSolveHistory::getProblemId)
                 .distinct()
@@ -274,9 +286,10 @@ public class UserProfileService {
                 .toList();
     }
 
-    private List<UserProfileSolvedRecordRes> createSolvedRecordResponses(List<ProblemSolveHistory> bestSolvedHistories) {
+    private List<UserProfileSolvedRecordOutput> createSolvedRecordResponses(List<ProblemSolveHistory> bestSolvedHistories) {
+        // 풀이 기록 응답 목록 생성
         return bestSolvedHistories.stream()
-                .map(history -> new UserProfileSolvedRecordRes(
+                .map(history -> new UserProfileSolvedRecordOutput(
                         history.getProblemId(),
                         problemStore.findProblem(history.getProblemId())
                                 .map(problem -> problem.getTitle())
@@ -290,6 +303,7 @@ public class UserProfileService {
     }
 
     private Double calculateAverageExecutionPercentile(List<ProblemSolveHistory> bestSolvedHistories, DbmsType dbmsType) {
+        // 평균 실행 백분위 계산
         List<Integer> executionPercentiles = bestSolvedHistories.stream()
                 .filter(history -> resolveDbmsType(history) == dbmsType)
                 .map(this::calculateExecutionPercentile)
@@ -309,6 +323,7 @@ public class UserProfileService {
     }
 
     private Optional<Integer> calculateExecutionPercentile(ProblemSolveHistory history) {
+        // 실행 백분위 계산
         List<ProblemSolveHistory> bestSubmittedHistories = problemStore.findBestSubmittedHistories(history.getProblemId()).stream()
                 .filter(candidateHistory -> resolveDbmsType(candidateHistory) == resolveDbmsType(history))
                 .toList();
@@ -330,6 +345,7 @@ public class UserProfileService {
     }
 
     private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+        // 더 나은 기록 선택
         if (candidateHistory.getCost() < currentHistory.getCost()) {
             return candidateHistory;
         }
@@ -353,20 +369,23 @@ public class UserProfileService {
         return currentHistory;
     }
 
-    private List<UserProfileLinkRes> createProfileLinkResponses(List<UserExternalLink> externalLinks) {
+    private List<UserProfileLinkOutput> createProfileLinkResponses(List<UserExternalLink> externalLinks) {
+        // 프로필 링크 응답 목록 생성
         return externalLinks.stream()
-                .map(link -> new UserProfileLinkRes(link.getType(), link.getLink()))
+                .map(link -> new UserProfileLinkOutput(link.getType(), link.getLink()))
                 .toList();
     }
 
-    private List<UserProfileCommunityPostRes> createCommunityPostResponses(List<CommunityPost> posts) {
+    private List<UserProfileCommunityPostOutput> createCommunityPostResponses(List<CommunityPost> posts) {
+        // 커뮤니티 게시글 응답 목록 생성
         return posts.stream()
                 .map(this::createCommunityPostResponse)
                 .toList();
     }
 
-    private UserProfileCommunityPostRes createCommunityPostResponse(CommunityPost post) {
-        return new UserProfileCommunityPostRes(
+    private UserProfileCommunityPostOutput createCommunityPostResponse(CommunityPost post) {
+        // 커뮤니티 게시글 응답 생성
+        return new UserProfileCommunityPostOutput(
                 post.getPostId(),
                 post.getTitle(),
                 createCommunityExcerpt(post.getContentText()),
@@ -380,14 +399,15 @@ public class UserProfileService {
         );
     }
 
-    private Optional<UserProfileCommunityPostRes> createLikedCommunityPostResponse(CommunityPostLike postLike, Map<String, CommunityPost> postById) {
+    private Optional<UserProfileCommunityPostOutput> createLikedCommunityPostResponse(CommunityPostLike postLike, Map<String, CommunityPost> postById) {
+        // 좋아요한 커뮤니티 게시글 응답 생성
         CommunityPost post = postById.get(postLike.getId().getPostId());
 
         if (post == null) {
             return Optional.empty();
         }
 
-        return Optional.of(new UserProfileCommunityPostRes(
+        return Optional.of(new UserProfileCommunityPostOutput(
                 post.getPostId(),
                 post.getTitle(),
                 createCommunityExcerpt(post.getContentText()),
@@ -401,9 +421,9 @@ public class UserProfileService {
         ));
     }
 
-    private Optional<UserProfileCommunityCommentRes> createLikedCommunityCommentResponse(CommunityCommentLike commentLike,
-                                                                                          Map<Long, CommunityComment> commentById,
-                                                                                          Map<String, String> postTitleByPostId) {
+    private Optional<UserProfileCommunityCommentOutput> createLikedCommunityCommentResponse(CommunityCommentLike commentLike,
+                                                                                            Map<Long, CommunityComment> commentById,
+                                                                                            Map<String, String> postTitleByPostId) {
         CommunityComment comment = commentById.get(commentLike.getId().getCommentId());
 
         if (comment == null) {
@@ -413,10 +433,10 @@ public class UserProfileService {
         return Optional.of(createCommunityCommentResponse(comment, postTitleByPostId, commentLike.getCreatedAt()));
     }
 
-    private UserProfileCommunityCommentRes createCommunityCommentResponse(CommunityComment comment,
-                                                                          Map<String, String> postTitleByPostId,
-                                                                          java.time.LocalDateTime actedAt) {
-        return new UserProfileCommunityCommentRes(
+    private UserProfileCommunityCommentOutput createCommunityCommentResponse(CommunityComment comment,
+                                                                             Map<String, String> postTitleByPostId,
+                                                                             java.time.LocalDateTime actedAt) {
+        return new UserProfileCommunityCommentOutput(
                 comment.getCommentId(),
                 comment.getPostId(),
                 postTitleByPostId.getOrDefault(comment.getPostId(), comment.getPostId()),
@@ -427,6 +447,7 @@ public class UserProfileService {
     }
 
     private Map<String, String> createPostTitleByPostId(List<String> postIds) {
+        // 게시글 번호별 게시글 제목 생성
         if (postIds.isEmpty()) {
             return Map.of();
         }
@@ -436,6 +457,7 @@ public class UserProfileService {
     }
 
     private String createCommunityExcerpt(String contentText) {
+        // 커뮤니티 요약문 생성
         if (contentText == null || contentText.isBlank()) {
             return "";
         }
@@ -446,7 +468,8 @@ public class UserProfileService {
                 : normalizedContentText;
     }
 
-    private void replaceExternalLinks(String handle, List<UserProfileLinkReq> links) {
+    private void replaceExternalLinks(String handle, List<UserProfileLinkInput> links) {
+        // 외부 링크 목록 교체
         List<UserExternalLink> normalizedExternalLinks = normalizeExternalLinks(handle, links);
 
         // 사용자 링크를 최신 입력값으로 전체 교체
@@ -459,11 +482,12 @@ public class UserProfileService {
         userExternalLinkRepository.saveAll(normalizedExternalLinks);
     }
 
-    private List<UserExternalLink> normalizeExternalLinks(String handle, List<UserProfileLinkReq> links) {
+    private List<UserExternalLink> normalizeExternalLinks(String handle, List<UserProfileLinkInput> links) {
+        // 외부 링크 목록 정규화
         Map<String, UserExternalLink> externalLinkByKey = new LinkedHashMap<>();
 
         // 공백, 중복 링크를 제거하고 저장용 엔티티 구성
-        for (UserProfileLinkReq link : links) {
+        for (UserProfileLinkInput link : links) {
             String type = link.getType().trim();
             String value = link.getValue().trim();
 
@@ -478,14 +502,17 @@ public class UserProfileService {
     }
 
     private String normalizeBio(String bio) {
+        // Bio 정규화
         return bio != null ? bio.trim() : "";
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
+        // DBMS 유형 결정
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
     private record UserSolvedHistoryKey(String problemId, DbmsType dbmsType) {
+        // 사용자 해결한 기록 키 처리
     }
 
 }

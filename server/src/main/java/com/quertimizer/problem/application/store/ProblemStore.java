@@ -5,10 +5,10 @@ import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSet;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSetRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSolveHistoryRepository;
-import com.quertimizer.problem.infrastructure.repository.ProblemSubmitHistoryRepository;
+import com.quertimizer.problem.application.port.ProblemRepository;
+import com.quertimizer.problem.application.port.ProblemSetRepository;
+import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
+import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -131,30 +131,36 @@ public class ProblemStore {
     }
 
     public List<Problem> findAllProblems() {
+        // 전체 문제 목록 조회
         return problemsById.values().stream()
                 .sorted(Comparator.comparing(Problem::getProblemId))
                 .toList();
     }
 
     public List<ProblemSet> findAllProblemSets() {
+        // 전체 문제 테이블셋 s 조회
         return problemSetsById.values().stream()
                 .sorted(Comparator.comparing(ProblemSet::getProblemSetId))
                 .toList();
     }
 
     public Optional<Problem> findProblem(String problemId) {
+        // 문제 조회
         return Optional.ofNullable(problemsById.get(problemId));
     }
 
     public Optional<ProblemSet> findProblemSet(String problemSetId) {
+        // 문제 테이블셋 조회
         return Optional.ofNullable(problemSetsById.get(problemSetId));
     }
 
     public List<ProblemSolveHistory> findBestSubmittedHistories(String problemId) {
+        // 최고 제출 목록 조회
         return bestSubmittedHistoriesByProblemId.getOrDefault(problemId, List.of());
     }
 
     private ProblemListEntry createProblemListEntry(Problem problem, String currentHandle) {
+        // 문제 목록 Entry 생성
         List<ProblemSolveHistory> submittedHistories = findBestSubmittedHistories(problem.getProblemId());
         ProblemSubmissionStats submissionStats = submissionStatsByProblemId.getOrDefault(
                 problem.getProblemId(),
@@ -183,6 +189,7 @@ public class ProblemStore {
     }
 
     private boolean matchesSearch(ProblemListEntry problemEntry, String searchKeyword) {
+        // 검색 일치 여부 확인
         if (searchKeyword == null || searchKeyword.isBlank()) {
             return true;
         }
@@ -193,6 +200,7 @@ public class ProblemStore {
     }
 
     private boolean matchesSolveState(ProblemListEntry problemEntry, String solveState, String currentHandle) {
+        // Solve State 일치 여부 확인
         if (currentHandle == null || solveState == null || solveState.isBlank() || "all".equalsIgnoreCase(solveState)) {
             return true;
         }
@@ -213,6 +221,7 @@ public class ProblemStore {
     }
 
     private boolean matchesSpreadRate(ProblemListEntry problemEntry, SpreadRateFilter spreadRateFilter) {
+        // Spread Rate 일치 여부 확인
         return problemEntry.spreadRate() >= spreadRateFilter.min()
                 && problemEntry.spreadRate() <= spreadRateFilter.max();
     }
@@ -267,6 +276,7 @@ public class ProblemStore {
     }
 
     private SpreadRateBounds createSpreadRateBounds(List<ProblemListEntry> problemEntries) {
+        // Spread Rate Bounds 생성
         if (problemEntries.isEmpty()) {
             return new SpreadRateBounds(0d, 0d);
         }
@@ -278,6 +288,7 @@ public class ProblemStore {
     }
 
     private SpreadRateFilter createSpreadRateFilter(Double spreadRateMin, Double spreadRateMax) {
+        // Spread Rate 필터 생성
         double min = spreadRateMin != null ? spreadRateMin : Double.NEGATIVE_INFINITY;
         double max = spreadRateMax != null ? spreadRateMax : Double.POSITIVE_INFINITY;
 
@@ -289,6 +300,7 @@ public class ProblemStore {
     }
 
     private double calculateSpreadRate(List<ProblemSolveHistory> submittedHistories) {
+        // Spread Rate 계산
         if (submittedHistories.isEmpty()) {
             return 0d;
         }
@@ -307,10 +319,12 @@ public class ProblemStore {
     }
 
     private double roundToOneDecimal(double value) {
+        // round To One Decimal 처리
         return Math.round(value * 10d) / 10d;
     }
 
     private Map<String, List<ProblemSolveHistory>> createBestSubmittedHistoriesByProblemId(List<ProblemSolveHistory> histories) {
+        // 문제 번호별 최고 제출 목록 생성
         Map<ProblemSubmittedHistoryKey, ProblemSolveHistory> bestHistoryByKey = new HashMap<>();
 
         // 문제별 사용자 기준 최고 제출 집계
@@ -342,6 +356,7 @@ public class ProblemStore {
     }
 
     private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+        // 더 나은 기록 선택
         if (candidateHistory.getCost() < currentHistory.getCost()) {
             return candidateHistory;
         }
@@ -366,6 +381,7 @@ public class ProblemStore {
     }
 
     private Map<String, ProblemSubmissionStats> createSubmissionStatsByProblemId(List<ProblemSubmitHistory> histories) {
+        // 문제 번호별 Submission Stats 생성
         Map<String, ProblemSubmissionStats> submissionStatsByProblemId = new HashMap<>();
 
         for (ProblemSubmitHistory history : histories) {
@@ -380,15 +396,18 @@ public class ProblemStore {
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
+        // DBMS 유형 결정
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
     private String formatLoadedDataSizeInMb() {
+        // Loaded 데이터 크기 In Mb 포맷
         double loadedDataSizeInMb = calculateLoadedDataBytes() / BYTES_PER_MB;
         return "%.4f".formatted(loadedDataSizeInMb);
     }
 
     private long calculateLoadedDataBytes() {
+        // Loaded 데이터 Bytes 계산
         long problemBytes = problemsById.entrySet().stream()
                 .mapToLong(entry -> measureString(entry.getKey()) + measureProblem(entry.getValue()))
                 .sum();
@@ -406,6 +425,7 @@ public class ProblemStore {
     }
 
     private long measureProblem(Problem problem) {
+        // measure 문제 처리
         return measureString(problem.getProblemId())
                 + measureString(problem.getResolvedProblemSetId())
                 + measureString(problem.getTitle())
@@ -419,12 +439,14 @@ public class ProblemStore {
     }
 
     private long measureProblemSet(ProblemSet problemSet) {
+        // measure 문제 테이블셋 처리
         return measureString(problemSet.getProblemSetId())
                 + measureString(problemSet.getDdl())
                 + measureString(problemSet.getData());
     }
 
     private long measureProblemSolveHistory(ProblemSolveHistory history) {
+        // measure 문제 Solve 기록 처리
         return measureString(history.getProblemId())
                 + measureString(history.getHandle())
                 + measureString(resolveDbmsType(history).name())
@@ -437,6 +459,7 @@ public class ProblemStore {
     }
 
     private long measureString(String value) {
+        // measure String 처리
         if (value == null) {
             return 0;
         }
@@ -450,14 +473,17 @@ public class ProblemStore {
     private record ProblemSubmissionStats(int totalSubmitCount, int successSubmitCount) {
 
         private static ProblemSubmissionStats empty() {
+            // empty 처리
             return new ProblemSubmissionStats(0, 0);
         }
 
         private static ProblemSubmissionStats from(boolean success) {
+            // from 처리
             return new ProblemSubmissionStats(1, success ? 1 : 0);
         }
 
         private ProblemSubmissionStats merge(ProblemSubmissionStats other) {
+            // merge 처리
             return new ProblemSubmissionStats(
                     totalSubmitCount + other.totalSubmitCount,
                     successSubmitCount + other.successSubmitCount

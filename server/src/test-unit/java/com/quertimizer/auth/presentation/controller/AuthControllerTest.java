@@ -9,7 +9,6 @@ import com.quertimizer.auth.presentation.dto.request.DuplicateCheckHandleReq;
 import com.quertimizer.auth.presentation.dto.request.LoginReq;
 import com.quertimizer.auth.presentation.dto.request.ResetPasswordReq;
 import com.quertimizer.auth.presentation.dto.request.SignupReq;
-import com.quertimizer.auth.presentation.dto.response.FindHandleRes;
 import com.quertimizer.global.handler.ApiExceptionHandler;
 import com.quertimizer.problem.presentation.realtime.handler.SessionWebSocketHandler;
 import com.quertimizer.global.log.LogFormatter;
@@ -142,7 +141,7 @@ class AuthControllerTest {
         class Normal {
 
             @Test
-            @DisplayName("200 OK + true (사용 가능)")
+            @DisplayName("200 OK 반환 (사용 가능)")
             void ok() throws Exception {
                 // given
                 DuplicateCheckHandleReq request = DuplicateCheckHandleReq.builder()
@@ -157,9 +156,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(true))
-                        .andExpect(jsonPath("$.reason").doesNotExist());
+                result.andExpect(status().isOk());
                 verify(authService).isDuplicatedHandle("tester");
             }
         }
@@ -169,8 +166,8 @@ class AuthControllerTest {
         class ExceptionCase {
 
             @Test
-            @DisplayName("200 OK + false (handle 중복)")
-            void okWhenHandleDuplicated() throws Exception {
+            @DisplayName("409 Conflict 반환 (handle 중복)")
+            void conflictWhenHandleDuplicated() throws Exception {
                 // given
                 DuplicateCheckHandleReq request = DuplicateCheckHandleReq.builder()
                         .handle("tester")
@@ -184,9 +181,8 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(false))
-                        .andExpect(jsonPath("$.reason").value("이미 사용중인 Handle입니다."));
+                result.andExpect(status().isConflict())
+                        .andExpect(jsonPath("$.reasons[0]").value("이미 사용중인 Handle입니다."));
                 verify(authService).isDuplicatedHandle("tester");
             }
 
@@ -221,7 +217,7 @@ class AuthControllerTest {
         class Normal {
 
             @Test
-            @DisplayName("200 OK + true (사용 가능)")
+            @DisplayName("200 OK 반환 (사용 가능)")
             void ok() throws Exception {
                 // given
                 DuplicateCheckEmailReq request = DuplicateCheckEmailReq.builder()
@@ -236,9 +232,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(true))
-                        .andExpect(jsonPath("$.reason").doesNotExist());
+                result.andExpect(status().isOk());
                 verify(authService).isDuplicatedEmail("tester@example.com");
             }
         }
@@ -248,8 +242,8 @@ class AuthControllerTest {
         class ExceptionCase {
 
             @Test
-            @DisplayName("200 OK + false (email 중복)")
-            void okWhenEmailDuplicated() throws Exception {
+            @DisplayName("409 Conflict 반환 (email 중복)")
+            void conflictWhenEmailDuplicated() throws Exception {
                 // given
                 DuplicateCheckEmailReq request = DuplicateCheckEmailReq.builder()
                         .email("tester@example.com")
@@ -263,9 +257,8 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)));
 
                 // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.available").value(false))
-                        .andExpect(jsonPath("$.reason").value("이미 사용중인 이메일입니다."));
+                result.andExpect(status().isConflict())
+                        .andExpect(jsonPath("$.reasons[0]").value("이미 사용중인 이메일입니다."));
                 verify(authService).isDuplicatedEmail("tester@example.com");
             }
 
@@ -384,118 +377,6 @@ class AuthControllerTest {
                 result.andExpect(status().isBadRequest());
                 verify(authService, never()).login(any(LoginReq.class), any());
                 verify(sessionStore, never()).saveContext(any(), any(), any());
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("/find-handle/send-code")
-    class SendFindHandleCode {
-
-        private static final String SEND_FIND_HANDLE_CODE_URL = "/find-handle/send-code";
-
-        @Nested
-        @DisplayName("정상")
-        class Normal {
-
-            @Test
-            @DisplayName("200 OK 반환 + 인증코드 발송 요청 처리")
-            void okAndSendCode() throws Exception {
-                // given
-                AccountRecoveryEmailReq request = AccountRecoveryEmailReq.builder()
-                        .email("tester@example.com")
-                        .build();
-
-                // when
-                ResultActions result = mockMvc.perform(post(SEND_FIND_HANDLE_CODE_URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)));
-
-                // then
-                result.andExpect(status().isOk());
-                verify(authService).sendFindHandleCode(any(AccountRecoveryEmailReq.class));
-            }
-        }
-
-        @Nested
-        @DisplayName("예외")
-        class ExceptionCase {
-
-            @Test
-            @DisplayName("400 Bad Request 반환 (비정상 파라미터)")
-            void badRequestWhenValidationFails() throws Exception {
-                // given
-                AccountRecoveryEmailReq request = AccountRecoveryEmailReq.builder()
-                        .email("not-an-email")
-                        .build();
-
-                // when
-                ResultActions result = mockMvc.perform(post(SEND_FIND_HANDLE_CODE_URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)));
-
-                // then
-                result.andExpect(status().isBadRequest());
-                verify(authService, never()).sendFindHandleCode(any(AccountRecoveryEmailReq.class));
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("/find-handle/verify-code")
-    class FindHandle {
-
-        private static final String FIND_HANDLE_URL = "/find-handle/verify-code";
-
-        @Nested
-        @DisplayName("정상")
-        class Normal {
-
-            @Test
-            @DisplayName("200 OK 반환 + handle 반환")
-            void okAndReturnHandle() throws Exception {
-                // given
-                AccountRecoveryCodeReq request = AccountRecoveryCodeReq.builder()
-                        .email("tester@example.com")
-                        .code("ABC123")
-                        .build();
-
-                when(authService.findHandle(any(AccountRecoveryCodeReq.class)))
-                        .thenReturn(new FindHandleRes("tester"));
-
-                // when
-                ResultActions result = mockMvc.perform(post(FIND_HANDLE_URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)));
-
-                // then
-                result.andExpect(status().isOk())
-                        .andExpect(jsonPath("$.handle").value("tester"));
-                verify(authService).findHandle(any(AccountRecoveryCodeReq.class));
-            }
-        }
-
-        @Nested
-        @DisplayName("예외")
-        class ExceptionCase {
-
-            @Test
-            @DisplayName("400 Bad Request 반환 (비정상 파라미터)")
-            void badRequestWhenValidationFails() throws Exception {
-                // given
-                AccountRecoveryCodeReq request = AccountRecoveryCodeReq.builder()
-                        .email("tester@example.com")
-                        .code("123")
-                        .build();
-
-                // when
-                ResultActions result = mockMvc.perform(post(FIND_HANDLE_URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)));
-
-                // then
-                result.andExpect(status().isBadRequest());
-                verify(authService, never()).findHandle(any(AccountRecoveryCodeReq.class));
             }
         }
     }

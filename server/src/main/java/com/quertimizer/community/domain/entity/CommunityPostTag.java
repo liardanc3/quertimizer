@@ -31,6 +31,7 @@ public class CommunityPostTag {
     private int tagOrder;
 
     public static CommunityPostTag create(String postId, String tag, int tagOrder) {
+        // 게시글 태그 생성
         return new CommunityPostTag(postId, tag, tagOrder);
     }
 

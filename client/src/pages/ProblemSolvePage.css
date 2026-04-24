@@ -676,9 +676,7 @@
 .solve-external-window-root-inner .solve-result-table-grid-overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  gap: 0.38rem;
+  overflow: hidden;
   border-radius: inherit;
   background: rgba(248, 250, 252, 0.6);
   backdrop-filter: blur(1.4px);
@@ -686,24 +684,35 @@
   pointer-events: none;
 }
 
+.solve-page .solve-result-table-grid-overlay::before,
+.solve-floating-pane-shell .solve-result-table-grid-overlay::before,
+.solve-external-window-root-inner .solve-result-table-grid-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
+  animation: solve-result-grid-loading-wave 1.8s ease-in-out infinite;
+}
+
 .solve-page .solve-result-table-grid-spinner,
 .solve-floating-pane-shell .solve-result-table-grid-spinner,
 .solve-external-window-root-inner .solve-result-table-grid-spinner {
-  width: 1.16rem;
-  height: 1.16rem;
-  border: 0.14rem solid rgba(37, 99, 235, 0.32);
-  border-right-color: transparent;
-  border-radius: 999px;
-  animation: solve-statement-spinner-rotate 0.75s linear infinite;
+  display: none;
 }
 
 .solve-page .solve-result-table-grid-overlay-label,
 .solve-floating-pane-shell .solve-result-table-grid-overlay-label,
 .solve-external-window-root-inner .solve-result-table-grid-overlay-label {
-  color: #475569;
-  font-size: 0.74rem;
-  font-weight: 700;
-  line-height: 1;
+  display: none;
+}
+
+@keyframes solve-result-grid-loading-wave {
+  to {
+    transform: translateX(520%);
+  }
 }
 
 .solve-page .solve-editor-inline-result-group.is-success .solve-detail-table-block,
@@ -1770,11 +1779,10 @@ body.handle-setup-locked {
     background: rgba(15, 23, 42, 0.58);
   }
 
-  .solve-page .solve-result-table-grid-spinner,
-  .solve-floating-pane-shell .solve-result-table-grid-spinner,
-  .solve-external-window-root-inner .solve-result-table-grid-spinner {
-    border-color: rgba(191, 219, 254, 0.4);
-    border-right-color: transparent;
+  .solve-page .solve-result-table-grid-overlay::before,
+  .solve-floating-pane-shell .solve-result-table-grid-overlay::before,
+  .solve-external-window-root-inner .solve-result-table-grid-overlay::before {
+    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
   }
 
   .solve-page .solve-result-table-grid-overlay-label,
@@ -1889,6 +1897,42 @@ body.handle-setup-locked {
   padding: 1.4rem 0;
   color: #64748b;
   font-size: 0.82rem;
+}
+
+.solve-page-loading-shell {
+  align-items: stretch;
+  padding: 0.2rem 0;
+}
+
+.solve-page-loading-card {
+  display: grid;
+  gap: 0.82rem;
+  width: min(100%, 72rem);
+}
+
+.solve-page-loading-tabs {
+  display: flex;
+  gap: 0.78rem;
+}
+
+.solve-page-loading-tabs .wave-loading-placeholder {
+  width: 5.6rem;
+  height: 1.9rem;
+  border-radius: 999px;
+}
+
+.solve-page-loading-panel {
+  display: grid;
+  gap: 0.62rem;
+  padding: 1rem 1.04rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 1rem;
+  background: transparent;
+}
+
+.solve-page-loading-panel.is-editor {
+  min-height: 14rem;
+  align-content: start;
 }
 
 .solve-page .solve-related-pagination {

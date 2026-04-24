@@ -2,7 +2,7 @@ package com.quertimizer.auth.domain.policy;
 
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.global.util.CanonicalCode;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.user.application.port.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;

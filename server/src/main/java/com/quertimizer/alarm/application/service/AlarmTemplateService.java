@@ -1,11 +1,11 @@
 package com.quertimizer.alarm.application.service;
 
-import com.quertimizer.alarm.presentation.dto.request.AlarmTemplateSaveReq;
-import com.quertimizer.alarm.presentation.dto.response.AlarmTemplateRes;
+import com.quertimizer.alarm.application.input.AlarmTemplateInput;
+import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
 import com.quertimizer.alarm.domain.entity.AlarmTemplate;
 import com.quertimizer.alarm.domain.model.AlarmType;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.alarm.infrastructure.repository.AlarmTemplateRepository;
+import com.quertimizer.alarm.application.port.AlarmTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +51,7 @@ public class AlarmTemplateService {
 
     @Transactional
     public void ensureDefaultTemplates() {
+        // 기본 알람 템플릿을 보장
         Map<String, AlarmTemplate> savedTemplatesByType = alarmTemplateRepository.findAllByOrderByAlarmTypeAsc().stream()
                 .collect(Collectors.toMap(AlarmTemplate::getAlarmType, Function.identity()));
 
@@ -67,14 +68,16 @@ public class AlarmTemplateService {
         }
     }
 
-    public List<AlarmTemplateRes> getAdminAlarmTemplates() {
+    public List<AlarmTemplateOutput> getAdminAlarmTemplates() {
+        // 관리자 알람 템플릿 목록을 조회
         ensureDefaultTemplates();
         return alarmTemplateRepository.findAllByOrderByAlarmTypeAsc().stream()
-                .map(AlarmTemplateRes::from)
+                .map(this::toAlarmTemplateOutput)
                 .toList();
     }
 
     public AlarmTemplate getAlarmTemplate(String alarmType) {
+        // 알람 타입 기준 템플릿을 조회
         ensureDefaultTemplates();
         String normalizedAlarmType = normalizeAlarmType(alarmType);
 
@@ -83,17 +86,19 @@ public class AlarmTemplateService {
     }
 
     @Transactional
-    public AlarmTemplateRes updateAlarmTemplate(String alarmType, AlarmTemplateSaveReq request) {
+    public AlarmTemplateOutput updateAlarmTemplate(String alarmType, AlarmTemplateInput input) {
+        // 알람 템플릿 내용을 수정
         AlarmTemplate alarmTemplate = getAlarmTemplate(alarmType);
 
         alarmTemplate.changeContent(
-                requireText(request.getSentence(), SENTENCE_REQUIRED.getMessage()),
-                requireText(request.getDescription(), DESCRIPTION_REQUIRED.getMessage())
+                requireText(input.getSentence(), SENTENCE_REQUIRED.getMessage()),
+                requireText(input.getDescription(), DESCRIPTION_REQUIRED.getMessage())
         );
-        return AlarmTemplateRes.from(alarmTemplate);
+        return toAlarmTemplateOutput(alarmTemplate);
     }
 
     private String normalizeAlarmType(String alarmType) {
+        // 알람 유형 정규화
         if (alarmType == null || alarmType.isBlank()) {
             return alarmType;
         }
@@ -108,6 +113,7 @@ public class AlarmTemplateService {
     }
 
     private String requireText(String value, String message) {
+        // 텍스트 필수값 검증
         if (value == null || value.isBlank()) {
             throw new BusinessException(message, HttpStatus.BAD_REQUEST);
         }
@@ -115,7 +121,17 @@ public class AlarmTemplateService {
         return value.trim();
     }
 
+    private AlarmTemplateOutput toAlarmTemplateOutput(AlarmTemplate alarmTemplate) {
+        // 알람 템플릿 응답으로 변환
+        return new AlarmTemplateOutput(
+                alarmTemplate.getAlarmType(),
+                alarmTemplate.getSentence(),
+                alarmTemplate.getDescription()
+        );
+    }
+
     private record DefaultAlarmTemplate(String sentence, String description) {
+        // 기본 알람 템플릿 처리
     }
 
 }

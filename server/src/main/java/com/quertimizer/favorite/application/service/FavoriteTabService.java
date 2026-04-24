@@ -4,13 +4,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.quertimizer.favorite.application.input.FavoriteTabInput;
+import com.quertimizer.favorite.application.output.FavoriteTabOutput;
+import com.quertimizer.favorite.application.output.FavoriteTabsOutput;
 import com.quertimizer.favorite.domain.model.FavoriteFailReason;
-import com.quertimizer.favorite.presentation.dto.request.FavoriteTabReq;
-import com.quertimizer.favorite.presentation.dto.request.FavoriteTabsUpdateReq;
-import com.quertimizer.favorite.presentation.dto.response.FavoriteTabRes;
-import com.quertimizer.favorite.presentation.dto.response.FavoriteTabsRes;
 import com.quertimizer.favorite.domain.entity.FavoriteTab;
-import com.quertimizer.favorite.infrastructure.repository.FavoriteTabRepository;
+import com.quertimizer.favorite.application.port.FavoriteTabRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,20 +26,22 @@ public class FavoriteTabService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public FavoriteTabsRes getFavoriteTabs(String userEmail) {
-        List<FavoriteTabRes> tabs = favoriteTabRepository.findAllByUserEmailOrderByDisplayOrderAsc(userEmail).stream()
-                .map(this::toResponse)
+    public FavoriteTabsOutput getFavoriteTabs(String userEmail) {
+        // 즐겨찾기 탭 목록을 조회
+        List<FavoriteTabOutput> tabs = favoriteTabRepository.findAllByUserEmailOrderByDisplayOrderAsc(userEmail).stream()
+                .map(this::toFavoriteTabOutput)
                 .toList();
 
-        return new FavoriteTabsRes(tabs);
+        return new FavoriteTabsOutput(tabs);
     }
 
-    public FavoriteTabsRes replaceFavoriteTabs(String userEmail, FavoriteTabsUpdateReq request) {
+    public FavoriteTabsOutput replaceFavoriteTabs(String userEmail, List<FavoriteTabInput> tabs) {
+        // 즐겨찾기 탭 목록을 교체
         favoriteTabRepository.deleteByUserEmail(userEmail);
 
         List<FavoriteTab> nextTabs = new ArrayList<>();
         int nextDisplayOrder = 0;
-        for (FavoriteTabReq tab : request.getTabs()) {
+        for (FavoriteTabInput tab : tabs) {
             nextTabs.add(FavoriteTab.create(
                     userEmail,
                     nextDisplayOrder++,
@@ -54,11 +55,12 @@ public class FavoriteTabService {
             favoriteTabRepository.saveAll(nextTabs);
         }
 
-        return new FavoriteTabsRes(nextTabs.stream().map(this::toResponse).toList());
+        return new FavoriteTabsOutput(nextTabs.stream().map(this::toFavoriteTabOutput).toList());
     }
 
-    private FavoriteTabRes toResponse(FavoriteTab favoriteTab) {
-        return new FavoriteTabRes(
+    private FavoriteTabOutput toFavoriteTabOutput(FavoriteTab favoriteTab) {
+        // 즐겨찾기 탭 응답으로 변환
+        return new FavoriteTabOutput(
                 favoriteTab.getLabel(),
                 favoriteTab.getPath(),
                 deserializeSnapshot(favoriteTab.getSnapshotJson())
@@ -66,6 +68,7 @@ public class FavoriteTabService {
     }
 
     private String serializeSnapshot(JsonNode snapshot) {
+        // 스냅샷 직렬화
         if (snapshot == null || snapshot.isNull()) {
             return null;
         }
@@ -78,6 +81,7 @@ public class FavoriteTabService {
     }
 
     private JsonNode deserializeSnapshot(String snapshotJson) {
+        // 스냅샷 역직렬화
         if (snapshotJson == null || snapshotJson.isBlank()) {
             return NullNode.getInstance();
         }

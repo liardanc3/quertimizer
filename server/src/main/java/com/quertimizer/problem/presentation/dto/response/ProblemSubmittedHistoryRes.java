@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemSubmittedHistoryResult;
+import com.quertimizer.problem.application.output.ProblemSubmittedHistoryOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -14,7 +14,7 @@ public class ProblemSubmittedHistoryRes {
     private final long executionTimeMs;
     private final double cost;
 
-    public static ProblemSubmittedHistoryRes from(ProblemSubmittedHistoryResult result) {
+    public static ProblemSubmittedHistoryRes from(ProblemSubmittedHistoryOutput result) {
         return new ProblemSubmittedHistoryRes(
                 result.dbms(),
                 result.handle(),

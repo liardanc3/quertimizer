@@ -476,132 +476,132 @@ export default function CommunityPage() {
         {errorMessage ? (
           <PageLoadFailureState className="submit-history-empty-state" />
         ) : (
-          <div className={`submit-history-table-shell community-table-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
-            <div className="submit-history-table community-table" role="table" aria-label="커뮤니티 목록">
-              <div className="submit-history-row submit-history-head community-table-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">구분</div>
-                <div role="columnheader" className="submit-history-head-cell">제목</div>
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>작성일</span>
-                  <button
-                    type="button"
-                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'latest' || sortKey === 'oldest') ? 'is-active' : ''}`.trim()}
-                    aria-label={sortKey === 'oldest' ? '작성일 오름차순 정렬' : sortKey === 'latest' ? '작성일 내림차순 정렬' : '작성일 기본 정렬'}
-                    onClick={() => toggleMetricSort('latest', 'oldest')}
-                  >
-                    {sortKey === 'oldest' ? <SortAscendingIcon /> : sortKey === 'latest' ? <SortDescendingIcon /> : <SortNeutralIcon />}
-                  </button>
-                </div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>조회수</span>
-                  <button
-                    type="button"
-                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'views' || sortKey === 'viewsAsc') ? 'is-active' : ''}`.trim()}
-                    aria-label={sortKey === 'viewsAsc' ? '조회수 오름차순 정렬' : sortKey === 'views' ? '조회수 내림차순 정렬' : '조회수 기본 정렬'}
-                    onClick={() => toggleMetricSort('views', 'viewsAsc')}
-                  >
-                    {sortKey === 'viewsAsc' ? <SortAscendingIcon /> : sortKey === 'views' ? <SortDescendingIcon /> : <SortNeutralIcon />}
-                  </button>
-                </div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>좋아요</span>
-                  <button
-                    type="button"
-                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'likes' || sortKey === 'likesAsc') ? 'is-active' : ''}`.trim()}
-                    aria-label={sortKey === 'likesAsc' ? '좋아요 오름차순 정렬' : sortKey === 'likes' ? '좋아요 내림차순 정렬' : '좋아요 기본 정렬'}
-                    onClick={() => toggleMetricSort('likes', 'likesAsc')}
-                  >
-                    {sortKey === 'likesAsc' ? <SortAscendingIcon /> : sortKey === 'likes' ? <SortDescendingIcon /> : <SortNeutralIcon />}
-                  </button>
-                </div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>댓글</span>
-                  <button
-                    type="button"
-                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'comments' || sortKey === 'commentsAsc') ? 'is-active' : ''}`.trim()}
-                    aria-label={sortKey === 'commentsAsc' ? '댓글 수 오름차순 정렬' : sortKey === 'comments' ? '댓글 수 내림차순 정렬' : '댓글 수 기본 정렬'}
-                    onClick={() => toggleMetricSort('comments', 'commentsAsc')}
-                  >
-                    {sortKey === 'commentsAsc' ? <SortAscendingIcon /> : sortKey === 'comments' ? <SortDescendingIcon /> : <SortNeutralIcon />}
-                  </button>
-                </div>
-              </div>
-
-              {isLoading && postPage.posts.length === 0 ? (
-                loadingPlaceholderRows.map((rowIndex) => (
-                  <div key={`community-loading-${rowIndex}`} className="submit-history-row submit-history-body community-table-row community-loading-row" role="row" aria-hidden="true">
-                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                    <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell">
-                      <span className="community-loading-placeholder is-long" />
-                      <span className="community-loading-placeholder is-medium" />
-                    </div>
-                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
-                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
-                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                    <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+          <div className={`community-table-loading-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
+            <div className={`submit-history-table-shell community-table-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
+              <div className="submit-history-table community-table" role="table" aria-label="커뮤니티 목록">
+                <div className="submit-history-row submit-history-head community-table-head" role="row">
+                  <div role="columnheader" className="submit-history-head-cell">구분</div>
+                  <div role="columnheader" className="submit-history-head-cell">제목</div>
+                  <div role="columnheader" className="submit-history-head-cell">Handle</div>
+                  <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                    <span>작성일</span>
+                    <button
+                      type="button"
+                      className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'latest' || sortKey === 'oldest') ? 'is-active' : ''}`.trim()}
+                      aria-label={sortKey === 'oldest' ? '작성일 오름차순 정렬' : sortKey === 'latest' ? '작성일 내림차순 정렬' : '작성일 기본 정렬'}
+                      onClick={() => toggleMetricSort('latest', 'oldest')}
+                    >
+                      {sortKey === 'oldest' ? <SortAscendingIcon /> : sortKey === 'latest' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                    </button>
                   </div>
-                ))
-              ) : postPage.posts.length === 0 ? (
-                <div className="submit-history-row submit-history-empty-row community-empty-row" role="row">
-                  <span className="submit-history-empty-cell" role="cell">조건에 맞는 게시글이 없습니다.</span>
+                  <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                    <span>조회수</span>
+                    <button
+                      type="button"
+                      className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'views' || sortKey === 'viewsAsc') ? 'is-active' : ''}`.trim()}
+                      aria-label={sortKey === 'viewsAsc' ? '조회수 오름차순 정렬' : sortKey === 'views' ? '조회수 내림차순 정렬' : '조회수 기본 정렬'}
+                      onClick={() => toggleMetricSort('views', 'viewsAsc')}
+                    >
+                      {sortKey === 'viewsAsc' ? <SortAscendingIcon /> : sortKey === 'views' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                    </button>
+                  </div>
+                  <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                    <span>좋아요</span>
+                    <button
+                      type="button"
+                      className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'likes' || sortKey === 'likesAsc') ? 'is-active' : ''}`.trim()}
+                      aria-label={sortKey === 'likesAsc' ? '좋아요 오름차순 정렬' : sortKey === 'likes' ? '좋아요 내림차순 정렬' : '좋아요 기본 정렬'}
+                      onClick={() => toggleMetricSort('likes', 'likesAsc')}
+                    >
+                      {sortKey === 'likesAsc' ? <SortAscendingIcon /> : sortKey === 'likes' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                    </button>
+                  </div>
+                  <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                    <span>댓글</span>
+                    <button
+                      type="button"
+                      className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'comments' || sortKey === 'commentsAsc') ? 'is-active' : ''}`.trim()}
+                      aria-label={sortKey === 'commentsAsc' ? '댓글 수 오름차순 정렬' : sortKey === 'comments' ? '댓글 수 내림차순 정렬' : '댓글 수 기본 정렬'}
+                      onClick={() => toggleMetricSort('comments', 'commentsAsc')}
+                    >
+                      {sortKey === 'commentsAsc' ? <SortAscendingIcon /> : sortKey === 'comments' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                postPage.posts.map((post) => (
-                  <article key={post.id} className="submit-history-row submit-history-body community-table-row" role="row">
-                    <div role="cell" className="submit-history-cell community-table-cell" data-label="구분">
-                      <span className={`community-category-text is-${post.category}`}>{getCategoryLabel(post.category)}</span>
-                    </div>
 
-                    <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell" data-label="제목">
-                      <button type="button" className="community-post-title-link" onClick={() => handleOpenPost(post.id)}>
-                        <span className="community-post-title-text">{post.title}</span>
-                      </button>
-
-                      {post.tags.length > 0 ? (
-                        <div className="community-table-tags">
-                          {Array.from(new Set(post.tags)).slice(0, 5).map((tag) => (
-                            <span key={tag} className="community-table-tag">#{tag}</span>
-                          ))}
-                        </div>
-                      ) : null}
+                {isLoading && postPage.posts.length === 0 ? (
+                  loadingPlaceholderRows.map((rowIndex) => (
+                    <div key={`community-loading-${rowIndex}`} className="submit-history-row submit-history-body community-table-row community-loading-row" role="row" aria-hidden="true">
+                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell">
+                        <span className="community-loading-placeholder is-long" />
+                        <span className="community-loading-placeholder is-medium" />
+                      </div>
+                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
+                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
+                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
+                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
                     </div>
+                  ))
+                ) : postPage.posts.length === 0 ? (
+                  <div className="submit-history-row submit-history-empty-row community-empty-row" role="row">
+                    <span className="submit-history-empty-cell" role="cell">조건에 맞는 게시글이 없습니다.</span>
+                  </div>
+                ) : (
+                  postPage.posts.map((post) => (
+                    <article key={post.id} className="submit-history-row submit-history-body community-table-row" role="row">
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label="구분">
+                        <span className={`community-category-text is-${post.category}`}>{getCategoryLabel(post.category)}</span>
+                      </div>
 
-                    <div role="cell" className="submit-history-cell community-table-cell" data-label="Handle">
-                      <button
-                        type="button"
-                        className="community-handle-link"
-                        onClick={() => navigate(getProfilePath(post.authorHandle))}
-                      >
-                        {post.authorHandle}
-                      </button>
-                    </div>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell" data-label="제목">
+                        <button type="button" className="community-post-title-link" onClick={() => handleOpenPost(post.id)}>
+                          <span className="community-post-title-text">{post.title}</span>
+                        </button>
 
-                    <div role="cell" className="submit-history-cell community-table-cell community-table-date-cell" data-label="작성일">
-                      {formatBoardDate(post.updatedAt ?? post.createdAt)}
-                    </div>
+                        {post.tags.length > 0 ? (
+                          <div className="community-table-tags">
+                            {Array.from(new Set(post.tags)).slice(0, 5).map((tag) => (
+                              <span key={tag} className="community-table-tag">#{tag}</span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
 
-                    <div role="cell" className="submit-history-cell community-table-cell" data-label="조회수">
-                      {formatNumber(post.views)}
-                    </div>
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label="Handle">
+                        <button
+                          type="button"
+                          className="community-handle-link"
+                          onClick={() => navigate(getProfilePath(post.authorHandle))}
+                        >
+                          {post.authorHandle}
+                        </button>
+                      </div>
 
-                    <div role="cell" className="submit-history-cell community-table-cell" data-label="좋아요">
-                      {formatNumber(post.likes)}
-                    </div>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-date-cell" data-label="작성일">
+                        {formatBoardDate(post.updatedAt ?? post.createdAt)}
+                      </div>
 
-                    <div role="cell" className="submit-history-cell community-table-cell" data-label="댓글">
-                      {formatNumber(post.comments)}
-                    </div>
-                  </article>
-                ))
-              )}
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label="조회수">
+                        {formatNumber(post.views)}
+                      </div>
+
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label="좋아요">
+                        {formatNumber(post.likes)}
+                      </div>
+
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label="댓글">
+                        {formatNumber(post.comments)}
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
             </div>
 
             {isLoading ? (
-              <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-                <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-              </div>
+              <div className="community-table-loading-overlay" aria-live="polite" aria-label="로딩 중" />
             ) : null}
           </div>
         )}

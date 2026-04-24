@@ -6,8 +6,15 @@ import com.quertimizer.user.presentation.dto.response.UserProfileCommunityPostsR
 import com.quertimizer.user.presentation.dto.response.UserProfileSolvedProblemsRes;
 import com.quertimizer.user.presentation.dto.response.UserProfileSolvedRecordsRes;
 import com.quertimizer.user.presentation.dto.response.UserProfileSummaryRes;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.user.application.service.UserProfileService;
+import com.quertimizer.user.application.usecase.GetUserProfileCommunityComments;
+import com.quertimizer.user.application.usecase.GetUserProfileCommunityPosts;
+import com.quertimizer.user.application.usecase.GetUserProfileLikedComments;
+import com.quertimizer.user.application.usecase.GetUserProfileLikedPosts;
+import com.quertimizer.user.application.usecase.GetUserProfileSolvedProblems;
+import com.quertimizer.user.application.usecase.GetUserProfileSolvedRecords;
+import com.quertimizer.user.application.usecase.GetUserProfileSummary;
+import com.quertimizer.user.application.usecase.UpdateUserProfile;
+import com.quertimizer.user.presentation.support.UserProfileSupport;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,167 +30,174 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UserProfileController {
 
-    private final UserProfileService userProfileService;
-    private final AuthService authService;
+    private final GetUserProfileSummary getUserProfileSummary;
+    private final GetUserProfileSolvedProblems getUserProfileSolvedProblems;
+    private final GetUserProfileSolvedRecords getUserProfileSolvedRecords;
+    private final GetUserProfileCommunityPosts getUserProfileCommunityPosts;
+    private final GetUserProfileLikedPosts getUserProfileLikedPosts;
+    private final GetUserProfileCommunityComments getUserProfileCommunityComments;
+    private final GetUserProfileLikedComments getUserProfileLikedComments;
+    private final UpdateUserProfile updateUserProfile;
+
+    private final UserProfileSupport userProfileSupport;
 
     @GetMapping("/profile/me")
     public ResponseEntity<UserProfileSummaryRes> getMyProfile(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내 프로필 기본 정보 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getProfileSummary(currentHandle, currentHandle));
+        return ResponseEntity.of(getUserProfileSummary.execute(currentHandle, currentHandle).map(UserProfileSummaryRes::from));
     }
 
     @GetMapping("/profile/me/solved-problems")
     public ResponseEntity<UserProfileSolvedProblemsRes> getMySolvedProblems(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내 해결한 문제 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getSolvedProblems(currentHandle, currentHandle));
+        return ResponseEntity.of(getUserProfileSolvedProblems.execute(currentHandle, currentHandle).map(UserProfileSolvedProblemsRes::from));
     }
 
     @GetMapping("/profile/me/solved-records")
     public ResponseEntity<UserProfileSolvedRecordsRes> getMySolvedRecords(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내 해결 기록 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getSolvedRecords(currentHandle, currentHandle));
+        return ResponseEntity.of(getUserProfileSolvedRecords.execute(currentHandle, currentHandle).map(UserProfileSolvedRecordsRes::from));
     }
 
     @GetMapping("/profile/me/community/posts")
     public ResponseEntity<UserProfileCommunityPostsRes> getMyCommunityPosts(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내가 작성한 게시글 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getCommunityPosts(currentHandle));
+        return ResponseEntity.of(getUserProfileCommunityPosts.execute(currentHandle).map(UserProfileCommunityPostsRes::from));
     }
 
     @GetMapping("/profile/me/community/liked-posts")
     public ResponseEntity<UserProfileCommunityPostsRes> getMyLikedPosts(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내가 좋아요한 게시글 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getLikedPosts(currentHandle));
+        return ResponseEntity.of(getUserProfileLikedPosts.execute(currentHandle).map(UserProfileCommunityPostsRes::from));
     }
 
     @GetMapping("/profile/me/community/comments")
     public ResponseEntity<UserProfileCommunityCommentsRes> getMyCommunityComments(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내가 작성한 댓글 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getCommunityComments(currentHandle));
+        return ResponseEntity.of(getUserProfileCommunityComments.execute(currentHandle).map(UserProfileCommunityCommentsRes::from));
     }
 
     @GetMapping("/profile/me/community/liked-comments")
     public ResponseEntity<UserProfileCommunityCommentsRes> getMyLikedComments(Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내가 좋아요한 댓글 조회
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.getLikedComments(currentHandle));
+        return ResponseEntity.of(getUserProfileLikedComments.execute(currentHandle).map(UserProfileCommunityCommentsRes::from));
     }
 
     @PutMapping("/profile/me")
     public ResponseEntity<UserProfileSummaryRes> updateMyProfile(@Valid @RequestBody UserProfileUpdateReq request,
                                                                  Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 내 프로필 수정
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(userProfileService.updateProfile(currentHandle, request));
+        return ResponseEntity.of(updateUserProfile.execute(currentHandle, request.toUserProfileUpdateInput())
+                .map(UserProfileSummaryRes::from));
     }
 
     @GetMapping("/profiles/{handle}")
     public ResponseEntity<UserProfileSummaryRes> getProfile(@PathVariable String handle,
                                                             Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 공개 프로필 기본 정보 조회
-        return ResponseEntity.of(userProfileService.getProfileSummary(handle, currentHandle));
+        return ResponseEntity.of(getUserProfileSummary.execute(handle, currentHandle).map(UserProfileSummaryRes::from));
     }
 
     @GetMapping("/profiles/{handle}/solved-problems")
     public ResponseEntity<UserProfileSolvedProblemsRes> getSolvedProblems(@PathVariable String handle,
                                                                           Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 공개 해결한 문제 조회
-        return ResponseEntity.of(userProfileService.getSolvedProblems(handle, currentHandle));
+        return ResponseEntity.of(getUserProfileSolvedProblems.execute(handle, currentHandle).map(UserProfileSolvedProblemsRes::from));
     }
 
     @GetMapping("/profiles/{handle}/solved-records")
     public ResponseEntity<UserProfileSolvedRecordsRes> getSolvedRecords(@PathVariable String handle,
                                                                         Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = userProfileSupport.resolveCurrentHandle(authentication);
 
         // 공개 해결 기록 조회
-        return ResponseEntity.of(userProfileService.getSolvedRecords(handle, currentHandle));
+        return ResponseEntity.of(getUserProfileSolvedRecords.execute(handle, currentHandle).map(UserProfileSolvedRecordsRes::from));
     }
 
     @GetMapping("/profiles/{handle}/community/posts")
     public ResponseEntity<UserProfileCommunityPostsRes> getCommunityPosts(@PathVariable String handle) {
-
         // 공개 프로필 작성 게시글 조회
-        return ResponseEntity.of(userProfileService.getCommunityPosts(handle));
+        return ResponseEntity.of(getUserProfileCommunityPosts.execute(handle).map(UserProfileCommunityPostsRes::from));
     }
 
     @GetMapping("/profiles/{handle}/community/liked-posts")
     public ResponseEntity<UserProfileCommunityPostsRes> getLikedPosts(@PathVariable String handle) {
-
         // 공개 프로필 좋아요 게시글 조회
-        return ResponseEntity.of(userProfileService.getLikedPosts(handle));
+        return ResponseEntity.of(getUserProfileLikedPosts.execute(handle).map(UserProfileCommunityPostsRes::from));
     }
 
     @GetMapping("/profiles/{handle}/community/comments")
     public ResponseEntity<UserProfileCommunityCommentsRes> getCommunityComments(@PathVariable String handle) {
-
         // 공개 프로필 댓글 조회
-        return ResponseEntity.of(userProfileService.getCommunityComments(handle));
+        return ResponseEntity.of(getUserProfileCommunityComments.execute(handle).map(UserProfileCommunityCommentsRes::from));
     }
 
     @GetMapping("/profiles/{handle}/community/liked-comments")
     public ResponseEntity<UserProfileCommunityCommentsRes> getLikedComments(@PathVariable String handle) {
-
         // 공개 프로필 좋아요 댓글 조회
-        return ResponseEntity.of(userProfileService.getLikedComments(handle));
+        return ResponseEntity.of(getUserProfileLikedComments.execute(handle).map(UserProfileCommunityCommentsRes::from));
     }
-
-    private String resolveCurrentHandle(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
-            return null;
-        }
-
-        return authService.resolveCurrentHandle(authentication.getName());
-    }
-
 }

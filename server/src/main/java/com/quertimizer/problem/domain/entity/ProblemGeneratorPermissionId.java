@@ -24,6 +24,7 @@ public class ProblemGeneratorPermissionId implements Serializable {
     private String problemId;
 
     public static ProblemGeneratorPermissionId create(String handle, String problemId) {
+        // 문제 생성 권한 식별자 생성
         return new ProblemGeneratorPermissionId(handle, problemId);
     }
 

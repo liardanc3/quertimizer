@@ -6,10 +6,9 @@ import com.quertimizer.auth.presentation.dto.request.AccountRecoveryEmailReq;
 import com.quertimizer.auth.presentation.dto.request.LoginReq;
 import com.quertimizer.auth.presentation.dto.request.ResetPasswordReq;
 import com.quertimizer.auth.presentation.dto.request.SignupReq;
-import com.quertimizer.auth.presentation.dto.response.FindHandleRes;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.user.infrastructure.repository.UserJpaRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -54,7 +53,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     @Mock
-    private UserRepository userRepository;
+    private UserJpaRepository userRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -300,98 +299,6 @@ class AuthServiceTest {
                 // then
                 assertEquals(LoginFailReason.INVALID_EMAIL_OR_PASSWORD.getMessage(), exception.getReason());
                 assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("sendFindHandleCode")
-    class SendFindHandleCode {
-
-        @Nested
-        @DisplayName("정상")
-        class Normal {
-
-            @Test
-            @DisplayName("메일 발송")
-            void sendMail() {
-                // given
-                AccountRecoveryEmailReq request = AccountRecoveryEmailReq.builder()
-                        .email("tester@example.com")
-                        .build();
-                User user = User.create("tester", "encoded-password", request.getEmail());
-
-                when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
-
-                // when
-                authService.sendFindHandleCode(request);
-
-                // then
-                ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
-                verify(mailService).send(any(String.class), any(String.class), textCaptor.capture());
-                assertTrue(extractVerificationCode(textCaptor.getValue()).matches("^[A-Z0-9]{6}$"));
-            }
-        }
-
-        @Nested
-        @DisplayName("예외")
-        class ExceptionCase {
-
-            @Test
-            @DisplayName("BusinessException 발생 : 등록되지 않은 이메일")
-            void throwEmailNotFound() {
-                // given
-                AccountRecoveryEmailReq request = AccountRecoveryEmailReq.builder()
-                        .email("tester@example.com")
-                        .build();
-
-                when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.empty());
-
-                // when
-                BusinessException exception = assertThrows(BusinessException.class, () -> authService.sendFindHandleCode(request));
-
-                // then
-                assertEquals(EMAIL_NOT_FOUND.getMessage(), exception.getReason());
-                assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-                verify(mailService, never()).send(any(String.class), any(String.class), any(String.class));
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("findHandle")
-    class FindHandle {
-
-        @Nested
-        @DisplayName("정상")
-        class Normal {
-
-            @Test
-            @DisplayName("handle 반환")
-            void returnHandle() {
-                // given
-                AccountRecoveryEmailReq sendCodeRequest = AccountRecoveryEmailReq.builder()
-                        .email("tester@example.com")
-                        .build();
-                User user = User.create("tester", "encoded-password", sendCodeRequest.getEmail());
-
-                when(userRepository.findByEmail(sendCodeRequest.getEmail())).thenReturn(Optional.of(user));
-
-                authService.sendFindHandleCode(sendCodeRequest);
-
-                ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
-                verify(mailService).send(any(String.class), any(String.class), textCaptor.capture());
-                String verificationCode = extractVerificationCode(textCaptor.getValue());
-                AccountRecoveryCodeReq request = AccountRecoveryCodeReq.builder()
-                        .email("tester@example.com")
-                        .code(verificationCode)
-                        .build();
-
-                // when
-                FindHandleRes response = authService.findHandle(request);
-
-                // then
-                assertEquals("tester", response.getHandle());
             }
         }
     }

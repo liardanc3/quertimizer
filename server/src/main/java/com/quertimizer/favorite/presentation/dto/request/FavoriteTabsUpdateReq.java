@@ -1,5 +1,6 @@
 package com.quertimizer.favorite.presentation.dto.request;
 
+import com.quertimizer.favorite.application.input.FavoriteTabInput;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,8 +12,6 @@ import lombok.NoArgsConstructor;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.quertimizer.favorite.domain.model.FavoriteValidationMessage.TAB_LIMIT_EXCEEDED;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -21,7 +20,13 @@ public class FavoriteTabsUpdateReq {
 
     @Valid
     @NotNull
-    @Size(max = 10, message = TAB_LIMIT_EXCEEDED)
+    @Size(max = 10, message = "즐겨찾기 탭은 최대 10개까지 저장할 수 있습니다.")
     @Builder.Default
     private List<FavoriteTabReq> tabs = new ArrayList<>();
+
+    public List<FavoriteTabInput> toFavoriteTabInputs() {
+        return tabs.stream()
+                .map(tab -> new FavoriteTabInput(tab.getLabel(), tab.getPath(), tab.getSnapshot()))
+                .toList();
+    }
 }

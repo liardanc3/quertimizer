@@ -1,4 +1,4 @@
-import { Children, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { ProblemDetailData, ProblemOutputSampleData, ProblemSampleTableData } from '../../lib/problemApi';
 import type { DbmsType } from '../../types/domain';
 import ReactFlowDiagram from './ReactFlowDiagram';
@@ -16,7 +16,6 @@ interface ProblemDetailContentProps {
   sectionActions?: Partial<Record<keyof CollapsedSectionState, ReactNode>>;
   sectionClassNames?: Partial<Record<keyof CollapsedSectionState, string>>;
   hiddenSections?: Partial<Record<keyof CollapsedSectionState | 'description', boolean>>;
-  afterSectionsContent?: ReactNode;
 }
 
 interface ParsedTableColumn {
@@ -704,7 +703,7 @@ function ResizableGrid({ columns, rows, emptyMessage, initialWeights, minimumWei
   );
 }
 
-export default function ProblemDetailContent({
+const ProblemDetailContent = memo(function ProblemDetailContent({
   detail,
   selectedDbms,
   descriptionContent,
@@ -717,10 +716,7 @@ export default function ProblemDetailContent({
   sectionActions,
   sectionClassNames,
   hiddenSections,
-  afterSectionsContent,
 }: ProblemDetailContentProps) {
-  const afterSectionItems = Children.toArray(afterSectionsContent);
-
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSectionState>({
     table: false,
     erd: false,
@@ -1319,11 +1315,8 @@ export default function ProblemDetailContent({
       </section>
       ) : null}
 
-      {afterSectionItems.map((content, index) => (
-        <section key={`after-section-${index}`} className="solve-detail-section solve-detail-section-after-content">
-          {content}
-        </section>
-      ))}
     </div>
   );
-}
+});
+
+export default ProblemDetailContent;

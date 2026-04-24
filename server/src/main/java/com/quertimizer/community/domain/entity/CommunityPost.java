@@ -49,6 +49,7 @@ public class CommunityPost {
     private LocalDateTime updatedAt;
 
     public static CommunityPost create(String handle, String title, String contentHtml, String contentText) {
+        // 게시글 생성
         return new CommunityPost(
                 "community-" + UUID.randomUUID().toString().replace("-", ""),
                 handle,
@@ -84,6 +85,7 @@ public class CommunityPost {
     }
 
     public void changeContent(String title, String contentHtml, String contentText) {
+        // 게시글 본문 변경
         this.title = title;
         this.contentHtml = contentHtml;
         this.contentText = contentText;
@@ -91,22 +93,27 @@ public class CommunityPost {
     }
 
     public void increaseViewCount() {
+        // 조회수 증가
         this.viewCount += 1;
     }
 
     public void increaseLikeCount() {
+        // 좋아요 수 증가
         this.likeCount += 1;
     }
 
     public void decreaseLikeCount() {
+        // 좋아요 수 감소
         this.likeCount = Math.max(0, this.likeCount - 1);
     }
 
     public void increaseCommentCount() {
+        // 댓글 수 증가
         this.commentCount += 1;
     }
 
     public void decreaseCommentCount(int amount) {
+        // 댓글 수 감소
         this.commentCount = Math.max(0, this.commentCount - Math.max(amount, 0));
     }
 

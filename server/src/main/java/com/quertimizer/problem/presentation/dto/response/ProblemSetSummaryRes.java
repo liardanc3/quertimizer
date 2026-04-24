@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemSetSummaryResult;
+import com.quertimizer.problem.application.output.ProblemSetSummaryOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -10,7 +10,7 @@ public class ProblemSetSummaryRes {
 
     private final String problemSetId;
 
-    public static ProblemSetSummaryRes from(ProblemSetSummaryResult result) {
+    public static ProblemSetSummaryRes from(ProblemSetSummaryOutput result) {
         return new ProblemSetSummaryRes(result.problemSetId());
     }
 }

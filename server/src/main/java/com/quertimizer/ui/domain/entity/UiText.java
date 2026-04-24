@@ -24,18 +24,22 @@ public class UiText {
     private String description;
 
     public static UiText create(String key, String value, String language, String description) {
+        // UI 텍스트 생성
         return new UiText(UiTextId.create(key, language), value, description);
     }
 
     public String getKey() {
+        // 키 조회
         return id.getKey();
     }
 
     public String getLanguage() {
+        // 언어 조회
         return id.getLanguage();
     }
 
     public void changeContent(String value, String description) {
+        // UI 텍스트 본문 변경
         this.value = value;
         this.description = description;
     }

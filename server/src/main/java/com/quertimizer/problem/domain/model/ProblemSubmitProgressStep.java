@@ -14,6 +14,7 @@ public enum ProblemSubmitProgressStep {
     }
 
     public String getKey() {
+        // 키 조회
         return key;
     }
 

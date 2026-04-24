@@ -1,7 +1,7 @@
 package com.quertimizer.user.infrastructure.mock;
 
 import com.quertimizer.user.domain.entity.UserExternalLink;
-import com.quertimizer.user.infrastructure.repository.UserExternalLinkRepository;
+import com.quertimizer.user.application.port.UserExternalLinkRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -18,6 +18,7 @@ public class UserExternalLinkMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 외부 링크 Mock 데이터 적재
         userExternalLinkRepository.saveAll(List.of(
                 UserExternalLink.create("liardanc3", "blog", "https://blog.com/liardanc3"),
                 UserExternalLink.create("liardanc3", "github", "https://github.com/liardanc3"),

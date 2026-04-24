@@ -2,8 +2,8 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityPost;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityCommentRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -22,6 +22,7 @@ public class CommunityCommentMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 댓글 Mock 데이터 적재
         for (CommunityPost post : communityPostRepository.findAll().stream()
                 .sorted(Comparator.comparing(CommunityPost::getPostId))
                 .toList()) {
@@ -65,6 +66,7 @@ public class CommunityCommentMockData {
     }
 
     private String resolveRootCommentHandle(int postNumber) {
+        // Root 댓글 Handle 결정
         if (postNumber <= 10) {
             return "advanced%02d".formatted(postNumber);
         }
@@ -77,10 +79,12 @@ public class CommunityCommentMockData {
     }
 
     private String resolveReplyCommentHandle(int postNumber) {
+        // Reply 댓글 Handle 결정
         return "intermediate%02d".formatted(postNumber);
     }
 
     private String resolveHotCommentHandle(int commentIndex) {
+        // 인기 댓글 Handle 결정
         return switch (commentIndex) {
             case 1 -> "liardanc3";
             case 2 -> "advanced08";
@@ -90,23 +94,28 @@ public class CommunityCommentMockData {
     }
 
     private String createRootCommentContent(int postNumber) {
+        // Root 댓글 본문 생성
         return "comment-seed-root-%02d / 필터 위치를 orders에 먼저 두면 읽기가 더 편했다는 점에는 동의한다.".formatted(postNumber);
     }
 
     private String createReplyCommentContent(int postNumber) {
+        // Reply 댓글 본문 생성
         return "comment-seed-reply-%02d / COUNT DISTINCT를 같이 두고 검증하면 중복 집계 여부를 더 빨리 찾을 수 있었다.".formatted(postNumber);
     }
 
     private String createHotCommentContent(int postNumber, int commentIndex) {
+        // 인기 댓글 본문 생성
         return "comment-seed-hot-%02d-%02d / 본문이 길어서 대시보드 미리보기와 상세 본문 기준을 같이 확인하기 좋다."
                 .formatted(postNumber, commentIndex);
     }
 
     private int resolvePostNumber(String postId) {
+        // 게시글 번호 결정
         return Integer.parseInt(postId.substring(postId.length() - 2));
     }
 
     private int toExistingUserNumber(int postNumber) {
+        // 기존 사용자 번호 변환
         return ((postNumber - 1) % 10) + 1;
     }
 }

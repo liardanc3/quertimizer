@@ -8,13 +8,13 @@ const TARGET_BUCKET_COUNT = 40;
 const MIN_VISUAL_BUCKET_COUNT = 12;
 const FLOATING_TOOLTIP_DELAY_MS = 250;
 const numberFormatter = new Intl.NumberFormat('ko-KR');
+const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
 
 type MarkerKey = 'fastest' | 'mine';
 type MarkerTone = 'fastest' | 'mine';
 type FilterMatchMode = 'and' | 'or';
 type RuntimeBucketFilterKey = 'scanBucket' | 'joinBucket' | 'filterBucket' | 'sortBucket' | 'aggregateBucket';
 type BucketFilterValue = ScanBucket | JoinBucket | FilterBucket | SortBucket | AggregateBucket;
-type PlanSectionKey = RuntimeBucketFilterKey | 'hint';
 type HintFilterValue = 'USED' | 'UNUSED';
 
 interface ProblemRuntimeChartProps {
@@ -91,15 +91,6 @@ const HINT_FILTER_OPTIONS: readonly HintFilterValue[] = ['USED', 'UNUSED'];
 const HINT_FILTER_DISPLAY_ORDER: readonly HintFilterValue[] = ['UNUSED', 'USED'];
 const ALL_HINT_FILTERS: HintFilterValue[] = [...HINT_FILTER_OPTIONS];
 
-const PLAN_SECTION_OPTIONS: { key: PlanSectionKey; label: string }[] = [
-  { key: 'scanBucket', label: 'Scan' },
-  { key: 'joinBucket', label: 'Join' },
-  { key: 'filterBucket', label: 'Filter' },
-  { key: 'sortBucket', label: 'Sort' },
-  { key: 'aggregateBucket', label: 'Aggregate' },
-  { key: 'hint', label: 'Hint' },
-];
-
 const BUCKET_FILTERS_BY_DBMS: Record<DbmsType, BucketFilterDefinition[]> = {
   postgresql: [
     { key: 'scanBucket', label: 'Scan', options: ['FULL_SCAN', 'INDEX_SCAN', 'BITMAP_SCAN', 'TID_SCAN', 'DERIVED_SCAN', 'OTHERS'] },
@@ -159,11 +150,15 @@ function hasAnyPlanElement(mask: number, indexes: number[]) {
 }
 
 function formatCostValue(value: number) {
-  return String(Math.round(value * 10) / 10);
+  return costFormatter.format(Math.round(value * 100) / 100);
 }
 
 function formatPercent(value: number) {
   return `${numberFormatter.format(Math.round(value * 10) / 10)}%`;
+}
+
+function formatCount(value: number | undefined) {
+  return numberFormatter.format(value ?? 0);
 }
 
 function formatBucketDisplayLabel(value: BucketFilterValue) {
@@ -381,38 +376,43 @@ function renderMarkerTooltip(marker: RuntimeMarker, onSearchSelect: (value: stri
 
 function buildPlanSectionRatioItems(args: {
   activeSamples: RuntimeSample[];
+  availableBucketFilters: BucketFilterDefinition[];
   dbms: DbmsType;
   filterMatchMode: FilterMatchMode;
-  selectedPlanSections: PlanSectionKey[];
   selectedBucketFilters: Record<RuntimeBucketFilterKey, BucketFilterValue[]>;
   selectedHintFilters: HintFilterValue[];
 }) {
-  const { activeSamples, dbms, filterMatchMode, selectedPlanSections, selectedBucketFilters, selectedHintFilters } = args;
+  const { activeSamples, availableBucketFilters, dbms, filterMatchMode, selectedBucketFilters, selectedHintFilters } = args;
   const modeLabel = filterMatchMode.toUpperCase();
-  const bucketItems = buildAvailableBucketFilters(dbms).flatMap((filter) => {
-    if (!selectedPlanSections.includes(filter.key)) {
-      return [];
-    }
-
+  const bucketItems = availableBucketFilters.flatMap((filter) => {
     const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
     if (selectedValues.length === 0) {
       return [];
     }
 
     const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
-    const ratio = isAllSelected ? 100 : calculatePercent(activeSamples, (sample) => selectedValues.some((value) => matchesBucketFilter(sample, dbms, filter.key, value)));
-    return [{ id: filter.key, label: `${filter.label} 발생 비율 (${modeLabel})`, detail: isAllSelected ? '전체' : selectedValues.map((value) => formatBucketDisplayLabel(value)).join(', '), value: ratio === null ? '-' : formatPercent(ratio) }];
+    const ratio = isAllSelected
+      ? 100
+      : calculatePercent(activeSamples, (sample) => selectedValues.some((value) => matchesBucketFilter(sample, dbms, filter.key, value)));
+    return [{
+      id: filter.key,
+      label: `${filter.label} 발생 비율 (${modeLabel})`,
+      detail: isAllSelected ? '전체' : selectedValues.map((value) => formatBucketDisplayLabel(value)).join(', '),
+      value: ratio === null ? '-' : formatPercent(ratio),
+    }];
   });
 
   const hintItem =
-    !selectedPlanSections.includes('hint') || selectedHintFilters.length === 0
+    selectedHintFilters.length === 0
       ? []
       : [{
           id: 'hint',
           label: `Hint 사용 비율 (${modeLabel})`,
-          detail: areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS) ? '전체' : sortHintFilters(selectedHintFilters).map((value) => (value === 'USED' ? '사용' : '미사용')).join(', '),
+          detail: areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS)
+            ? '전체'
+            : sortHintFilters(selectedHintFilters).map((value) => (value === 'USED' ? '사용' : '미사용')).join(', '),
           value: areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS)
-            ? '100%'
+            ? formatPercent(100)
             : formatPercent(calculatePercent(activeSamples, (sample) => selectedHintFilters.some((value) => value === 'USED' ? hasPlanElement(sample.executionPlanElement, 30) : !hasPlanElement(sample.executionPlanElement, 30))) ?? 0),
         }];
 
@@ -430,12 +430,9 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     const sampleDbms = DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key));
     return sampleDbms.length > 0 ? sampleDbms : DBMS_OPTIONS;
   }, [forcedDbms, samples]);
-  const defaultPlanSections = useMemo(() => PLAN_SECTION_OPTIONS.map((section) => section.key), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0]?.key ?? 'postgresql');
   const hasUserSelectedDbmsRef = useRef(false);
   const [filterMatchMode, setFilterMatchMode] = useState<FilterMatchMode>('or');
-  const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(defaultPlanSections);
-  const [showPlanDetails, setShowPlanDetails] = useState(false);
   const [selectedBucketFilters, setSelectedBucketFilters] = useState<Record<RuntimeBucketFilterKey, BucketFilterValue[]>>(DEFAULT_BUCKET_FILTERS);
   const [selectedHintFilters, setSelectedHintFilters] = useState<HintFilterValue[]>(ALL_HINT_FILTERS);
   const [floatingTooltip, setFloatingTooltip] = useState<FloatingTooltipState | null>(null);
@@ -470,19 +467,10 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
 
   const activeSamples = useMemo(() => samples.filter((sample) => sample.dbms === selectedDbms), [samples, selectedDbms]);
   const availableBucketFilters = useMemo(() => buildAvailableBucketFilters(selectedDbms), [selectedDbms]);
-  const normalizedSelectedPlanSections = useMemo(
-    () => defaultPlanSections.filter((sectionKey) => selectedPlanSections.includes(sectionKey)),
-    [defaultPlanSections, selectedPlanSections]
-  );
-  const allPlanSectionsSelected = normalizedSelectedPlanSections.length === defaultPlanSections.length;
   const allHintFiltersSelected = areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS);
   const selectedBucketEntries = useMemo(
     () =>
       availableBucketFilters.flatMap((filter) => {
-        if (!normalizedSelectedPlanSections.includes(filter.key)) {
-          return [];
-        }
-
         const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
         if (selectedValues.length === 0 || areAllOptionsSelected(selectedValues, filter.options)) {
           return [];
@@ -490,9 +478,9 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
 
         return [[filter.key, selectedValues] as const];
       }),
-    [availableBucketFilters, normalizedSelectedPlanSections, selectedBucketFilters]
+    [availableBucketFilters, selectedBucketFilters]
   );
-  const hasActiveHintSelection = normalizedSelectedPlanSections.includes('hint') && selectedHintFilters.length > 0 && !allHintFiltersSelected;
+  const hasActiveHintSelection = selectedHintFilters.length > 0 && !allHintFiltersSelected;
   const filteredSamples = useMemo(() => {
     if (selectedBucketEntries.length === 0 && !hasActiveHintSelection) {
       return activeSamples;
@@ -546,24 +534,26 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     () =>
       buildPlanSectionRatioItems({
         activeSamples,
+        availableBucketFilters,
         dbms: selectedDbms,
         filterMatchMode,
-        selectedPlanSections: normalizedSelectedPlanSections,
         selectedBucketFilters,
         selectedHintFilters,
       }),
-    [activeSamples, filterMatchMode, normalizedSelectedPlanSections, selectedBucketFilters, selectedDbms, selectedHintFilters]
+    [activeSamples, availableBucketFilters, filterMatchMode, selectedBucketFilters, selectedDbms, selectedHintFilters]
   );
-  const firstAxisLabel = bucketModel ? String(Math.round(bucketModel.minValue)) : '';
-  const lastAxisLabel = bucketModel ? String(Math.round(bucketModel.maxValue)) : '';
-  const timeStatItems = timeSummary
-    ? [
-        { id: 'spread', label: `Cost \uD3B8\uCC28`, value: formatPercent(timeSummary.spreadRate) },
-        { id: 'min', label: `\uCD5C\uC18C Cost`, value: formatCostValue(timeSummary.min) },
-        { id: 'avg', label: `\uD3C9\uADE0 Cost`, value: formatCostValue(timeSummary.average) },
-        { id: 'median', label: `Cost \uC911\uC559\uAC12`, value: formatCostValue(timeSummary.median) },
-      ]
-    : [];
+  const firstAxisLabel = bucketModel ? formatCostValue(bucketModel.minValue) : '';
+  const lastAxisLabel = bucketModel ? formatCostValue(bucketModel.maxValue) : '';
+  const timeStatItems = [
+    { id: 'spread', label: 'Cost 편차', value: timeSummary ? formatPercent(timeSummary.spreadRate) : '-' },
+    { id: 'min', label: '최소 Cost', value: timeSummary ? formatCostValue(timeSummary.min) : '-' },
+    { id: 'avg', label: '평균 Cost', value: timeSummary ? formatCostValue(timeSummary.average) : '-' },
+    { id: 'median', label: 'Cost 중앙값', value: timeSummary ? formatCostValue(timeSummary.median) : '-' },
+  ];
+  const kpiItems = [
+    ...timeStatItems,
+    { id: 'submit-ratio', label: '정답 제출 / 전체 제출', value: `${formatCount(problem.successSubmitCount)} / ${formatCount(problem.totalSubmitCount)}` },
+  ];
 
   useEffect(() => {
     onSolvedCountChange(filteredSamples.length);
@@ -620,215 +610,18 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
 
   return (
     <div className="problem-runtime-shell">
-      <div className="problem-runtime-main">
-        <div className="runtime-toolbar">
-          <div className="runtime-toolbar-primary">
-            <div className={`runtime-plan-shell ${normalizedSelectedPlanSections.length > 0 && showPlanDetails ? 'is-open' : ''}`}>
-              <div className="runtime-filter-cluster is-wide" role="group" aria-label="실행 계획 요소">
-                <span className="runtime-filter-cluster-label">실행 계획 요소</span>
-
-                <div className="runtime-plan-mode-cluster" role="group" aria-label="필터 조합 방식">
-                  {FILTER_MODE_OPTIONS.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={`runtime-filter-button is-plan-inline ${filterMatchMode === option.key ? 'is-selected' : ''}`}
-                      aria-pressed={filterMatchMode === option.key}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setFilterMatchMode(option.key);
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="runtime-filter-group is-plan runtime-plan-section-cluster">
-                  <button
-                    type="button"
-                    className={`runtime-filter-button is-plan-option runtime-check-button runtime-plan-all-button ${allPlanSectionsSelected ? 'is-selected' : ''}`}
-                    aria-pressed={allPlanSectionsSelected}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setSelectedPlanSections((current) => defaultPlanSections.every((sectionKey) => current.includes(sectionKey)) ? [] : defaultPlanSections);
-                    }}
-                  >
-                    <SelectionCheckbox checked={allPlanSectionsSelected} />
-                    <span className="runtime-check-label">전체</span>
-                  </button>
-
-                  {PLAN_SECTION_OPTIONS.map((section) => {
-                    const isSelected = normalizedSelectedPlanSections.includes(section.key);
-
-                    return (
-                      <button
-                        key={section.key}
-                        type="button"
-                        className={`runtime-filter-button is-plan-option runtime-check-button ${isSelected ? 'is-selected' : ''}`}
-                        aria-pressed={isSelected}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setSelectedPlanSections((current) => {
-                            const nextValues = current.includes(section.key) ? current.filter((currentKey) => currentKey !== section.key) : [...current, section.key];
-                            return defaultPlanSections.filter((sectionKey) => nextValues.includes(sectionKey));
-                          });
-                        }}
-                      >
-                        <SelectionCheckbox checked={isSelected} />
-                        <span className="runtime-check-label">{section.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  type="button"
-                  className="runtime-detail-toggle"
-                  aria-expanded={showPlanDetails}
-                  aria-label={showPlanDetails ? '실행 계획 요소 상세 접기' : '실행 계획 요소 상세 펼치기'}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setShowPlanDetails((value) => !value);
-                  }}
-                >
-                  {showPlanDetails ? '▴' : '▾'}
-                </button>
-              </div>
+      <section className="runtime-summary-panel" aria-label="통계 개요">
+        <div className="runtime-kpi-grid">
+          {kpiItems.map((item) => (
+            <div key={item.id} className="runtime-kpi-card">
+              <span className="runtime-kpi-label">{item.label}</span>
+              <span className="runtime-kpi-value">{item.value}</span>
             </div>
-          </div>
+          ))}
         </div>
+      </section>
 
-        {normalizedSelectedPlanSections.length > 0 && showPlanDetails ? (
-          <div className="runtime-subfilter-board runtime-plan-shell-panel" role="group" aria-label="실행 계획 요소 세부 선택">
-            {availableBucketFilters
-              .filter((filter) => normalizedSelectedPlanSections.includes(filter.key))
-              .map((filter) => {
-                const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
-                const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
-
-                return (
-                  <div key={filter.key} className="runtime-subfilter-row">
-                    <span className="runtime-subfilter-label">{filter.label}</span>
-                    <div className="runtime-subfilter-options is-bucket">
-                      <button
-                        type="button"
-                        className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${isAllSelected ? 'is-selected' : ''}`}
-                        aria-pressed={isAllSelected}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setSelectedBucketFilters((current) => ({ ...current, [filter.key]: isAllSelected ? [] : [...filter.options] }));
-                        }}
-                      >
-                        <SelectionCheckbox checked={isAllSelected} />
-                        <span className="runtime-check-label">전체</span>
-                      </button>
-
-                      <div className="runtime-subfilter-chip-grid">
-                        {filter.options.map((option) => {
-                          const tooltipId = `${filter.key}-${option}`;
-                          const isSelected = selectedValues.includes(option);
-
-                          return (
-                            <span
-                              key={option}
-                              className="runtime-subfilter-option"
-                              onMouseEnter={(event) => {
-                                scheduleFloatingTooltip(
-                                  tooltipId,
-                                  event.currentTarget,
-                                  getBucketTooltipText(selectedDbms, filter.key, option)
-                                );
-                              }}
-                              onMouseLeave={hideFloatingTooltip}
-                            >
-                              <button
-                                type="button"
-                                className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
-                                aria-pressed={isSelected}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  setSelectedBucketFilters((current) => {
-                                    const currentVisibleValues = getVisibleSelectedValues(current[filter.key], filter.options);
-                                    const baseValues = areAllOptionsSelected(currentVisibleValues, filter.options) ? [...filter.options] : currentVisibleValues;
-                                    const nextValues = baseValues.includes(option) ? baseValues.filter((value) => value !== option) : [...baseValues, option];
-                                    return { ...current, [filter.key]: normalizeSelectedValues(nextValues, filter.options) };
-                                  });
-                                }}
-                              >
-                                <SelectionCheckbox checked={isSelected} />
-                                <span className="runtime-check-label">{formatBucketDisplayLabel(option)}</span>
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-            {normalizedSelectedPlanSections.includes('hint') ? (
-              <div className="runtime-subfilter-row">
-                <span className="runtime-subfilter-label">Hint</span>
-                <div className="runtime-subfilter-options is-bucket">
-                  <button
-                    type="button"
-                    className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${allHintFiltersSelected ? 'is-selected' : ''}`}
-                    aria-pressed={allHintFiltersSelected}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
-                    }}
-                  >
-                    <SelectionCheckbox checked={allHintFiltersSelected} />
-                    <span className="runtime-check-label">전체</span>
-                  </button>
-
-                  <div className="runtime-subfilter-chip-grid">
-                    {[
-                      { key: 'UNUSED', label: '미사용' },
-                      { key: 'USED', label: '사용' },
-                    ].map((option) => {
-                      const isSelected = selectedHintFilters.includes(option.key as HintFilterValue);
-
-                      return (
-                        <span key={option.key} className="runtime-subfilter-option">
-                          <button
-                            type="button"
-                            className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
-                            aria-pressed={isSelected}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setSelectedHintFilters((current) => {
-                                const nextValues = current.includes(option.key as HintFilterValue)
-                                  ? current.filter((value) => value !== option.key)
-                                  : [...current, option.key as HintFilterValue];
-                                return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
-                              });
-                            }}
-                          >
-                            <SelectionCheckbox checked={isSelected} />
-                            <span className="runtime-check-label">{option.label}</span>
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
+      <section className="runtime-chart-panel" aria-label="Cost 분포">
         {bucketModel ? (
           <div className="runtime-plot-shell">
             <div className="runtime-marker-column" style={{ gridTemplateRows: 'repeat(2, minmax(1rem, 1fr))' }}>
@@ -886,7 +679,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                       {axisLabel ? <span className="runtime-axis-inline">{axisLabel}</span> : null}
                       {bucket ? (
                         <span className="ui-tooltip runtime-bar-tooltip">
-                          <span className="ui-tooltip-title">{`${Math.round(bucket.startValue)}-${Math.round(bucket.startValue + bucketModel.bucketSize - 1)}`}</span>
+                          <span className="ui-tooltip-title">{`${formatCostValue(bucket.startValue)}-${formatCostValue(bucket.startValue + bucketModel.bucketSize - 1)}`}</span>
                           <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
                         </span>
                       ) : null}
@@ -899,16 +692,161 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
         ) : (
           <div className="runtime-empty-state">선택한 조건에 맞는 제출이 없습니다</div>
         )}
-      </div>
+      </section>
 
-      <aside className="runtime-stats-panel" aria-label={`Cost \uD1B5\uACC4`}>
-        <section className="runtime-stat-section">
-          <div className="runtime-stat-grid is-compact">
-            {timeStatItems.map((item) => (
-              <div key={item.id} className="runtime-stat-item is-neutral">
+      <section className="runtime-filter-panel" aria-label="실행계획 요소 필터">
+        <div className="runtime-filter-panel-head">
+          <span className="runtime-filter-panel-title">실행계획 요소 필터</span>
+          <div className="runtime-mode-toggle" role="group" aria-label="필터 조합 방식">
+            {FILTER_MODE_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={`runtime-mode-button ${filterMatchMode === option.key ? 'is-selected' : ''}`}
+                aria-pressed={filterMatchMode === option.key}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setFilterMatchMode(option.key);
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="runtime-subfilter-board runtime-plan-shell-panel" role="group" aria-label="실행 계획 요소 세부 선택">
+          {availableBucketFilters
+            .map((filter) => {
+              const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
+              const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
+
+              return (
+                <div key={filter.key} className="runtime-subfilter-row">
+                  <span className="runtime-subfilter-label">{filter.label}</span>
+                  <div className="runtime-subfilter-options is-bucket">
+                    <button
+                      type="button"
+                      className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${isAllSelected ? 'is-selected' : ''}`}
+                      aria-pressed={isAllSelected}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedBucketFilters((current) => ({ ...current, [filter.key]: isAllSelected ? [] : [...filter.options] }));
+                      }}
+                    >
+                      <SelectionCheckbox checked={isAllSelected} />
+                      <span className="runtime-check-label">전체</span>
+                    </button>
+
+                    <div className="runtime-subfilter-chip-grid">
+                      {filter.options.map((option) => {
+                        const tooltipId = `${filter.key}-${option}`;
+                        const isSelected = selectedValues.includes(option);
+
+                        return (
+                          <span
+                            key={option}
+                            className="runtime-subfilter-option"
+                            onMouseEnter={(event) => {
+                              scheduleFloatingTooltip(
+                                tooltipId,
+                                event.currentTarget,
+                                getBucketTooltipText(selectedDbms, filter.key, option)
+                              );
+                            }}
+                            onMouseLeave={hideFloatingTooltip}
+                          >
+                            <button
+                              type="button"
+                              className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
+                              aria-pressed={isSelected}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setSelectedBucketFilters((current) => {
+                                  const currentVisibleValues = getVisibleSelectedValues(current[filter.key], filter.options);
+                                  const baseValues = areAllOptionsSelected(currentVisibleValues, filter.options) ? [...filter.options] : currentVisibleValues;
+                                  const nextValues = baseValues.includes(option) ? baseValues.filter((value) => value !== option) : [...baseValues, option];
+                                  return { ...current, [filter.key]: normalizeSelectedValues(nextValues, filter.options) };
+                                });
+                              }}
+                            >
+                              <SelectionCheckbox checked={isSelected} />
+                              <span className="runtime-check-label">{formatBucketDisplayLabel(option)}</span>
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+          <div className="runtime-subfilter-row">
+            <span className="runtime-subfilter-label">Hint</span>
+            <div className="runtime-subfilter-options is-bucket">
+              <button
+                type="button"
+                className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${allHintFiltersSelected ? 'is-selected' : ''}`}
+                aria-pressed={allHintFiltersSelected}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
+                }}
+              >
+                <SelectionCheckbox checked={allHintFiltersSelected} />
+                <span className="runtime-check-label">전체</span>
+              </button>
+
+              <div className="runtime-subfilter-chip-grid">
+                {[
+                  { key: 'UNUSED', label: '미사용' },
+                  { key: 'USED', label: '사용' },
+                ].map((option) => {
+                  const isSelected = selectedHintFilters.includes(option.key as HintFilterValue);
+
+                  return (
+                    <span key={option.key} className="runtime-subfilter-option">
+                      <button
+                        type="button"
+                        className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
+                        aria-pressed={isSelected}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setSelectedHintFilters((current) => {
+                            const nextValues = current.includes(option.key as HintFilterValue)
+                              ? current.filter((value) => value !== option.key)
+                              : [...current, option.key as HintFilterValue];
+                            return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
+                          });
+                        }}
+                      >
+                        <SelectionCheckbox checked={isSelected} />
+                        <span className="runtime-check-label">{option.label}</span>
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {selectedRatioItems.length > 0 ? (
+        <section className="runtime-detail-panel" aria-label="상세 통계">
+          <div className="runtime-detail-stat-grid">
+            {selectedRatioItems.map((item) => (
+              <div key={item.id} className="runtime-detail-stat-card">
                 <span className="runtime-stat-copy">
-                  <span className="runtime-stat-meta">
+                  <span className="runtime-stat-meta is-stacked">
                     <span className="runtime-stat-label">{item.label}</span>
+                    <span className="runtime-stat-detail">{item.detail}</span>
                   </span>
                 </span>
                 <span className="runtime-stat-value">{item.value}</span>
@@ -916,25 +854,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
             ))}
           </div>
         </section>
-
-        {showPlanDetails && selectedRatioItems.length > 0 ? (
-          <section className="runtime-stat-section is-ratio">
-            <div className="runtime-stat-grid is-tuning">
-              {selectedRatioItems.map((item) => (
-                <div key={item.id} className="runtime-stat-item is-neutral">
-                  <span className="runtime-stat-copy">
-                    <span className="runtime-stat-meta">
-                      <span className="runtime-stat-label">{item.label}</span>
-                      <span className="runtime-stat-detail">{item.detail}</span>
-                    </span>
-                  </span>
-                  <span className="runtime-stat-value">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-      </aside>
+      ) : null}
 
       {floatingTooltip ? createPortal(
         <div className="runtime-floating-tooltip" role="tooltip" style={{ left: `${floatingTooltip.x}px`, top: `${floatingTooltip.y}px` }}>

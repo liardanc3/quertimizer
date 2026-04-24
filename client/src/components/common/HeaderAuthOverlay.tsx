@@ -681,7 +681,6 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
       setResetStatusMessage(null);
       await resetPassword({
         email: normalizedResetEmail,
-        code: normalizedResetCode,
         password: newPassword,
       });
       setResetStatusMessage(RESET_PASSWORD_CHANGED_MESSAGE);

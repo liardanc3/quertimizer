@@ -148,7 +148,6 @@ export default function AccountRecoveryOverlay({ onClose }: AccountRecoveryOverl
 
       await resetPassword({
         email: normalizedEmail,
-        code: normalizedVerificationCode,
         password: newPassword,
       });
 

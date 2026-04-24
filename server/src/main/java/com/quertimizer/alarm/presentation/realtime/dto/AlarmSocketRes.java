@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.presentation.realtime.dto;
 
+import com.quertimizer.alarm.application.output.AlarmCreatedOutput;
 import com.quertimizer.alarm.presentation.dto.response.AlarmItemRes;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -16,4 +17,11 @@ public class AlarmSocketRes {
         return new AlarmSocketRes("alarm.created", alarm, unreadCount);
     }
 
+    public static AlarmSocketRes from(AlarmCreatedOutput result) {
+        return new AlarmSocketRes(
+                result.getType(),
+                AlarmItemRes.from(result.getAlarm()),
+                result.getUnreadCount()
+        );
+    }
 }

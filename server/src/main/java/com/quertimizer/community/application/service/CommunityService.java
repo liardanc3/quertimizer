@@ -5,13 +5,13 @@ import com.quertimizer.alarm.domain.model.CommunityPostLikeAlarm;
 import com.quertimizer.alarm.domain.model.CommunityPostCommentAlarm;
 import com.quertimizer.alarm.domain.model.CommunityCommentReplyAlarm;
 import com.quertimizer.alarm.domain.model.CommunityCommentLikeAlarm;
-import com.quertimizer.community.presentation.dto.request.CommunityCommentCreateReq;
-import com.quertimizer.community.presentation.dto.request.CommunityPostSaveReq;
-import com.quertimizer.community.presentation.dto.response.CommunityCommentRes;
-import com.quertimizer.community.presentation.dto.response.CommunityPostDetailRes;
-import com.quertimizer.community.presentation.dto.response.CommunityPostPageRes;
-import com.quertimizer.community.presentation.dto.response.CommunityReactionRes;
-import com.quertimizer.community.presentation.dto.response.CommunityTagSuggestionRes;
+import com.quertimizer.community.application.input.CommunityCommentInput;
+import com.quertimizer.community.application.input.CommunityPostInput;
+import com.quertimizer.community.application.output.CommunityCommentOutput;
+import com.quertimizer.community.application.output.CommunityPostDetailOutput;
+import com.quertimizer.community.application.output.CommunityPostPageOutput;
+import com.quertimizer.community.application.output.CommunityReactionOutput;
+import com.quertimizer.community.application.output.CommunityTagSuggestionOutput;
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityCommentLike;
 import com.quertimizer.community.domain.entity.CommunityCommentLikeId;
@@ -19,11 +19,11 @@ import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostLike;
 import com.quertimizer.community.domain.entity.CommunityPostLikeId;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentLikeRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostLikeRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostTagRepository;
+import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
+import com.quertimizer.community.application.port.CommunityCommentRepository;
+import com.quertimizer.community.application.port.CommunityPostLikeRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,7 +53,8 @@ public class CommunityService {
     private final AlarmService alarmService;
 
     @Transactional(readOnly = true)
-    public CommunityPostPageRes getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
+    public CommunityPostPageOutput getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
+        // 게시글 목록 페이지를 조회
         List<CommunityPost> posts = communityPostRepository.findAll();
         Map<String, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
@@ -70,7 +71,8 @@ public class CommunityService {
         );
     }
 
-    public Optional<CommunityPostDetailRes> getPostDetail(String postId, String currentHandle) {
+    public Optional<CommunityPostDetailOutput> getPostDetail(String postId, String currentHandle) {
+        // 게시글 상세를 조회
         return communityPostRepository.findById(postId)
                 .map(post -> {
                     // 상세 조회 시 조회수 증가
@@ -81,7 +83,7 @@ public class CommunityService {
                     Map<Long, Boolean> likedCommentById = createLikedCommentById(comments, currentHandle);
                     boolean likedByCurrentUser = isPostLiked(postId, currentHandle);
 
-                    CommunityPostDetailRes detailResponse = new CommunityPostDetailRes(
+                    CommunityPostDetailOutput detailResponse = new CommunityPostDetailOutput(
                             post.getPostId(),
                             post.getTitle(),
                             post.getHandle(),
@@ -103,11 +105,12 @@ public class CommunityService {
                 });
     }
 
-    public String createPost(String handle, CommunityPostSaveReq request) {
-        String normalizedTitle = request.getTitle().trim();
-        String normalizedContentHtml = normalizeContentHtml(request.getContentHtml());
+    public String createPost(String handle, CommunityPostInput input) {
+        // 게시글을 생성
+        String normalizedTitle = input.getTitle().trim();
+        String normalizedContentHtml = normalizeContentHtml(input.getContentHtml());
         String normalizedContentText = extractPlainText(normalizedContentHtml);
-        List<String> normalizedTags = normalizeTags(request.getTags());
+        List<String> normalizedTags = normalizeTags(input.getTags());
 
         // 게시글 저장 후 태그와 검색 인덱스 동기화
         CommunityPost post = communityPostRepository.save(
@@ -118,14 +121,15 @@ public class CommunityService {
         return post.getPostId();
     }
 
-    public Optional<String> updatePost(String postId, String handle, CommunityPostSaveReq request) {
+    public Optional<String> updatePost(String postId, String handle, CommunityPostInput input) {
+        // 게시글을 수정
         return communityPostRepository.findById(postId)
                 .filter(post -> post.getHandle().equals(handle))
                 .map(post -> {
-                    String normalizedTitle = request.getTitle().trim();
-                    String normalizedContentHtml = normalizeContentHtml(request.getContentHtml());
+                    String normalizedTitle = input.getTitle().trim();
+                    String normalizedContentHtml = normalizeContentHtml(input.getContentHtml());
                     String normalizedContentText = extractPlainText(normalizedContentHtml);
-                    List<String> normalizedTags = normalizeTags(request.getTags());
+                    List<String> normalizedTags = normalizeTags(input.getTags());
 
                     // 게시글 본문, 태그, 검색 인덱스 갱신
                     post.changeContent(normalizedTitle, normalizedContentHtml, normalizedContentText);
@@ -136,6 +140,7 @@ public class CommunityService {
     }
 
     public boolean deletePost(String postId, String handle) {
+        // 게시글을 삭제
         Optional<CommunityPost> post = communityPostRepository.findById(postId)
                 .filter(currentPost -> currentPost.getHandle().equals(handle));
 
@@ -160,7 +165,8 @@ public class CommunityService {
         return true;
     }
 
-    public Optional<CommunityReactionRes> togglePostLike(String postId, String handle) {
+    public Optional<CommunityReactionOutput> togglePostLike(String postId, String handle) {
+        // 게시글 좋아요를 토글
         return communityPostRepository.findById(postId)
                 .map(post -> {
                     CommunityPostLikeId postLikeId = new CommunityPostLikeId(postId, handle);
@@ -170,21 +176,22 @@ public class CommunityService {
                         communityPostLikeRepository.deleteById(postLikeId);
                         post.decreaseLikeCount();
                         communitySearchService.syncPost(post, createTags(postId));
-                        return new CommunityReactionRes(false, post.getLikeCount());
+                        return new CommunityReactionOutput(false, post.getLikeCount());
                     }
 
                     communityPostLikeRepository.save(CommunityPostLike.create(postId, handle));
                     post.increaseLikeCount();
                     communitySearchService.syncPost(post, createTags(postId));
                     publishPostLikeAlarm(post, handle);
-                    return new CommunityReactionRes(true, post.getLikeCount());
+                    return new CommunityReactionOutput(true, post.getLikeCount());
                 });
     }
 
-    public Optional<CommunityCommentRes> addComment(String postId, String handle, CommunityCommentCreateReq request) {
+    public Optional<CommunityCommentOutput> addComment(String postId, String handle, CommunityCommentInput input) {
+        // 댓글을 추가
         return communityPostRepository.findById(postId)
                 .map(post -> {
-                    Optional<CommunityComment> parentComment = Optional.ofNullable(request.getParentCommentId())
+                    Optional<CommunityComment> parentComment = Optional.ofNullable(input.getParentCommentId())
                             .flatMap(communityCommentRepository::findById)
                             .filter(currentComment -> currentComment.getPostId().equals(postId));
 
@@ -193,14 +200,14 @@ public class CommunityService {
                             CommunityComment.create(
                                     postId,
                                     handle,
-                                    request.getParentCommentId(),
-                                    request.getContent().trim()
+                                    input.getParentCommentId(),
+                                    input.getContent().trim()
                             )
                     );
                     post.increaseCommentCount();
                     communitySearchService.syncPost(post, createTags(postId));
                     publishCommentAlarms(post, comment, parentComment, handle);
-                    return new CommunityCommentRes(
+                    return new CommunityCommentOutput(
                             comment.getCommentId(),
                             comment.getHandle(),
                             comment.getContent(),
@@ -212,7 +219,8 @@ public class CommunityService {
                 });
     }
 
-    public Optional<CommunityReactionRes> toggleCommentLike(Long commentId, String handle) {
+    public Optional<CommunityReactionOutput> toggleCommentLike(Long commentId, String handle) {
+        // 댓글 좋아요를 토글
         return communityCommentRepository.findById(commentId)
                 .map(comment -> {
                     CommunityCommentLikeId commentLikeId = new CommunityCommentLikeId(commentId, handle);
@@ -221,18 +229,19 @@ public class CommunityService {
                     if (communityCommentLikeRepository.existsById(commentLikeId)) {
                         communityCommentLikeRepository.deleteById(commentLikeId);
                         comment.decreaseLikeCount();
-                        return new CommunityReactionRes(false, comment.getLikeCount());
+                        return new CommunityReactionOutput(false, comment.getLikeCount());
                     }
 
                     communityCommentLikeRepository.save(CommunityCommentLike.create(commentId, handle));
                     comment.increaseLikeCount();
                     publishCommentLikeAlarm(comment, handle);
-                    return new CommunityReactionRes(true, comment.getLikeCount());
+                    return new CommunityReactionOutput(true, comment.getLikeCount());
                 });
     }
 
     @Transactional(readOnly = true)
-    public List<CommunityTagSuggestionRes> getTagSuggestions(String query) {
+    public List<CommunityTagSuggestionOutput> getTagSuggestions(String query) {
+        // 태그 자동완성 목록을 조회
         if (!StringUtils.hasText(query)) {
             return List.of();
         }
@@ -247,11 +256,12 @@ public class CommunityService {
         return usageCountByTag.entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
                 .limit(10)
-                .map(entry -> new CommunityTagSuggestionRes(entry.getKey(), entry.getValue()))
+                .map(entry -> new CommunityTagSuggestionOutput(entry.getKey(), entry.getValue()))
                 .toList();
     }
 
     private void publishPostLikeAlarm(CommunityPost post, String actorHandle) {
+        // 게시글 좋아요 알람 발행
         if (post.getHandle().equals(actorHandle)) {
             return;
         }
@@ -294,6 +304,7 @@ public class CommunityService {
     }
 
     private void publishCommentLikeAlarm(CommunityComment comment, String actorHandle) {
+        // 댓글 좋아요 알람 발행
         if (comment.getHandle().equals(actorHandle)) {
             return;
         }
@@ -302,6 +313,7 @@ public class CommunityService {
     }
 
     private Map<String, List<String>> createTagsByPostId(List<String> postIds) {
+        // 게시글 번호별 태그 목록 생성
         Map<String, List<String>> tagsByPostId = new HashMap<>();
 
         if (postIds.isEmpty()) {
@@ -318,12 +330,14 @@ public class CommunityService {
     }
 
     private List<String> createTags(String postId) {
+        // 태그 목록 생성
         return communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(postId).stream()
                 .map(CommunityPostTag::getTag)
                 .toList();
     }
 
     private List<String> normalizeTags(List<String> tags) {
+        // 태그 목록 정규화
         Map<String, String> tagByNormalizedValue = new LinkedHashMap<>();
 
         // 공백, 중복 태그 제거 후 최대 10개 유지
@@ -344,6 +358,7 @@ public class CommunityService {
     }
 
     private void replaceTags(String postId, List<String> tags) {
+        // 태그 목록 교체
         communityPostTagRepository.deleteAllByPostId(postId);
 
         if (tags.isEmpty()) {
@@ -359,10 +374,12 @@ public class CommunityService {
     }
 
     private String normalizeContentHtml(String contentHtml) {
+        // 본문 HTML 정규화
         return StringUtils.hasText(contentHtml) ? contentHtml.trim() : "";
     }
 
     private String extractPlainText(String contentHtml) {
+        // 텍스트 추출
         return normalizeContentHtml(contentHtml)
                 .replaceAll("(?i)<img[^>]*>", " ")
                 .replaceAll("(?i)<br\\s*/?>", " ")
@@ -374,6 +391,7 @@ public class CommunityService {
     }
 
     private boolean isPostLiked(String postId, String currentHandle) {
+        // 게시글 좋아요한 여부 확인
         if (currentHandle == null) {
             return false;
         }
@@ -382,6 +400,7 @@ public class CommunityService {
     }
 
     private Map<Long, Boolean> createLikedCommentById(List<CommunityComment> comments, String currentHandle) {
+        // 번호별 좋아요한 댓글 생성
         Map<Long, Boolean> likedCommentById = new HashMap<>();
 
         if (currentHandle == null) {
@@ -399,7 +418,8 @@ public class CommunityService {
         return likedCommentById;
     }
 
-    private List<CommunityCommentRes> createCommentTree(List<CommunityComment> comments, Map<Long, Boolean> likedCommentById) {
+    private List<CommunityCommentOutput> createCommentTree(List<CommunityComment> comments, Map<Long, Boolean> likedCommentById) {
+        // 댓글 트리 생성
         Map<Long, List<CommunityComment>> childCommentsByParentId = new HashMap<>();
         List<CommunityComment> rootComments = new ArrayList<>();
 
@@ -420,15 +440,15 @@ public class CommunityService {
                 .toList();
     }
 
-    private CommunityCommentRes createCommentResponse(CommunityComment comment,
-                                                      Map<Long, List<CommunityComment>> childCommentsByParentId,
-                                                      Map<Long, Boolean> likedCommentById) {
-        List<CommunityCommentRes> replies = childCommentsByParentId.getOrDefault(comment.getCommentId(), List.of()).stream()
+    private CommunityCommentOutput createCommentResponse(CommunityComment comment,
+                                                         Map<Long, List<CommunityComment>> childCommentsByParentId,
+                                                         Map<Long, Boolean> likedCommentById) {
+        List<CommunityCommentOutput> replies = childCommentsByParentId.getOrDefault(comment.getCommentId(), List.of()).stream()
                 .sorted(Comparator.comparing(CommunityComment::getCreatedAt))
                 .map(reply -> createCommentResponse(reply, childCommentsByParentId, likedCommentById))
                 .toList();
 
-        return new CommunityCommentRes(
+        return new CommunityCommentOutput(
                 comment.getCommentId(),
                 comment.getHandle(),
                 comment.getContent(),

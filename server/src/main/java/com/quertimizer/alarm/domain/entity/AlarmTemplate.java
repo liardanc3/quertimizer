@@ -25,10 +25,12 @@ public class AlarmTemplate {
     private String description;
 
     public static AlarmTemplate create(String alarmType, String sentence, String description) {
+        // 알람 템플릿 생성
         return new AlarmTemplate(alarmType, sentence, description);
     }
 
     public void changeContent(String sentence, String description) {
+        // 알람 템플릿 본문 변경
         this.sentence = sentence;
         this.description = description;
     }

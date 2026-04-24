@@ -1,7 +1,7 @@
 package com.quertimizer.problem.infrastructure.mock;
 
 import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
-import com.quertimizer.problem.infrastructure.repository.ProblemGeneratorPermissionRepository;
+import com.quertimizer.problem.application.port.ProblemGeneratorPermissionRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -18,6 +18,7 @@ public class ProblemGeneratorPermissionMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 문제 생성 권한 Mock 데이터 적재
         problemGeneratorPermissionRepository.saveAll(List.of(
                 ProblemGeneratorPermission.create("problemgen01", "NEW"),
                 ProblemGeneratorPermission.create("problemgen01", "P00001"),

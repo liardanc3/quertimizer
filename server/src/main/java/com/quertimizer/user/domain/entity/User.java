@@ -75,12 +75,12 @@ public class User {
     @Column(name = "blocked_at")
     private LocalDateTime blockedAt;
 
-    public static User create(String handle, String doubleHashedPassword, String email) {
+    public static User create(String handle, String encodedPassword, String email) {
         // 일반 회원가입 완료 사용자는 기본 공개 설정과 기본 DBMS를 함께 초기화한다.
         return new User(
                 email,
                 handle,
-                doubleHashedPassword,
+                encodedPassword,
                 "",
                 UserRole.USER,
                 DbmsType.POSTGRESQL,
@@ -98,12 +98,12 @@ public class User {
         );
     }
 
-    public static User createPending(String doubleHashedPassword, String email) {
-        // 소셜 로그인 또는 이메일 가입 직후 Handle 설정 전 사용자는 handle 없이 임시 상태로 생성한다.
+    public static User create(String encodedPassword, String email) {
+        // 최초 생성 시 Handle 미설정 사용자는 handle 없이 시작한다.
         return new User(
                 email,
                 null,
-                doubleHashedPassword,
+                encodedPassword,
                 "",
                 UserRole.USER,
                 DbmsType.POSTGRESQL,
@@ -191,6 +191,7 @@ public class User {
     }
 
     public UserRole getResolvedRole() {
+        // Resolved 역할 조회
         return role != null ? role : UserRole.USER;
     }
 
@@ -200,18 +201,22 @@ public class User {
     }
 
     public boolean isSqlPublicEnabled() {
+        // SQL Public Enabled 여부 확인
         return Boolean.TRUE.equals(sqlPublic);
     }
 
     public boolean isExecutionPercentilePublicEnabled() {
+        // 실행 백분위 Public Enabled 여부 확인
         return Boolean.TRUE.equals(executionPercentilePublic);
     }
 
     public boolean isSolvedRecordsPublicEnabled() {
+        // 풀이 기록 목록 Public Enabled 여부 확인
         return Boolean.TRUE.equals(solvedRecordsPublic);
     }
 
     public boolean isSolvedProblemCountPublicEnabled() {
+        // 해결한 문제 Count Public Enabled 여부 확인
         return Boolean.TRUE.equals(solvedProblemCountPublic);
     }
 

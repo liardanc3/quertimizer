@@ -2,8 +2,8 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostLike;
-import com.quertimizer.community.infrastructure.repository.CommunityPostLikeRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostLikeRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -23,6 +23,7 @@ public class CommunityPostLikeMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 게시글 좋아요 Mock 데이터 적재
         List<CommunityPostLike> postLikes = new ArrayList<>();
 
         for (CommunityPost post : communityPostRepository.findAll().stream()
@@ -42,6 +43,7 @@ public class CommunityPostLikeMockData {
     }
 
     private List<String> resolveLikerHandles(int postNumber) {
+        // Liker Handles 결정
         if (postNumber > 30) {
             return List.of(
                     "liardanc3",
@@ -75,6 +77,7 @@ public class CommunityPostLikeMockData {
     }
 
     private int resolvePostNumber(String postId) {
+        // 게시글 번호 결정
         return Integer.parseInt(postId.substring(postId.length() - 2));
     }
 }

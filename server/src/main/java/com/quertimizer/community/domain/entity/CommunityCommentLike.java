@@ -23,6 +23,7 @@ public class CommunityCommentLike {
     private LocalDateTime createdAt;
 
     public static CommunityCommentLike create(Long commentId, String handle) {
+        // 댓글 좋아요 생성
         return new CommunityCommentLike(new CommunityCommentLikeId(commentId, handle), LocalDateTime.now());
     }
 

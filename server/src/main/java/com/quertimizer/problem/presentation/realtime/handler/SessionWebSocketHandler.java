@@ -48,6 +48,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        // 연결 주체와 세션 정보를 조회
         String actor = resolveActor(session);
         String handle = (String) session.getAttributes().get("handle");
         String sessionId = (String) session.getAttributes().get("sessionId");
@@ -68,6 +69,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        // 연결 주체와 로그 prefix를 조회
         String actor = resolveActor(session);
         String prefix = logFormatter.prefix(actor);
 
@@ -97,6 +99,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        // 연결 종료 세션 정리
         String actor = resolveActor(session);
         String sessionId = (String) session.getAttributes().get("sessionId");
         String handle = (String) session.getAttributes().get("handle");
@@ -135,6 +138,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void sendAlarm(String handle, AlarmSocketRes payload) throws Exception {
+        // 사용자 알람 대상 세션 조회
         Set<WebSocketSession> userWebSocketSessions = userSockets.get(handle);
         if (userWebSocketSessions == null || userWebSocketSessions.isEmpty()) {
             return;
@@ -155,40 +159,41 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void handleProblemExecute(WebSocketSession session, ProblemSocketReq request) throws Exception {
+        // SQL 실행 주체를 확인 후 비동기 처리
         String authenticatedHandle = resolveAuthenticatedHandle(session);
-
-        // SQL 실행은 별도 쓰레드에서 비동기 처리
         problemExecutingExecutor.execute(() -> executeProblemQuery(session, request, authenticatedHandle));
     }
 
     private void handleProblemExecutePage(WebSocketSession session, ProblemSocketReq request) throws Exception {
+        // SQL 실행 결과 페이지를 비동기 처리
         String authenticatedHandle = resolveAuthenticatedHandle(session);
         problemExecutingExecutor.execute(() -> executeProblemQueryPage(session, request, authenticatedHandle));
     }
 
     private void handleProblemSubmit(WebSocketSession session, ProblemSocketReq request) throws Exception {
+        // SQL 제출 주체를 확인 후 비동기 처리
         String authenticatedHandle = resolveAuthenticatedHandle(session);
-
-        // SQL 제출도 동일한 실행 쓰레드에서 비동기 처리
         problemExecutingExecutor.execute(() -> submitProblemQuery(session, request, authenticatedHandle));
     }
 
     private void handleProblemExecuteStop(WebSocketSession session, ProblemSocketReq request) {
+        // 진행 중 SQL 실행 중단
         problemQueryService.cancelInteractiveExecution(session.getId());
     }
 
     private void handleProblemLeave(WebSocketSession session, ProblemSocketReq request) throws Exception {
-
         // 명시적 페이지 이탈 후 작업용 스키마 정리
         problemWorkspaceService.handleExplicitLeave(session.getId());
         sendObjectMessage(session, ProblemExecuteRes.leaveSuccess(request.problemId()));
     }
 
     private void sendObjectMessage(WebSocketSession session, Object payload) throws Exception {
+        // 객체 payload를 텍스트 메시지로 변환 후 전송
         sendTextMessage(session, objectMapper.writeValueAsString(payload));
     }
 
     private void sendTextMessage(WebSocketSession session, String payload) throws Exception {
+        // 전송 주체와 로그 prefix를 조회
         String actor = resolveActor(session);
         String prefix = logFormatter.prefix(actor);
 
@@ -206,6 +211,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private String resolveAuthenticatedHandle(WebSocketSession session) {
+        // 인증 Handle 결정
         String handle = (String) session.getAttributes().get("handle");
         if (handle == null || handle.isBlank()) {
             throw new IllegalArgumentException(LOGIN_INFORMATION_NOT_FOUND.getMessage());
@@ -215,10 +221,12 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
+        // DBMS 유형 결정
         return "oracle".equalsIgnoreCase(dbms) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
     }
 
     private String resolveActor(WebSocketSession session) {
+        // 주체 결정
         String handle = (String) session.getAttributes().get("handle");
 
         if (handle != null && !handle.isBlank()) {
@@ -233,6 +241,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void removeSessionSocket(String sessionId, WebSocketSession session) {
+        // 세션 소켓 제거
         sessionSockets.computeIfPresent(sessionId, (key, sessions) -> {
             sessions.remove(session);
             if (sessions.isEmpty()) {
@@ -244,6 +253,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void removeUserSocket(String handle, WebSocketSession session) {
+        // 사용자 소켓 제거
         userSockets.computeIfPresent(handle, (key, sessions) -> {
             sessions.remove(session);
             if (sessions.isEmpty()) {
@@ -255,6 +265,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private String resolveErrorMessage(Exception exception) {
+        // Error 메시지 결정
         if (exception.getMessage() != null && !exception.getMessage().isBlank()) {
             return exception.getMessage();
         }
@@ -263,12 +274,14 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void logLines(List<String> logLines) {
+        // 로그 라인 생성
         for (String logLine : logLines) {
             log.info("{}", logLine);
         }
     }
 
     private void executeProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedHandle) {
+        // execute 문제 쿼리 처리
         try {
             ProblemQueryService.QueryExecutionResult executionResult = problemQueryService.executeInteractiveSql(
                     authenticatedHandle,
@@ -303,6 +316,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void executeProblemQueryPage(WebSocketSession session, ProblemSocketReq request, String authenticatedHandle) {
+        // execute 문제 쿼리 페이지 처리
         try {
             ProblemQueryService.QueryExecutionResult executionResult = problemQueryService.executeInteractiveSql(
                     authenticatedHandle,
@@ -337,6 +351,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void submitProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedHandle) {
+        // submit 문제 쿼리 처리
         try {
             ProblemQueryService.ProblemSubmitResult submitResult = problemQueryService.submitProblemSql(
                     authenticatedHandle,
@@ -367,6 +382,7 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendProblemSubmitProgressMessage(WebSocketSession session, ProblemQueryService.ProblemSubmitProgress progress) {
+        // 문제 제출 Progress 메시지 전송
         try {
             sendObjectMessage(session, ProblemSubmitProgressRes.of(
                     progress.problemId(),

@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemCreateResult;
+import com.quertimizer.problem.application.output.ProblemCreateOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -10,7 +10,7 @@ public class ProblemCreateRes {
 
     private final String problemId;
 
-    public static ProblemCreateRes from(ProblemCreateResult result) {
+    public static ProblemCreateRes from(ProblemCreateOutput result) {
         return new ProblemCreateRes(result.problemId());
     }
 }

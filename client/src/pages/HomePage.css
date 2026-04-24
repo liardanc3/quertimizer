@@ -1498,6 +1498,10 @@ body.handle-setup-locked {
 }
 
 @media (prefers-color-scheme: dark) {
+  .home-page .problem-table-loading-overlay::before {
+    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
+  }
+
   .home-page .problem-table-entry.is-solved {
     border-bottom-color: var(--line-soft);
   }
@@ -1542,20 +1546,30 @@ body.handle-setup-locked {
 .home-page .problem-table-loading-overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
   pointer-events: none;
+  z-index: 4;
+}
+
+.home-page .problem-table-loading-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
+  animation: problem-table-loading-wave 1.8s ease-in-out infinite;
 }
 
 .home-page .problem-table-loading-overlay .submit-history-loading-badge {
-  width: 1.8rem;
-  height: 1.8rem;
-  min-width: 1.8rem;
-  min-height: 1.8rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  display: none;
+}
+
+@keyframes problem-table-loading-wave {
+  to {
+    transform: translateX(520%);
+  }
 }
 
 .home-page .problem-table {
@@ -1564,6 +1578,30 @@ body.handle-setup-locked {
 
 .home-page .problem-table-row {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 2.7fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) 48px;
+}
+
+.home-page .problem-table-entry,
+.home-page .problem-table-entry.is-solved {
+  border-bottom: 0;
+}
+
+.home-page .problem-table-entry {
+  position: relative;
+}
+
+.home-page .problem-table-entry:not(.is-stats-hidden) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.home-page .problem-table-entry.is-solved:not(.is-stats-hidden) {
+  background: transparent;
+}
+
+.home-page .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
+  margin-top: 0;
+  padding: 0.3rem 0 0.92rem;
+  border-top: 0;
 }
 
 .home-page .problem-table-head-cell-stats,
@@ -1695,6 +1733,19 @@ body.handle-setup-locked {
   .home-page .problem-table-header-menu-spread {
     border-color: var(--line-soft);
     background: var(--surface-elevated);
+  }
+
+  .home-page .problem-table-entry:not(.is-stats-hidden) {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .home-page .problem-table-entry.is-solved:not(.is-stats-hidden) {
+    background: transparent;
+  }
+
+  .home-page .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
+    border-top-color: transparent;
   }
 
   .home-page .problem-table-status-text.is-solved {

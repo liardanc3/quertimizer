@@ -3,7 +3,7 @@ package com.quertimizer.ui.infrastructure.mock;
 import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.model.UiTextKey;
 import com.quertimizer.ui.domain.model.UiTextLanguage;
-import com.quertimizer.ui.infrastructure.repository.UiTextRepository;
+import com.quertimizer.ui.application.port.UiTextRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -18,6 +18,7 @@ public class UiTextMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 UI 텍스트 Mock 데이터 적재
         uiTextRepository.saveAll(List.of(
                 UiText.create(
                         UiTextKey.TITLE.getValue(),

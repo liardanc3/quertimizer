@@ -12,6 +12,7 @@ public enum UiTextKey {
     }
 
     public String getValue() {
+        // 값 조회
         return value;
     }
 

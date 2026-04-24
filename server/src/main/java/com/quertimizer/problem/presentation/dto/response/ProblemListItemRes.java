@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.ProblemListItemResult;
+import com.quertimizer.problem.application.output.ProblemListItemOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -18,7 +18,7 @@ public class ProblemListItemRes {
     private final double spreadRate;
     private final List<ProblemSubmittedHistoryRes> submittedHistories;
 
-    public static ProblemListItemRes from(ProblemListItemResult result) {
+    public static ProblemListItemRes from(ProblemListItemOutput result) {
         return new ProblemListItemRes(
                 result.problemId(),
                 result.title(),

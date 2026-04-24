@@ -925,9 +925,17 @@ export function ProblemCreateContent() {
                 </div>
               ) : null}
 
-              {problemSetMode === 'existing' && isProblemSetLoading ? <p className="content-text">테이블셋 정보를 불러오는 중이다.</p> : null}
+              {problemSetMode === 'existing' && isProblemSetLoading ? (
+                <p className="content-text" aria-hidden="true">
+                  <span className="wave-loading-placeholder is-medium" />
+                </p>
+              ) : null}
               {problemSetMode === 'existing' && problemSetErrorMessage ? <p className="problem-create-error">{problemSetErrorMessage}</p> : null}
-              {problemSetMode === 'existing' && isProblemLoading ? <p className="content-text">문제 정보를 불러오는 중이다.</p> : null}
+              {problemSetMode === 'existing' && isProblemLoading ? (
+                <p className="content-text" aria-hidden="true">
+                  <span className="wave-loading-placeholder is-medium" />
+                </p>
+              ) : null}
               {problemSetMode === 'existing' && problemErrorMessage ? <p className="problem-create-error">{problemErrorMessage}</p> : null}
 
               {availableTableNames.length > 0 ? (

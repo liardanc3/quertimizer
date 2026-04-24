@@ -2,8 +2,8 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityCommentLike;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentLikeRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityCommentRepository;
+import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
+import com.quertimizer.community.application.port.CommunityCommentRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -23,6 +23,7 @@ public class CommunityCommentLikeMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 댓글 좋아요 Mock 데이터 적재
         List<CommunityCommentLike> commentLikes = new ArrayList<>();
 
         for (CommunityComment comment : communityCommentRepository.findAll().stream()

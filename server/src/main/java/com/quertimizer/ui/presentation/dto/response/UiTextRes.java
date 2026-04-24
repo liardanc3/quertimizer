@@ -1,6 +1,6 @@
 package com.quertimizer.ui.presentation.dto.response;
 
-import com.quertimizer.ui.domain.entity.UiText;
+import com.quertimizer.ui.application.output.UiTextOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -13,7 +13,7 @@ public class UiTextRes {
     private final String language;
     private final String description;
 
-    public static UiTextRes from(UiText uiText) {
+    public static UiTextRes from(UiTextOutput uiText) {
         return new UiTextRes(
                 uiText.getKey(),
                 uiText.getValue(),

@@ -2,12 +2,12 @@ package com.quertimizer.community.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quertimizer.community.presentation.dto.response.CommunityPostPageRes;
-import com.quertimizer.community.presentation.dto.response.CommunityPostSummaryRes;
+import com.quertimizer.community.application.output.CommunityPostPageOutput;
+import com.quertimizer.community.application.output.CommunityPostSummaryOutput;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostTagRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import com.quertimizer.community.infrastructure.search.CommunityPostDocument;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -42,6 +42,7 @@ public class CommunitySearchService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void syncAllPosts() {
+        // 서버 기동 시 게시글 검색 인덱스를 동기화
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -57,14 +58,14 @@ public class CommunitySearchService {
         }
     }
 
-    public CommunityPostPageRes searchPosts(int requestedPage,
-                                            int pageSize,
-                                            String searchKeyword,
-                                            String tag,
-                                            String category,
-                                            String sortKey,
-                                            List<CommunityPost> posts,
-                                            Map<String, List<String>> tagsByPostId) {
+    public CommunityPostPageOutput searchPosts(int requestedPage,
+                                               int pageSize,
+                                               String searchKeyword,
+                                               String tag,
+                                               String category,
+                                               String sortKey,
+                                               List<CommunityPost> posts,
+                                               Map<String, List<String>> tagsByPostId) {
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -89,6 +90,7 @@ public class CommunitySearchService {
     }
 
     public void syncPost(CommunityPost post, List<String> tags) {
+        // 단일 게시글 검색 인덱스를 동기화
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -115,6 +117,7 @@ public class CommunitySearchService {
     }
 
     public void deletePost(String postId) {
+        // 삭제된 게시글 검색 인덱스를 정리
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -130,6 +133,7 @@ public class CommunitySearchService {
     }
 
     private Map<String, List<String>> createTagsByPostId(List<String> postIds) {
+        // 게시글 번호별 태그 목록 생성
         Map<String, List<String>> tagsByPostId = new HashMap<>();
 
         if (postIds.isEmpty()) {
@@ -144,15 +148,15 @@ public class CommunitySearchService {
         return tagsByPostId;
     }
 
-    private CommunityPostPageRes searchPostsInElasticsearch(ElasticsearchOperations elasticsearchOperations,
-                                                            int requestedPage,
-                                                            int pageSize,
-                                                            String searchKeyword,
-                                                            String tag,
-                                                            String category,
-                                                            String sortKey,
-                                                            List<CommunityPost> posts,
-                                                            Map<String, List<String>> tagsByPostId) {
+    private CommunityPostPageOutput searchPostsInElasticsearch(ElasticsearchOperations elasticsearchOperations,
+                                                               int requestedPage,
+                                                               int pageSize,
+                                                               String searchKeyword,
+                                                               String tag,
+                                                               String category,
+                                                               String sortKey,
+                                                               List<CommunityPost> posts,
+                                                               Map<String, List<String>> tagsByPostId) {
         StringQuery query = new StringQuery(createSearchQuery(searchKeyword, tag, category, sortKey));
         query.setPageable(PageRequest.of(Math.max(requestedPage - 1, 0), pageSize));
 
@@ -168,7 +172,7 @@ public class CommunitySearchService {
             postById.put(post.getPostId(), post);
         }
 
-        List<CommunityPostSummaryRes> postResponses = orderedPostIds.stream()
+        List<CommunityPostSummaryOutput> postResponses = orderedPostIds.stream()
                 .map(postById::get)
                 .filter(java.util.Objects::nonNull)
                 .map(post -> toCommunityPostSummary(post, tagsByPostId.getOrDefault(post.getPostId(), List.of())))
@@ -176,7 +180,7 @@ public class CommunitySearchService {
         int totalPages = Math.max(1, (int) Math.ceil(hits.getTotalHits() / (double) pageSize));
         int currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
 
-        return new CommunityPostPageRes(
+        return new CommunityPostPageOutput(
                 currentPage,
                 pageSize,
                 hits.getTotalHits(),
@@ -186,6 +190,7 @@ public class CommunitySearchService {
     }
 
     private String createSearchQuery(String searchKeyword, String tag, String category, String sortKey) {
+        // 검색 쿼리 생성
         Map<String, Object> root = new LinkedHashMap<>();
         Map<String, Object> functionScore = new LinkedHashMap<>();
         Map<String, Object> bool = new LinkedHashMap<>();
@@ -294,14 +299,14 @@ public class CommunitySearchService {
         }
     }
 
-    private CommunityPostPageRes searchPostsInMemory(int requestedPage,
-                                                     int pageSize,
-                                                     String searchKeyword,
-                                                     String tag,
-                                                     String category,
-                                                     String sortKey,
-                                                     List<CommunityPost> posts,
-                                                     Map<String, List<String>> tagsByPostId) {
+    private CommunityPostPageOutput searchPostsInMemory(int requestedPage,
+                                                        int pageSize,
+                                                        String searchKeyword,
+                                                        String tag,
+                                                        String category,
+                                                        String sortKey,
+                                                        List<CommunityPost> posts,
+                                                        Map<String, List<String>> tagsByPostId) {
         String normalizedSearchKeyword = normalizeKeyword(searchKeyword);
         String normalizedTag = normalizeKeyword(tag);
         String normalizedCategory = normalizeCategory(category);
@@ -323,7 +328,7 @@ public class CommunitySearchService {
         int fromIndex = Math.min((currentPage - 1) * pageSize, totalCount);
         int toIndex = Math.min(fromIndex + pageSize, totalCount);
 
-        return new CommunityPostPageRes(
+        return new CommunityPostPageOutput(
                 currentPage,
                 pageSize,
                 totalCount,
@@ -335,6 +340,7 @@ public class CommunitySearchService {
     }
 
     private Comparator<RankedPost> createComparator(String sortKey, boolean hasSearchKeyword) {
+        // 비교 기준 생성
         if ("latest".equalsIgnoreCase(sortKey) || ("default".equalsIgnoreCase(sortKey) && !hasSearchKeyword)) {
             return Comparator.comparing((RankedPost rankedPost) -> rankedPost.post().getCreatedAt(), Comparator.reverseOrder())
                     .thenComparing(rankedPost -> rankedPost.post().getPostId());
@@ -384,6 +390,7 @@ public class CommunitySearchService {
     }
 
     private boolean matchesTag(List<String> tags, String normalizedTag) {
+        // 태그 일치 여부 확인
         if (normalizedTag.isBlank()) {
             return true;
         }
@@ -392,6 +399,7 @@ public class CommunitySearchService {
     }
 
     private double calculateScore(CommunityPost post, List<String> tags, String normalizedSearchKeyword) {
+        // 점수 계산
         if (normalizedSearchKeyword.isBlank()) {
             return post.getLikeCount() * 0.4
                     + post.getCommentCount() * 0.6
@@ -416,6 +424,7 @@ public class CommunitySearchService {
     }
 
     private double calculateTextScore(String value, String normalizedSearchKeyword, double weight) {
+        // 텍스트 점수 계산
         String normalizedValue = normalizeKeyword(value);
 
         if (normalizedValue.isBlank()) {
@@ -439,6 +448,7 @@ public class CommunitySearchService {
 
 
     private String normalizeCategory(String value) {
+        // 구분 정규화
         if (!StringUtils.hasText(value) || "all".equalsIgnoreCase(value.trim())) {
             return "all";
         }
@@ -447,10 +457,12 @@ public class CommunitySearchService {
     }
 
     private boolean matchesCategory(CommunityPost post, String normalizedCategory) {
+        // 구분 일치 여부 확인
         return "all".equals(normalizedCategory) || resolveCategory(post).equals(normalizedCategory);
     }
 
     private String resolveCategory(CommunityPost post) {
+        // 구분 결정
         int postNumber = extractPostNumber(post.getPostId());
 
         if (postNumber > 0) {
@@ -465,6 +477,7 @@ public class CommunitySearchService {
     }
 
     private int extractPostNumber(String postId) {
+        // 게시글 번호 추출
         if (!StringUtils.hasText(postId)) {
             return 0;
         }
@@ -482,6 +495,7 @@ public class CommunitySearchService {
     }
 
     private String normalizeKeyword(String value) {
+        // 키워드 정규화
         if (!StringUtils.hasText(value)) {
             return "";
         }
@@ -489,8 +503,9 @@ public class CommunitySearchService {
         return value.trim().toLowerCase(Locale.ROOT).replace(" ", "");
     }
 
-    private CommunityPostSummaryRes toCommunityPostSummary(CommunityPost post, List<String> tags) {
-        return new CommunityPostSummaryRes(
+    private CommunityPostSummaryOutput toCommunityPostSummary(CommunityPost post, List<String> tags) {
+        // 커뮤니티 게시글 요약 변환
+        return new CommunityPostSummaryOutput(
                 post.getPostId(),
                 post.getTitle(),
                 post.getHandle(),
@@ -506,6 +521,7 @@ public class CommunitySearchService {
     }
 
     private String createExcerpt(String contentText) {
+        // 요약문 생성
         if (!StringUtils.hasText(contentText)) {
             return "";
         }
@@ -517,6 +533,7 @@ public class CommunitySearchService {
     }
 
     private record RankedPost(CommunityPost post, List<String> tags, double score) {
+        // Ranked 게시글 처리
     }
 
 }

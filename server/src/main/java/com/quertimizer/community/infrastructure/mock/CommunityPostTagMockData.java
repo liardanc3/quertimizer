@@ -2,8 +2,8 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
-import com.quertimizer.community.infrastructure.repository.CommunityPostRepository;
-import com.quertimizer.community.infrastructure.repository.CommunityPostTagRepository;
+import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -23,6 +23,7 @@ public class CommunityPostTagMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 게시글 태그 Mock 데이터 적재
         List<CommunityPostTag> postTags = new ArrayList<>();
 
         for (CommunityPost post : communityPostRepository.findAll().stream()
@@ -39,6 +40,7 @@ public class CommunityPostTagMockData {
     }
 
     private List<String> createTags(int postNumber) {
+        // 태그 목록 생성
         if (postNumber <= 15) {
             return List.of(
                     "00001-00001",
@@ -69,6 +71,7 @@ public class CommunityPostTagMockData {
     }
 
     private int resolvePostNumber(String postId) {
+        // 게시글 번호 결정
         return Integer.parseInt(postId.substring(postId.length() - 2));
     }
 }

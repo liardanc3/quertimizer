@@ -1,6 +1,6 @@
 package com.quertimizer.ranking.presentation.dto.response;
 
-import com.quertimizer.ranking.application.result.RankPageResult;
+import com.quertimizer.ranking.application.output.RankPageOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -16,7 +16,7 @@ public class RankPageRes {
     private final int totalPages;
     private final List<RankListItemRes> ranks;
 
-    public static RankPageRes from(RankPageResult result) {
+    public static RankPageRes from(RankPageOutput result) {
         return new RankPageRes(
                 result.currentPage(),
                 result.pageSize(),

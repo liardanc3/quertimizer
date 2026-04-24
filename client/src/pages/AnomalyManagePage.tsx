@@ -54,6 +54,7 @@ const anomalyRanges: Array<{ value: AdminAnomalyRange; label: string }> = [
   { value: 'all', label: '전체' },
   { value: 'custom', label: '사용자 지정' },
 ];
+const anomalyLoadingRows = Array.from({ length: 6 }, (_, index) => index);
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -546,7 +547,25 @@ export function AnomalyManageContent() {
         {activeRange === 'custom' && customRangeErrorMessage ? <p className="admin-anomaly-range-feedback is-error">{customRangeErrorMessage}</p> : null}
 
         <div className={`submit-history-table-shell ${isTrendLoading ? 'is-loading' : ''}`.trim()}>
-          {trendPageData.items.length === 0 && !isTrendLoading ? (
+          {isTrendLoading && trendPageData.items.length === 0 ? (
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-trend-table" role="table" aria-label="이상계정 추이 목록" aria-hidden="true">
+              <div className="submit-history-row submit-history-head" role="row">
+                <div role="columnheader" className="submit-history-head-cell">Handle</div>
+                <div role="columnheader" className="submit-history-head-cell">실행/제출</div>
+                <div role="columnheader" className="submit-history-head-cell">횟수</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단" />
+              </div>
+
+              {anomalyLoadingRows.map((rowIndex) => (
+                <div key={`anomaly-trend-loading-${rowIndex}`} className="submit-history-row submit-history-body" role="row">
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell admin-anomaly-action-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                </div>
+              ))}
+            </div>
+          ) : trendPageData.items.length === 0 ? (
             <div className="submit-history-empty-state">표시할 데이터가 없다.</div>
           ) : (
             <div className="submit-history-table admin-anomaly-table admin-anomaly-trend-table" role="table" aria-label="이상계정 추이 목록">
@@ -622,7 +641,25 @@ export function AnomalyManageContent() {
     return (
       <>
         <div className={`submit-history-table-shell ${isBlockedUserLoading ? 'is-loading' : ''}`.trim()}>
-          {blockedUserPageData.items.length === 0 && !isBlockedUserLoading ? (
+          {isBlockedUserLoading && blockedUserPageData.items.length === 0 ? (
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-user-table" role="table" aria-label="차단 계정 목록" aria-hidden="true">
+              <div className="submit-history-row submit-history-head" role="row">
+                <div role="columnheader" className="submit-history-head-cell">Handle</div>
+                <div role="columnheader" className="submit-history-head-cell">IP</div>
+                <div role="columnheader" className="submit-history-head-cell">차단 일시</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단 해제" />
+              </div>
+
+              {anomalyLoadingRows.map((rowIndex) => (
+                <div key={`anomaly-blocked-user-loading-${rowIndex}`} className="submit-history-row submit-history-body" role="row">
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell admin-anomaly-action-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                </div>
+              ))}
+            </div>
+          ) : blockedUserPageData.items.length === 0 ? (
             <div className="submit-history-empty-state">차단된 계정이 없다.</div>
           ) : (
             <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-user-table" role="table" aria-label="차단 계정 목록">
@@ -697,7 +734,23 @@ export function AnomalyManageContent() {
     return (
       <>
         <div className={`submit-history-table-shell ${isBlockedIpLoading ? 'is-loading' : ''}`.trim()}>
-          {blockedIpPageData.items.length === 0 && !isBlockedIpLoading ? (
+          {isBlockedIpLoading && blockedIpPageData.items.length === 0 ? (
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-ip-table" role="table" aria-label="차단 IP 목록" aria-hidden="true">
+              <div className="submit-history-row submit-history-head" role="row">
+                <div role="columnheader" className="submit-history-head-cell">IP</div>
+                <div role="columnheader" className="submit-history-head-cell">차단 일시</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단 해제" />
+              </div>
+
+              {anomalyLoadingRows.map((rowIndex) => (
+                <div key={`anomaly-blocked-ip-loading-${rowIndex}`} className="submit-history-row submit-history-body" role="row">
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell admin-anomaly-action-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                </div>
+              ))}
+            </div>
+          ) : blockedIpPageData.items.length === 0 ? (
             <div className="submit-history-empty-state">차단된 IP가 없다.</div>
           ) : (
             <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-ip-table" role="table" aria-label="차단 IP 목록">

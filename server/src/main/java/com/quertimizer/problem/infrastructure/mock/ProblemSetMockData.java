@@ -1,7 +1,7 @@
 package com.quertimizer.problem.infrastructure.mock;
 
 import com.quertimizer.problem.domain.entity.ProblemSet;
-import com.quertimizer.problem.infrastructure.repository.ProblemSetRepository;
+import com.quertimizer.problem.application.port.ProblemSetRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -177,6 +177,7 @@ public class ProblemSetMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 문제 테이블셋 Mock 데이터 적재
         problemSetRepository.save(ProblemSet.create(
                 "P00001",
                 TABLE_SET_00001_POSTGRESQL_DDL,

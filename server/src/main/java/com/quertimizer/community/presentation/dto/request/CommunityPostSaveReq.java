@@ -1,5 +1,6 @@
 package com.quertimizer.community.presentation.dto.request;
 
+import com.quertimizer.community.application.input.CommunityPostInput;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -10,29 +11,25 @@ import lombok.NoArgsConstructor;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.quertimizer.community.domain.model.CommunityValidationMessage.POST_CONTENT_LENGTH_EXCEEDED;
-import static com.quertimizer.community.domain.model.CommunityValidationMessage.POST_TITLE_LENGTH_EXCEEDED;
-import static com.quertimizer.community.domain.model.CommunityValidationMessage.POST_TITLE_REQUIRED;
-import static com.quertimizer.community.domain.model.CommunityValidationMessage.TAG_LENGTH_EXCEEDED;
-import static com.quertimizer.community.domain.model.CommunityValidationMessage.TAG_LIMIT_EXCEEDED;
-import static com.quertimizer.community.domain.model.CommunityValidationMessage.TAG_REQUIRED;
-
 @Data
 @NoArgsConstructor
 @Builder
 @AllArgsConstructor
 public class CommunityPostSaveReq {
 
-    @NotBlank(message = POST_TITLE_REQUIRED)
-    @Size(max = 200, message = POST_TITLE_LENGTH_EXCEEDED)
+    @NotBlank(message = "제목을 입력해 주세요.")
+    @Size(max = 200, message = "제목은 최대 200자까지 입력할 수 있습니다.")
     private String title;
 
-    @Size(max = 100000, message = POST_CONTENT_LENGTH_EXCEEDED)
+    @Size(max = 100000, message = "본문은 최대 100000자까지 입력할 수 있습니다.")
     private String contentHtml;
 
     @Builder.Default
-    @Size(max = 10, message = TAG_LIMIT_EXCEEDED)
-    private List<@NotBlank(message = TAG_REQUIRED) @Size(max = 100, message = TAG_LENGTH_EXCEEDED) String> tags =
+    @Size(max = 10, message = "태그는 최대 10개까지 등록할 수 있습니다.")
+    private List<@NotBlank(message = "태그를 입력해 주세요.") @Size(max = 100, message = "태그는 최대 100자까지 입력할 수 있습니다.") String> tags =
             new ArrayList<>();
 
+    public CommunityPostInput toCommunityPostInput() {
+        return new CommunityPostInput(title, contentHtml, tags);
+    }
 }

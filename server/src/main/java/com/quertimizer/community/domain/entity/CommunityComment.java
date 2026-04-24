@@ -42,6 +42,7 @@ public class CommunityComment {
     private LocalDateTime createdAt;
 
     public static CommunityComment create(String postId, String handle, Long parentCommentId, String content) {
+        // 댓글 생성
         return new CommunityComment(
                 postId,
                 handle,
@@ -68,10 +69,12 @@ public class CommunityComment {
     }
 
     public void increaseLikeCount() {
+        // 좋아요 수 증가
         this.likeCount += 1;
     }
 
     public void decreaseLikeCount() {
+        // 좋아요 수 감소
         this.likeCount = Math.max(0, this.likeCount - 1);
     }
 

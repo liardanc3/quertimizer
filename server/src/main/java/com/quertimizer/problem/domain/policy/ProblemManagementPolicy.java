@@ -18,12 +18,14 @@ import static com.quertimizer.problem.domain.model.ProblemPermissionKey.NEW;
 public class ProblemManagementPolicy {
 
     public void validateProblemManagementUser(User user) {
+        // 문제 관리 사용자 검증
         if (user.getResolvedRole() != UserRole.ADMIN && user.getResolvedRole() != UserRole.PROBLEM_GENERATOR) {
             throw new BusinessException(PROBLEM_MANAGEMENT_ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN);
         }
     }
 
     public void validateProblemSetAccess(User currentUser, Set<String> permissionKeys, String scopedProblemSetId) {
+        // 문제 테이블셋 접근 검증
         if (currentUser.getResolvedRole() == UserRole.ADMIN) {
             return;
         }
@@ -67,6 +69,7 @@ public class ProblemManagementPolicy {
     }
 
     public String normalizePermissionKey(String permissionKey) {
+        // 권한 키 정규화
         if (permissionKey == null || permissionKey.isBlank()) {
             return "";
         }
@@ -84,10 +87,12 @@ public class ProblemManagementPolicy {
     }
 
     public boolean isScopedProblemSetId(String problemSetId) {
+        // 스코프 문제 테이블셋 번호 여부 확인
         return problemSetId.matches("^[PO]\\d{5}$");
     }
 
     public boolean isScopedProblemId(String permissionKey) {
+        // 스코프 문제 번호 여부 확인
         return permissionKey.matches("^[PO]\\d{5}-\\d{5}$");
     }
 

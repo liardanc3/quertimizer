@@ -7,19 +7,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import static com.quertimizer.auth.domain.model.AuthValidationMessage.EMAIL_FORMAT_INVALID_WITH_PERIOD;
-import static com.quertimizer.auth.domain.model.AuthValidationMessage.EMAIL_REQUIRED;
-
 @Data
 @NoArgsConstructor
 @Builder
 @AllArgsConstructor
 public class DuplicateCheckEmailReq {
 
-    @NotBlank(message = EMAIL_REQUIRED)
+    @NotBlank(message = "이메일을 입력해 주세요")
     @Pattern(
             regexp = "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
-            message = EMAIL_FORMAT_INVALID_WITH_PERIOD
+            message = "올바른 이메일 형식으로 입력해 주세요."
     )
     private String email;
 }

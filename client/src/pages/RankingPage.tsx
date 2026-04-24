@@ -11,6 +11,7 @@ import './SubmitHistoryPage.css';
 import './RankingPage.css';
 
 const PAGE_SIZE = 100;
+const rankingLoadingRows = Array.from({ length: 8 }, (_, index) => index);
 
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
@@ -385,7 +386,16 @@ export default function RankingPage() {
                 </div>
               </div>
 
-              {rankedEntries.length === 0 && !isLoading ? (
+              {isLoading && rankedEntries.length === 0 ? (
+                rankingLoadingRows.map((rowIndex) => (
+                  <div key={`ranking-loading-${rowIndex}`} className="submit-history-row submit-history-body ranking-body" role="row" aria-hidden="true">
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  </div>
+                ))
+              ) : rankedEntries.length === 0 ? (
                 <div className="submit-history-row submit-history-empty-row" role="row">
                   <span className="submit-history-empty-cell" role="cell">
                     조건에 맞는 랭킹이 없습니다.

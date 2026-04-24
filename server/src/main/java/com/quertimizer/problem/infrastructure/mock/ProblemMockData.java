@@ -1,7 +1,7 @@
 package com.quertimizer.problem.infrastructure.mock;
 
 import com.quertimizer.problem.domain.entity.Problem;
-import com.quertimizer.problem.infrastructure.repository.ProblemRepository;
+import com.quertimizer.problem.application.port.ProblemRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -59,17 +59,36 @@ public class ProblemMockData {
 
     @PostConstruct
     public void seed() {
+        // 기본 문제 Mock 데이터 적재
         saveProblem("P00001-00001", "P00001", ProblemSetMockData.TABLE_SET_00001_POSTGRESQL_DDL, true, false);
         saveProblem("O00001-00001", "O00001", ProblemSetMockData.TABLE_SET_00001_ORACLE_DDL, false, true);
         saveProblem("P00001-00002", "P00001", ProblemSetMockData.TABLE_SET_00001_POSTGRESQL_DDL, true, false);
         saveProblem("O00001-00002", "O00001", ProblemSetMockData.TABLE_SET_00001_ORACLE_DDL, false, true);
+
+        // 목록 확인용 PostgreSQL/Oracle 문제 Mock 데이터 추가 적재
+        for (int sequence = 3; sequence <= 12; sequence++) {
+            saveProblem(
+                    "P00001-%05d".formatted(sequence), "P00001", "PostgreSQL 주문 집계 연습 %02d".formatted(sequence),
+                    ProblemSetMockData.TABLE_SET_00001_POSTGRESQL_DDL, true, false
+            );
+            saveProblem(
+                    "O00001-%05d".formatted(sequence), "O00001", "Oracle 주문 집계 연습 %02d".formatted(sequence),
+                    ProblemSetMockData.TABLE_SET_00001_ORACLE_DDL, false, true
+            );
+        }
     }
 
     private void saveProblem(String problemId, String problemSetId, String ddl, boolean isPostgresql, boolean isOracle) {
+        // 기본 제목으로 문제 저장
+        saveProblem(problemId, problemSetId, "3월 고객별 주문 건수와 총 주문 금액 조회", ddl, isPostgresql, isOracle);
+    }
+
+    private void saveProblem(String problemId, String problemSetId, String title, String ddl, boolean isPostgresql, boolean isOracle) {
+        // 문제 저장
         problemRepository.save(Problem.create(
                 problemId,
                 problemSetId,
-                "3월 고객별 주문 건수와 총 주문 금액 조회",
+                title,
                 DESCRIPTION,
                 ddl,
                 isPostgresql,

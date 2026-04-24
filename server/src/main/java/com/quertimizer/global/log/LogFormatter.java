@@ -34,22 +34,27 @@ public class LogFormatter {
     private final ObjectMapper objectMapper;
 
     public String formatHttpLine(String actor, String label, String message) {
+        // HTTP 로그 라인 포맷
         return formatLine(actor, label, message);
     }
 
     public String formatWebSocketLine(String actor, String label, String message) {
+        // WebSocket 로그 라인 포맷
         return formatLine(actor, label, message);
     }
 
     public List<String> formatRequestBodyLines(String prefix, String body) {
+        // 요청 본문 로그 라인 포맷
         return formatPayload(prefix, body, REQUEST_FIELD_MAX_LENGTH, REQUEST_TRUNCATED_SUFFIX);
     }
 
     public List<String> formatResponseBodyLines(String prefix, String body) {
+        // 응답 본문 로그 라인 포맷
         return formatPayload(prefix, body, RESPONSE_FIELD_MAX_LENGTH, RESPONSE_TRUNCATED_SUFFIX);
     }
 
     public List<String> formatQueryStringLines(String prefix, String queryString) {
+        // 쿼리 문자열 로그 라인 포맷
         if (queryString == null || queryString.isBlank()) {
             return List.of();
         }
@@ -61,10 +66,12 @@ public class LogFormatter {
     }
 
     public String prefix(String actor) {
+        // 로그 prefix 생성
         return "[" + String.format("%" + ACTOR_WIDTH + "s", normalizeActor(actor)) + "] ";
     }
 
     private List<String> formatPayload(String prefix, String body, int maxFieldLength, String truncatedSuffix) {
+        // 로그 페이로드 포맷
         if (body == null || body.isBlank()) {
             return List.of();
         }
@@ -81,6 +88,7 @@ public class LogFormatter {
     }
 
     private String formatLine(String actor, String label, String message) {
+        // 로그 라인 포맷
         if (message == null || message.isBlank()) {
             return prefix(actor) + label;
         }
@@ -89,6 +97,7 @@ public class LogFormatter {
     }
 
     private String tryFormatJson(String body, int maxFieldLength, String truncatedSuffix) {
+        // JSON 로그 포맷 시도
         try {
             JsonNode jsonNode = objectMapper.readTree(body);
             JsonNode sanitizedJsonNode = sanitizeJsonNode(jsonNode, null, maxFieldLength, truncatedSuffix);
@@ -99,6 +108,7 @@ public class LogFormatter {
     }
 
     private JsonNode sanitizeJsonNode(JsonNode jsonNode, String fieldName, int maxFieldLength, String truncatedSuffix) {
+        // JSON 노드 정리
         if (jsonNode.isObject()) {
 
             // 객체 필드별 마스킹, 길이 제한 적용
@@ -136,6 +146,7 @@ public class LogFormatter {
     }
 
     private String truncateText(String fieldName, String value, int maxFieldLength, String truncatedSuffix) {
+        // 로그 텍스트 길이 제한
         if (value == null) {
             return null;
         }
@@ -153,11 +164,13 @@ public class LogFormatter {
     }
 
     private boolean isSensitiveKey(String fieldName) {
+        // 민감 키 여부 확인
         String normalizedFieldName = fieldName.toLowerCase(Locale.ROOT);
         return SENSITIVE_KEYS.stream().anyMatch(normalizedFieldName::contains);
     }
 
     private String sanitizeQueryParameter(String queryParameter) {
+        // 쿼리 파라미터 길이 제한 적용
         int separatorIndex = queryParameter.indexOf('=');
         if (separatorIndex < 0) {
             return truncateText(null, queryParameter, REQUEST_FIELD_MAX_LENGTH, REQUEST_TRUNCATED_SUFFIX);
@@ -169,6 +182,7 @@ public class LogFormatter {
     }
 
     private String normalizeActor(String actor) {
+        // 주체 정규화
         if (actor == null || actor.isBlank()) {
             return "unknown";
         }
@@ -188,6 +202,7 @@ public class LogFormatter {
     }
 
     private List<String> prefixEachLine(String prefix, String value) {
+        // 각 로그 라인에 prefix 추가
         return Arrays.stream(value.split("\\R", -1))
                 .map(line -> prefix + line)
                 .toList();

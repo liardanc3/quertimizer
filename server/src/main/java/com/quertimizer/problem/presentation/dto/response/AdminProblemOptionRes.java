@@ -1,6 +1,6 @@
 package com.quertimizer.problem.presentation.dto.response;
 
-import com.quertimizer.problem.application.result.AdminProblemOptionResult;
+import com.quertimizer.problem.application.output.AdminProblemOptionOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -10,7 +10,7 @@ public class AdminProblemOptionRes {
 
     private final String problemId;
 
-    public static AdminProblemOptionRes from(AdminProblemOptionResult result) {
+    public static AdminProblemOptionRes from(AdminProblemOptionOutput result) {
         return new AdminProblemOptionRes(result.problemId());
     }
 }

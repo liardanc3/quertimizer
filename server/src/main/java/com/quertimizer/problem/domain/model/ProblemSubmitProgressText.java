@@ -49,6 +49,7 @@ public enum ProblemSubmitProgressText {
     }
 
     public String getText() {
+        // 문구 조회
         return text;
     }
 

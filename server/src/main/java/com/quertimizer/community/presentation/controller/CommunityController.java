@@ -1,5 +1,14 @@
 package com.quertimizer.community.presentation.controller;
 
+import com.quertimizer.community.application.usecase.AddCommunityComment;
+import com.quertimizer.community.application.usecase.CreateCommunityPost;
+import com.quertimizer.community.application.usecase.DeleteCommunityPost;
+import com.quertimizer.community.application.usecase.GetCommunityPostDetail;
+import com.quertimizer.community.application.usecase.GetCommunityPosts;
+import com.quertimizer.community.application.usecase.GetCommunityTagSuggestions;
+import com.quertimizer.community.application.usecase.ToggleCommunityCommentLike;
+import com.quertimizer.community.application.usecase.ToggleCommunityPostLike;
+import com.quertimizer.community.application.usecase.UpdateCommunityPost;
 import com.quertimizer.community.presentation.dto.request.CommunityCommentCreateReq;
 import com.quertimizer.community.presentation.dto.request.CommunityPostSaveReq;
 import com.quertimizer.community.presentation.dto.response.CommunityCommentRes;
@@ -7,8 +16,7 @@ import com.quertimizer.community.presentation.dto.response.CommunityPostDetailRe
 import com.quertimizer.community.presentation.dto.response.CommunityPostPageRes;
 import com.quertimizer.community.presentation.dto.response.CommunityReactionRes;
 import com.quertimizer.community.presentation.dto.response.CommunityTagSuggestionRes;
-import com.quertimizer.community.application.service.CommunityService;
-import com.quertimizer.auth.application.service.AuthService;
+import com.quertimizer.community.presentation.support.CommunitySupport;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,15 +31,23 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.net.URI;
 import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
 public class CommunityController {
 
-    private final CommunityService communityService;
-    private final AuthService authService;
+    private final GetCommunityPosts getCommunityPosts;
+    private final GetCommunityPostDetail getCommunityPostDetail;
+    private final CreateCommunityPost createCommunityPost;
+    private final UpdateCommunityPost updateCommunityPost;
+    private final DeleteCommunityPost deleteCommunityPost;
+    private final ToggleCommunityPostLike toggleCommunityPostLike;
+    private final AddCommunityComment addCommunityComment;
+    private final ToggleCommunityCommentLike toggleCommunityCommentLike;
+    private final GetCommunityTagSuggestions getCommunityTagSuggestions;
+
+    private final CommunitySupport communitySupport;
 
     @GetMapping("/community/posts")
     public ResponseEntity<CommunityPostPageRes> getPosts(@RequestParam(defaultValue = "1") int page,
@@ -39,46 +55,50 @@ public class CommunityController {
                                                          @RequestParam(required = false) String tag,
                                                          @RequestParam(defaultValue = "all") String category,
                                                          @RequestParam(defaultValue = "default") String sortKey) {
-
         // 게시글 목록 검색, 태그 필터, 정렬, 페이징 조회
-        return ResponseEntity.ok(communityService.getPosts(page, search, tag, category, sortKey));
+        return ResponseEntity.ok(CommunityPostPageRes.from(
+                getCommunityPosts.execute(page, search, tag, category, sortKey)
+        ));
     }
 
     @GetMapping("/community/posts/{postId}")
     public ResponseEntity<CommunityPostDetailRes> getPostDetail(@PathVariable String postId,
                                                                 Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 게시글 상세 조회
-        return ResponseEntity.of(communityService.getPostDetail(postId, currentHandle));
+        return ResponseEntity.of(getCommunityPostDetail.execute(postId, currentHandle).map(CommunityPostDetailRes::from));
     }
 
     @PostMapping("/community/posts")
     public ResponseEntity<Void> createPost(@Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 게시글 작성
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String createdPostId = communityService.createPost(currentHandle, request);
-        return ResponseEntity.created(URI.create("/community/posts/" + createdPostId)).build();
+        String createdPostId = createCommunityPost.execute(currentHandle, request.toCommunityPostInput());
+        return ResponseEntity.created(communitySupport.buildPostLocation(createdPostId)).build();
     }
 
     @PutMapping("/community/posts/{postId}")
     public ResponseEntity<Void> updatePost(@PathVariable String postId,
                                            @Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 본인 게시글 수정
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        if (communityService.updatePost(postId, currentHandle, request).isPresent()) {
+        if (updateCommunityPost.execute(postId, currentHandle, request.toCommunityPostInput()).isPresent()) {
             return ResponseEntity.noContent().build();
         }
 
@@ -87,14 +107,15 @@ public class CommunityController {
 
     @DeleteMapping("/community/posts/{postId}")
     public ResponseEntity<Void> deletePost(@PathVariable String postId, Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 본인 게시글 삭제
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return communityService.deletePost(postId, currentHandle)
+        return deleteCommunityPost.execute(postId, currentHandle)
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
@@ -102,56 +123,52 @@ public class CommunityController {
     @PostMapping("/community/posts/{postId}/likes")
     public ResponseEntity<CommunityReactionRes> togglePostLike(@PathVariable String postId,
                                                                Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 게시글 좋아요 토글
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(communityService.togglePostLike(postId, currentHandle));
+        return ResponseEntity.of(toggleCommunityPostLike.execute(postId, currentHandle).map(CommunityReactionRes::from));
     }
 
     @PostMapping("/community/posts/{postId}/comments")
     public ResponseEntity<CommunityCommentRes> addComment(@PathVariable String postId,
                                                           @Valid @RequestBody CommunityCommentCreateReq request,
                                                           Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 댓글, 대댓글 작성
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(communityService.addComment(postId, currentHandle, request));
+        return ResponseEntity.of(addCommunityComment.execute(postId, currentHandle, request.toCommunityCommentInput())
+                .map(CommunityCommentRes::from));
     }
 
     @PostMapping("/community/comments/{commentId}/likes")
     public ResponseEntity<CommunityReactionRes> toggleCommentLike(@PathVariable Long commentId,
                                                                   Authentication authentication) {
-        String currentHandle = resolveCurrentHandle(authentication);
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
         // 댓글 좋아요 토글
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(communityService.toggleCommentLike(commentId, currentHandle));
+        return ResponseEntity.of(toggleCommunityCommentLike.execute(commentId, currentHandle).map(CommunityReactionRes::from));
     }
 
     @GetMapping("/community/tags/suggestions")
     public ResponseEntity<List<CommunityTagSuggestionRes>> getTagSuggestions(@RequestParam(required = false) String query) {
-
         // 게시글 작성용 태그 자동완성 조회
-        return ResponseEntity.ok(communityService.getTagSuggestions(query));
+        return ResponseEntity.ok(getCommunityTagSuggestions.execute(query).stream()
+                .map(CommunityTagSuggestionRes::from)
+                .toList());
     }
-
-    private String resolveCurrentHandle(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
-            return null;
-        }
-
-        return authService.resolveCurrentHandle(authentication.getName());
-    }
-
 }

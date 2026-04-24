@@ -1,6 +1,6 @@
 package com.quertimizer.alarm.presentation.dto.response;
 
-import com.quertimizer.alarm.domain.entity.AlarmTemplate;
+import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -12,9 +12,9 @@ public class AlarmTemplateRes {
     private final String sentence;
     private final String description;
 
-    public static AlarmTemplateRes from(AlarmTemplate alarmTemplate) {
+    public static AlarmTemplateRes from(AlarmTemplateOutput alarmTemplate) {
         return new AlarmTemplateRes(
-                alarmTemplate.getAlarmType(),
+                alarmTemplate.getType(),
                 alarmTemplate.getSentence(),
                 alarmTemplate.getDescription()
         );

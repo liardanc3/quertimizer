@@ -18,6 +18,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        // WebSocket 핸들러 등록
 
         registry.addHandler(sessionWebSocketHandler, "/ws/session")
                 .addInterceptors(sessionHandshakeInterceptor)

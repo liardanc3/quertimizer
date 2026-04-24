@@ -15,6 +15,7 @@ public enum ProblemQueryResultText {
     }
 
     public String getText() {
+        // 문구 조회
         return text;
     }
 

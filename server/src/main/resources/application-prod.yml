@@ -14,6 +14,12 @@ spring:
         default_schema: quertimizer
         format_sql: true
 
+  session:
+    store-type: jdbc
+    jdbc:
+      initialize-schema: always
+      schema: classpath:schema-session-postgresql.sql
+
   elasticsearch:
     uris: ${SPRING_ELASTICSEARCH_URIS}
     username: ${SPRING_ELASTICSEARCH_USERNAME}

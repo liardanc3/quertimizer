@@ -61,6 +61,8 @@ type ProfileSubmissionModalState =
   | { type: 'plan'; history: SubmitHistoryEntry }
   | null;
 
+const profileAlarmLoadingRows = Array.from({ length: 5 }, (_, index) => index);
+
 type SubmitHistorySqlTokenKind =
   | 'keyword'
   | 'explain-keyword'
@@ -1914,7 +1916,14 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <div role="columnheader" className="submit-history-head-cell">날짜</div>
                   </div>
 
-                  {profileAlarmPageData.alarms.map((alarm) => (
+                  {isProfileAlarmLoading && profileAlarmPageData.alarms.length === 0 ? (
+                    profileAlarmLoadingRows.map((rowIndex) => (
+                      <div key={`profile-alarm-loading-${rowIndex}`} className="submit-history-row submit-history-body profile-alarm-row" role="row" aria-hidden="true">
+                        <span className="submit-history-cell profile-alarm-cell" role="cell"><span className="wave-loading-placeholder is-long" /></span>
+                        <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                      </div>
+                    ))
+                  ) : profileAlarmPageData.alarms.map((alarm) => (
                     <article key={alarm.alarmId} className={`submit-history-row submit-history-body profile-alarm-row ${!alarm.read ? 'is-unread' : ''}`.trim()} role="row">
                       <span className="submit-history-cell profile-alarm-cell" role="cell" data-label="알림 내용">
                         {renderProfileAlarmSentence(alarm)}

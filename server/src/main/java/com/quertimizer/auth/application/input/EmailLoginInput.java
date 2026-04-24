@@ -1,29 +1,23 @@
 package com.quertimizer.auth.application.input;
 
-import lombok.Getter;
+import com.quertimizer.global.util.CanonicalCode;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
 import java.util.Locale;
 import java.util.Optional;
 
-@Getter
+@CanonicalCode
+@Data
+@AllArgsConstructor
 public class EmailLoginInput {
 
     private final String email;
     private final String password;
     private final String accessIp;
 
-    private EmailLoginInput(String email, String password, String accessIp) {
-        this.email = email;
-        this.password = password;
-        this.accessIp = accessIp;
-    }
-
     public static EmailLoginInput of(String email, String password, String accessIp) {
-        return new EmailLoginInput(
-                normalizeEmail(email),
-                password,
-                normalizeAccessIp(accessIp)
-        );
+        return new EmailLoginInput(normalizeEmail(email), password, normalizeAccessIp(accessIp));
     }
 
     private static String normalizeEmail(String email) {

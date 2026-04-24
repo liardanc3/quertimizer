@@ -1,0 +1,25 @@
+package com.quertimizer.community.application.port;
+
+import com.quertimizer.community.domain.entity.CommunityComment;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface CommunityCommentRepository {
+
+    List<CommunityComment> findAll();
+
+    Optional<CommunityComment> findById(Long commentId);
+
+    <S extends CommunityComment> S save(S communityComment);
+
+    List<CommunityComment> findAllByPostIdOrderByCreatedAtAsc(String postId);
+
+    List<CommunityComment> findAllByHandleOrderByCreatedAtDesc(String handle);
+
+    List<CommunityComment> findAllByCommentIdIn(List<Long> commentIds);
+
+    long countByHandle(String handle);
+
+    void deleteAllByPostId(String postId);
+}

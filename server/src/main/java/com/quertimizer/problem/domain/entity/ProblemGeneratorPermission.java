@@ -17,14 +17,17 @@ public class ProblemGeneratorPermission {
     private ProblemGeneratorPermissionId id;
 
     public static ProblemGeneratorPermission create(String handle, String problemId) {
+        // 문제 생성 권한 항목 생성
         return new ProblemGeneratorPermission(ProblemGeneratorPermissionId.create(handle, problemId));
     }
 
     public String getHandle() {
+        // Handle 조회
         return id.getHandle();
     }
 
     public String getProblemId() {
+        // 문제 번호 조회
         return id.getProblemId();
     }
 

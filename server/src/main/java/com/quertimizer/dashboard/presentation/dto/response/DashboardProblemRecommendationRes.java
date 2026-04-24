@@ -1,6 +1,6 @@
 package com.quertimizer.dashboard.presentation.dto.response;
 
-import com.quertimizer.dashboard.application.result.DashboardProblemRecommendationResult;
+import com.quertimizer.dashboard.application.output.DashboardProblemRecommendationOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -17,7 +17,7 @@ public class DashboardProblemRecommendationRes {
     private final double spreadRate;
     private final boolean solvedByCurrentUser;
 
-    public static DashboardProblemRecommendationRes from(DashboardProblemRecommendationResult result) {
+    public static DashboardProblemRecommendationRes from(DashboardProblemRecommendationOutput result) {
         return new DashboardProblemRecommendationRes(
                 result.problemId(),
                 result.title(),

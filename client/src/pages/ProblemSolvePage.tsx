@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
 import { Fragment } from 'react';
@@ -117,6 +117,8 @@ function createEmptySolveCommunityPage(): CommunityPostPage {
     posts: [],
   };
 }
+
+const solveRelatedLoadingRows = Array.from({ length: 6 }, (_, index) => index);
 
 function createEmptySolvePlanFilters(): SubmitHistoryPlanFilters {
   return {
@@ -2784,7 +2786,6 @@ function SolvePageAuthOverlay({
       setResetStatusMessage(null);
       await resetPassword({
         email: normalizedResetEmail,
-        code: normalizedResetCode,
         password: newPassword,
       });
       setResetStatusMessage(RESET_PASSWORD_CHANGED_MESSAGE);
@@ -3660,6 +3661,7 @@ function PanelExternalWindow({ panelKey, title, layout, onClose, children }: Pan
 export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const sqlEditorSelectionRef = useRef<SqlEditorSelection>({ start: 0, end: 0 });
+  const sqlEditorHeightRef = useRef(SQL_EDITOR_MIN_HEIGHT);
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<ProblemSolveFavoriteSnapshot>('problemSolve'), []);
   const favoriteSelectionRestoreRef = useRef<SqlEditorSelection | null>(favoriteRestoreSnapshot?.editorSelection ?? null);
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
@@ -3671,7 +3673,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const { defaultDbms, isAuthenticated, isReady, handle } = useMockSession();
   const previousAuthenticationStateRef = useRef(isAuthenticated);
-  const fallbackProblem = createFallbackProblemDetail(problemId);
+  const fallbackProblem = useMemo(() => createFallbackProblemDetail(problemId), [problemId]);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
   const [executionRuns, setExecutionRuns] = useState<ExecutionStatementRun[]>([]);
@@ -3706,7 +3708,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [authOverlayMode, setAuthOverlayMode] = useState<SolveAuthOverlayMode | null>(null);
   const [sqlEditorElement, setSqlEditorElement] = useState<HTMLTextAreaElement | null>(null);
   const problem = fallbackProblem;
-  const availableDbms = getAvailableDbms(problem);
+  const availableDbms = useMemo(() => getAvailableDbms(problem), [problem]);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
     favoriteRestoreSnapshot?.selectedDbms != null && availableDbms.includes(favoriteRestoreSnapshot.selectedDbms)
       ? favoriteRestoreSnapshot.selectedDbms
@@ -3727,6 +3729,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [taggedPostPageJumpDraft, setTaggedPostPageJumpDraft] = useState('1');
   const [relatedModalState, setRelatedModalState] = useState<SolveRelatedModalState>(null);
   const [sql, setSql] = useState(() => favoriteRestoreSnapshot?.sql ?? '');
+  const deferredSql = useDeferredValue(sql);
   const [sqlEditorFontSize, setSqlEditorFontSize] = useState(SQL_EDITOR_DEFAULT_FONT_SIZE);
   const getPanelTitle = (panelKey: PanelKey) =>
     panelKey === 'editor' ? `${getDbmsLabel(selectedDbms)} 에디터` : panelLabels[panelKey];
@@ -3780,7 +3783,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     syncSqlEditorSelectionFromElement(element);
   }, [syncSqlEditorSelectionFromElement]);
   const executionStatementMarkerRuns = useMemo(() => {
-    const currentStatementSegments = parseSqlStatements(sql);
+    const currentStatementSegments = parseSqlStatements(deferredSql);
     const remainingRuns = executionRuns.filter((run) => run.status !== 'idle');
 
     return currentStatementSegments.flatMap((segment) => {
@@ -3798,7 +3801,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         },
       ];
     });
-  }, [executionRuns, sql]);
+  }, [deferredSql, executionRuns]);
   const autocompleteItems = useMemo(
     () => [
       ...SQL_AUTOCOMPLETE_KEYWORDS.map(
@@ -4159,8 +4162,16 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     const textarea = sqlEditorElement;
-    textarea.style.height = '0px';
-    textarea.style.height = `${Math.max(SQL_EDITOR_MIN_HEIGHT, textarea.scrollHeight)}px`;
+    textarea.style.height = 'auto';
+
+    const nextHeight = Math.max(SQL_EDITOR_MIN_HEIGHT, textarea.scrollHeight);
+    if (sqlEditorHeightRef.current === nextHeight) {
+      textarea.style.height = `${nextHeight}px`;
+      return;
+    }
+
+    textarea.style.height = `${nextHeight}px`;
+    sqlEditorHeightRef.current = nextHeight;
   }, [collapsedCards.editor, sql, sqlEditorElement, sqlEditorFontSize]);
 
   useEffect(() => {
@@ -4181,7 +4192,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       setExecutionStatementMarkerLayout(
         measureExecutionStatementMarkerLayout(
           sqlEditorElement,
-          sql,
+          deferredSql,
           executionStatementMarkerRuns.map((marker) => marker.startOffset),
           sqlEditorFontSize,
         ),
@@ -4211,10 +4222,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     };
   }, [
     detachedPanels.editor,
+    deferredSql,
     executionStatementMarkerRuns,
     externalWindowPanels.editor,
     panelVisibility.editor,
-    sql,
     sqlEditorElement,
     sqlEditorFontSize,
     visibleExternalWindows.length,
@@ -5627,7 +5638,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                           return;
                         }
 
-                        if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
                           return;
                         }
 
@@ -5950,7 +5961,19 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               <div role="columnheader" className="submit-history-head-cell">실행계획요소</div>
             </div>
 
-            {mySubmitHistoryPage.histories.length === 0 && !isMySubmitLoading ? (
+            {isMySubmitLoading && mySubmitHistoryPage.histories.length === 0 ? (
+              solveRelatedLoadingRows.map((rowIndex) => (
+                <div key={`solve-related-submit-loading-${rowIndex}`} className="submit-history-row submit-history-body solve-related-table-row" role="row" aria-hidden="true">
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                </div>
+              ))
+            ) : mySubmitHistoryPage.histories.length === 0 ? (
               <div className="submit-history-row submit-history-empty-row" role="row">
                 <span className="submit-history-empty-cell" role="cell">이 문제에 대한 내 제출이 없습니다.</span>
               </div>
@@ -6100,7 +6123,22 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               <div role="columnheader" className="submit-history-head-cell">댓글</div>
             </div>
 
-            {taggedPostPage.posts.length === 0 && !isTaggedPostLoading ? (
+            {isTaggedPostLoading && taggedPostPage.posts.length === 0 ? (
+              solveRelatedLoadingRows.map((rowIndex) => (
+                <div key={`solve-related-community-loading-${rowIndex}`} className="submit-history-row submit-history-body solve-related-table-row" role="row" aria-hidden="true">
+                  <span className="submit-history-cell solve-related-community-category" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <div className="submit-history-cell solve-related-community-title-cell" role="cell">
+                    <span className="wave-loading-placeholder is-long" />
+                    <span className="wave-loading-placeholder is-medium" />
+                  </div>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                </div>
+              ))
+            ) : taggedPostPage.posts.length === 0 ? (
               <div className="submit-history-row submit-history-empty-row" role="row">
                 <span className="submit-history-empty-cell" role="cell">이 문제 번호로 태그된 게시글이 없습니다.</span>
               </div>
@@ -6239,7 +6277,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <ProblemDetailContent
         detail={problemDetail}
         selectedDbms={selectedDbms}
-        afterSectionsContent={inlineDetailPanels}
       />
     ) : problemLoadError ? (
       <PageLoadFailureState className="solve-related-empty-state" />
@@ -6259,12 +6296,40 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       ? renderSubmitPanel(false)
       : null;
   const inlineDetailPanels = [inlineEditorPanel, inlineSubmitPanel].filter((panel): panel is ReactNode => panel != null);
+  const problemAfterSections = contentTab === 'problem' && problemDetail
+    ? inlineDetailPanels.map((panel, index) => (
+        <section key={`solve-problem-after-section-${index}`} className="solve-detail-section solve-detail-section-after-content">
+          {panel}
+        </section>
+      ))
+    : null;
 
   if (!problemLoadError && problemDetail == null) {
     return (
       <div className="page-stack solve-page-loading-state">
-        <section className="page-loading-shell" aria-label="Loading problem" aria-busy="true">
-          <span className="page-loading-spinner" aria-hidden="true" />
+        <section className="page-loading-shell solve-page-loading-shell" aria-label="Loading problem" aria-busy="true">
+          <div className="solve-page-loading-card" aria-hidden="true">
+            <div className="solve-page-loading-tabs">
+              <span className="wave-loading-placeholder is-medium" />
+              <span className="wave-loading-placeholder is-medium" />
+              <span className="wave-loading-placeholder is-medium" />
+            </div>
+
+            <div className="solve-page-loading-panel">
+              <span className="wave-loading-placeholder is-long" />
+              <span className="wave-loading-placeholder is-medium" />
+              <span className="wave-loading-placeholder is-long" />
+              <span className="wave-loading-placeholder is-long" />
+            </div>
+
+            <div className="solve-page-loading-panel is-editor">
+              <span className="wave-loading-placeholder is-long" />
+              <span className="wave-loading-placeholder is-long" />
+              <span className="wave-loading-placeholder is-medium" />
+              <span className="wave-loading-placeholder is-long" />
+              <span className="wave-loading-placeholder is-short" />
+            </div>
+          </div>
         </section>
       </div>
     );
@@ -6320,6 +6385,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         </div>
         {renderActiveContentTab()}
       </section>
+
+      {problemAfterSections}
 
       {contentTab === 'problem' && !problemDetail ? inlineDetailPanels : null}
 

@@ -11,6 +11,7 @@ public enum FavoriteFailReason {
     }
 
     public String getMessage() {
+        // 메시지 조회
         return message;
     }
 

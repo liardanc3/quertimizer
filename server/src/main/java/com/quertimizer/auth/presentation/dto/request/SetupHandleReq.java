@@ -1,6 +1,4 @@
 package com.quertimizer.auth.presentation.dto.request;
-
-import com.quertimizer.auth.application.input.SetupHandleInput;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
@@ -20,8 +18,4 @@ public class SetupHandleReq {
             message = "영문, 숫자, 언더스코어(_)와 하이픈(-)만 사용할 수 있으며 최대 15자까지 입력할 수 있습니다."
     )
     private String handle;
-
-    public SetupHandleInput toSetupHandleInput() {
-        return new SetupHandleInput(handle);
-    }
 }

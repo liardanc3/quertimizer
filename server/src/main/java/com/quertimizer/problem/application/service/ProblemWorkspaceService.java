@@ -51,6 +51,7 @@ public class ProblemWorkspaceService {
     private final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor(new CleanupThreadFactory());
 
     public WorkspaceHandle prepareWorkspace(String handle, String problemId, String socketId) {
+        // 인터랙티브 실행용 작업 스키마를 준비
         Problem problem = problemStore.findProblem(problemId)
                 .orElseThrow(() -> new IllegalArgumentException(PROBLEM_NOT_FOUND.getMessage()));
 
@@ -81,19 +82,23 @@ public class ProblemWorkspaceService {
     }
 
     public void markActivity(String socketId) {
+        // 소켓 활동 시각을 갱신
         findWorkspaceBySocketId(socketId)
                 .ifPresent(workspaceContext -> workspaceContext.lastActivityAt = Instant.now());
     }
 
     public void handleConnectionClose(String socketId) {
+        // 연결 종료에 맞춰 작업 스키마를 정리 예약
         releaseWorkspace(socketId, false);
     }
 
     public void handleExplicitLeave(String socketId) {
+        // 명시적 이탈 시 작업 스키마를 즉시 정리
         releaseWorkspace(socketId, true);
     }
 
     public void cleanupInactiveWorkspaces() {
+        // 장시간 비활성 작업 스키마를 정리
         Instant now = Instant.now();
 
         // 비활성 작업용 스키마 정리
@@ -113,7 +118,6 @@ public class ProblemWorkspaceService {
     }
 
     public void cleanupResidualWorkspaces() {
-
         // 서버 재시작 뒤 잔여 작업용 스키마 정리
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement();
@@ -139,10 +143,12 @@ public class ProblemWorkspaceService {
 
     @PreDestroy
     public void shutdownCleanupExecutor() {
+        // 작업 스키마 정리 스레드를 종료
         cleanupExecutor.shutdownNow();
     }
 
     private void releaseWorkspace(String socketId, boolean cleanupImmediately) {
+        // 소켓 연결 종료 후 작업 스키마 상태 정리
         String workspaceKey = workspaceKeyBySocketId.remove(socketId);
         if (workspaceKey == null) {
             return;
@@ -154,7 +160,6 @@ public class ProblemWorkspaceService {
         }
 
         synchronized (workspaceContext.monitor) {
-
             // 연결 종료 뒤 소켓 정보 제거
             workspaceContext.activeSocketIds.remove(socketId);
             workspaceContext.lastActivityAt = Instant.now();
@@ -173,6 +178,7 @@ public class ProblemWorkspaceService {
     }
 
     private void scheduleCleanup(WorkspaceContext workspaceContext) {
+        // 작업 스키마 정리 예약
         cancelCleanup(workspaceContext);
         workspaceContext.cleanupFuture = cleanupExecutor.schedule(
                 () -> cleanupWorkspaceByKey(workspaceContext.workspaceKey),
@@ -182,6 +188,7 @@ public class ProblemWorkspaceService {
     }
 
     private void cleanupWorkspaceByKey(String workspaceKey) {
+        // 작업 스키마 정리 대상 조회
         WorkspaceContext workspaceContext = workspaceByKey.get(workspaceKey);
         if (workspaceContext == null) {
             return;
@@ -197,7 +204,6 @@ public class ProblemWorkspaceService {
     }
 
     private void cleanupWorkspace(WorkspaceContext workspaceContext) {
-
         // 작업용 스키마 drop 후 메모리 상태 제거
         try (Connection connection = dataSource.getConnection()) {
             dropSchema(connection, workspaceContext.schemaName);
@@ -211,6 +217,7 @@ public class ProblemWorkspaceService {
     }
 
     private Optional<WorkspaceContext> findWorkspaceBySocketId(String socketId) {
+        // 소켓 연결 기준 작업 스키마 조회
         String workspaceKey = workspaceKeyBySocketId.get(socketId);
         if (workspaceKey == null) {
             return Optional.empty();
@@ -220,6 +227,7 @@ public class ProblemWorkspaceService {
     }
 
     private void createWorkspaceIfMissing(WorkspaceContext workspaceContext) {
+        // 작업용 스키마 생성
         String baseSchemaName = "problem_set_" + workspaceContext.problemSetId;
 
         try (Connection connection = dataSource.getConnection();
@@ -249,6 +257,7 @@ public class ProblemWorkspaceService {
     }
 
     private boolean schemaExists(Connection connection, String schemaName) throws Exception {
+        // 작업 스키마 존재 여부 확인
         try (var preparedStatement = connection.prepareStatement("""
                 SELECT COUNT(*)
                 FROM information_schema.schemata
@@ -265,6 +274,7 @@ public class ProblemWorkspaceService {
 
 
     private boolean hasAllWorkspaceTables(Connection connection, String schemaName, List<String> tableNames) throws Exception {
+        // 작업 스키마 테이블 준비 여부 확인
         for (String tableName : tableNames) {
             if (!tableExists(connection, schemaName, tableName)) {
                 return false;
@@ -275,6 +285,7 @@ public class ProblemWorkspaceService {
     }
 
     private boolean tableExists(Connection connection, String schemaName, String tableName) throws Exception {
+        // 작업 스키마 테이블 존재 여부 확인
         try (var preparedStatement = connection.prepareStatement("""
                 SELECT COUNT(*)
                 FROM information_schema.tables
@@ -326,12 +337,14 @@ public class ProblemWorkspaceService {
     }
 
     private void dropSchema(Connection connection, String schemaName) throws Exception {
+        // 작업 스키마 삭제
         try (Statement statement = connection.createStatement()) {
             statement.execute("DROP SCHEMA IF EXISTS " + quoteIdentifier(schemaName) + " CASCADE");
         }
     }
 
     private void cancelCleanup(WorkspaceContext workspaceContext) {
+        // 작업 스키마 정리 예약 취소
         if (workspaceContext.cleanupFuture == null) {
             return;
         }
@@ -341,6 +354,7 @@ public class ProblemWorkspaceService {
     }
 
     private List<String> resolveProblemTableNames(Problem problem) {
+        // 문제 DDL 기준 테이블 이름 추출
         String ddl = problem.getDdl();
         if (ddl == null || ddl.isBlank()) {
             return List.of();
@@ -356,15 +370,18 @@ public class ProblemWorkspaceService {
     }
 
     private String createWorkspaceKey(String handle, String problemId) {
+        // 작업 스키마 식별 키 생성
         return sanitizeSchemaPrefix(handle) + ":" + problemId;
     }
 
     private String createSchemaName(String handle, String problemId) {
+        // 작업 스키마 이름 생성
         String normalizedHandle = sanitizeSchemaPrefix(handle);
         return normalizedHandle + "_problem_" + problemId.replace('-', '_');
     }
 
     private String sanitizeSchemaPrefix(String handle) {
+        // 작업 스키마 prefix 정규화
         String sanitizedHandle = handle.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
         if (sanitizedHandle.isBlank()) {
             sanitizedHandle = "user";
@@ -381,6 +398,7 @@ public class ProblemWorkspaceService {
     }
 
     private String quoteIdentifier(String identifier) {
+        // SQL 식별자 인용
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
@@ -409,6 +427,7 @@ public class ProblemWorkspaceService {
 
         @Override
         public Thread newThread(Runnable runnable) {
+            // 작업 스키마 정리 전용 데몬 스레드를 생성
             Thread thread = new Thread(runnable, "problem-workspace-cleanup");
             thread.setDaemon(true);
             return thread;

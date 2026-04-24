@@ -3,7 +3,7 @@ package com.quertimizer.user.infrastructure.mock;
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.user.domain.entity.User;
-import com.quertimizer.user.infrastructure.repository.UserRepository;
+import com.quertimizer.user.application.port.UserRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.token.Sha512DigestUtils;
@@ -29,6 +29,7 @@ public class UserMockData {
     }
 
     private List<User> createUsers() {
+        // 사용자 목록 생성
         List<User> users = new ArrayList<>();
 
         users.add(createUser(
@@ -109,6 +110,7 @@ public class UserMockData {
     }
 
     private String formatTwoDigits(int value) {
+        // Two Digits 포맷
         return "%02d".formatted(value);
     }
 }

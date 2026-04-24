@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
 import { connectSessionSocket, disconnectSessionSocket, isSessionSocketOpen } from './sessionSocket';
 import type { SessionMeResult } from './authApi';
-import { applyAuthenticatedSession, syncSession, useMockSession } from './session';
+import { applyAuthenticatedSession, logoutMock, syncSession, useMockSession } from './session';
 
 export async function completeAuthentication(session: SessionMeResult) {
-  applyAuthenticatedSession(session);
-
   if (!session.authenticated) {
+    logoutMock();
     return;
   }
+
+  applyAuthenticatedSession(session);
 
   try {
     await connectSessionSocket();

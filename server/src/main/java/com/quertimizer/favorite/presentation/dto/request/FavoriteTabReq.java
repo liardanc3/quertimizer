@@ -8,23 +8,18 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import static com.quertimizer.favorite.domain.model.FavoriteValidationMessage.LABEL_LENGTH_EXCEEDED;
-import static com.quertimizer.favorite.domain.model.FavoriteValidationMessage.LABEL_REQUIRED;
-import static com.quertimizer.favorite.domain.model.FavoriteValidationMessage.PATH_LENGTH_EXCEEDED;
-import static com.quertimizer.favorite.domain.model.FavoriteValidationMessage.PATH_REQUIRED;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class FavoriteTabReq {
 
-    @NotBlank(message = LABEL_REQUIRED)
-    @Size(max = 200, message = LABEL_LENGTH_EXCEEDED)
+    @NotBlank(message = "탭 라벨을 입력해 주세요.")
+    @Size(max = 200, message = "탭 라벨은 최대 200자까지 입력할 수 있습니다.")
     private String label;
 
-    @NotBlank(message = PATH_REQUIRED)
-    @Size(max = 2048, message = PATH_LENGTH_EXCEEDED)
+    @NotBlank(message = "탭 경로를 입력해 주세요.")
+    @Size(max = 2048, message = "탭 경로는 최대 2048자까지 입력할 수 있습니다.")
     private String path;
 
     private JsonNode snapshot;
