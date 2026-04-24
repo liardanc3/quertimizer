@@ -120,12 +120,9 @@ export function formatBucketDisplayLabel(value: BucketFilterValue) {
     return '없음';
   }
 
-  if (value === 'OTHERS') {
-    return '기타';
-  }
-
-  const normalized = value.replace(/_AGG$/, '_AGGREGATE').toLowerCase().split('_');
-  return normalized.map((token) => token.charAt(0).toUpperCase() + token.slice(1)).join(' ');
+  const normalizedSource = value.toLowerCase().endsWith('_agg') ? value.toLowerCase().replace(/_agg$/, '') : value.toLowerCase();
+  const normalized = normalizedSource.replaceAll('_', ' ');
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 export function formatHintFilterLabel(value: HintFilterValue) {

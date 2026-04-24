@@ -62,14 +62,6 @@ type SubmitHistoryModalState =
   | { type: 'plan'; history: SubmitHistoryEntry }
   | null;
 
-type LinkMenuState = {
-  label: string;
-  path: string;
-  ariaLabel: string;
-  left: number;
-  top: number;
-} | null;
-
 type HeaderFilterMenuState = {
   key: SubmitHistoryHeaderFilterKey;
   left: number;
@@ -118,7 +110,7 @@ interface SubmitHistoryFavoriteSnapshot {
   activePlanDetailDbms: DbmsType;
 }
 
-const submitHistoryLoadingRows = Array.from({ length: 8 }, (_, index) => index);
+const submitHistoryLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
@@ -244,7 +236,7 @@ const SUBMIT_HISTORY_SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS = new Set([
 function createEmptySubmitHistoryPage(): SubmitHistoryPageData {
   return {
     currentPage: 1,
-    pageSize: 30,
+    pageSize: 10,
     totalCount: 0,
     totalPages: 1,
     problemIds: [],
@@ -292,32 +284,12 @@ function formatSubmittedAt(value: string) {
   return `${parsedDate.getFullYear()}-${padDatePart(parsedDate.getMonth() + 1)}-${padDatePart(parsedDate.getDate())} ${padDatePart(parsedDate.getHours())}:${padDatePart(parsedDate.getMinutes())}:${padDatePart(parsedDate.getSeconds())}`;
 }
 
-function getDbmsLabel(dbms: DbmsType) {
-  return dbms === 'oracle' ? 'Oracle' : 'PostgreSQL';
-}
-
-function buildProblemLabel(problemId: string) {
-  return `문제 ${problemId}`;
-}
-
 function toggleValue<T extends string>(values: T[], value: T) {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 function resolveSubmitHistoryDbmsFilterValue(dbmsSelections: DbmsType[]): DbmsFilterValue {
   return dbmsSelections.length === 1 ? dbmsSelections[0] : 'all';
-}
-
-function toggleRequiredDbmsSelection(currentSelections: DbmsType[], nextValue: DbmsType) {
-  if (currentSelections.includes(nextValue)) {
-    return currentSelections.length === 1
-      ? dbmsOptions.map((option) => option.value).filter((value) => value !== nextValue)
-      : currentSelections.filter((value) => value !== nextValue);
-  }
-
-  return dbmsOptions
-    .map((option) => option.value)
-    .filter((value) => value === nextValue || currentSelections.includes(value));
 }
 
 function resolveSubmitHistoryJudgeFilterValue(judgeSelections: JudgeSelectionValue[]): SubmitHistoryJudge {
@@ -539,12 +511,32 @@ function renderSubmitHistoryHighlightedSql(sql: string) {
   });
 }
 
-function toggleExclusiveFilterValue<T extends string>(currentValue: T, nextValue: T, defaultValue: T) {
-  return currentValue === nextValue ? defaultValue : nextValue;
-}
-
 function SelectionCheckbox({ checked }: { checked: boolean }) {
   return <span className={`runtime-check-indicator ${checked ? 'is-checked' : ''}`} aria-hidden="true" />;
+}
+
+function buildSubmitHistoryPlanSections(history: SubmitHistoryEntry) {
+  const labelGroupsBySection = new Map(
+    getExecutionPlanDetailGroups(history.dbms, history.executionPlanElement)
+      .map((group) => [group.sectionKey, group.labels] as const),
+  );
+
+  return [
+    ...buildAvailableBucketFilters(history.dbms).map((filter) => ({
+      sectionKey: filter.key,
+      sectionLabel: filter.label,
+      labels: labelGroupsBySection.get(filter.key) ?? [],
+    })),
+    {
+      sectionKey: 'hint' as const,
+      sectionLabel: 'Hint',
+      labels: labelGroupsBySection.get('hint') ?? [],
+    },
+  ];
+}
+
+function hasExecutionPlanDetails(history: SubmitHistoryEntry) {
+  return buildSubmitHistoryPlanSections(history).some((section) => section.labels.length > 0);
 }
 
 export default function SubmitHistoryPage() {
@@ -563,9 +555,7 @@ export default function SubmitHistoryPage() {
   const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(() => favoriteRestoreSnapshot?.selectedPlanSections ?? DEFAULT_PLAN_SECTION_KEYS);
   const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.activePlanDetailDbms ?? 'postgresql');
   const [modalState, setModalState] = useState<SubmitHistoryModalState>(null);
-  const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
   const headerFilterMenuRef = useRef<HTMLDivElement | null>(null);
-  const linkMenuRef = useRef<HTMLDivElement | null>(null);
 
   const submittedDbmsFilterValue = useMemo(
     () => resolveSubmitHistoryDbmsFilterValue(submittedFilters.dbmsSelections),
@@ -596,7 +586,6 @@ export default function SubmitHistoryPage() {
     [selectedPlanSections],
   );
   const allPlanSectionsSelected = normalizedSelectedPlanSections.length === DEFAULT_PLAN_SECTION_KEYS.length;
-  const shouldShowPlanFilters = draftFilters.dbmsSelections.length === 1;
   const visibleBucketFilters = useMemo(
     () => availableBucketFilters.filter((filter) => normalizedSelectedPlanSections.includes(filter.key)),
     [availableBucketFilters, normalizedSelectedPlanSections],
@@ -612,6 +601,14 @@ export default function SubmitHistoryPage() {
 
     return renderSubmitHistoryHighlightedSql(modalState.history.submittedSql);
   }, [modalState]);
+  const sqlModalHasExecutionPlanDetails = useMemo(
+    () => (modalState?.type === 'sql' ? hasExecutionPlanDetails(modalState.history) : false),
+    [modalState],
+  );
+  const planModalSections = useMemo(
+    () => (modalState?.type === 'plan' ? buildSubmitHistoryPlanSections(modalState.history) : []),
+    [modalState],
+  );
 
   useEffect(() => {
     if (isPageJumpEditing) {
@@ -765,40 +762,6 @@ export default function SubmitHistoryPage() {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [modalState]);
 
-  useEffect(() => {
-    if (linkMenuState == null) {
-      return;
-    }
-
-    function closeLinkMenu() {
-      setLinkMenuState(null);
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!linkMenuRef.current?.contains(event.target as Node)) {
-        closeLinkMenu();
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        closeLinkMenu();
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('resize', closeLinkMenu);
-    window.addEventListener('scroll', closeLinkMenu, true);
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('resize', closeLinkMenu);
-      window.removeEventListener('scroll', closeLinkMenu, true);
-    };
-  }, [linkMenuState]);
-
   function commitImmediateFilters(
     updater: (currentFilters: SubmitHistoryFilters) => SubmitHistoryFilters,
     nextSelectedSections: PlanSectionKey[] = normalizedSelectedPlanSections,
@@ -943,35 +906,6 @@ export default function SubmitHistoryPage() {
     commitImmediateFilters((currentFilters) => currentFilters, DEFAULT_PLAN_SECTION_KEYS);
   }
 
-  function openLinkMenu(label: string, path: string, ariaLabel: string, button: HTMLButtonElement) {
-    const rect = button.getBoundingClientRect();
-    const menuWidth = 224;
-    const viewportWidth = document.documentElement.clientWidth;
-    const maxLeft = viewportWidth - menuWidth - 12;
-    const nextLeft = Math.max(12, Math.min(rect.left, maxLeft));
-
-    setLinkMenuState({
-      label,
-      path,
-      ariaLabel,
-      left: nextLeft,
-      top: rect.bottom + 8,
-    });
-  }
-
-  function openHandleMenu(handle: string, button: HTMLButtonElement) {
-    openLinkMenu(`${handle} 프로필로 이동`, getProfilePath(handle), `${handle} 프로필 이동`, button);
-  }
-
-  function openProblemMenu(problemId: string, button: HTMLButtonElement) {
-    openLinkMenu(
-      `문제 ${problemId}로 이동`,
-      `${PROBLEMS_PATH}/${encodeURIComponent(problemId)}`,
-      `문제 ${problemId} 이동`,
-      button,
-    );
-  }
-
   function toggleHeaderFilterMenu(filterKey: SubmitHistoryHeaderFilterKey, button: HTMLButtonElement) {
     setHeaderFilterMenuState((currentState) => {
       if (currentState?.key === filterKey) {
@@ -1016,10 +950,6 @@ export default function SubmitHistoryPage() {
     setIsPageJumpEditing(false);
   }
 
-  function hasExecutionPlanDetails(history: SubmitHistoryEntry) {
-    return getExecutionPlanDetailGroups(history.dbms, history.executionPlanElement).length > 0;
-  }
-
   const modalContent =
     modalState == null || typeof document === 'undefined'
       ? null
@@ -1039,35 +969,22 @@ export default function SubmitHistoryPage() {
                   <div className="submit-history-modal-copy">
                     <div className="submit-history-modal-title-row">
                       <strong>제출 결과</strong>
-                    </div>
-                    <div className="submit-history-modal-meta submit-history-modal-meta-stack">
-                      <span className="submit-history-modal-meta-line">{modalState.history.submitId}</span>
-                      <span className="submit-history-modal-meta-line">{modalState.history.handle}</span>
-                      <span className="submit-history-modal-meta-line">{modalState.history.problemId}</span>
-                      <span className="submit-history-modal-meta-line">{getDbmsLabel(modalState.history.dbms)}</span>
-                      <span
-                        className={`submit-history-modal-meta-line submit-history-modal-meta-result ${modalState.history.success ? 'is-success' : 'is-fail'}`}
-                      >
+                      <span className={`submit-history-modal-title-status ${modalState.history.success ? 'is-success' : 'is-fail'}`}>
                         {modalState.history.success ? '정답' : '오답'}
                       </span>
-                      {modalState.history.success || modalState.history.cost > 0 ? (
-                        <span className="submit-history-modal-meta-line">{formatCost(modalState.history.cost)}</span>
-                      ) : null}
-                      <span className="submit-history-modal-meta-line">{formatSubmittedAt(modalState.history.submittedAt)}</span>
-                      {hasExecutionPlanDetails(modalState.history) ? (
-                        <button
-                          type="button"
-                          className="submit-history-modal-meta-action submit-history-modal-meta-icon"
-                          aria-label="실행계획 요소 보기"
-                          title="실행계획 요소 보기"
-                          onClick={() => setModalState({ type: 'plan', history: modalState.history })}
-                        >
-                          ↗
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        className="submit-history-modal-plan-action"
+                        aria-label="실행계획 요소 자세히 보기"
+                        title="실행계획 요소 자세히 보기"
+                        disabled={!sqlModalHasExecutionPlanDetails}
+                        onClick={() => setModalState({ type: 'plan', history: modalState.history })}
+                      >
+                        ↗
+                      </button>
                     </div>
                   </div>
-                  <button type="button" className="submit-history-modal-close" onClick={() => setModalState(null)}>
+                  <button type="button" className="submit-history-modal-close" aria-label="제출 결과 닫기" onClick={() => setModalState(null)}>
                     닫기
                   </button>
                 </div>
@@ -1087,47 +1004,36 @@ export default function SubmitHistoryPage() {
               >
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
-                    <strong>실행계획 요소</strong>
-                    <span>
-                      {modalState.history.handle} · {getDbmsLabel(modalState.history.dbms)} · {buildProblemLabel(modalState.history.problemId)}
-                    </span>
+                    <strong>실행 계획 요소</strong>
                   </div>
-                  <button type="button" className="submit-history-modal-close" onClick={() => setModalState(null)}>
+                  <button type="button" className="submit-history-modal-close" aria-label="실행 계획 요소 닫기" onClick={() => setModalState(null)}>
                     닫기
                   </button>
                 </div>
 
                 <div className="submit-history-modal-body submit-history-plan-modal-body">
-                  <div className="submit-history-plan-modal-summary">
-                    <span className="submit-history-plan-modal-label">Cost</span>
-                    <strong>{formatCost(modalState.history.cost)}</strong>
-                  </div>
+                  <div className="runtime-subfilter-board runtime-plan-shell-panel submit-history-plan-detail-board">
+                    {planModalSections.map((group) => (
+                      <div key={`${group.sectionKey}-${group.sectionLabel}`} className="runtime-subfilter-row">
+                        <span className="runtime-subfilter-label">{group.sectionLabel}</span>
+                        <div className="runtime-subfilter-options submit-history-plan-detail-options">
+                          <div className="runtime-subfilter-chip-grid submit-history-plan-detail-grid">
+                            {(group.labels.length > 0 ? group.labels : ['없음']).map((label) => {
+                              const isEmpty = group.labels.length === 0;
 
-                  {getExecutionPlanDetailGroups(modalState.history.dbms, modalState.history.executionPlanElement).length > 0 ? (
-                    <div className="runtime-subfilter-board runtime-plan-shell-panel submit-history-plan-detail-board">
-                      {getExecutionPlanDetailGroups(modalState.history.dbms, modalState.history.executionPlanElement).map((group) => (
-                        <div key={`${group.sectionKey}-${group.sectionLabel}`} className="runtime-subfilter-row">
-                          <span className="runtime-subfilter-label">{group.sectionLabel}</span>
-                          <div className="runtime-subfilter-options submit-history-plan-detail-options">
-                            <div className="runtime-subfilter-chip-grid submit-history-plan-detail-grid">
-                              {group.labels.map((label) => (
-                                <span key={label} className="runtime-subfilter-option">
-                                  <span className="runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button is-selected submit-history-plan-static-item">
-                                    <SelectionCheckbox checked />
+                              return (
+                                <span key={`${group.sectionKey}-${label}`} className="runtime-subfilter-option">
+                                  <span className={`runtime-subfilter-button runtime-subfilter-button-plain submit-history-plan-static-item ${isEmpty ? 'is-empty' : 'is-selected'}`}>
                                     <span className="runtime-check-label">{label}</span>
                                   </span>
                                 </span>
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="submit-history-empty-state submit-history-modal-empty-state">
-                      감지된 대표 실행계획 요소가 없습니다.
-                    </div>
-                  )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -1359,27 +1265,6 @@ export default function SubmitHistoryPage() {
           document.body,
         );
 
-  const linkMenuContent =
-    linkMenuState == null || typeof document === 'undefined'
-      ? null
-      : createPortal(
-          <button
-            ref={linkMenuRef}
-            type="button"
-            className="submit-history-link-menu"
-            role="menuitem"
-            aria-label={linkMenuState.ariaLabel}
-            style={{ top: `${linkMenuState.top}px`, left: `${linkMenuState.left}px` }}
-            onClick={() => {
-              navigate(linkMenuState.path);
-              setLinkMenuState(null);
-            }}
-          >
-            <span className="submit-history-link-menu-label">{linkMenuState.label}</span>
-          </button>,
-          document.body,
-        );
-
   return (
     <div className="page-stack submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card">
@@ -1553,8 +1438,8 @@ export default function SubmitHistoryPage() {
                       <button
                         type="button"
                         className="submit-history-link-button"
-                        onClick={(event) => openHandleMenu(history.handle, event.currentTarget)}
-                        aria-label={`${history.handle} Handle 메뉴 열기`}
+                        onClick={() => navigate(getProfilePath(history.handle))}
+                        aria-label={`${history.handle} 프로필 이동`}
                       >
                         {history.handle}
                       </button>
@@ -1563,8 +1448,8 @@ export default function SubmitHistoryPage() {
                       <button
                         type="button"
                         className="submit-history-link-button"
-                        onClick={(event) => openProblemMenu(history.problemId, event.currentTarget)}
-                        aria-label={`문제 ${history.problemId} 메뉴 열기`}
+                        onClick={() => navigate(`${PROBLEMS_PATH}/${encodeURIComponent(history.problemId)}`)}
+                        aria-label={`문제 ${history.problemId} 이동`}
                       >
                         {history.problemId}
                       </button>
@@ -1675,7 +1560,6 @@ export default function SubmitHistoryPage() {
       </section>
       {modalContent}
       {headerFilterMenuContent}
-      {linkMenuContent}
     </div>
   );
 }

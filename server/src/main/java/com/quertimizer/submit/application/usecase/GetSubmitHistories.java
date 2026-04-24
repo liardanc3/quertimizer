@@ -26,7 +26,7 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class GetSubmitHistories {
 
-    private static final int SUBMIT_HISTORY_PAGE_SIZE = 30;
+    private static final int SUBMIT_HISTORY_PAGE_SIZE = 10;
     private static final int HINT_INDEX = 30;
     private static final int SUBMIT_ID_LENGTH = 8;
 

@@ -6612,6 +6612,11 @@ button {
     color: var(--ink-soft);
   }
 
+  .solve-dbms-tab:hover,
+  .solve-dbms-tab:focus-visible {
+    color: #dbeafe;
+  }
+
   .solve-problem-number {
     color: #93c5fd;
   }
