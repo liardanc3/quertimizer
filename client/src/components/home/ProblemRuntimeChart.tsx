@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useMockSession } from '../../lib/session';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '../../types/domain';
 import './ProblemRuntimeChart.css';
@@ -15,13 +15,12 @@ type MarkerTone = 'fastest' | 'mine';
 type FilterMatchMode = 'and' | 'or';
 type RuntimeBucketFilterKey = 'scanBucket' | 'joinBucket' | 'filterBucket' | 'sortBucket' | 'aggregateBucket';
 type BucketFilterValue = ScanBucket | JoinBucket | FilterBucket | SortBucket | AggregateBucket;
-type HintFilterValue = 'USED' | 'UNUSED';
+type HintFilterValue = 'UNUSED' | 'USED';
 
 interface ProblemRuntimeChartProps {
   problem: ProblemSummary;
   forcedDbms?: DbmsType;
   onSearchSelect: (value: string) => void;
-  onSolvedCountChange: (count: number) => void;
 }
 
 interface RuntimeSample {
@@ -47,6 +46,7 @@ interface PlacedMarker extends RuntimeMarker {
 
 interface BucketView {
   startValue: number;
+  endValue: number;
   count: number;
 }
 
@@ -55,6 +55,8 @@ interface BucketModel {
   buckets: BucketView[];
   minValue: number;
   maxValue: number;
+  axisMin: number;
+  axisMax: number;
 }
 
 interface DisplayBucketLayout {
@@ -87,33 +89,35 @@ const FILTER_MODE_OPTIONS: { key: FilterMatchMode; label: string }[] = [
   { key: 'or', label: 'OR' },
 ];
 
-const HINT_FILTER_OPTIONS: readonly HintFilterValue[] = ['USED', 'UNUSED'];
-const HINT_FILTER_DISPLAY_ORDER: readonly HintFilterValue[] = ['UNUSED', 'USED'];
-const ALL_HINT_FILTERS: HintFilterValue[] = [...HINT_FILTER_OPTIONS];
+const HINT_FILTER_OPTIONS: { key: HintFilterValue; label: string }[] = [
+  { key: 'UNUSED', label: '미사용' },
+  { key: 'USED', label: '사용' },
+];
+const DEFAULT_HINT_FILTERS: HintFilterValue[] = HINT_FILTER_OPTIONS.map((option) => option.key);
 
 const BUCKET_FILTERS_BY_DBMS: Record<DbmsType, BucketFilterDefinition[]> = {
   postgresql: [
     { key: 'scanBucket', label: 'Scan', options: ['FULL_SCAN', 'INDEX_SCAN', 'BITMAP_SCAN', 'TID_SCAN', 'DERIVED_SCAN', 'OTHERS'] },
-    { key: 'joinBucket', label: 'Join', options: ['NONE', 'NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'OTHERS'] },
-    { key: 'filterBucket', label: 'Filter', options: ['NONE', 'ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
-    { key: 'sortBucket', label: 'Sort', options: ['NONE', 'PLAIN_SORT', 'INCREMENTAL_SORT', 'OTHERS'] },
-    { key: 'aggregateBucket', label: 'Aggregate', options: ['NONE', 'PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'] },
+    { key: 'joinBucket', label: 'Join', options: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'OTHERS'] },
+    { key: 'filterBucket', label: 'Filter', options: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
+    { key: 'sortBucket', label: 'Sort', options: ['PLAIN_SORT', 'INCREMENTAL_SORT', 'OTHERS'] },
+    { key: 'aggregateBucket', label: 'Aggregate', options: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'] },
   ],
   oracle: [
     { key: 'scanBucket', label: 'Scan', options: ['FULL_SCAN', 'ROWID_ACCESS', 'INDEX_SCAN', 'BITMAP_SCAN', 'DERIVED_SCAN', 'REMOTE_SCAN', 'OTHERS'] },
-    { key: 'joinBucket', label: 'Join', options: ['NONE', 'NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'] },
-    { key: 'filterBucket', label: 'Filter', options: ['NONE', 'ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
-    { key: 'sortBucket', label: 'Sort', options: ['NONE', 'ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'] },
-    { key: 'aggregateBucket', label: 'Aggregate', options: ['NONE', 'PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'WINDOW_AGG', 'OTHERS'] },
+    { key: 'joinBucket', label: 'Join', options: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'] },
+    { key: 'filterBucket', label: 'Filter', options: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
+    { key: 'sortBucket', label: 'Sort', options: ['ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'] },
+    { key: 'aggregateBucket', label: 'Aggregate', options: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'WINDOW_AGG', 'OTHERS'] },
   ],
 };
 
 const DEFAULT_BUCKET_FILTERS: Record<RuntimeBucketFilterKey, BucketFilterValue[]> = {
   scanBucket: ['FULL_SCAN', 'ROWID_ACCESS', 'INDEX_SCAN', 'BITMAP_SCAN', 'TID_SCAN', 'DERIVED_SCAN', 'REMOTE_SCAN', 'OTHERS'],
-  joinBucket: ['NONE', 'NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'],
-  filterBucket: ['NONE', 'ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'],
-  sortBucket: ['NONE', 'PLAIN_SORT', 'INCREMENTAL_SORT', 'ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'],
-  aggregateBucket: ['NONE', 'PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'],
+  joinBucket: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'],
+  filterBucket: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'],
+  sortBucket: ['PLAIN_SORT', 'INCREMENTAL_SORT', 'ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'],
+  aggregateBucket: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'],
 };
 
 const BUCKET_PLAN_INDEXES_BY_DBMS: Record<DbmsType, BucketIndexMap> = {
@@ -137,6 +141,30 @@ function SelectionCheckbox({ checked }: { checked: boolean }) {
   return <span className={`runtime-check-indicator ${checked ? 'is-checked' : ''}`} aria-hidden="true" />;
 }
 
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M3.4 4.1h11.2l-4.4 5.05v3.65l-2.4 1.1V9.15L3.4 4.1Z" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M4.8 4.8l8.4 8.4M13.2 4.8l-8.4 8.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ApplyIcon() {
+  return (
+    <svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M3.6 9.35l3.45 3.35 7.35-7.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -149,16 +177,17 @@ function hasAnyPlanElement(mask: number, indexes: number[]) {
   return indexes.some((index) => hasPlanElement(mask, index));
 }
 
+function roundToPrecision(value: number, precision = 6) {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
 function formatCostValue(value: number) {
   return costFormatter.format(Math.round(value * 100) / 100);
 }
 
 function formatPercent(value: number) {
   return `${numberFormatter.format(Math.round(value * 10) / 10)}%`;
-}
-
-function formatCount(value: number | undefined) {
-  return numberFormatter.format(value ?? 0);
 }
 
 function formatBucketDisplayLabel(value: BucketFilterValue) {
@@ -210,8 +239,14 @@ function normalizeSelectedValues<T extends string>(selectedValues: T[], allOptio
   return allOptions.filter((option) => selectedValues.includes(option));
 }
 
-function sortHintFilters(values: HintFilterValue[]) {
-  return [...values].sort((left, right) => HINT_FILTER_DISPLAY_ORDER.indexOf(left) - HINT_FILTER_DISPLAY_ORDER.indexOf(right));
+function cloneBucketFilters(filters: Record<RuntimeBucketFilterKey, BucketFilterValue[]>) {
+  return {
+    scanBucket: [...filters.scanBucket],
+    joinBucket: [...filters.joinBucket],
+    filterBucket: [...filters.filterBucket],
+    sortBucket: [...filters.sortBucket],
+    aggregateBucket: [...filters.aggregateBucket],
+  } satisfies Record<RuntimeBucketFilterKey, BucketFilterValue[]>;
 }
 
 function getVisibleSelectedValues<T extends string>(selectedValues: T[], allOptions: readonly T[]) {
@@ -248,11 +283,23 @@ function matchesBucketFilter(sample: RuntimeSample, dbms: DbmsType, filterKey: R
   return hasAnyPlanElement(sample.executionPlanElement, BUCKET_PLAN_INDEXES_BY_DBMS[dbms][filterKey][value] ?? []);
 }
 
+function matchesBucketFilterValues(sample: RuntimeSample, dbms: DbmsType, filterKey: RuntimeBucketFilterKey, values: BucketFilterValue[], matchMode: FilterMatchMode) {
+  return matchMode === 'and'
+    ? values.every((value) => matchesBucketFilter(sample, dbms, filterKey, value))
+    : values.some((value) => matchesBucketFilter(sample, dbms, filterKey, value));
+}
+
+function matchesHintFilterValues(sample: RuntimeSample, values: HintFilterValue[], matchMode: FilterMatchMode) {
+  return matchMode === 'and'
+    ? values.every((value) => (value === 'USED' ? hasPlanElement(sample.executionPlanElement, 30) : !hasPlanElement(sample.executionPlanElement, 30)))
+    : values.some((value) => (value === 'USED' ? hasPlanElement(sample.executionPlanElement, 30) : !hasPlanElement(sample.executionPlanElement, 30)));
+}
+
 function toSamples(problem: ProblemSummary, handle: string | null) {
   return (problem.submittedHistories ?? []).map((submittedHistory) => ({
     handle: submittedHistory.handle,
     dbms: submittedHistory.dbms,
-    timeMs: submittedHistory.executionTimeMs,
+    timeMs: typeof submittedHistory.cost === 'number' ? submittedHistory.cost : submittedHistory.executionTimeMs,
     executionPlanElement: submittedHistory.executionPlanElement,
     isMine: handle != null && submittedHistory.handle === handle,
   }));
@@ -266,30 +313,49 @@ function buildBucketModel(samples: RuntimeSample[]): BucketModel | null {
   const values = samples.map((sample) => sample.timeMs);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
-  const range = Math.max(1, maxValue - minValue + 1);
-  const bucketSize = Math.max(1, Math.ceil(range / TARGET_BUCKET_COUNT));
-  const bucketCount = Math.max(1, Math.ceil(range / bucketSize));
-  const bucketStarts = Array.from({ length: bucketCount }, (_, index) => minValue + index * bucketSize);
-  const lastBoundaryValue = minValue + bucketSize * bucketCount;
-  const bucketCounts = new Map(bucketStarts.map((startValue) => [startValue, 0]));
+
+  if (minValue === maxValue) {
+    return {
+      bucketSize: 1,
+      buckets: [{ startValue: minValue, endValue: maxValue, count: samples.length }],
+      minValue,
+      maxValue,
+      axisMin: minValue,
+      axisMax: maxValue,
+    };
+  }
+
+  const paddedMinValue = minValue >= 0 ? 0 : minValue;
+  const axisMin = Math.min(0, paddedMinValue);
+  const axisMax = maxValue > axisMin ? maxValue : axisMin + 1;
+  const bucketSize = roundToPrecision((axisMax - axisMin) / TARGET_BUCKET_COUNT);
+  const buckets = Array.from({ length: TARGET_BUCKET_COUNT }, (_, index) => {
+    const startValue = roundToPrecision(axisMin + bucketSize * index);
+    const endValue = index === TARGET_BUCKET_COUNT - 1 ? axisMax : roundToPrecision(startValue + bucketSize);
+    return { startValue, endValue, count: 0 };
+  });
 
   samples.forEach((sample) => {
-    const normalizedValue = sample.timeMs === lastBoundaryValue ? sample.timeMs - 1 : sample.timeMs;
-    const bucketStart = minValue + Math.floor((clamp(normalizedValue, minValue, lastBoundaryValue - 1) - minValue) / bucketSize) * bucketSize;
-    bucketCounts.set(bucketStart, (bucketCounts.get(bucketStart) ?? 0) + 1);
+    const normalizedValue = clamp(sample.timeMs, axisMin, axisMax);
+    const bucketIndex = normalizedValue === axisMax
+      ? TARGET_BUCKET_COUNT - 1
+      : clamp(Math.floor((normalizedValue - axisMin) / Math.max(bucketSize, 0.0001)), 0, TARGET_BUCKET_COUNT - 1);
+    buckets[bucketIndex].count += 1;
   });
 
   return {
     bucketSize,
-    buckets: bucketStarts.map((startValue) => ({ startValue, count: bucketCounts.get(startValue) ?? 0 })),
+    buckets,
     minValue,
     maxValue,
+    axisMin,
+    axisMax,
   };
 }
 
 function buildDisplayBucketLayout(bucketModel: BucketModel): DisplayBucketLayout {
   const actualBucketCount = bucketModel.buckets.length;
-  const displayBucketCount = Math.max(actualBucketCount, MIN_VISUAL_BUCKET_COUNT);
+  const displayBucketCount = actualBucketCount === 1 ? MIN_VISUAL_BUCKET_COUNT + 1 : Math.max(actualBucketCount, MIN_VISUAL_BUCKET_COUNT);
 
   if (actualBucketCount >= displayBucketCount) {
     return {
@@ -378,48 +444,31 @@ function buildPlanSectionRatioItems(args: {
   activeSamples: RuntimeSample[];
   availableBucketFilters: BucketFilterDefinition[];
   dbms: DbmsType;
-  filterMatchMode: FilterMatchMode;
   selectedBucketFilters: Record<RuntimeBucketFilterKey, BucketFilterValue[]>;
-  selectedHintFilters: HintFilterValue[];
 }) {
-  const { activeSamples, availableBucketFilters, dbms, filterMatchMode, selectedBucketFilters, selectedHintFilters } = args;
-  const modeLabel = filterMatchMode.toUpperCase();
-  const bucketItems = availableBucketFilters.flatMap((filter) => {
+  const { activeSamples, availableBucketFilters, dbms, selectedBucketFilters } = args;
+  const bucketItems = availableBucketFilters.map((filter) => {
     const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
-    if (selectedValues.length === 0) {
-      return [];
-    }
+    const ratio = selectedValues.length === 0
+      ? 0
+      : calculatePercent(activeSamples, (sample) => selectedValues.some((value) => matchesBucketFilter(sample, dbms, filter.key, value))) ?? 0;
 
-    const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
-    const ratio = isAllSelected
-      ? 100
-      : calculatePercent(activeSamples, (sample) => selectedValues.some((value) => matchesBucketFilter(sample, dbms, filter.key, value)));
-    return [{
+    return {
       id: filter.key,
-      label: `${filter.label} 발생 비율 (${modeLabel})`,
-      detail: isAllSelected ? '전체' : selectedValues.map((value) => formatBucketDisplayLabel(value)).join(', '),
-      value: ratio === null ? '-' : formatPercent(ratio),
-    }];
+      label: `${filter.label} 발생 비율`,
+      value: formatPercent(ratio),
+    };
   });
 
-  const hintItem =
-    selectedHintFilters.length === 0
-      ? []
-      : [{
-          id: 'hint',
-          label: `Hint 사용 비율 (${modeLabel})`,
-          detail: areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS)
-            ? '전체'
-            : sortHintFilters(selectedHintFilters).map((value) => (value === 'USED' ? '사용' : '미사용')).join(', '),
-          value: areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS)
-            ? formatPercent(100)
-            : formatPercent(calculatePercent(activeSamples, (sample) => selectedHintFilters.some((value) => value === 'USED' ? hasPlanElement(sample.executionPlanElement, 30) : !hasPlanElement(sample.executionPlanElement, 30))) ?? 0),
-        }];
+  const hintRatio = calculatePercent(activeSamples, (sample) => hasPlanElement(sample.executionPlanElement, 30)) ?? 0;
 
-  return [...bucketItems, ...hintItem];
+  return [
+    ...bucketItems,
+    { id: 'hint', label: 'Hint 사용 비율', value: formatPercent(hintRatio) },
+  ];
 }
 
-export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelect, onSolvedCountChange }: ProblemRuntimeChartProps) {
+export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelect }: ProblemRuntimeChartProps) {
   const { handle, defaultDbms } = useMockSession();
   const samples = useMemo(() => toSamples(problem, handle), [problem, handle]);
   const availableDbms = useMemo(() => {
@@ -430,49 +479,39 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     const sampleDbms = DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key));
     return sampleDbms.length > 0 ? sampleDbms : DBMS_OPTIONS;
   }, [forcedDbms, samples]);
-  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(availableDbms[0]?.key ?? 'postgresql');
-  const hasUserSelectedDbmsRef = useRef(false);
+  const selectedDbms = useMemo(() => {
+    if (forcedDbms) {
+      return forcedDbms;
+    }
+
+    if (defaultDbms && availableDbms.some((option) => option.key === defaultDbms)) {
+      return defaultDbms;
+    }
+
+    return availableDbms[0]?.key ?? 'postgresql';
+  }, [availableDbms, defaultDbms, forcedDbms]);
   const [filterMatchMode, setFilterMatchMode] = useState<FilterMatchMode>('or');
-  const [selectedBucketFilters, setSelectedBucketFilters] = useState<Record<RuntimeBucketFilterKey, BucketFilterValue[]>>(DEFAULT_BUCKET_FILTERS);
-  const [selectedHintFilters, setSelectedHintFilters] = useState<HintFilterValue[]>(ALL_HINT_FILTERS);
+  const [selectedBucketFilters, setSelectedBucketFilters] = useState<Record<RuntimeBucketFilterKey, BucketFilterValue[]>>(
+    () => cloneBucketFilters(DEFAULT_BUCKET_FILTERS)
+  );
+  const [selectedHintFilters, setSelectedHintFilters] = useState<HintFilterValue[]>(() => [...DEFAULT_HINT_FILTERS]);
+  const [draftFilterMatchMode, setDraftFilterMatchMode] = useState<FilterMatchMode>('or');
+  const [draftBucketFilters, setDraftBucketFilters] = useState<Record<RuntimeBucketFilterKey, BucketFilterValue[]>>(
+    () => cloneBucketFilters(DEFAULT_BUCKET_FILTERS)
+  );
+  const [draftHintFilters, setDraftHintFilters] = useState<HintFilterValue[]>(() => [...DEFAULT_HINT_FILTERS]);
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  const [hasSeenFilterPopover, setHasSeenFilterPopover] = useState(false);
   const [floatingTooltip, setFloatingTooltip] = useState<FloatingTooltipState | null>(null);
   const floatingTooltipTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (forcedDbms) {
-      if (selectedDbms !== forcedDbms) {
-        setSelectedDbms(forcedDbms);
-      }
-      return;
-    }
-
-    if (availableDbms.length === 0) {
-      return;
-    }
-
-    if (!hasUserSelectedDbmsRef.current && defaultDbms && availableDbms.some((option) => option.key === defaultDbms) && selectedDbms !== defaultDbms) {
-      setSelectedDbms(defaultDbms);
-      return;
-    }
-
-    if (!availableDbms.some((option) => option.key === selectedDbms)) {
-      if (defaultDbms && availableDbms.some((option) => option.key === defaultDbms)) {
-        setSelectedDbms(defaultDbms);
-        return;
-      }
-
-      setSelectedDbms(availableDbms[0].key);
-    }
-  }, [availableDbms, defaultDbms, forcedDbms, selectedDbms]);
-
   const activeSamples = useMemo(() => samples.filter((sample) => sample.dbms === selectedDbms), [samples, selectedDbms]);
   const availableBucketFilters = useMemo(() => buildAvailableBucketFilters(selectedDbms), [selectedDbms]);
-  const allHintFiltersSelected = areAllOptionsSelected(selectedHintFilters, HINT_FILTER_OPTIONS);
   const selectedBucketEntries = useMemo(
     () =>
       availableBucketFilters.flatMap((filter) => {
         const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
-        if (selectedValues.length === 0 || areAllOptionsSelected(selectedValues, filter.options)) {
+        if (selectedValues.length === 0) {
           return [];
         }
 
@@ -480,35 +519,41 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
       }),
     [availableBucketFilters, selectedBucketFilters]
   );
-  const hasActiveHintSelection = selectedHintFilters.length > 0 && !allHintFiltersSelected;
+  const emptyBucketFilterKeys = useMemo(
+    () =>
+      availableBucketFilters.flatMap((filter) =>
+        getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options).length === 0 ? [filter.key] : []
+      ),
+    [availableBucketFilters, selectedBucketFilters]
+  );
+  const hasActiveHintSelection = selectedHintFilters.length > 0;
+  const hasExplicitPlanFilter = selectedBucketEntries.length > 0 || emptyBucketFilterKeys.length > 0 || hasActiveHintSelection;
   const filteredSamples = useMemo(() => {
-    if (selectedBucketEntries.length === 0 && !hasActiveHintSelection) {
+    if (!hasExplicitPlanFilter) {
       return activeSamples;
     }
 
     return activeSamples.filter((sample) => {
       const matches = [
         ...selectedBucketEntries.map(([filterKey, filterValues]) =>
-          filterValues.some((filterValue) => matchesBucketFilter(sample, selectedDbms, filterKey, filterValue))
+          matchesBucketFilterValues(sample, selectedDbms, filterKey, filterValues, filterMatchMode)
         ),
+        ...(filterMatchMode === 'and'
+          ? emptyBucketFilterKeys.map((filterKey) => matchesBucketFilter(sample, selectedDbms, filterKey, 'NONE'))
+          : []),
         ...(hasActiveHintSelection
-          ? [
-              selectedHintFilters.some((filterValue) =>
-                filterValue === 'USED'
-                  ? hasPlanElement(sample.executionPlanElement, 30)
-                  : !hasPlanElement(sample.executionPlanElement, 30)
-              ),
-            ]
+          ? [matchesHintFilterValues(sample, selectedHintFilters, filterMatchMode)]
           : []),
       ];
 
-      return matches.length === 0 ? true : filterMatchMode === 'and' ? matches.every(Boolean) : matches.some(Boolean);
+      return matches.length === 0 ? false : filterMatchMode === 'and' ? matches.every(Boolean) : matches.some(Boolean);
     });
-  }, [activeSamples, filterMatchMode, hasActiveHintSelection, selectedBucketEntries, selectedDbms, selectedHintFilters]);
+  }, [activeSamples, emptyBucketFilterKeys, filterMatchMode, hasActiveHintSelection, hasExplicitPlanFilter, selectedBucketEntries, selectedDbms, selectedHintFilters]);
   const bucketModel = useMemo(() => buildBucketModel(filteredSamples), [filteredSamples]);
   const displayBucketLayout = useMemo(() => (bucketModel ? buildDisplayBucketLayout(bucketModel) : null), [bucketModel]);
   const timeSummary = useMemo(() => buildTimeSummary(filteredSamples), [filteredSamples]);
   const markers = useMemo(() => buildMarkers(filteredSamples), [filteredSamples]);
+  const hasActivePlanFilter = hasExplicitPlanFilter;
   const maxBucketCount = bucketModel ? Math.max(1, ...bucketModel.buckets.map((bucket) => bucket.count)) : 1;
   const placedMarkers: PlacedMarker[] = useMemo(() => {
     if (bucketModel == null) {
@@ -516,55 +561,64 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     }
 
     return markers.map((marker) => {
+      const axisRange = Math.max(bucketModel.axisMax - bucketModel.axisMin, 0.0001);
       const bucketIndex = clamp(
-        Math.floor((marker.value - bucketModel.minValue) / bucketModel.bucketSize),
+        Math.floor((clamp(marker.value, bucketModel.axisMin, bucketModel.axisMax) - bucketModel.axisMin) / Math.max(bucketModel.bucketSize, 0.0001)),
         0,
         bucketModel.buckets.length - 1
       );
       const displayBucketIndex = displayBucketLayout?.actualBucketIndexes[bucketIndex] ?? bucketIndex;
       const displayBucketCount = displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length;
-      return { ...marker, rowIndex: marker.key === 'mine' ? 0 : 1, targetPercent: ((displayBucketIndex + 0.5) / displayBucketCount) * 100 };
+
+      return {
+        ...marker,
+        rowIndex: marker.key === 'mine' ? 0 : 1,
+        targetPercent: displayBucketLayout
+          ? ((displayBucketIndex + 0.5) / displayBucketCount) * 100
+          : ((clamp(marker.value, bucketModel.axisMin, bucketModel.axisMax) - bucketModel.axisMin) / axisRange) * 100,
+      };
     });
   }, [bucketModel, displayBucketLayout, markers]);
   const markersByRow = useMemo(
     () => [placedMarkers.find((marker) => marker.key === 'mine') ?? null, placedMarkers.find((marker) => marker.key === 'fastest') ?? null],
     [placedMarkers]
   );
+  const markerAxisLabels = useMemo(() => {
+    const labelsByValue = new Map<string, { key: string; label: string; targetPercent: number }>();
+    placedMarkers.forEach((marker) => {
+      const label = formatCostValue(marker.value);
+      if (!labelsByValue.has(label)) {
+        labelsByValue.set(label, { key: marker.key, label, targetPercent: marker.targetPercent });
+      }
+    });
+
+    return [...labelsByValue.values()].slice(0, 2);
+  }, [placedMarkers]);
   const selectedRatioItems = useMemo(
     () =>
       buildPlanSectionRatioItems({
         activeSamples,
         availableBucketFilters,
         dbms: selectedDbms,
-        filterMatchMode,
         selectedBucketFilters,
-        selectedHintFilters,
       }),
-    [activeSamples, availableBucketFilters, filterMatchMode, selectedBucketFilters, selectedDbms, selectedHintFilters]
+    [activeSamples, availableBucketFilters, selectedBucketFilters, selectedDbms]
   );
-  const firstAxisLabel = bucketModel ? formatCostValue(bucketModel.minValue) : '';
-  const lastAxisLabel = bucketModel ? formatCostValue(bucketModel.maxValue) : '';
-  const timeStatItems = [
-    { id: 'spread', label: 'Cost 편차', value: timeSummary ? formatPercent(timeSummary.spreadRate) : '-' },
-    { id: 'min', label: '최소 Cost', value: timeSummary ? formatCostValue(timeSummary.min) : '-' },
+  const costMetricItems = [
+    { id: 'sample-count', label: '집계 수', value: numberFormatter.format(filteredSamples.length) },
     { id: 'avg', label: '평균 Cost', value: timeSummary ? formatCostValue(timeSummary.average) : '-' },
+    { id: 'min', label: '최소 Cost', value: timeSummary ? formatCostValue(timeSummary.min) : '-' },
     { id: 'median', label: 'Cost 중앙값', value: timeSummary ? formatCostValue(timeSummary.median) : '-' },
   ];
-  const kpiItems = [
-    ...timeStatItems,
-    { id: 'submit-ratio', label: '정답 제출 / 전체 제출', value: `${formatCount(problem.successSubmitCount)} / ${formatCount(problem.totalSubmitCount)}` },
-  ];
+  const firstAxisLabel = bucketModel ? formatCostValue(bucketModel.axisMin) : '';
+  const lastAxisLabel = bucketModel ? formatCostValue(bucketModel.axisMax) : '';
 
-  useEffect(() => {
-    onSolvedCountChange(filteredSamples.length);
-  }, [filteredSamples.length, onSolvedCountChange]);
-
-  function clearFloatingTooltipTimer() {
+  const clearFloatingTooltipTimer = useCallback(() => {
     if (floatingTooltipTimerRef.current != null) {
       window.clearTimeout(floatingTooltipTimerRef.current);
       floatingTooltipTimerRef.current = null;
     }
-  }
+  }, []);
 
   function showFloatingTooltip(id: string, anchor: HTMLElement, text: string) {
     const rect = anchor.getBoundingClientRect();
@@ -579,16 +633,41 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     }, FLOATING_TOOLTIP_DELAY_MS);
   }
 
-  function hideFloatingTooltip() {
+  const hideFloatingTooltip = useCallback(() => {
     clearFloatingTooltipTimer();
     setFloatingTooltip(null);
+  }, [clearFloatingTooltipTimer]);
+
+  function openFilterPopover() {
+    hideFloatingTooltip();
+    setHasSeenFilterPopover(true);
+    setDraftFilterMatchMode(filterMatchMode);
+    setDraftBucketFilters(cloneBucketFilters(selectedBucketFilters));
+    setDraftHintFilters([...selectedHintFilters]);
+    setIsFilterPopoverOpen(true);
+  }
+
+  function cancelFilterPopover() {
+    hideFloatingTooltip();
+    setDraftFilterMatchMode(filterMatchMode);
+    setDraftBucketFilters(cloneBucketFilters(selectedBucketFilters));
+    setDraftHintFilters([...selectedHintFilters]);
+    setIsFilterPopoverOpen(false);
+  }
+
+  function applyFilterPopover() {
+    hideFloatingTooltip();
+    setFilterMatchMode(draftFilterMatchMode);
+    setSelectedBucketFilters(cloneBucketFilters(draftBucketFilters));
+    setSelectedHintFilters([...draftHintFilters]);
+    setIsFilterPopoverOpen(false);
   }
 
   useEffect(() => {
     return () => {
       clearFloatingTooltipTimer();
     };
-  }, []);
+  }, [clearFloatingTooltipTimer]);
 
   useEffect(() => {
     if (floatingTooltip == null) {
@@ -602,258 +681,297 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
       window.removeEventListener('resize', hideFloatingTooltip);
       window.removeEventListener('scroll', hideFloatingTooltip, true);
     };
-  }, [floatingTooltip]);
-
-  if (activeSamples.length === 0 || problem.solvedCount === 0) {
-    return <div className="runtime-empty-state">이 문제의 첫 도전자가 되어보세요</div>;
-  }
+  }, [floatingTooltip, hideFloatingTooltip]);
 
   return (
-    <div className="problem-runtime-shell">
-      <section className="runtime-summary-panel" aria-label="통계 개요">
-        <div className="runtime-kpi-grid">
-          {kpiItems.map((item) => (
-            <div key={item.id} className="runtime-kpi-card">
-              <span className="runtime-kpi-label">{item.label}</span>
-              <span className="runtime-kpi-value">{item.value}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+    <div className={`problem-runtime-shell ${isFilterPopoverOpen ? 'is-filter-popover-open' : ''}`.trim()}>
+      <div className="runtime-chart-panel-head">
+        <button
+          type="button"
+          className={`runtime-filter-launch ${hasActivePlanFilter ? 'is-active' : ''} ${!hasSeenFilterPopover && !isFilterPopoverOpen ? 'is-hinting' : ''}`.trim()}
+          aria-label="실행 계획 요소 열기"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!isFilterPopoverOpen) {
+              openFilterPopover();
+            }
+          }}
+        >
+          <FilterIcon />
+        </button>
+      </div>
 
-      <section className="runtime-chart-panel" aria-label="Cost 분포">
+      <div className={`runtime-content ${isFilterPopoverOpen ? 'is-filter-blurred' : ''}`.trim()}>
         {bucketModel ? (
-          <div className="runtime-plot-shell">
-            <div className="runtime-marker-column" style={{ gridTemplateRows: 'repeat(2, minmax(1rem, 1fr))' }}>
-              {markersByRow.map((marker, rowIndex) => (
-                <div key={`marker-row-${rowIndex}`} className="runtime-guide-row">
-                  {marker ? (
-                    <div className={`runtime-marker-item tooltip-anchor is-${marker.tone}`}>
-                      <span className={`runtime-marker-token is-${marker.tone}`}>{marker.label}</span>
-                      <span className="ui-tooltip runtime-marker-tooltip">{renderMarkerTooltip(marker, onSearchSelect)}</span>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+          <section className="runtime-summary-panel" aria-label="통계 개요">
+            <div className="runtime-metric-grid">
+              <div className="runtime-metric-row is-cost">
+                {costMetricItems.map((item) => (
+                  <div key={item.id} className="runtime-metric-cell">
+                    <span className="runtime-metric-label">{item.label}</span>
+                    <span className="runtime-metric-value">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="runtime-metric-row is-plan">
+                {selectedRatioItems.map((item) => (
+                  <div key={item.id} className="runtime-metric-cell">
+                    <span className="runtime-metric-label">{item.label}</span>
+                    <span className="runtime-metric-value">{item.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+          </section>
+        ) : null}
 
-            <div className="runtime-chart-stage">
-              <div className="runtime-guide-grid" aria-hidden="true" style={{ gridTemplateRows: 'repeat(2, minmax(1rem, 1fr))' }}>
+        <section className="runtime-chart-panel" aria-label="Cost 분포">
+          {bucketModel ? (
+            <div className="runtime-plot-shell">
+              <div className="runtime-marker-column" style={{ gridTemplateRows: 'repeat(2, minmax(0.92rem, 1fr))' }}>
                 {markersByRow.map((marker, rowIndex) => (
-                  <div key={`guide-row-${rowIndex}`} className="runtime-guide-row">
+                  <div key={`marker-row-${rowIndex}`} className="runtime-guide-row">
                     {marker ? (
-                      <span className={`runtime-connector-line is-${marker.tone}`}>
-                        <span className="runtime-connector-gap" />
-                        <span className="runtime-connector-track">
-                          <span className="runtime-connector-progress" style={{ width: `max(0px, calc(${marker.targetPercent}% - var(--runtime-arrow-width)))` }} />
-                        </span>
-                      </span>
+                      <div className={`runtime-marker-item tooltip-anchor is-${marker.tone}`}>
+                        <span className={`runtime-marker-token is-${marker.tone}`}>{marker.label}</span>
+                        <span className="ui-tooltip runtime-marker-tooltip">{renderMarkerTooltip(marker, onSearchSelect)}</span>
+                      </div>
                     ) : null}
                   </div>
                 ))}
               </div>
 
-              <div className="runtime-bars" style={{ gridTemplateColumns: `repeat(${displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length}, minmax(0, 1fr))` }}>
-                {(displayBucketLayout?.displayBuckets ?? bucketModel.buckets).map((bucket, index) => {
-                  const isMineBucket =
-                    bucket != null &&
-                    markers.some((marker) => marker.key === 'mine' && marker.value >= bucket.startValue && marker.value < bucket.startValue + bucketModel.bucketSize);
-                  const singleValueLabelIndex = displayBucketLayout?.actualBucketIndexes[0] ?? 0;
-                  const axisLabel =
-                    bucketModel.minValue === bucketModel.maxValue
-                      ? index === singleValueLabelIndex
-                        ? firstAxisLabel
-                        : null
-                      : index === 0
-                        ? firstAxisLabel
-                        : index === (displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length) - 1
-                          ? lastAxisLabel
-                          : null;
-
-                  return (
-                    <div key={bucket ? bucket.startValue : `empty-${index}`} className={`runtime-bar-slot tooltip-anchor ${isMineBucket ? 'is-mine' : ''}`}>
-                      <span
-                        className={`runtime-bar ${isMineBucket ? 'is-mine' : ''}`}
-                        style={{ height: bucket == null || bucket.count === 0 ? '0%' : `${Math.max((bucket.count / maxBucketCount) * 100, 9)}%` }}
-                      />
-                      {axisLabel ? <span className="runtime-axis-inline">{axisLabel}</span> : null}
-                      {bucket ? (
-                        <span className="ui-tooltip runtime-bar-tooltip">
-                          <span className="ui-tooltip-title">{`${formatCostValue(bucket.startValue)}-${formatCostValue(bucket.startValue + bucketModel.bucketSize - 1)}`}</span>
-                          <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
+              <div className="runtime-chart-stage">
+                <div className="runtime-guide-grid" aria-hidden="true" style={{ gridTemplateRows: 'repeat(2, minmax(0.92rem, 1fr))' }}>
+                  {markersByRow.map((marker, rowIndex) => (
+                    <div key={`guide-row-${rowIndex}`} className="runtime-guide-row">
+                      {marker ? (
+                        <span className={`runtime-connector-line is-${marker.tone}`}>
+                          <span className="runtime-connector-gap" />
+                          <span className="runtime-connector-track">
+                            <span className="runtime-connector-progress" style={{ width: `max(0px, calc(${marker.targetPercent}% - var(--runtime-arrow-width)))` }} />
+                          </span>
                         </span>
                       ) : null}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+
+                <div className="runtime-bars" style={{ gridTemplateColumns: `repeat(${displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length}, minmax(0, 1fr))` }}>
+                  {(displayBucketLayout?.displayBuckets ?? bucketModel.buckets).map((bucket, index) => {
+                    const isMineBucket =
+                      bucket != null &&
+                      markers.some(
+                        (marker) =>
+                          marker.key === 'mine' &&
+                          marker.value >= bucket.startValue &&
+                          (marker.value < bucket.endValue || bucket.endValue === bucketModel.axisMax)
+                      );
+                    const singleValueLabelIndex = displayBucketLayout?.actualBucketIndexes[0] ?? 0;
+                    const axisLabel =
+                      bucketModel.axisMin === bucketModel.axisMax
+                        ? index === singleValueLabelIndex
+                          ? firstAxisLabel
+                          : null
+                        : index === 0
+                          ? firstAxisLabel
+                          : index === (displayBucketLayout?.displayBuckets.length ?? bucketModel.buckets.length) - 1
+                            ? lastAxisLabel
+                            : null;
+
+                    return (
+                      <div key={bucket ? bucket.startValue : `empty-${index}`} className={`runtime-bar-slot tooltip-anchor ${isMineBucket ? 'is-mine' : ''}`}>
+                        <span
+                          className={`runtime-bar ${isMineBucket ? 'is-mine' : ''}`}
+                          style={{ height: bucket == null || bucket.count === 0 ? '0%' : `${Math.max((bucket.count / maxBucketCount) * 100, 9)}%` }}
+                        />
+                        {axisLabel ? <span className="runtime-axis-inline">{axisLabel}</span> : null}
+                        {bucket ? (
+                          <span className="ui-tooltip runtime-bar-tooltip">
+                            <span className="ui-tooltip-title">{`${formatCostValue(bucket.startValue)} - ${formatCostValue(bucket.endValue)}`}</span>
+                            <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {markerAxisLabels.map((marker) => (
+                    <span
+                      key={`marker-axis-${marker.key}`}
+                      className="runtime-axis-inline"
+                      style={{ left: `${marker.targetPercent}%` }}
+                      aria-hidden="true"
+                    >
+                      {marker.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="runtime-empty-state">선택한 조건에 맞는 제출이 없습니다</div>
-        )}
-      </section>
+          ) : <div className="runtime-empty-state">선택한 조건에 맞는 제출이 없습니다</div>}
+        </section>
+      </div>
 
-      <section className="runtime-filter-panel" aria-label="실행계획 요소 필터">
-        <div className="runtime-filter-panel-head">
-          <span className="runtime-filter-panel-title">실행계획 요소 필터</span>
-          <div className="runtime-mode-toggle" role="group" aria-label="필터 조합 방식">
-            {FILTER_MODE_OPTIONS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                className={`runtime-mode-button ${filterMatchMode === option.key ? 'is-selected' : ''}`}
-                aria-pressed={filterMatchMode === option.key}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setFilterMatchMode(option.key);
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="runtime-subfilter-board runtime-plan-shell-panel" role="group" aria-label="실행 계획 요소 세부 선택">
-          {availableBucketFilters
-            .map((filter) => {
-              const selectedValues = getVisibleSelectedValues(selectedBucketFilters[filter.key], filter.options);
-              const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
-
-              return (
-                <div key={filter.key} className="runtime-subfilter-row">
-                  <span className="runtime-subfilter-label">{filter.label}</span>
-                  <div className="runtime-subfilter-options is-bucket">
+      {isFilterPopoverOpen ? (
+        <div
+          className="runtime-filter-overlay"
+          role="presentation"
+        >
+          <div
+            className="runtime-filter-popover"
+            role="dialog"
+            aria-modal="true"
+            aria-label="실행 계획 요소"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="runtime-filter-popover-head">
+              <strong>실행 계획 요소</strong>
+              <div className="runtime-mode-toggle" role="group" aria-label="필터 조합 방식">
+                {FILTER_MODE_OPTIONS.map((option, index) => (
+                  <Fragment key={option.key}>
+                    {index > 0 ? <span className="runtime-mode-divider" aria-hidden="true">/</span> : null}
                     <button
                       type="button"
-                      className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${isAllSelected ? 'is-selected' : ''}`}
-                      aria-pressed={isAllSelected}
+                      className={`runtime-mode-button ${draftFilterMatchMode === option.key ? 'is-selected' : ''}`}
+                      aria-pressed={draftFilterMatchMode === option.key}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        setSelectedBucketFilters((current) => ({ ...current, [filter.key]: isAllSelected ? [] : [...filter.options] }));
+                        setDraftFilterMatchMode(option.key);
                       }}
                     >
-                      <SelectionCheckbox checked={isAllSelected} />
-                      <span className="runtime-check-label">전체</span>
+                      {option.label}
                     </button>
+                  </Fragment>
+                ))}
+              </div>
+              <div className="runtime-filter-popover-actions">
+                <button
+                  type="button"
+                  className="runtime-filter-icon-button is-cancel"
+                  aria-label="실행 계획 요소 필터 취소"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    cancelFilterPopover();
+                  }}
+                >
+                  <CloseIcon />
+                </button>
+                <button
+                  type="button"
+                  className="runtime-filter-icon-button is-apply"
+                  aria-label="실행 계획 요소 필터 적용"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    applyFilterPopover();
+                  }}
+                >
+                  <ApplyIcon />
+                </button>
+              </div>
+            </div>
 
-                    <div className="runtime-subfilter-chip-grid">
-                      {filter.options.map((option) => {
-                        const tooltipId = `${filter.key}-${option}`;
-                        const isSelected = selectedValues.includes(option);
+            <div className="runtime-subfilter-board runtime-plan-shell-panel" role="group" aria-label="실행 계획 요소 세부 선택">
+              {availableBucketFilters.map((filter) => {
+                const selectedValues = getVisibleSelectedValues(draftBucketFilters[filter.key], filter.options);
+                const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
 
-                        return (
-                          <span
-                            key={option}
-                            className="runtime-subfilter-option"
-                            onMouseEnter={(event) => {
-                              scheduleFloatingTooltip(
-                                tooltipId,
-                                event.currentTarget,
-                                getBucketTooltipText(selectedDbms, filter.key, option)
-                              );
-                            }}
-                            onMouseLeave={hideFloatingTooltip}
-                          >
-                            <button
-                              type="button"
-                              className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
-                              aria-pressed={isSelected}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setSelectedBucketFilters((current) => {
-                                  const currentVisibleValues = getVisibleSelectedValues(current[filter.key], filter.options);
-                                  const baseValues = areAllOptionsSelected(currentVisibleValues, filter.options) ? [...filter.options] : currentVisibleValues;
-                                  const nextValues = baseValues.includes(option) ? baseValues.filter((value) => value !== option) : [...baseValues, option];
-                                  return { ...current, [filter.key]: normalizeSelectedValues(nextValues, filter.options) };
-                                });
-                              }}
-                            >
-                              <SelectionCheckbox checked={isSelected} />
-                              <span className="runtime-check-label">{formatBucketDisplayLabel(option)}</span>
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-          <div className="runtime-subfilter-row">
-            <span className="runtime-subfilter-label">Hint</span>
-            <div className="runtime-subfilter-options is-bucket">
-              <button
-                type="button"
-                className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${allHintFiltersSelected ? 'is-selected' : ''}`}
-                aria-pressed={allHintFiltersSelected}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setSelectedHintFilters((current) => areAllOptionsSelected(current, HINT_FILTER_OPTIONS) ? [] : [...ALL_HINT_FILTERS]);
-                }}
-              >
-                <SelectionCheckbox checked={allHintFiltersSelected} />
-                <span className="runtime-check-label">전체</span>
-              </button>
-
-              <div className="runtime-subfilter-chip-grid">
-                {[
-                  { key: 'UNUSED', label: '미사용' },
-                  { key: 'USED', label: '사용' },
-                ].map((option) => {
-                  const isSelected = selectedHintFilters.includes(option.key as HintFilterValue);
-
-                  return (
-                    <span key={option.key} className="runtime-subfilter-option">
+                return (
+                  <div key={filter.key} className="runtime-subfilter-row">
+                    <span className="runtime-subfilter-label">{filter.label}</span>
+                    <div className="runtime-subfilter-options is-bucket">
                       <button
                         type="button"
-                        className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
-                        aria-pressed={isSelected}
+                        className={`runtime-subfilter-button runtime-subfilter-all-button runtime-check-button ${isAllSelected ? 'is-selected' : ''}`}
+                        aria-pressed={isAllSelected}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          setSelectedHintFilters((current) => {
-                            const nextValues = current.includes(option.key as HintFilterValue)
-                              ? current.filter((value) => value !== option.key)
-                              : [...current, option.key as HintFilterValue];
-                            return normalizeSelectedValues(sortHintFilters(nextValues), HINT_FILTER_OPTIONS);
-                          });
+                          setDraftBucketFilters((current) => ({ ...current, [filter.key]: isAllSelected ? [] : [...filter.options] }));
                         }}
                       >
-                        <SelectionCheckbox checked={isSelected} />
-                        <span className="runtime-check-label">{option.label}</span>
+                        <SelectionCheckbox checked={isAllSelected} />
+                        <span className="runtime-check-label">전체</span>
                       </button>
-                    </span>
-                  );
-                })}
+
+                      <div className="runtime-subfilter-chip-grid">
+                        {filter.options.map((option) => {
+                          const tooltipId = `${filter.key}-${option}`;
+                          const isSelected = selectedValues.includes(option);
+
+                          return (
+                            <span
+                              key={option}
+                              className="runtime-subfilter-option"
+                              onMouseEnter={(event) => {
+                                scheduleFloatingTooltip(tooltipId, event.currentTarget, getBucketTooltipText(selectedDbms, filter.key, option));
+                              }}
+                              onMouseLeave={hideFloatingTooltip}
+                            >
+                              <button
+                                type="button"
+                                className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
+                                aria-pressed={isSelected}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setDraftBucketFilters((current) => {
+                                    const currentVisibleValues = getVisibleSelectedValues(current[filter.key], filter.options);
+                                    const isCurrentAllSelected = areAllOptionsSelected(currentVisibleValues, filter.options);
+                                    const baseValues = isCurrentAllSelected ? [] : currentVisibleValues;
+                                    const nextValues = baseValues.includes(option) ? baseValues.filter((value) => value !== option) : [...baseValues, option];
+                                    return { ...current, [filter.key]: normalizeSelectedValues(nextValues, filter.options) };
+                                  });
+                                }}
+                              >
+                                <SelectionCheckbox checked={isSelected} />
+                                <span className="runtime-check-label">{formatBucketDisplayLabel(option)}</span>
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="runtime-subfilter-row">
+                <span className="runtime-subfilter-label">Hint</span>
+                <div className="runtime-subfilter-options is-bucket">
+                  <div className="runtime-subfilter-chip-grid">
+                    {HINT_FILTER_OPTIONS.map((option) => {
+                      const isSelected = draftHintFilters.includes(option.key);
+
+                      return (
+                        <span key={option.key} className="runtime-subfilter-option">
+                          <button
+                            type="button"
+                            className={`runtime-subfilter-button runtime-subfilter-button-plain runtime-check-button ${isSelected ? 'is-selected' : ''}`}
+                            aria-pressed={isSelected}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setDraftHintFilters((current) =>
+                                current.includes(option.key) ? current.filter((value) => value !== option.key) : [...current, option.key]
+                              );
+                            }}
+                          >
+                            <SelectionCheckbox checked={isSelected} />
+                            <span className="runtime-check-label">{option.label}</span>
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </section>
-
-      {selectedRatioItems.length > 0 ? (
-        <section className="runtime-detail-panel" aria-label="상세 통계">
-          <div className="runtime-detail-stat-grid">
-            {selectedRatioItems.map((item) => (
-              <div key={item.id} className="runtime-detail-stat-card">
-                <span className="runtime-stat-copy">
-                  <span className="runtime-stat-meta is-stacked">
-                    <span className="runtime-stat-label">{item.label}</span>
-                    <span className="runtime-stat-detail">{item.detail}</span>
-                  </span>
-                </span>
-                <span className="runtime-stat-value">{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </section>
       ) : null}
 
       {floatingTooltip ? createPortal(

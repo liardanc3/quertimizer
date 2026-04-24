@@ -33,9 +33,9 @@ html.is-dashboard-route .main-content {
 
 .dashboard-section-title h2 {
   margin: 0;
-  color: var(--ink-strong);
+  color: var(--ink-base);
   font-size: 1rem;
-  font-weight: 860;
+  font-weight: 820;
   line-height: 1;
   letter-spacing: -0.03em;
 }
@@ -65,9 +65,9 @@ html.is-dashboard-route .main-content {
   padding: 0 0.08rem;
   border: 0;
   background: transparent;
-  color: var(--ink-base);
+  color: var(--ink-subtle);
   font-size: 0.72rem;
-  font-weight: 760;
+  font-weight: 720;
   cursor: pointer;
 }
 
@@ -232,7 +232,7 @@ html.is-dashboard-route .main-content {
   background: var(--accent-soft);
   color: var(--accent-ink);
   font-size: 0.64rem;
-  font-weight: 820;
+  font-weight: 760;
   line-height: 1;
   white-space: nowrap;
 }
@@ -255,7 +255,7 @@ html.is-dashboard-route .main-content {
 .dashboard-post-title,
 .dashboard-problem-title {
   margin: 0;
-  color: var(--ink-strong);
+  color: var(--ink-base);
   line-height: 1.35;
   letter-spacing: -0.025em;
 }
@@ -266,7 +266,7 @@ html.is-dashboard-route .main-content {
   display: -webkit-box;
   overflow: hidden;
   font-size: 0.9rem;
-  font-weight: 760;
+  font-weight: 720;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -276,7 +276,7 @@ html.is-dashboard-route .main-content {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 0.78rem;
-  font-weight: 720;
+  font-weight: 680;
   line-height: 1.2;
   text-overflow: ellipsis;
   transform: translateY(-0.055rem);
@@ -289,7 +289,7 @@ html.is-dashboard-route .main-content {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 1.12rem;
-  font-weight: 860;
+  font-weight: 800;
   text-overflow: ellipsis;
   transform: translateY(-0.055rem);
   white-space: nowrap;
@@ -348,9 +348,9 @@ html.is-dashboard-route .main-content {
   display: -webkit-box;
   overflow: hidden;
   margin: 0;
-  color: var(--ink-soft);
+  color: var(--ink-subtle);
   font-size: 0.76rem;
-  font-weight: 620;
+  font-weight: 580;
   line-height: 1.7;
   white-space: pre-line;
   -webkit-box-orient: vertical;
@@ -374,7 +374,7 @@ html.is-dashboard-route .main-content {
   flex: 0 0 auto;
   color: var(--ink-subtle);
   font-size: 0.66rem;
-  font-weight: 760;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -394,10 +394,10 @@ html.is-dashboard-route .main-content {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ink-strong);
+  color: var(--ink-base);
   font: inherit;
   font-size: 0.68rem;
-  font-weight: 820;
+  font-weight: 760;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
@@ -428,7 +428,7 @@ html.is-dashboard-route .main-content {
   overflow: hidden;
   min-height: 0;
   font-size: 0.82rem;
-  font-weight: 780;
+  font-weight: 720;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
@@ -460,7 +460,7 @@ html.is-dashboard-route .main-content {
   overflow: hidden;
   color: var(--ink-subtle);
   font-size: 0.58rem;
-  font-weight: 760;
+  font-weight: 700;
   line-height: 1;
   text-align: center;
   text-overflow: ellipsis;
@@ -469,9 +469,9 @@ html.is-dashboard-route .main-content {
 
 .dashboard-problem-metric strong {
   overflow: hidden;
-  color: var(--ink-strong);
+  color: var(--ink-base);
   font-size: 0.68rem;
-  font-weight: 860;
+  font-weight: 800;
   line-height: 1;
   text-align: center;
   text-overflow: ellipsis;

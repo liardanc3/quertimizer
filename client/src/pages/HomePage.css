@@ -1447,21 +1447,27 @@ body.handle-setup-locked {
   justify-items: initial;
 }
 
+.home-page .problem-table-status-text {
+  font-weight: 700;
+}
+
 .home-page .problem-table-status-text.is-solved {
-  color: #1565c0;
+  color: #2f7fd3;
 }
 
 .home-page .problem-table-status-text.is-unsolved {
-  color: #0f172a;
+  color: #334155;
 }
 
 .home-page .problem-number {
-  color: #0f172a;
+  color: #334155;
+  font-weight: 500;
 }
 
 .home-page .problem-title {
+  color: #334155;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.34;
   text-decoration: none;
 }
@@ -1577,7 +1583,7 @@ body.handle-setup-locked {
 }
 
 .home-page .problem-table-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 2.7fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) 48px;
+  grid-template-columns: minmax(0, 0.76fr) minmax(0, 1.05fr) minmax(0, 2.94fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) 48px;
 }
 
 .home-page .problem-table-entry,
@@ -1600,7 +1606,7 @@ body.handle-setup-locked {
 
 .home-page .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
   margin-top: 0;
-  padding: 0.3rem 0 0.92rem;
+  padding: 0.18rem 0 0.56rem;
   border-top: 0;
 }
 
@@ -1692,21 +1698,27 @@ body.handle-setup-locked {
   justify-items: initial;
 }
 
+.home-page .problem-table-status-text {
+  font-weight: 700;
+}
+
 .home-page .problem-table-status-text.is-solved {
-  color: #1565c0;
+  color: #2f7fd3;
 }
 
 .home-page .problem-table-status-text.is-unsolved {
-  color: #0f172a;
+  color: #334155;
 }
 
 .home-page .problem-number {
-  color: #0f172a;
+  color: #334155;
+  font-weight: 500;
 }
 
 .home-page .problem-title {
+  color: #334155;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.34;
   text-decoration: none;
 }
@@ -1765,5 +1777,69 @@ body.handle-setup-locked {
 
   .home-page .problem-stats-toggle-button:disabled {
     color: var(--line-strong);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .home-page .home-problem-search-form .home-problem-search-button,
+  .home-page .problem-control-label,
+  .home-page .problem-variance-value-separator,
+  .home-page .problem-variance-value-unit,
+  .home-page .problem-sort-toggle-button,
+  .home-page .problem-status-check,
+  .home-page .problem-status-check-text,
+  .home-page .problem-solved-count {
+    color: #cbd5e1;
+  }
+
+  .home-page .problem-table-head {
+    border-bottom-color: rgba(148, 163, 184, 0.5);
+    color: #cbd5e1;
+  }
+
+  .home-page .problem-table-cell {
+    color: #dbe4f0;
+  }
+
+  .home-page .problem-table-status-text.is-solved {
+    color: #93c5fd;
+  }
+
+  .home-page .problem-table-status-text.is-unsolved,
+  .home-page .problem-number,
+  .home-page .problem-title {
+    color: #f1f5f9;
+  }
+
+  .home-page .problem-table-head-filter-trigger,
+  .home-page .problem-stats-toggle-button {
+    color: #cbd5e1;
+  }
+
+  .home-page .problem-table-head-filter-trigger:hover,
+  .home-page .problem-table-head-filter-trigger.is-open,
+  .home-page .problem-table-head-filter-trigger.is-active,
+  .home-page .problem-stats-toggle-button:hover:not(:disabled),
+  .home-page .problem-stats-toggle-button.is-open {
+    color: #93c5fd;
+  }
+
+  .home-page .problem-table-header-menu,
+  .home-page .problem-table-header-menu-spread {
+    border-color: rgba(148, 163, 184, 0.52);
+    background: rgba(15, 23, 42, 0.98);
+  }
+
+  .home-page .problem-checkbox-ui,
+  .home-page .problem-status-check-ui,
+  .home-page .problem-variance-value-input {
+    border-color: rgba(148, 163, 184, 0.64);
+  }
+
+  .home-page .problem-variance-value-button,
+  .home-page .problem-variance-value-editor,
+  .home-page .problem-variance-value-input,
+  .home-page .problem-card-action {
+    color: #f1f5f9;
   }
 }

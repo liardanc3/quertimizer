@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import type { DbmsType, ProblemSummary } from '../../types/domain';
 import ProblemRuntimeChart from './ProblemRuntimeChart';
 
@@ -51,22 +51,11 @@ export default function ProblemCard({
   onSearchSelect,
   onSelect,
 }: ProblemCardProps) {
-  const [isStatsExpanded, setIsStatsExpanded] = useState(true);
-  const [activeSolvedCount, setActiveSolvedCount] = useState(problem.solvedCount);
+  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
   const hasSubmissionHistory = (problem.totalSubmitCount ?? 0) > 0;
   const visibleStatsEnabled = showStats && isStatsExpanded && hasSubmissionHistory;
   const problemNumber = problem.problemNumber ?? String(problem.number);
   const solveStateLabel = showSolveState ? (problem.isSolved ? '해결' : '미해결') : '-';
-
-  useEffect(() => {
-    setActiveSolvedCount(problem.solvedCount);
-  }, [problem.solvedCount]);
-
-  useEffect(() => {
-    if (!hasSubmissionHistory) {
-      setIsStatsExpanded(false);
-    }
-  }, [hasSubmissionHistory]);
 
   return (
     <div
@@ -117,7 +106,7 @@ export default function ProblemCard({
         </div>
 
         <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label="푼 사람 수">
-          {formatCount(activeSolvedCount)}
+          {formatCount(problem.solvedCount)}
         </div>
 
         <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label="전체 제출">
@@ -152,14 +141,15 @@ export default function ProblemCard({
         </div>
       </div>
 
-      <div className={`problem-table-stats ${visibleStatsEnabled ? '' : 'is-hidden'}`.trim()}>
-        <ProblemRuntimeChart
-          problem={problem}
-          forcedDbms={currentDbms}
-          onSearchSelect={onSearchSelect}
-          onSolvedCountChange={setActiveSolvedCount}
-        />
-      </div>
+      {visibleStatsEnabled ? (
+        <div className="problem-table-stats">
+          <ProblemRuntimeChart
+            problem={problem}
+            forcedDbms={currentDbms}
+            onSearchSelect={onSearchSelect}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -30,6 +30,7 @@ interface HomePageFavoriteSnapshot {
   committedSpreadRateRange: RangeSelection | null;
 }
 const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
+const PROBLEM_PAGE_SIZE = 10;
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
   { value: 'oracle', label: 'Oracle' },
@@ -67,7 +68,7 @@ function resolveSolveState(showSolved: boolean, showUnsolved: boolean): SolveSta
 function createEmptyProblemPage(): ProblemPage {
   return {
     currentPage: 1,
-    pageSize: 20,
+    pageSize: PROBLEM_PAGE_SIZE,
     totalCount: 0,
     totalPages: 1,
     spreadRateRange: { min: 0, max: 0 },
@@ -322,13 +323,24 @@ export default function HomePage() {
     setIsPageJumpEditing(false);
 
     if (nextPage !== problemPage.currentPage) {
-      setRequestedPage(nextPage);
+      requestProblemPage(nextPage);
     }
   }
 
   function cancelPageJump() {
     setPageJumpDraft(String(problemPage.currentPage));
     setIsPageJumpEditing(false);
+  }
+
+  function requestProblemPage(nextPage: number) {
+    const normalizedPage = Math.min(problemPage.totalPages, Math.max(1, nextPage));
+
+    if (normalizedPage === problemPage.currentPage) {
+      return;
+    }
+
+    setIsLoading(true);
+    setRequestedPage(normalizedPage);
   }
 
   return (
@@ -454,7 +466,7 @@ export default function HomePage() {
             <button
               type="button"
               className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
+              onClick={() => requestProblemPage(problemPage.currentPage - 1)}
               disabled={problemPage.currentPage === 1}
             >
               이전
@@ -503,7 +515,7 @@ export default function HomePage() {
             <button
               type="button"
               className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.min(problemPage.totalPages, page + 1))}
+              onClick={() => requestProblemPage(problemPage.currentPage + 1)}
               disabled={problemPage.currentPage === problemPage.totalPages}
             >
               다음

@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class ProblemStore {
 
-    private static final int PROBLEM_PAGE_SIZE = 20;
+    private static final int PROBLEM_PAGE_SIZE = 10;
     private static final double BYTES_PER_MB = 1024d * 1024d;
 
     private final ProblemRepository problemRepository;
@@ -516,4 +516,3 @@ public class ProblemStore {
     }
 
 }
-
