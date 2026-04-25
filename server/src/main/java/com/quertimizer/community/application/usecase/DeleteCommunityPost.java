@@ -10,7 +10,7 @@ public class DeleteCommunityPost {
 
     private final CommunityService communityService;
 
-    public boolean execute(String postId, String handle) {
+    public boolean execute(Long postId, String handle) {
         // 게시글을 삭제
         return communityService.deletePost(postId, handle);
     }

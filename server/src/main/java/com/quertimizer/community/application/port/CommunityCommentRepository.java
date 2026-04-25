@@ -13,7 +13,7 @@ public interface CommunityCommentRepository {
 
     <S extends CommunityComment> S save(S communityComment);
 
-    List<CommunityComment> findAllByPostIdOrderByCreatedAtAsc(String postId);
+    List<CommunityComment> findAllByPostIdOrderByCreatedAtAsc(Long postId);
 
     List<CommunityComment> findAllByHandleOrderByCreatedAtDesc(String handle);
 
@@ -21,5 +21,5 @@ public interface CommunityCommentRepository {
 
     long countByHandle(String handle);
 
-    void deleteAllByPostId(String postId);
+    void deleteAllByPostId(Long postId);
 }

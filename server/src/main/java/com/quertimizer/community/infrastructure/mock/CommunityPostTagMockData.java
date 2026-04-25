@@ -2,6 +2,7 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.community.application.port.CommunityPostRepository;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import jakarta.annotation.PostConstruct;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @Component("communityPostTagMockData")
 @DependsOn("communityPostMockData")
@@ -24,12 +26,22 @@ public class CommunityPostTagMockData {
     @PostConstruct
     public void seed() {
         // 기본 게시글 태그 Mock 데이터 적재
+        if (!communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(1L).isEmpty()) {
+            return;
+        }
+
         List<CommunityPostTag> postTags = new ArrayList<>();
 
         for (CommunityPost post : communityPostRepository.findAll().stream()
                 .sorted(Comparator.comparing(CommunityPost::getPostId))
                 .toList()) {
-            List<String> tags = createTags(resolvePostNumber(post.getPostId()));
+            Optional<Integer> postNumber = resolvePostNumber(post.getPostId());
+
+            if (postNumber.isEmpty()) {
+                continue;
+            }
+
+            List<String> tags = createTags(postNumber.get());
 
             for (int tagIndex = 0; tagIndex < tags.size(); tagIndex++) {
                 postTags.add(CommunityPostTag.create(post.getPostId(), tags.get(tagIndex), tagIndex + 1));
@@ -70,8 +82,8 @@ public class CommunityPostTagMockData {
         };
     }
 
-    private int resolvePostNumber(String postId) {
+    private Optional<Integer> resolvePostNumber(Long postId) {
         // 게시글 번호 결정
-        return Integer.parseInt(postId.substring(postId.length() - 2));
+        return CommunityPostIdPolicy.resolveSeedPostNumber(postId);
     }
 }

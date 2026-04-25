@@ -1,6 +1,7 @@
 package com.quertimizer.community.presentation.support;
 
 import com.quertimizer.auth.application.service.AuthService;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -22,8 +23,8 @@ public class CommunitySupport {
         return authService.resolveCurrentHandle(authentication.getName());
     }
 
-    public URI buildPostLocation(String postId) {
+    public URI buildPostLocation(Long postId) {
         // 게시글 상세 URI를 생성
-        return URI.create("/community/posts/" + postId);
+        return URI.create("/community/posts/" + CommunityPostIdPolicy.format(postId));
     }
 }

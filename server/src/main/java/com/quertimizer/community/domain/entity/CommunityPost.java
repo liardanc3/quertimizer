@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "community_post")
@@ -18,8 +17,8 @@ import java.util.UUID;
 public class CommunityPost {
 
     @Id
-    @Column(name = "post_id", nullable = false, length = 50)
-    private String postId;
+    @Column(name = "post_id", nullable = false)
+    private Long postId;
 
     @Column(name = "handle", nullable = false, length = 50)
     private String handle;
@@ -27,11 +26,17 @@ public class CommunityPost {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @Column(name = "content_html", nullable = false, columnDefinition = "TEXT")
-    private String contentHtml;
+    @Column(name = "content_json", nullable = false, columnDefinition = "TEXT")
+    private String contentJson;
 
-    @Column(name = "content_text", nullable = false, columnDefinition = "TEXT")
-    private String contentText;
+    @Column(name = "plain_text_summary", nullable = false, columnDefinition = "TEXT")
+    private String plainTextSummary;
+
+    @Column(name = "image_ids", nullable = false, columnDefinition = "TEXT")
+    private String imageIds;
+
+    @Column(length = 20)
+    private String category;
 
     @Column(name = "view_count", nullable = false)
     private int viewCount;
@@ -48,14 +53,22 @@ public class CommunityPost {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public static CommunityPost create(String handle, String title, String contentHtml, String contentText) {
+    public static CommunityPost create(Long postId,
+                                       String handle,
+                                       String title,
+                                       String contentJson,
+                                       String plainTextSummary,
+                                       String imageIds,
+                                       String category) {
         // 게시글 생성
         return new CommunityPost(
-                "community-" + UUID.randomUUID().toString().replace("-", ""),
+                postId,
                 handle,
                 title,
-                contentHtml,
-                contentText,
+                contentJson,
+                plainTextSummary,
+                imageIds,
+                category,
                 0,
                 0,
                 0,
@@ -64,18 +77,21 @@ public class CommunityPost {
         );
     }
 
-    public static CommunityPost create(String postId,
-                                       String handle,
+    public static CommunityPost create(Long postId, String handle,
                                        String title,
-                                       String contentHtml,
-                                       String contentText,
+                                       String contentJson,
+                                       String plainTextSummary,
+                                       String imageIds,
+                                       String category,
                                        LocalDateTime createdAt) {
         return new CommunityPost(
                 postId,
                 handle,
                 title,
-                contentHtml,
-                contentText,
+                contentJson,
+                plainTextSummary,
+                imageIds,
+                category,
                 0,
                 0,
                 0,
@@ -84,11 +100,13 @@ public class CommunityPost {
         );
     }
 
-    public void changeContent(String title, String contentHtml, String contentText) {
+    public void changeContent(String title, String contentJson, String plainTextSummary, String imageIds, String category) {
         // 게시글 본문 변경
         this.title = title;
-        this.contentHtml = contentHtml;
-        this.contentText = contentText;
+        this.contentJson = contentJson;
+        this.plainTextSummary = plainTextSummary;
+        this.imageIds = imageIds;
+        this.category = category;
         this.updatedAt = LocalDateTime.now();
     }
 
@@ -117,11 +135,12 @@ public class CommunityPost {
         this.commentCount = Math.max(0, this.commentCount - Math.max(amount, 0));
     }
 
-    private CommunityPost(String postId,
-                          String handle,
+    private CommunityPost(Long postId, String handle,
                           String title,
-                          String contentHtml,
-                          String contentText,
+                          String contentJson,
+                          String plainTextSummary,
+                          String imageIds,
+                          String category,
                           int viewCount,
                           int likeCount,
                           int commentCount,
@@ -130,8 +149,10 @@ public class CommunityPost {
         this.postId = postId;
         this.handle = handle;
         this.title = title;
-        this.contentHtml = contentHtml;
-        this.contentText = contentText;
+        this.contentJson = contentJson;
+        this.plainTextSummary = plainTextSummary;
+        this.imageIds = imageIds;
+        this.category = category;
         this.viewCount = viewCount;
         this.likeCount = likeCount;
         this.commentCount = commentCount;

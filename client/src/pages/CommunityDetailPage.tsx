@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent as ReactChangeEvent, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import CommunityCommentThread from '../components/community/CommunityCommentThread';
+import CommunityTiptapEditor from '../components/community/CommunityTiptapEditor';
+import CommunityTiptapViewer from '../components/community/CommunityTiptapViewer';
 import {
   addCommunityComment,
   deleteCommunityPost,
@@ -9,8 +11,11 @@ import {
   toggleCommunityCommentLike,
   toggleCommunityPostLike,
   updateCommunityPost,
+  uploadCommunityImage,
   type CommunityPostDetail,
 } from '../lib/communityApi';
+import { COMMUNITY_POST_CONTENT_MAX_BYTES } from '../lib/communityContent';
+import { createCommunityEditorSnapshotFromJson, type CommunityEditorSnapshot } from '../lib/communityTiptap';
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
 import { showSessionToast, useMockSession } from '../lib/session';
@@ -36,6 +41,15 @@ function getLocationHashSnapshot() {
 
 const numberFormatter = new Intl.NumberFormat('ko-KR');
 const COMMENT_LOGIN_DESCRIPTION = '작성 중인 댓글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
+type EditableCommunityCategory = Extract<CommunityPostDetail['category'], 'discussion' | 'question' | 'notice'>;
+
+const emptyEditorSnapshot: CommunityEditorSnapshot = {
+  contentJson: '',
+  plainTextSummary: '',
+  imageIds: [],
+  contentByteLength: 0,
+  empty: true,
+};
 
 function formatBoardDate(value: string) {
   const date = new Date(value);
@@ -68,57 +82,34 @@ function getCategoryLabel(value: CommunityPostDetail['category']) {
   return '자유';
 }
 
+function CategoryArrowIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="m4.8 6.4 3.2 3.2 3.2-3.2" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function normalizeEditableCategory(category?: string): EditableCommunityCategory {
+  if (category === 'notice' || category === 'question') {
+    return category;
+  }
+
+  return 'discussion';
+}
+
+function createCategoryOptions(isAdmin: boolean, selectedCategory: EditableCommunityCategory) {
+  const options: EditableCommunityCategory[] = ['discussion', 'question'];
+
+  if (isAdmin || selectedCategory === 'notice') {
+    options.push('notice');
+  }
+
+  return options;
+}
+
 function normalizeTag(value: string) {
   return value.trim().replace(/^#/, '');
-}
-
-function escapeHtmlAttribute(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function hasMeaningfulHtml(value: string) {
-  const withoutTags = value
-    .replace(/<img[\s\S]*?>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return withoutTags.length > 0 || /<img[\s\S]*?>/i.test(value);
-}
-
-function stripLeadingHeadingBlocks(contentHtml: string) {
-  if (typeof window === 'undefined' || contentHtml.trim() === '') {
-    return contentHtml;
-  }
-
-  const container = window.document.createElement('div');
-  container.innerHTML = contentHtml;
-
-  while (container.firstElementChild) {
-    const firstElement = container.firstElementChild;
-    const tagName = firstElement.tagName.toLowerCase();
-    const isEmptyParagraph = tagName == 'p' && (firstElement.textContent ?? '').replace(/\s+/g, '').replace(/&nbsp;/gi, '') === '';
-
-    if (tagName === 'br' || isEmptyParagraph) {
-      firstElement.remove();
-      continue;
-    }
-
-    if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
-      firstElement.remove();
-      continue;
-    }
-
-    break;
-  }
-
-  return container.innerHTML;
 }
 
 function LinkCopyIcon() {
@@ -207,48 +198,11 @@ function SaveEditIcon() {
   );
 }
 
-function BoldToolIcon() {
-  return <span aria-hidden="true">B</span>;
-}
-
-function UnderlineToolIcon() {
-  return <span aria-hidden="true" className="community-editor-tool-underlined">U</span>;
-}
-
-function QuoteToolIcon() {
-  return <span aria-hidden="true">"</span>;
-}
-
-function CodeToolIcon() {
-  return <span aria-hidden="true">&lt;/&gt;</span>;
-}
-
-function ImageToolIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2.2" y="3" width="11.6" height="10" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="5.5" cy="6.3" r="1.1" fill="currentColor" />
-      <path d="m4.1 11 2.7-2.8 2.2 2.2 1.4-1.4L12 11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function DisclosureToolIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M3.3 5.2h9.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-      <path d="m6 7.2 2 2 2-2" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3.3 11.1h9.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
-  const { isAuthenticated } = useMockSession();
+  const { isAuthenticated, isAdmin } = useMockSession();
   const locationHash = useSyncExternalStore(subscribeLocationHash, getLocationHashSnapshot, () => '');
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
@@ -258,13 +212,14 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState<EditableCommunityCategory>('discussion');
+  const [isEditCategoryMenuOpen, setIsEditCategoryMenuOpen] = useState(false);
   const [editDraftTag, setEditDraftTag] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
-  const [editContentHtml, setEditContentHtml] = useState('');
-  const editContentRef = useRef<HTMLDivElement | null>(null);
-  const editImageInputRef = useRef<HTMLInputElement | null>(null);
-  const savedEditRangeRef = useRef<Range | null>(null);
+  const [editInitialContentJson, setEditInitialContentJson] = useState('');
+  const [editSnapshot, setEditSnapshot] = useState<CommunityEditorSnapshot>(emptyEditorSnapshot);
   const hasCommentDraft = commentDraft.trim() !== '' || Object.values(replyDrafts).some((replyDraft) => replyDraft.trim() !== '');
+  const editCategoryOptions = createCategoryOptions(isAdmin, editCategory);
 
   useEffect(() => {
     setLoginOverlayDescription(hasCommentDraft ? COMMENT_LOGIN_DESCRIPTION : null);
@@ -275,7 +230,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    setErrorMessage(null);
 
     fetchCommunityPostDetail(postId)
       .then((nextPost) => {
@@ -285,13 +239,12 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
         setPost(nextPost);
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (cancelled) {
           return;
         }
 
         setPost(null);
-        setErrorMessage(error instanceof Error ? error.message : '게시글을 불러오지 못했다.');
       })
       .finally(() => {
         if (!cancelled) {
@@ -338,15 +291,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     };
   }, [locationHash, post]);
 
-  useEffect(() => {
-    if (!isEditing || !editContentRef.current) {
-      return;
-    }
-
-    editContentRef.current.innerHTML = editContentHtml;
-  }, [isEditing]);
-
-
   async function reloadPost() {
     try {
       const nextPost = await fetchCommunityPostDetail(postId);
@@ -364,157 +308,21 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     }
 
     setEditTitle(post.title);
+    setEditCategory(normalizeEditableCategory(post.category));
+    setIsEditCategoryMenuOpen(false);
     setEditDraftTag('');
     setEditTags(Array.from(new Set(post.tags.map(normalizeTag).filter((tag) => tag !== ''))).slice(0, 7));
-    setEditContentHtml(post.contentHtml);
+    setEditInitialContentJson(post.contentJson);
+    setEditSnapshot(createCommunityEditorSnapshotFromJson(post.contentJson));
     setIsEditing(true);
     setFeedback(null);
   }
 
   function closeEditMode() {
     setIsEditing(false);
+    setIsEditCategoryMenuOpen(false);
     setEditDraftTag('');
     setIsSavingEdit(false);
-  }
-
-  function rememberEditSelection() {
-    const selection = window.getSelection();
-    const editor = editContentRef.current;
-
-    if (!selection || !editor || selection.rangeCount === 0) {
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-
-    if (!editor.contains(range.commonAncestorContainer)) {
-      return;
-    }
-
-    savedEditRangeRef.current = range.cloneRange();
-  }
-
-  function placeEditCaretAtEnd() {
-    const editor = editContentRef.current;
-    const selection = window.getSelection();
-
-    if (!editor || !selection) {
-      return;
-    }
-
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    savedEditRangeRef.current = range.cloneRange();
-  }
-
-  function restoreEditSelection() {
-    const editor = editContentRef.current;
-    const selection = window.getSelection();
-
-    if (!editor || !selection) {
-      return;
-    }
-
-    editor.focus();
-
-    if (!savedEditRangeRef.current) {
-      placeEditCaretAtEnd();
-      return;
-    }
-
-    try {
-      selection.removeAllRanges();
-      selection.addRange(savedEditRangeRef.current);
-    } catch {
-      placeEditCaretAtEnd();
-    }
-  }
-
-  function syncEditContentHtml() {
-    const nextHtml = editContentRef.current?.innerHTML ?? '';
-    setEditContentHtml(nextHtml);
-    rememberEditSelection();
-    setFeedback(null);
-  }
-
-  function runEditEditorCommand(command: string, value?: string) {
-    restoreEditSelection();
-    document.execCommand(command, false, value);
-    syncEditContentHtml();
-  }
-
-  function insertEditCodeBlock() {
-    restoreEditSelection();
-    document.execCommand('insertHTML', false, '<pre><code><br /></code></pre><p><br /></p>');
-    syncEditContentHtml();
-  }
-
-  function insertEditImage(source: string, altText: string) {
-    restoreEditSelection();
-    document.execCommand(
-      'insertHTML',
-      false,
-      `<figure class="community-editor-figure"><img src="${escapeHtmlAttribute(source)}" alt="${escapeHtmlAttribute(altText)}" /></figure><p><br /></p>`,
-    );
-    syncEditContentHtml();
-  }
-
-  function insertEditDisclosureBlock() {
-    restoreEditSelection();
-    document.execCommand(
-      'insertHTML',
-      false,
-      '<details class="community-editor-disclosure" open><summary>접고 펼치기</summary><p><br /></p></details><p><br /></p>',
-    );
-    syncEditContentHtml();
-  }
-
-  function readAndInsertEditImage(file: File) {
-    if (!file.type.startsWith('image/')) {
-      setFeedback('이미지 파일만 첨부할 수 있다.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        return;
-      }
-
-      insertEditImage(reader.result, file.name || '첨부 이미지');
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function handleEditToolbarMouseDown(event: ReactMouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
-  }
-
-  function handleEditImageFileChange(event: ReactChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    readAndInsertEditImage(file);
-    event.target.value = '';
-  }
-
-  function handleEditEditorPaste(event: ReactClipboardEvent<HTMLDivElement>) {
-    const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'));
-    const file = imageItem?.getAsFile();
-
-    if (!file) {
-      return;
-    }
-
-    event.preventDefault();
-    rememberEditSelection();
-    readAndInsertEditImage(file);
   }
 
   function handleAddEditTag(rawValue = editDraftTag) {
@@ -544,17 +352,80 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     setEditTags((currentTags) => currentTags.filter((tag) => tag !== tagToRemove));
   }
 
+  function selectEditCategory(nextCategory: EditableCommunityCategory) {
+    setEditCategory(nextCategory);
+    setIsEditCategoryMenuOpen(false);
+    setFeedback(null);
+  }
+
+  function renderEditCategorySelect() {
+    return (
+      <div className="community-category-select-wrap community-title-category-wrap">
+        <button
+          type="button"
+          className="community-title-category-trigger"
+          onClick={() => setIsEditCategoryMenuOpen((currentValue) => !currentValue)}
+          aria-haspopup="menu"
+          aria-expanded={isEditCategoryMenuOpen}
+          aria-label="게시글 구분 선택"
+        >
+          <span>{getCategoryLabel(editCategory)}</span>
+          <CategoryArrowIcon />
+        </button>
+
+        {isEditCategoryMenuOpen ? (
+          <div className="community-category-select-menu community-title-category-menu" role="menu">
+            {editCategoryOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`community-category-select-item ${option === editCategory ? 'is-selected' : ''}`.trim()}
+                onClick={() => selectEditCategory(option)}
+                role="menuitem"
+              >
+                {getCategoryLabel(option)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderEditActions() {
+    return (
+      <div className="community-detail-tab-actions community-title-edit-actions community-detail-icon-actions">
+        <button type="button" className="community-detail-icon-button is-cancel" onClick={closeEditMode} aria-label="수정 취소">
+          <CancelEditIcon />
+        </button>
+        <button
+          type="button"
+          className="community-detail-icon-button is-confirm"
+          onClick={() => void handleSaveEdit()}
+          disabled={isSavingEdit}
+          aria-label={isSavingEdit ? '저장 중' : '저장'}
+        >
+          <SaveEditIcon />
+        </button>
+      </div>
+    );
+  }
+
   async function handleSaveEdit() {
     const normalizedTitle = editTitle.trim();
-    const currentHtml = editContentRef.current?.innerHTML ?? editContentHtml;
 
     if (normalizedTitle === '') {
       setFeedback('제목을 입력해야 한다.');
       return;
     }
 
-    if (!hasMeaningfulHtml(currentHtml)) {
+    if (editSnapshot.empty) {
       setFeedback('본문을 입력해야 한다.');
+      return;
+    }
+
+    if (editSnapshot.contentByteLength > COMMUNITY_POST_CONTENT_MAX_BYTES) {
+      setFeedback('본문은 최대 500000 Byte까지 입력할 수 있다.');
       return;
     }
 
@@ -563,8 +434,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     try {
       await updateCommunityPost(postId, {
         title: normalizedTitle,
+        category: editCategory,
         tags: Array.from(new Set(editTags.map(normalizeTag).filter((tag) => tag !== ''))).slice(0, 7),
-        contentHtml: currentHtml,
+        contentJson: editSnapshot.contentJson,
+        plainTextSummary: editSnapshot.plainTextSummary,
+        imageIds: editSnapshot.imageIds,
       });
       setIsEditing(false);
       setFeedback(null);
@@ -697,7 +571,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   async function handleDeletePost() {
-    if (!window.confirm('게시글을 삭제할까?')) {
+    if (!window.confirm('게시글을 삭제하시겠습니까?')) {
       return;
     }
 
@@ -709,7 +583,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     }
   }
 
-  function handleContentClick(event: ReactMouseEvent<HTMLDivElement>) {
+  function handleBack() {
+    navigate(COMMUNITY_PATH);
+  }
+
+  function handleContentClick(event: MouseEvent<HTMLDivElement>) {
     if (isEditing) {
       return;
     }
@@ -737,10 +615,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   const visibleTags = useMemo(() => Array.from(new Set(post?.tags ?? [])), [post?.tags]);
-  const renderedContentHtml = useMemo(
-    () => stripLeadingHeadingBlocks(post?.contentHtml || (post ? `<p>${post.content}</p>` : '')),
-    [post?.content, post?.contentHtml],
-  );
 
   if (isLoading) {
     return (
@@ -774,9 +648,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               </div>
             </div>
 
-            <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-              <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-            </div>
+            <div className="community-table-loading-overlay" aria-live="polite" aria-label="로딩 중" />
           </div>
         </section>
 
@@ -788,9 +660,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <span className="community-loading-placeholder is-long" />
             </div>
 
-            <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-              <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-            </div>
+            <div className="community-table-loading-overlay" aria-live="polite" aria-label="로딩 중" />
           </div>
         </section>
       </div>
@@ -810,66 +680,46 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   return (
     <div className="page-stack community-detail-page">
       <section className="panel-card community-detail-card">
-        {isEditing ? (
-          <input
-            ref={editImageInputRef}
-            type="file"
-            accept="image/*"
-            className="community-editor-file-input"
-            onChange={handleEditImageFileChange}
-          />
-        ) : null}
+        {!isEditing ? (
+          <div className="community-detail-topbar">
+            <div className="solve-dbms-tab-row community-detail-tab-row" aria-label="게시글 구분">
+              <span className="solve-dbms-tab is-selected community-detail-category-tab">{getCategoryLabel(post.category)}</span>
 
-        <div className="community-detail-topbar">
-          <div className="solve-dbms-tab-row community-detail-tab-row" aria-label="게시글 구분">
-            <span className="solve-dbms-tab is-selected community-detail-category-tab">{getCategoryLabel(post.category)}</span>
-
-            <div className="community-detail-tab-actions community-detail-icon-actions">
-              {isEditing ? (
-                <>
-                  <button type="button" className="community-detail-icon-button is-cancel" onClick={closeEditMode} aria-label="수정 취소">
-                    <CancelEditIcon />
+              <div className="community-detail-tab-actions community-detail-icon-actions">
+                <button type="button" className="community-detail-icon-button" onClick={handleCopyLink} aria-label="링크 복사">
+                  <LinkCopyIcon />
+                </button>
+                {post.editable ? (
+                  <button type="button" className="community-detail-icon-button" onClick={openEditMode} aria-label="수정하기">
+                    <EditIcon />
                   </button>
-                  <button
-                    type="button"
-                    className="community-detail-icon-button is-confirm"
-                    onClick={handleSaveEdit}
-                    disabled={isSavingEdit}
-                    aria-label={isSavingEdit ? '저장 중' : '저장'}
-                  >
-                    <SaveEditIcon />
+                ) : null}
+                {post.editable ? (
+                  <button type="button" className="community-detail-icon-button is-danger" onClick={() => void handleDeletePost()} aria-label="삭제하기">
+                    <DeleteIcon />
                   </button>
-                </>
-              ) : (
-                <>
-                  <button type="button" className="community-detail-icon-button" onClick={handleCopyLink} aria-label="링크 복사">
-                    <LinkCopyIcon />
-                  </button>
-                  {post.editable ? (
-                    <button type="button" className="community-detail-icon-button" onClick={openEditMode} aria-label="수정하기">
-                      <EditIcon />
-                    </button>
-                  ) : null}
-                  {post.editable ? (
-                    <button type="button" className="community-detail-icon-button is-danger" onClick={handleDeletePost} aria-label="삭제하기">
-                      <DeleteIcon />
-                    </button>
-                  ) : null}
-                </>
-              )}
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="community-detail-header">
           {isEditing ? (
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(event) => setEditTitle(event.target.value)}
-              className="text-field community-detail-title-input"
-              placeholder="제목을 입력해."
-            />
+            <div className="community-title-input-row community-title-edit-row">
+              {renderEditCategorySelect()}
+
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+                onFocus={() => setIsEditCategoryMenuOpen(false)}
+                className="text-field community-detail-title-input"
+                placeholder="제목"
+              />
+
+              {renderEditActions()}
+            </div>
           ) : (
             <h1 className="community-detail-title">{post.title}</h1>
           )}
@@ -879,12 +729,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               {editTags.length > 0 ? (
                 <div className="community-detail-edit-tag-list">
                   {editTags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className="community-detail-edit-tag"
-                      onClick={() => handleRemoveEditTag(tag)}
-                    >
+                    <button key={tag} type="button" className="community-detail-edit-tag" onClick={() => handleRemoveEditTag(tag)}>
                       <span>#{tag}</span>
                       <span aria-hidden="true" className="community-detail-edit-tag-remove">
                         <TagRemoveIcon />
@@ -939,11 +784,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           ) : null}
 
           <div className="community-detail-meta">
-            <button
-              type="button"
-              className="community-author-button"
-              onClick={() => navigate(getProfilePath(post.authorHandle))}
-            >
+            <button type="button" className="community-author-button" onClick={() => navigate(getProfilePath(post.authorHandle))}>
               <span>{post.authorHandle}</span>
             </button>
             <span>{formatBoardDate(post.createdAt)}</span>
@@ -970,82 +811,18 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
           <div className="community-content-body" onClick={handleContentClick}>
             {isEditing ? (
-              <div className="community-editor-shell community-detail-editor-shell">
-                <div className="community-editor-toolbar community-detail-editor-toolbar">
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleEditToolbarMouseDown}
-                    onClick={() => runEditEditorCommand('bold')}
-                    aria-label="굵게"
-                  >
-                    <BoldToolIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleEditToolbarMouseDown}
-                    onClick={() => runEditEditorCommand('underline')}
-                    aria-label="밑줄"
-                  >
-                    <UnderlineToolIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleEditToolbarMouseDown}
-                    onClick={() => runEditEditorCommand('formatBlock', 'blockquote')}
-                    aria-label="인용"
-                  >
-                    <QuoteToolIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleEditToolbarMouseDown}
-                    onClick={insertEditCodeBlock}
-                    aria-label="코드 영역"
-                  >
-                    <CodeToolIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleEditToolbarMouseDown}
-                    onClick={() => editImageInputRef.current?.click()}
-                    aria-label="이미지 첨부"
-                  >
-                    <ImageToolIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="mini-toggle community-editor-tool"
-                    onMouseDown={handleEditToolbarMouseDown}
-                    onClick={insertEditDisclosureBlock}
-                    aria-label="접고 펼치기 영역"
-                  >
-                    <DisclosureToolIcon />
-                  </button>
-                </div>
-
-                <div
-                  ref={editContentRef}
-                  className={`community-editor-body community-detail-editor-body ${hasMeaningfulHtml(editContentHtml) ? '' : 'is-empty'}`.trim()}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={syncEditContentHtml}
-                  onBlur={rememberEditSelection}
-                  onKeyUp={rememberEditSelection}
-                  onMouseUp={rememberEditSelection}
-                  onPaste={handleEditEditorPaste}
-                  data-placeholder="본문을 입력해."
-                />
-              </div>
-            ) : (
-              <div
-                className="community-detail-rich-content"
-                dangerouslySetInnerHTML={{ __html: renderedContentHtml }}
+              <CommunityTiptapEditor
+                initialContentJson={editInitialContentJson}
+                placeholder=""
+                onSnapshot={(snapshot) => {
+                  setEditSnapshot(snapshot);
+                  setFeedback(null);
+                }}
+                onUploadImage={uploadCommunityImage}
+                onFeedback={setFeedback}
               />
+            ) : (
+              <CommunityTiptapViewer contentJson={post.contentJson} />
             )}
           </div>
         </div>
@@ -1072,12 +849,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               onKeyDown={handleCommentDraftKeyDown}
               placeholder="댓글 추가"
             />
-            <button
-              type="button"
-              className="community-comment-submit-icon"
-              onClick={() => void handleSubmitComment()}
-              aria-label="댓글 등록"
-            >
+            <button type="button" className="community-comment-submit-icon" onClick={() => void handleSubmitComment()} aria-label="댓글 등록">
               <SendIcon />
             </button>
           </div>
@@ -1097,9 +869,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                 onToggleLike={handleToggleCommentLike}
               />
             ))
-          ) : (
-            <div className="community-comment-empty">첫 댓글을 남겨라.</div>
-          )}
+          ) : null}
         </div>
       </section>
 

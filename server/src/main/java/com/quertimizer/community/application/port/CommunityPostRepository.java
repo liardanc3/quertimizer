@@ -9,7 +9,9 @@ public interface CommunityPostRepository {
 
     List<CommunityPost> findAll();
 
-    Optional<CommunityPost> findById(String postId);
+    Optional<CommunityPost> findById(Long postId);
+
+    Optional<Long> findTopPostId();
 
     <S extends CommunityPost> S save(S communityPost);
 
@@ -17,7 +19,7 @@ public interface CommunityPostRepository {
 
     void delete(CommunityPost communityPost);
 
-    List<CommunityPost> findAllByPostIdIn(List<String> postIds);
+    List<CommunityPost> findAllByPostIdIn(List<Long> postIds);
 
     List<CommunityPost> findAllByHandleOrderByCreatedAtDesc(String handle);
 

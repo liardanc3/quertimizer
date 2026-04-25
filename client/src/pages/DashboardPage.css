@@ -328,7 +328,12 @@ html.is-dashboard-route .main-content {
 }
 
 .dashboard-post-card.is-compact .dashboard-post-tags {
+  min-height: 0.72rem;
   margin-bottom: 0.2rem;
+}
+
+.dashboard-post-card.is-compact .dashboard-post-tags.is-empty {
+  pointer-events: none;
 }
 
 .dashboard-post-tags span {

@@ -5,6 +5,7 @@ import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../li
 import CommunityWritePage from './CommunityWritePage';
 import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
 import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, subscribeLocation, navigate } from '../lib/navigation';
+import { useMockSession } from '../lib/session';
 import './HomePage.css';
 import './SubmitHistoryPage.css';
 import './CommunityPage.css';
@@ -108,10 +109,6 @@ function getCommunityTabLabel(category: CommunityCategoryTab) {
   return '전체';
 }
 
-function buildCommunityFavoritePath(category: CommunityCategoryTab) {
-  return category === 'all' ? COMMUNITY_PATH : `${COMMUNITY_PATH}?category=${encodeURIComponent(category)}`;
-}
-
 function buildCommunityWritePath(category: CommunityCategoryTab) {
   return category === 'all' ? COMMUNITY_WRITE_PATH : `${COMMUNITY_WRITE_PATH}?category=${encodeURIComponent(category)}`;
 }
@@ -189,6 +186,7 @@ const emptyPage: CommunityPostPage = {
 };
 
 export default function CommunityPage() {
+  const { isAuthenticated } = useMockSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityPageFavoriteSnapshot>('community'), []);
   const didApplyFavoriteRestoreRef = useRef(false);
@@ -244,6 +242,14 @@ export default function CommunityPage() {
     setPageJumpDraft(String(postPage.currentPage));
   }, [isPageJumpEditing, postPage.currentPage]);
 
+  function replaceListHistory(nextSearch: string, nextCategory: CommunityCategoryTab, nextSortKey: CommunitySortKey, nextPage: number, scrollY = 0) {
+    window.history.replaceState(
+      { ...(window.history.state ?? {}), scrollY },
+      '',
+      buildCommunityListPath({ search: nextSearch, category: nextCategory, sortKey: nextSortKey, page: nextPage }),
+    );
+  }
+
   useEffect(() => {
     if (isWriteMode) {
       setIsLoading(false);
@@ -292,20 +298,23 @@ export default function CommunityPage() {
     };
   }, [isWriteMode, requestedPage, searchQuery, selectedCategory, sortKey]);
 
-  function replaceListHistory(nextSearch: string, nextCategory: CommunityCategoryTab, nextSortKey: CommunitySortKey, nextPage: number, scrollY = 0) {
-    window.history.replaceState(
-      { ...(window.history.state ?? {}), scrollY },
-      '',
-      buildCommunityListPath({ search: nextSearch, category: nextCategory, sortKey: nextSortKey, page: nextPage }),
-    );
+  function moveList(nextSearch: string, nextCategory: CommunityCategoryTab, nextSortKey: CommunitySortKey, nextPage: number) {
+  const trimmedSearch = nextSearch.trim();
+  const isSameRequest =
+    trimmedSearch === searchQuery
+    && nextCategory === selectedCategory
+    && nextSortKey === sortKey
+    && nextPage === requestedPage;
+
+  if (isSameRequest) {
+    return;
   }
 
-  function moveList(nextSearch: string, nextCategory: CommunityCategoryTab, nextSortKey: CommunitySortKey, nextPage: number) {
-    const trimmedSearch = nextSearch.trim();
-
-    setSearchQuery(trimmedSearch);
-    setSelectedCategory(nextCategory);
-    setSortKey(nextSortKey);
+  setIsLoading(true);
+  setErrorMessage(null);
+  setSearchQuery(trimmedSearch);
+  setSelectedCategory(nextCategory);
+  setSortKey(nextSortKey);
     setRequestedPage(nextPage);
     replaceListHistory(trimmedSearch, nextCategory, nextSortKey, nextPage, 0);
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -321,7 +330,9 @@ export default function CommunityPage() {
       return;
     }
 
-    moveList(searchQuery, category, sortKey, 1);
+    setIsLoading(true);
+    navigate(buildCommunityListPath({ search: searchQuery, category, sortKey, page: 1 }));
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function toggleMetricSort(descKey: CommunitySortKey, ascKey: CommunitySortKey) {
@@ -378,6 +389,7 @@ export default function CommunityPage() {
 
   function handleOpenPost(postId: string) {
     const scrollY = window.scrollY;
+    setIsLoading(true);
     replaceListHistory(searchQuery, selectedCategory, sortKey, postPage.currentPage, scrollY);
     navigate(getCommunityPostPath(postId), {
       state: {
@@ -412,9 +424,11 @@ export default function CommunityPage() {
 
               <button
                 type="button"
-                className={`solve-dbms-tab ${isWriteMode ? 'is-selected' : ''}`}
+                className={`solve-dbms-tab ${isWriteMode ? 'is-selected' : ''} ${!isAuthenticated ? 'is-disabled' : ''}`.trim()}
                 role="tab"
                 aria-selected={isWriteMode}
+                disabled={!isAuthenticated}
+                title={isAuthenticated ? undefined : '로그인 후 글쓰기를 사용할 수 있습니다.'}
                 onClick={() => {
                   if (!isWriteMode) {
                     navigate(buildCommunityWritePath(selectedCategory));

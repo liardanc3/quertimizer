@@ -2,6 +2,7 @@ package com.quertimizer.dashboard.application.service;
 
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.community.application.port.CommunityPostRepository;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import com.quertimizer.dashboard.application.output.DashboardCommunityPostOutput;
@@ -28,9 +29,6 @@ import java.util.Map;
 public class DashboardService {
 
     private static final int EXCERPT_LENGTH = 720;
-    private static final String LEADING_DETAIL_HEADING_BLOCK_PATTERN =
-            "(?is)^\\s*(<br\\s*/?>|<p[^>]*>(?:\\s|&nbsp;|<br\\s*/?>)*</p>|<h[1-3][^>]*>.*?</h[1-3]>)";
-
     private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
     private final ProblemStore problemStore;
@@ -50,7 +48,7 @@ public class DashboardService {
     private List<DashboardCommunityPostOutput> getHotCommunityPosts() {
         // 인기 커뮤니티 게시글 목록 조회
         List<CommunityPost> posts = communityPostRepository.findAll();
-        Map<String, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
+        Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
         return posts.stream()
                 .sorted(hotPostPolicy.createHotPostComparator())
@@ -117,9 +115,9 @@ public class DashboardService {
         }
     }
 
-    private Map<String, List<String>> createTagsByPostId(List<String> postIds) {
+    private Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
         // 게시글 번호별 태그 목록 생성
-        Map<String, List<String>> tagsByPostId = new LinkedHashMap<>();
+        Map<Long, List<String>> tagsByPostId = new LinkedHashMap<>();
 
         if (postIds.isEmpty()) {
             return tagsByPostId;
@@ -136,10 +134,10 @@ public class DashboardService {
     private DashboardCommunityPostOutput toCommunityPostOutput(CommunityPost post, List<String> tags) {
         // 커뮤니티 게시글 응답으로 변환
         return new DashboardCommunityPostOutput(
-                post.getPostId(),
+                CommunityPostIdPolicy.format(post.getPostId()),
                 post.getTitle(),
                 post.getHandle(),
-                createExcerpt(post.getContentHtml(), post.getContentText()),
+                createExcerpt(post.getPlainTextSummary()),
                 tags,
                 resolveCategory(post),
                 post.getCreatedAt(),
@@ -164,9 +162,9 @@ public class DashboardService {
         );
     }
 
-    private String createExcerpt(String contentHtml, String contentText) {
+    private String createExcerpt(String contentText) {
         // 요약문 생성
-        String normalizedContentText = StringUtils.hasText(contentHtml) ? stripContentHtmlForExcerpt(contentHtml) : normalizeContentText(contentText);
+        String normalizedContentText = normalizeContentText(contentText);
 
         if (!StringUtils.hasText(normalizedContentText)) {
             return "";
@@ -175,29 +173,6 @@ public class DashboardService {
         return normalizedContentText.length() > EXCERPT_LENGTH
                 ? normalizedContentText.substring(0, EXCERPT_LENGTH).trim() + "..."
                 : normalizedContentText;
-    }
-
-    private String stripContentHtmlForExcerpt(String contentHtml) {
-        // 요약문용 본문 HTML 제거
-        return normalizeExcerptWhitespace(stripLeadingHeadingBlocks(contentHtml).trim()
-                .replaceAll("(?i)<img[^>]*>", " [이미지] ")
-                .replaceAll("(?i)<br\\s*/?>", "\n")
-                .replaceAll("(?i)</(p|div|li|h1|h2|h3|blockquote|figure|figcaption)>", "\n")
-                .replaceAll("<[^>]+>", " ")
-                .replace("&nbsp;", " "));
-    }
-
-    private String stripLeadingHeadingBlocks(String contentHtml) {
-        // 선행 제목 블록 제거
-        String strippedContentHtml = contentHtml;
-        String nextContentHtml = strippedContentHtml.replaceFirst(LEADING_DETAIL_HEADING_BLOCK_PATTERN, "");
-
-        while (!nextContentHtml.equals(strippedContentHtml)) {
-            strippedContentHtml = nextContentHtml;
-            nextContentHtml = strippedContentHtml.replaceFirst(LEADING_DETAIL_HEADING_BLOCK_PATTERN, "");
-        }
-
-        return strippedContentHtml;
     }
 
     private String normalizeContentText(String contentText) {
@@ -217,7 +192,7 @@ public class DashboardService {
 
     private String resolveCategory(CommunityPost post) {
         // 구분 결정
-        int postNumber = extractPostNumber(post.getPostId());
+        int postNumber = CommunityPostIdPolicy.resolveSeedPostNumber(post.getPostId()).orElse(0);
 
         if (postNumber > 0) {
             if (postNumber % 10 == 0) {
@@ -228,24 +203,6 @@ public class DashboardService {
         }
 
         return "discussion";
-    }
-
-    private int extractPostNumber(String postId) {
-        // 게시글 번호 추출
-        if (!StringUtils.hasText(postId)) {
-            return 0;
-        }
-
-        String digits = postId.replaceAll("\\D+", "");
-        if (!StringUtils.hasText(digits)) {
-            return 0;
-        }
-
-        try {
-            return Integer.parseInt(digits);
-        } catch (NumberFormatException ignored) {
-            return 0;
-        }
     }
 
 }

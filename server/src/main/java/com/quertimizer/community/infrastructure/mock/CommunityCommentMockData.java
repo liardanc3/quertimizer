@@ -2,6 +2,7 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityPost;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.community.application.port.CommunityCommentRepository;
 import com.quertimizer.community.application.port.CommunityPostRepository;
 import jakarta.annotation.PostConstruct;
@@ -9,8 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.Optional;
 
 @Component("communityCommentMockData")
 @DependsOn({"communityPostMockData", "userMockData"})
@@ -23,38 +24,46 @@ public class CommunityCommentMockData {
     @PostConstruct
     public void seed() {
         // 기본 댓글 Mock 데이터 적재
+        if (!communityCommentRepository.findAllByPostIdOrderByCreatedAtAsc(1L).isEmpty()) {
+            return;
+        }
+
         for (CommunityPost post : communityPostRepository.findAll().stream()
                 .sorted(Comparator.comparing(CommunityPost::getPostId))
                 .toList()) {
-            int postNumber = resolvePostNumber(post.getPostId());
+            Optional<Integer> postNumber = resolvePostNumber(post.getPostId());
+
+            if (postNumber.isEmpty()) {
+                continue;
+            }
 
             CommunityComment rootComment = communityCommentRepository.save(CommunityComment.create(
                     post.getPostId(),
-                    resolveRootCommentHandle(postNumber),
+                    resolveRootCommentHandle(postNumber.get()),
                     null,
-                    createRootCommentContent(postNumber),
+                    createRootCommentContent(postNumber.get()),
                     post.getCreatedAt().plusMinutes(25)
             ));
             post.increaseCommentCount();
 
-            if (postNumber <= 10) {
+            if (postNumber.get() <= 10) {
                 communityCommentRepository.save(CommunityComment.create(
                         post.getPostId(),
-                        resolveReplyCommentHandle(postNumber),
+                        resolveReplyCommentHandle(postNumber.get()),
                         rootComment.getCommentId(),
-                        createReplyCommentContent(postNumber),
+                        createReplyCommentContent(postNumber.get()),
                         post.getCreatedAt().plusMinutes(52)
                 ));
                 post.increaseCommentCount();
             }
 
-            if (postNumber > 30) {
+            if (postNumber.get() > 30) {
                 for (int commentIndex = 1; commentIndex <= 4; commentIndex++) {
                     communityCommentRepository.save(CommunityComment.create(
                             post.getPostId(),
                             resolveHotCommentHandle(commentIndex),
                             null,
-                            createHotCommentContent(postNumber, commentIndex),
+                            createHotCommentContent(postNumber.get(), commentIndex),
                             post.getCreatedAt().plusMinutes(52 + (commentIndex * 17L))
                     ));
                     post.increaseCommentCount();
@@ -109,9 +118,9 @@ public class CommunityCommentMockData {
                 .formatted(postNumber, commentIndex);
     }
 
-    private int resolvePostNumber(String postId) {
-        // 게시글 번호 결정
-        return Integer.parseInt(postId.substring(postId.length() - 2));
+    private Optional<Integer> resolvePostNumber(Long postId) {
+        // Seed 게시글 번호 결정
+        return CommunityPostIdPolicy.resolveSeedPostNumber(postId);
     }
 
     private int toExistingUserNumber(int postNumber) {

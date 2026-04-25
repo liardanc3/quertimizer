@@ -15,13 +15,13 @@ import java.io.Serializable;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CommunityPostLikeId implements Serializable {
 
-    @Column(name = "post_id", nullable = false, length = 50)
-    private String postId;
+    @Column(name = "post_id", nullable = false)
+    private Long postId;
 
     @Column(name = "handle", nullable = false, length = 50)
     private String handle;
 
-    public CommunityPostLikeId(String postId, String handle) {
+    public CommunityPostLikeId(Long postId, String handle) {
         this.postId = postId;
         this.handle = handle;
     }

@@ -13,7 +13,7 @@ public class ToggleCommunityPostLike {
 
     private final CommunityService communityService;
 
-    public Optional<CommunityReactionOutput> execute(String postId, String handle) {
+    public Optional<CommunityReactionOutput> execute(Long postId, String handle) {
         // 게시글 좋아요를 토글
         return communityService.togglePostLike(postId, handle);
     }

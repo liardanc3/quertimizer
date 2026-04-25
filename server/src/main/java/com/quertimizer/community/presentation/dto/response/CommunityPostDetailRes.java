@@ -14,8 +14,10 @@ public class CommunityPostDetailRes {
     private final String postId;
     private final String title;
     private final String authorId;
-    private final String contentHtml;
+    private final String contentJson;
+    private final List<String> imageIds;
     private final List<String> tags;
+    private final String category;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
     private final int viewCount;
@@ -30,8 +32,10 @@ public class CommunityPostDetailRes {
                 result.getPostId(),
                 result.getTitle(),
                 result.getAuthorId(),
-                result.getContentHtml(),
+                result.getContentJson(),
+                result.getImageIds(),
                 result.getTags(),
+                result.getCategory(),
                 result.getCreatedAt(),
                 result.getUpdatedAt(),
                 result.getViewCount(),

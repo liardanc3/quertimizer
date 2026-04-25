@@ -14,7 +14,7 @@ public class AddCommunityComment {
 
     private final CommunityService communityService;
 
-    public Optional<CommunityCommentOutput> execute(String postId, String handle, CommunityCommentInput input) {
+    public Optional<CommunityCommentOutput> execute(Long postId, String handle, CommunityCommentInput input) {
         // 게시글 댓글을 추가
         return communityService.addComment(postId, handle, input);
     }

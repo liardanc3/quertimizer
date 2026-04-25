@@ -6,12 +6,15 @@ import com.quertimizer.community.application.usecase.DeleteCommunityPost;
 import com.quertimizer.community.application.usecase.GetCommunityPostDetail;
 import com.quertimizer.community.application.usecase.GetCommunityPosts;
 import com.quertimizer.community.application.usecase.GetCommunityTagSuggestions;
+import com.quertimizer.community.application.usecase.GetCommunityImage;
 import com.quertimizer.community.application.usecase.ToggleCommunityCommentLike;
 import com.quertimizer.community.application.usecase.ToggleCommunityPostLike;
 import com.quertimizer.community.application.usecase.UpdateCommunityPost;
+import com.quertimizer.community.application.usecase.UploadCommunityImage;
 import com.quertimizer.community.presentation.dto.request.CommunityCommentCreateReq;
 import com.quertimizer.community.presentation.dto.request.CommunityPostSaveReq;
 import com.quertimizer.community.presentation.dto.response.CommunityCommentRes;
+import com.quertimizer.community.presentation.dto.response.CommunityImageUploadRes;
 import com.quertimizer.community.presentation.dto.response.CommunityPostDetailRes;
 import com.quertimizer.community.presentation.dto.response.CommunityPostPageRes;
 import com.quertimizer.community.presentation.dto.response.CommunityReactionRes;
@@ -19,7 +22,9 @@ import com.quertimizer.community.presentation.dto.response.CommunityTagSuggestio
 import com.quertimizer.community.presentation.support.CommunitySupport;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,6 +35,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -46,6 +52,8 @@ public class CommunityController {
     private final AddCommunityComment addCommunityComment;
     private final ToggleCommunityCommentLike toggleCommunityCommentLike;
     private final GetCommunityTagSuggestions getCommunityTagSuggestions;
+    private final UploadCommunityImage uploadCommunityImage;
+    private final GetCommunityImage getCommunityImage;
 
     private final CommunitySupport communitySupport;
 
@@ -62,7 +70,7 @@ public class CommunityController {
     }
 
     @GetMapping("/community/posts/{postId}")
-    public ResponseEntity<CommunityPostDetailRes> getPostDetail(@PathVariable String postId,
+    public ResponseEntity<CommunityPostDetailRes> getPostDetail(@PathVariable Long postId,
                                                                 Authentication authentication) {
         // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
@@ -82,12 +90,36 @@ public class CommunityController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String createdPostId = createCommunityPost.execute(currentHandle, request.toCommunityPostInput());
+        Long createdPostId = createCommunityPost.execute(currentHandle, request.toCommunityPostInput());
         return ResponseEntity.created(communitySupport.buildPostLocation(createdPostId)).build();
     }
 
+    @PostMapping("/community/images")
+    public ResponseEntity<CommunityImageUploadRes> uploadImage(@RequestParam("file") MultipartFile file,
+                                                               Authentication authentication) {
+        // 현재 사용자 Handle을 해석
+        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+
+        // 커뮤니티 글쓰기 이미지를 업로드
+        if (currentHandle == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.ok(CommunityImageUploadRes.from(uploadCommunityImage.execute(file)));
+    }
+
+    @GetMapping("/community/images/{imageId}")
+    public ResponseEntity<Resource> getImage(@PathVariable String imageId) {
+        // 커뮤니티 이미지를 조회
+        return getCommunityImage.execute(imageId)
+                .map(image -> ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(image.getContentType()))
+                        .body(image.getResource()))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PutMapping("/community/posts/{postId}")
-    public ResponseEntity<Void> updatePost(@PathVariable String postId,
+    public ResponseEntity<Void> updatePost(@PathVariable Long postId,
                                            @Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
         // 현재 사용자 Handle을 해석
@@ -106,7 +138,7 @@ public class CommunityController {
     }
 
     @DeleteMapping("/community/posts/{postId}")
-    public ResponseEntity<Void> deletePost(@PathVariable String postId, Authentication authentication) {
+    public ResponseEntity<Void> deletePost(@PathVariable Long postId, Authentication authentication) {
         // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
@@ -121,7 +153,7 @@ public class CommunityController {
     }
 
     @PostMapping("/community/posts/{postId}/likes")
-    public ResponseEntity<CommunityReactionRes> togglePostLike(@PathVariable String postId,
+    public ResponseEntity<CommunityReactionRes> togglePostLike(@PathVariable Long postId,
                                                                Authentication authentication) {
         // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
@@ -135,7 +167,7 @@ public class CommunityController {
     }
 
     @PostMapping("/community/posts/{postId}/comments")
-    public ResponseEntity<CommunityCommentRes> addComment(@PathVariable String postId,
+    public ResponseEntity<CommunityCommentRes> addComment(@PathVariable Long postId,
                                                           @Valid @RequestBody CommunityCommentCreateReq request,
                                                           Authentication authentication) {
         // 현재 사용자 Handle을 해석

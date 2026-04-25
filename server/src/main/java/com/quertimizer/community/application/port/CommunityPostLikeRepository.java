@@ -15,7 +15,7 @@ public interface CommunityPostLikeRepository {
 
     void deleteById(CommunityPostLikeId communityPostLikeId);
 
-    void deleteAllByIdPostId(String postId);
+    void deleteAllByIdPostId(Long postId);
 
     List<CommunityPostLike> findAllByIdHandleOrderByCreatedAtDesc(String handle);
 

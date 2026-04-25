@@ -264,6 +264,7 @@ export interface CommunityPostSummary {
   authorHandle: string;
   excerpt: string;
   content: string;
+  contentJson?: string;
   contentHtml?: string;
   tags: string[];
   category: CommunityPostCategory;

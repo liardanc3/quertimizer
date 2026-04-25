@@ -2,6 +2,8 @@ package com.quertimizer.community.infrastructure.mock;
 
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityCommentLike;
+import com.quertimizer.community.domain.entity.CommunityCommentLikeId;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
 import com.quertimizer.community.application.port.CommunityCommentRepository;
 import jakarta.annotation.PostConstruct;
@@ -24,11 +26,22 @@ public class CommunityCommentLikeMockData {
     @PostConstruct
     public void seed() {
         // 기본 댓글 좋아요 Mock 데이터 적재
+        if (communityCommentRepository.findAllByPostIdOrderByCreatedAtAsc(1L).stream()
+                .findFirst()
+                .map(comment -> communityCommentLikeRepository.existsById(new CommunityCommentLikeId(comment.getCommentId(), "liardanc3")))
+                .orElse(false)) {
+            return;
+        }
+
         List<CommunityCommentLike> commentLikes = new ArrayList<>();
 
         for (CommunityComment comment : communityCommentRepository.findAll().stream()
                 .sorted(Comparator.comparing(CommunityComment::getCommentId))
                 .toList()) {
+            if (!CommunityPostIdPolicy.isSeedPostId(comment.getPostId())) {
+                continue;
+            }
+
             int commentNumber = comment.getCommentId().intValue();
 
             commentLikes.add(CommunityCommentLike.create(comment.getCommentId(), "liardanc3"));

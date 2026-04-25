@@ -22,7 +22,7 @@ public class CommunityPostLike {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    public static CommunityPostLike create(String postId, String handle) {
+    public static CommunityPostLike create(Long postId, String handle) {
         // 게시글 좋아요 생성
         return new CommunityPostLike(new CommunityPostLikeId(postId, handle), LocalDateTime.now());
     }

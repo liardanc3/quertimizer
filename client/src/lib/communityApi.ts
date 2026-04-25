@@ -34,7 +34,8 @@ interface CommunityPostPageResponse {
 }
 
 interface CommunityPostDetailResponse extends CommunityPostSummaryResponse {
-  contentHtml?: string;
+  contentJson?: string;
+  imageIds?: string[];
   likedByCurrentUser?: boolean;
   editable?: boolean;
   comments?: CommunityCommentResponse[];
@@ -100,7 +101,8 @@ export interface CommunityPostDetail {
   authorHandle: string;
   excerpt: string;
   content: string;
-  contentHtml: string;
+  contentJson: string;
+  imageIds: string[];
   tags: string[];
   category: CommunityPostSummary['category'];
   createdAt: string;
@@ -125,8 +127,21 @@ export interface CommunityTagSuggestion {
 
 export interface SaveCommunityPostPayload {
   title: string;
+  category: CommunityPostSummary['category'];
   tags: string[];
-  contentHtml: string;
+  contentJson: string;
+  plainTextSummary: string;
+  imageIds: string[];
+}
+
+export interface CommunityUploadedImageResponse {
+  imageId?: string;
+  imageUrl?: string;
+}
+
+export interface CommunityUploadedImage {
+  imageId: string;
+  imageUrl: string;
 }
 
 export interface AddCommunityCommentPayload {
@@ -203,7 +218,7 @@ function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPost
     authorHandle: post.authorId!,
     excerpt: post.excerpt ?? '',
     content: '',
-    contentHtml: undefined,
+    contentJson: undefined,
     tags: normalizeTags(post.tags),
     category: normalizePostCategory(post.category),
     createdAt: post.createdAt!,
@@ -214,17 +229,6 @@ function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPost
     isPinned: false,
     isResolved: false,
   };
-}
-
-function extractPlainText(value: string) {
-  return value
-    .replace(/<img[\s\S]*?>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<\/(p|div|li|h1|h2|h3|blockquote|figure|figcaption)>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 async function requestCommunity<T>(path: string, init: RequestInit, fallbackMessage: string, normalize: (data: unknown) => T): Promise<T> {
@@ -316,7 +320,7 @@ export async function fetchCommunityPostDetail(postId: string): Promise<Communit
         typeof post.title !== 'string' ||
         typeof post.authorId !== 'string' ||
         typeof post.createdAt !== 'string' ||
-        typeof post.contentHtml !== 'string' ||
+        typeof post.contentJson !== 'string' ||
         !Array.isArray(post.comments)
       ) {
         throw new Error();
@@ -327,8 +331,9 @@ export async function fetchCommunityPostDetail(postId: string): Promise<Communit
         title: post.title,
         authorHandle: post.authorId,
         excerpt: post.excerpt ?? '',
-        content: extractPlainText(post.contentHtml),
-        contentHtml: post.contentHtml,
+        content: post.excerpt ?? '',
+        contentJson: post.contentJson,
+        imageIds: Array.isArray(post.imageIds) ? post.imageIds.filter((imageId): imageId is string => typeof imageId === 'string') : [],
         tags: normalizeTags(post.tags),
         category: normalizePostCategory(post.category),
         createdAt: post.createdAt,
@@ -384,6 +389,33 @@ export async function updateCommunityPost(postId: string, payload: SaveCommunity
   if (!response.ok) {
     throw new Error('게시글 수정에 실패했다.');
   }
+}
+
+export async function uploadCommunityImage(file: File): Promise<CommunityUploadedImage> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${getApiBaseUrl()}/community/images`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('이미지 업로드에 실패했다.');
+  }
+
+  const uploadedImage = (await response.json()) as CommunityUploadedImageResponse;
+  if (typeof uploadedImage.imageId !== 'string' || typeof uploadedImage.imageUrl !== 'string') {
+    throw new Error('이미지 업로드 응답이 올바르지 않다.');
+  }
+
+  return {
+    imageId: uploadedImage.imageId,
+    imageUrl: uploadedImage.imageUrl.startsWith('http')
+      ? uploadedImage.imageUrl
+      : `${getApiBaseUrl()}${uploadedImage.imageUrl}`,
+  };
 }
 
 export async function deleteCommunityPost(postId: string) {

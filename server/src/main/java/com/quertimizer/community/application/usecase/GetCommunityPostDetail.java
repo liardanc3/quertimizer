@@ -13,7 +13,7 @@ public class GetCommunityPostDetail {
 
     private final CommunityService communityService;
 
-    public Optional<CommunityPostDetailOutput> execute(String postId, String currentHandle) {
+    public Optional<CommunityPostDetailOutput> execute(Long postId, String currentHandle) {
         // 게시글 상세를 조회
         return communityService.getPostDetail(postId, currentHandle);
     }

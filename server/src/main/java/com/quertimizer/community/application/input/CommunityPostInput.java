@@ -10,6 +10,9 @@ import java.util.List;
 public class CommunityPostInput {
 
     private final String title;
-    private final String contentHtml;
+    private final String contentJson;
+    private final String plainTextSummary;
+    private final List<String> imageIds;
     private final List<String> tags;
+    private final String category;
 }

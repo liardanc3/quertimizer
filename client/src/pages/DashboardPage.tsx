@@ -303,13 +303,17 @@ function CommunityPostCard({
         <h2 className="dashboard-post-title">{post.title}</h2>
       </div>
 
-      {post.tags.length > 0 ? (
-        <div className="dashboard-post-tags" aria-label="게시글 태그">
+      {featured && post.tags.length === 0 ? null : (
+        <div
+          className={`dashboard-post-tags ${!featured && post.tags.length === 0 ? 'is-empty' : ''}`.trim()}
+          aria-label={post.tags.length > 0 ? '게시글 태그' : undefined}
+          aria-hidden={post.tags.length === 0}
+        >
           {post.tags.slice(0, featured ? 4 : 3).map((tag) => (
             <span key={tag}>{`#${tag}`}</span>
           ))}
         </div>
-      ) : null}
+      )}
 
       {featured ? <p className="dashboard-post-excerpt">{post.excerpt || '본문 미리보기가 없습니다.'}</p> : null}
 

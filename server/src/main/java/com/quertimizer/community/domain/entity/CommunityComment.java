@@ -23,8 +23,8 @@ public class CommunityComment {
     @Column(name = "comment_id", nullable = false)
     private Long commentId;
 
-    @Column(name = "post_id", nullable = false, length = 50)
-    private String postId;
+    @Column(name = "post_id", nullable = false)
+    private Long postId;
 
     @Column(name = "handle", nullable = false, length = 50)
     private String handle;
@@ -41,7 +41,7 @@ public class CommunityComment {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    public static CommunityComment create(String postId, String handle, Long parentCommentId, String content) {
+    public static CommunityComment create(Long postId, String handle, Long parentCommentId, String content) {
         // 댓글 생성
         return new CommunityComment(
                 postId,
@@ -53,8 +53,7 @@ public class CommunityComment {
         );
     }
 
-    public static CommunityComment create(String postId,
-                                          String handle,
+    public static CommunityComment create(Long postId, String handle,
                                           Long parentCommentId,
                                           String content,
                                           LocalDateTime createdAt) {
@@ -78,8 +77,7 @@ public class CommunityComment {
         this.likeCount = Math.max(0, this.likeCount - 1);
     }
 
-    private CommunityComment(String postId,
-                             String handle,
+    private CommunityComment(Long postId, String handle,
                              Long parentCommentId,
                              String content,
                              int likeCount,

@@ -6,11 +6,11 @@ import java.util.List;
 
 public interface CommunityPostTagRepository {
 
-    List<CommunityPostTag> findAllByPostIdOrderByTagOrderAsc(String postId);
+    List<CommunityPostTag> findAllByPostIdOrderByTagOrderAsc(Long postId);
 
-    List<CommunityPostTag> findAllByPostIdInOrderByPostIdAscTagOrderAsc(List<String> postIds);
+    List<CommunityPostTag> findAllByPostIdInOrderByPostIdAscTagOrderAsc(List<Long> postIds);
 
-    void deleteAllByPostId(String postId);
+    void deleteAllByPostId(Long postId);
 
     List<CommunityPostTag> findAllByTagContainingIgnoreCaseOrderByTagAsc(String tag);
 

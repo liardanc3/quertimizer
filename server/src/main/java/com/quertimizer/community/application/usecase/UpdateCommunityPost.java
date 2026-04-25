@@ -13,7 +13,7 @@ public class UpdateCommunityPost {
 
     private final CommunityService communityService;
 
-    public Optional<String> execute(String postId, String handle, CommunityPostInput input) {
+    public Optional<Long> execute(Long postId, String handle, CommunityPostInput input) {
         // 게시글을 수정
         return communityService.updatePost(postId, handle, input);
     }

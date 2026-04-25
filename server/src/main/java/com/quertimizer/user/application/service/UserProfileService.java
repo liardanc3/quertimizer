@@ -17,6 +17,7 @@ import com.quertimizer.community.domain.entity.CommunityCommentLike;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostLike;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.user.domain.entity.UserExternalLink;
@@ -93,7 +94,7 @@ public class UserProfileService {
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
                     List<CommunityPostLike> likedPosts = communityPostLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(targetHandle);
-                    Map<String, CommunityPost> postById = communityPostRepository.findAllByPostIdIn(
+                    Map<Long, CommunityPost> postById = communityPostRepository.findAllByPostIdIn(
                                     likedPosts.stream()
                                             .map(CommunityPostLike::getId)
                                             .map(postLikeId -> postLikeId.getPostId())
@@ -116,7 +117,7 @@ public class UserProfileService {
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
                     List<CommunityComment> comments = communityCommentRepository.findAllByHandleOrderByCreatedAtDesc(targetHandle);
-                    Map<String, String> postTitleByPostId = createPostTitleByPostId(comments.stream()
+                    Map<Long, String> postTitleByPostId = createPostTitleByPostId(comments.stream()
                             .map(CommunityComment::getPostId)
                             .distinct()
                             .toList());
@@ -142,7 +143,7 @@ public class UserProfileService {
                                             .toList()
                             ).stream()
                             .collect(java.util.stream.Collectors.toMap(CommunityComment::getCommentId, comment -> comment));
-                    Map<String, String> postTitleByPostId = createPostTitleByPostId(commentById.values().stream()
+                    Map<Long, String> postTitleByPostId = createPostTitleByPostId(commentById.values().stream()
                             .map(CommunityComment::getPostId)
                             .distinct()
                             .toList());
@@ -386,9 +387,9 @@ public class UserProfileService {
     private UserProfileCommunityPostOutput createCommunityPostResponse(CommunityPost post) {
         // 커뮤니티 게시글 응답 생성
         return new UserProfileCommunityPostOutput(
-                post.getPostId(),
+                CommunityPostIdPolicy.format(post.getPostId()),
                 post.getTitle(),
-                createCommunityExcerpt(post.getContentText()),
+                createCommunityExcerpt(post.getPlainTextSummary()),
                 communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(post.getPostId()).stream()
                         .map(CommunityPostTag::getTag)
                         .toList(),
@@ -399,7 +400,7 @@ public class UserProfileService {
         );
     }
 
-    private Optional<UserProfileCommunityPostOutput> createLikedCommunityPostResponse(CommunityPostLike postLike, Map<String, CommunityPost> postById) {
+    private Optional<UserProfileCommunityPostOutput> createLikedCommunityPostResponse(CommunityPostLike postLike, Map<Long, CommunityPost> postById) {
         // 좋아요한 커뮤니티 게시글 응답 생성
         CommunityPost post = postById.get(postLike.getId().getPostId());
 
@@ -408,9 +409,9 @@ public class UserProfileService {
         }
 
         return Optional.of(new UserProfileCommunityPostOutput(
-                post.getPostId(),
+                CommunityPostIdPolicy.format(post.getPostId()),
                 post.getTitle(),
-                createCommunityExcerpt(post.getContentText()),
+                createCommunityExcerpt(post.getPlainTextSummary()),
                 communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(post.getPostId()).stream()
                         .map(CommunityPostTag::getTag)
                         .toList(),
@@ -423,7 +424,7 @@ public class UserProfileService {
 
     private Optional<UserProfileCommunityCommentOutput> createLikedCommunityCommentResponse(CommunityCommentLike commentLike,
                                                                                             Map<Long, CommunityComment> commentById,
-                                                                                            Map<String, String> postTitleByPostId) {
+                                                                                            Map<Long, String> postTitleByPostId) {
         CommunityComment comment = commentById.get(commentLike.getId().getCommentId());
 
         if (comment == null) {
@@ -434,19 +435,19 @@ public class UserProfileService {
     }
 
     private UserProfileCommunityCommentOutput createCommunityCommentResponse(CommunityComment comment,
-                                                                             Map<String, String> postTitleByPostId,
+                                                                             Map<Long, String> postTitleByPostId,
                                                                              java.time.LocalDateTime actedAt) {
         return new UserProfileCommunityCommentOutput(
                 comment.getCommentId(),
-                comment.getPostId(),
-                postTitleByPostId.getOrDefault(comment.getPostId(), comment.getPostId()),
+                CommunityPostIdPolicy.format(comment.getPostId()),
+                postTitleByPostId.getOrDefault(comment.getPostId(), CommunityPostIdPolicy.format(comment.getPostId())),
                 comment.getContent(),
                 actedAt,
                 comment.getParentCommentId() != null
         );
     }
 
-    private Map<String, String> createPostTitleByPostId(List<String> postIds) {
+    private Map<Long, String> createPostTitleByPostId(List<Long> postIds) {
         // 게시글 번호별 게시글 제목 생성
         if (postIds.isEmpty()) {
             return Map.of();

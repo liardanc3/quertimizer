@@ -11,7 +11,7 @@ public class CreateCommunityPost {
 
     private final CommunityService communityService;
 
-    public String execute(String handle, CommunityPostInput input) {
+    public Long execute(String handle, CommunityPostInput input) {
         // 게시글을 생성
         return communityService.createPost(handle, input);
     }

@@ -13,8 +13,10 @@ public class CommunityPostDetailOutput {
     private final String postId;
     private final String title;
     private final String authorId;
-    private final String contentHtml;
+    private final String contentJson;
+    private final List<String> imageIds;
     private final List<String> tags;
+    private final String category;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
     private final int viewCount;

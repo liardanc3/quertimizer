@@ -7,9 +7,11 @@ const COMMUNITY_CHANGE_EVENT = 'quertimizer:community-change';
 
 export interface CommunityEditorDraft {
   title: string;
+  category?: CommunityPostSummary['category'];
   draftTag: string;
   selectedTags: string[];
-  contentHtml: string;
+  contentJson: string;
+  contentHtml?: string;
   updatedAt: string;
 }
 
@@ -361,7 +363,8 @@ export function clearCommunityEditorDraft(draftKey: string) {
     return;
   }
 
-  const { [draftKey]: _, ...restDrafts } = state.drafts;
+  const restDrafts = { ...state.drafts };
+  delete restDrafts[draftKey];
 
   writeCommunityState({
     ...state,
@@ -384,7 +387,14 @@ export function getCommunityActivityData(handle = mockCurrentHandle) {
   return {
     posts: authoredPosts,
     likedPosts,
-    comments: authoredComments.map(({ authorHandle: _authorHandle, ...comment }) => comment),
+    comments: authoredComments.map((comment) => ({
+      id: comment.id,
+      postId: comment.postId,
+      postTitle: comment.postTitle,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      depth: comment.depth,
+    })),
   };
 }
 

@@ -19,16 +19,22 @@ import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostLike;
 import com.quertimizer.community.domain.entity.CommunityPostLikeId;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
 import com.quertimizer.community.application.port.CommunityCommentRepository;
 import com.quertimizer.community.application.port.CommunityPostLikeRepository;
 import com.quertimizer.community.application.port.CommunityPostRepository;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
+import com.quertimizer.global.exception.BusinessException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -43,6 +49,7 @@ import java.util.Optional;
 public class CommunityService {
 
     private static final int COMMUNITY_PAGE_SIZE = 10;
+    private static final int COMMUNITY_POST_CONTENT_MAX_BYTES = 500_000;
 
     private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
@@ -51,12 +58,13 @@ public class CommunityService {
     private final CommunityCommentLikeRepository communityCommentLikeRepository;
     private final CommunitySearchService communitySearchService;
     private final AlarmService alarmService;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public CommunityPostPageOutput getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
         // 게시글 목록 페이지를 조회
         List<CommunityPost> posts = communityPostRepository.findAll();
-        Map<String, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
+        Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
         // 게시글 목록 검색, 필터, 정렬, 페이징
         return communitySearchService.searchPosts(
@@ -71,7 +79,7 @@ public class CommunityService {
         );
     }
 
-    public Optional<CommunityPostDetailOutput> getPostDetail(String postId, String currentHandle) {
+    public Optional<CommunityPostDetailOutput> getPostDetail(Long postId, String currentHandle) {
         // 게시글 상세를 조회
         return communityPostRepository.findById(postId)
                 .map(post -> {
@@ -84,11 +92,13 @@ public class CommunityService {
                     boolean likedByCurrentUser = isPostLiked(postId, currentHandle);
 
                     CommunityPostDetailOutput detailResponse = new CommunityPostDetailOutput(
-                            post.getPostId(),
+                            CommunityPostIdPolicy.format(post.getPostId()),
                             post.getTitle(),
                             post.getHandle(),
-                            post.getContentHtml(),
+                            post.getContentJson(),
+                            createImageIds(post.getImageIds()),
                             tags,
+                            resolveCategory(post),
                             post.getCreatedAt(),
                             post.getUpdatedAt(),
                             post.getViewCount(),
@@ -105,41 +115,50 @@ public class CommunityService {
                 });
     }
 
-    public String createPost(String handle, CommunityPostInput input) {
+    public Long createPost(String handle, CommunityPostInput input) {
         // 게시글을 생성
         String normalizedTitle = input.getTitle().trim();
-        String normalizedContentHtml = normalizeContentHtml(input.getContentHtml());
-        String normalizedContentText = extractPlainText(normalizedContentHtml);
+        String normalizedContentJson = normalizeContentJson(input.getContentJson());
+        validateContentJson(normalizedContentJson);
+        String normalizedPlainTextSummary = normalizePlainTextSummary(input.getPlainTextSummary());
+        String normalizedImageIds = normalizeImageIds(input.getImageIds());
         List<String> normalizedTags = normalizeTags(input.getTags());
+        String normalizedCategory = normalizePostCategory(input.getCategory());
+        Long nextPostId = communityPostRepository.findTopPostId()
+                .map(postId -> postId + 1)
+                .orElse(1L);
 
         // 게시글 저장 후 태그와 검색 인덱스 동기화
         CommunityPost post = communityPostRepository.save(
-                CommunityPost.create(handle, normalizedTitle, normalizedContentHtml, normalizedContentText)
+                CommunityPost.create(nextPostId, handle, normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory)
         );
         replaceTags(post.getPostId(), normalizedTags);
         communitySearchService.syncPost(post, normalizedTags);
         return post.getPostId();
     }
 
-    public Optional<String> updatePost(String postId, String handle, CommunityPostInput input) {
+    public Optional<Long> updatePost(Long postId, String handle, CommunityPostInput input) {
         // 게시글을 수정
         return communityPostRepository.findById(postId)
                 .filter(post -> post.getHandle().equals(handle))
                 .map(post -> {
                     String normalizedTitle = input.getTitle().trim();
-                    String normalizedContentHtml = normalizeContentHtml(input.getContentHtml());
-                    String normalizedContentText = extractPlainText(normalizedContentHtml);
+                    String normalizedContentJson = normalizeContentJson(input.getContentJson());
+                    validateContentJson(normalizedContentJson);
+                    String normalizedPlainTextSummary = normalizePlainTextSummary(input.getPlainTextSummary());
+                    String normalizedImageIds = normalizeImageIds(input.getImageIds());
                     List<String> normalizedTags = normalizeTags(input.getTags());
+                    String normalizedCategory = normalizePostCategory(input.getCategory());
 
                     // 게시글 본문, 태그, 검색 인덱스 갱신
-                    post.changeContent(normalizedTitle, normalizedContentHtml, normalizedContentText);
+                    post.changeContent(normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory);
                     replaceTags(postId, normalizedTags);
                     communitySearchService.syncPost(post, normalizedTags);
                     return postId;
                 });
     }
 
-    public boolean deletePost(String postId, String handle) {
+    public boolean deletePost(Long postId, String handle) {
         // 게시글을 삭제
         Optional<CommunityPost> post = communityPostRepository.findById(postId)
                 .filter(currentPost -> currentPost.getHandle().equals(handle));
@@ -165,7 +184,7 @@ public class CommunityService {
         return true;
     }
 
-    public Optional<CommunityReactionOutput> togglePostLike(String postId, String handle) {
+    public Optional<CommunityReactionOutput> togglePostLike(Long postId, String handle) {
         // 게시글 좋아요를 토글
         return communityPostRepository.findById(postId)
                 .map(post -> {
@@ -187,7 +206,7 @@ public class CommunityService {
                 });
     }
 
-    public Optional<CommunityCommentOutput> addComment(String postId, String handle, CommunityCommentInput input) {
+    public Optional<CommunityCommentOutput> addComment(Long postId, String handle, CommunityCommentInput input) {
         // 댓글을 추가
         return communityPostRepository.findById(postId)
                 .map(post -> {
@@ -266,7 +285,12 @@ public class CommunityService {
             return;
         }
 
-        alarmService.publish(new CommunityPostLikeAlarm(post.getHandle(), actorHandle, post.getPostId(), post.getTitle()));
+        alarmService.publish(new CommunityPostLikeAlarm(
+                post.getHandle(),
+                actorHandle,
+                CommunityPostIdPolicy.format(post.getPostId()),
+                post.getTitle()
+        ));
     }
 
     private void publishCommentAlarms(CommunityPost post,
@@ -279,7 +303,7 @@ public class CommunityService {
             alarmService.publish(new CommunityCommentReplyAlarm(
                     parentComment.get().getHandle(),
                     actorHandle,
-                    post.getPostId(),
+                    CommunityPostIdPolicy.format(post.getPostId()),
                     comment.getContent(),
                     comment.getCommentId()
             ));
@@ -297,7 +321,7 @@ public class CommunityService {
         alarmService.publish(new CommunityPostCommentAlarm(
                 post.getHandle(),
                 actorHandle,
-                post.getPostId(),
+                CommunityPostIdPolicy.format(post.getPostId()),
                 comment.getContent(),
                 comment.getCommentId()
         ));
@@ -309,12 +333,18 @@ public class CommunityService {
             return;
         }
 
-        alarmService.publish(new CommunityCommentLikeAlarm(comment.getHandle(), actorHandle, comment.getPostId(), comment.getContent(), comment.getCommentId()));
+        alarmService.publish(new CommunityCommentLikeAlarm(
+                comment.getHandle(),
+                actorHandle,
+                CommunityPostIdPolicy.format(comment.getPostId()),
+                comment.getContent(),
+                comment.getCommentId()
+        ));
     }
 
-    private Map<String, List<String>> createTagsByPostId(List<String> postIds) {
+    private Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
         // 게시글 번호별 태그 목록 생성
-        Map<String, List<String>> tagsByPostId = new HashMap<>();
+        Map<Long, List<String>> tagsByPostId = new HashMap<>();
 
         if (postIds.isEmpty()) {
             return tagsByPostId;
@@ -329,7 +359,7 @@ public class CommunityService {
         return tagsByPostId;
     }
 
-    private List<String> createTags(String postId) {
+    private List<String> createTags(Long postId) {
         // 태그 목록 생성
         return communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(postId).stream()
                 .map(CommunityPostTag::getTag)
@@ -357,7 +387,25 @@ public class CommunityService {
         return new ArrayList<>(tagByNormalizedValue.values());
     }
 
-    private void replaceTags(String postId, List<String> tags) {
+    private String normalizePostCategory(String category) {
+        // 게시글 구분 정규화
+        if (!StringUtils.hasText(category)) {
+            return "discussion";
+        }
+
+        String normalizedCategory = category.trim().toLowerCase();
+        return switch (normalizedCategory) {
+            case "notice", "question" -> normalizedCategory;
+            default -> "discussion";
+        };
+    }
+
+    private String resolveCategory(CommunityPost post) {
+        // 게시글 구분 조회
+        return normalizePostCategory(post.getCategory());
+    }
+
+    private void replaceTags(Long postId, List<String> tags) {
         // 태그 목록 교체
         communityPostTagRepository.deleteAllByPostId(postId);
 
@@ -373,24 +421,61 @@ public class CommunityService {
         communityPostTagRepository.saveAll(postTags);
     }
 
-    private String normalizeContentHtml(String contentHtml) {
-        // 본문 HTML 정규화
-        return StringUtils.hasText(contentHtml) ? contentHtml.trim() : "";
+    private String normalizeContentJson(String contentJson) {
+        // 본문 JSON 정규화
+        return StringUtils.hasText(contentJson) ? contentJson.trim() : "";
     }
 
-    private String extractPlainText(String contentHtml) {
-        // 텍스트 추출
-        return normalizeContentHtml(contentHtml)
-                .replaceAll("(?i)<img[^>]*>", " ")
-                .replaceAll("(?i)<br\\s*/?>", " ")
-                .replaceAll("(?i)</(p|div|li|h1|h2|h3|blockquote|figure|figcaption)>", " ")
-                .replaceAll("<[^>]+>", " ")
-                .replace("&nbsp;", " ")
+    private void validateContentJson(String contentJson) {
+        // 본문 JSON 형식과 Byte 길이를 검증
+        if (contentJson.getBytes(StandardCharsets.UTF_8).length > COMMUNITY_POST_CONTENT_MAX_BYTES) {
+            throw new BusinessException("본문은 최대 500000 Byte까지 입력할 수 있습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            objectMapper.readTree(contentJson);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException("본문 형식이 올바르지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private String normalizePlainTextSummary(String plainTextSummary) {
+        // 본문 요약 텍스트 정규화
+        return StringUtils.hasText(plainTextSummary)
+                ? plainTextSummary.trim()
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
                 .replaceAll("\\s+", " ")
-                .trim();
+                : "";
     }
 
-    private boolean isPostLiked(String postId, String currentHandle) {
+    private String normalizeImageIds(List<String> imageIds) {
+        // 이미지 번호 목록 정규화
+        if (imageIds == null || imageIds.isEmpty()) {
+            return "";
+        }
+
+        return imageIds.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .limit(100)
+                .reduce((left, right) -> left + "," + right)
+                .orElse("");
+    }
+
+    private List<String> createImageIds(String imageIds) {
+        // 이미지 번호 목록 생성
+        if (!StringUtils.hasText(imageIds)) {
+            return List.of();
+        }
+
+        return List.of(imageIds.split(",")).stream()
+                .filter(StringUtils::hasText)
+                .toList();
+    }
+
+    private boolean isPostLiked(Long postId, String currentHandle) {
         // 게시글 좋아요한 여부 확인
         if (currentHandle == null) {
             return false;
