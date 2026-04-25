@@ -11,6 +11,8 @@ public class RankListItemRes {
     private final String handle;
     private final int solvedCount;
     private final double avgExecutionPercentile;
+    private final int totalSubmitCount;
+    private final int successSubmitCount;
     private final RankMonthlyDeltaRes monthlyRankDelta;
 
     public static RankListItemRes from(RankListItemOutput result) {
@@ -18,6 +20,8 @@ public class RankListItemRes {
                 result.handle(),
                 result.solvedCount(),
                 result.avgExecutionPercentile(),
+                result.totalSubmitCount(),
+                result.successSubmitCount(),
                 RankMonthlyDeltaRes.from(result.monthlyRankDelta())
         );
     }

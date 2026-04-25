@@ -1,6 +1,8 @@
 package com.quertimizer.ranking.application.usecase;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
+import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
 import com.quertimizer.ranking.application.output.RankListItemOutput;
@@ -23,17 +25,22 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class GetRanks {
 
-    private static final int RANK_PAGE_SIZE = 100;
+    private static final int DEFAULT_RANK_PAGE_SIZE = 10;
+    private static final int MAX_RANK_PAGE_SIZE = 100;
     private static final RankMonthlyDeltaOutput EMPTY_MONTHLY_DELTA = new RankMonthlyDeltaOutput(0, 0);
+    private static final SubmitMetrics EMPTY_SUBMIT_METRICS = new SubmitMetrics(0, 0);
 
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
+    private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
 
-    public RankPageOutput execute(int requestedPage, String dbms, String query, String sortKey) {
+    public RankPageOutput execute(int requestedPage, Integer requestedPageSize, String dbms, String query, String sortKey) {
         // 랭킹 페이지 데이터를 조회
+        int pageSize = resolvePageSize(requestedPageSize);
         DbmsType dbmsType = resolveDbmsType(dbms);
         RankSortKey rankSortKey = resolveRankSortKey(sortKey);
         LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         List<ProblemSolveHistory> histories = problemSolveHistoryRepository.findAll();
+        List<ProblemSubmitHistory> submitHistories = problemSubmitHistoryRepository.findAll();
 
         // 현재 기준 최고 제출 이력 추출
         List<ProblemSolveHistory> currentBestHistories = createBestHistories(histories, dbmsType, null);
@@ -44,6 +51,7 @@ public class GetRanks {
         // 사용자별 랭킹 지표 계산
         Map<String, RankMetrics> currentMetricsByHandle = createRankMetricsByHandle(currentBestHistories);
         Map<String, RankMetrics> baselineMetricsByHandle = createRankMetricsByHandle(baselineBestHistories);
+        Map<String, SubmitMetrics> submitMetricsByHandle = createSubmitMetricsByHandle(submitHistories, dbmsType);
 
         // 이번달 1일 대비 순위 변화 계산
         Map<String, RankMonthlyDeltaOutput> monthlyDeltaByHandle = createMonthlyDeltaByHandle(
@@ -57,6 +65,8 @@ public class GetRanks {
                         metrics.handle(),
                         metrics.solvedCount(),
                         metrics.avgExecutionPercentile(),
+                        submitMetricsByHandle.getOrDefault(metrics.handle(), EMPTY_SUBMIT_METRICS).totalSubmitCount(),
+                        submitMetricsByHandle.getOrDefault(metrics.handle(), EMPTY_SUBMIT_METRICS).successSubmitCount(),
                         monthlyDeltaByHandle.getOrDefault(metrics.handle(), EMPTY_MONTHLY_DELTA)
                 ))
                 .filter(rank -> matchesHandle(rank, query))
@@ -65,18 +75,27 @@ public class GetRanks {
 
         // 페이지 경계 계산
         int totalCount = filteredRanks.size();
-        int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) RANK_PAGE_SIZE));
+        int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) pageSize));
         int currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
-        int fromIndex = Math.min((currentPage - 1) * RANK_PAGE_SIZE, totalCount);
-        int toIndex = Math.min(fromIndex + RANK_PAGE_SIZE, totalCount);
+        int fromIndex = Math.min((currentPage - 1) * pageSize, totalCount);
+        int toIndex = Math.min(fromIndex + pageSize, totalCount);
 
         return new RankPageOutput(
                 currentPage,
-                RANK_PAGE_SIZE,
+                pageSize,
                 totalCount,
                 totalPages,
                 filteredRanks.subList(fromIndex, toIndex)
         );
+    }
+
+    private int resolvePageSize(Integer requestedPageSize) {
+        // 랭킹 페이지 크기를 보정
+        if (requestedPageSize == null || requestedPageSize < 1) {
+            return DEFAULT_RANK_PAGE_SIZE;
+        }
+
+        return Math.min(requestedPageSize, MAX_RANK_PAGE_SIZE);
     }
 
     private List<ProblemSolveHistory> createBestHistories(List<ProblemSolveHistory> histories,
@@ -164,6 +183,28 @@ public class GetRanks {
         }
 
         return historiesByProblemId;
+    }
+
+    private Map<String, SubmitMetrics> createSubmitMetricsByHandle(List<ProblemSubmitHistory> histories, DbmsType dbmsType) {
+        // Handle별 전체 제출 수, 정답 제출 수 집계
+        Map<String, SubmitMetrics> submitMetricsByHandle = new HashMap<>();
+
+        for (ProblemSubmitHistory history : histories) {
+            if (resolveDbmsType(history) != dbmsType) {
+                continue;
+            }
+
+            SubmitMetrics currentMetrics = submitMetricsByHandle.getOrDefault(history.getHandle(), EMPTY_SUBMIT_METRICS);
+            submitMetricsByHandle.put(
+                    history.getHandle(),
+                    new SubmitMetrics(
+                            currentMetrics.totalSubmitCount() + 1,
+                            currentMetrics.successSubmitCount() + (history.isSuccess() ? 1 : 0)
+                    )
+            );
+        }
+
+        return submitMetricsByHandle;
     }
 
     private Map<UserSolvedHistoryKey, Integer> createExecutionPercentileByHistoryKey(
@@ -341,6 +382,11 @@ public class GetRanks {
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
+    private DbmsType resolveDbmsType(ProblemSubmitHistory history) {
+        // DBMS 유형 결정
+        return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
+    }
+
     private RankSortKey resolveRankSortKey(String sortKey) {
         // Rank 정렬 키 결정
         if ("avgExecutionPercentile".equalsIgnoreCase(sortKey)) {
@@ -356,6 +402,10 @@ public class GetRanks {
 
     private record RankMetrics(String handle, int solvedCount, double avgExecutionPercentile) {
         // Rank 지표 처리
+    }
+
+    private record SubmitMetrics(int totalSubmitCount, int successSubmitCount) {
+        // 제출 지표 처리
     }
 
     private enum RankSortKey {

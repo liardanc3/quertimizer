@@ -16,12 +16,13 @@ public class RankController {
 
     @GetMapping("/ranks")
     public ResponseEntity<RankPageRes> getRanks(@RequestParam(defaultValue = "1") int page,
+                                                @RequestParam(required = false) Integer pageSize,
                                                 @RequestParam(defaultValue = "postgresql") String dbms,
                                                 @RequestParam(required = false) String query,
                                                 @RequestParam(defaultValue = "solvedCount") String sortKey) {
 
         // 현재 DBMS, 검색, 정렬 기준 랭킹 페이지 반환
-        return ResponseEntity.ok(RankPageRes.from(getRanks.execute(page, dbms, query, sortKey)));
+        return ResponseEntity.ok(RankPageRes.from(getRanks.execute(page, pageSize, dbms, query, sortKey)));
     }
 
 }

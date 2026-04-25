@@ -10,6 +10,8 @@ interface RankListItemResponse {
   handle?: string;
   solvedCount?: number;
   avgExecutionPercentile?: number;
+  totalSubmitCount?: number;
+  successSubmitCount?: number;
   monthlyRankDelta?: RankMonthlyDeltaResponse;
 }
 
@@ -23,6 +25,7 @@ interface RankPageResponse {
 
 export interface FetchRanksParams {
   page: number;
+  pageSize: number;
   dbms: DbmsType;
   query: string;
   sortKey: RankingMetricKey;
@@ -41,6 +44,8 @@ function toRankingEntry(rank: RankListItemResponse) {
     handle: rank.handle!,
     solvedCount: rank.solvedCount!,
     avgExecutionPercentile: rank.avgExecutionPercentile!,
+    totalSubmitCount: rank.totalSubmitCount!,
+    successSubmitCount: rank.successSubmitCount!,
     monthlyRankDelta: {
       solvedCount: rank.monthlyRankDelta?.solvedCount ?? 0,
       avgExecutionPercentile: rank.monthlyRankDelta?.avgExecutionPercentile ?? 0,
@@ -53,6 +58,7 @@ export async function fetchRanks(params: FetchRanksParams): Promise<RankPage> {
 
   const searchParams = new URLSearchParams({
     page: String(params.page),
+    pageSize: String(params.pageSize),
     dbms: params.dbms,
     sortKey: params.sortKey,
   });
@@ -93,10 +99,12 @@ export async function fetchRanks(params: FetchRanksParams): Promise<RankPage> {
       totalPages: data.totalPages,
       ranks: data.ranks
         .filter(
-          (rank): rank is Required<Pick<RankListItemResponse, 'handle' | 'solvedCount' | 'avgExecutionPercentile'>> & RankListItemResponse =>
+          (rank): rank is Required<Pick<RankListItemResponse, 'handle' | 'solvedCount' | 'avgExecutionPercentile' | 'totalSubmitCount' | 'successSubmitCount'>> & RankListItemResponse =>
             typeof rank.handle === 'string' &&
             typeof rank.solvedCount === 'number' &&
-            typeof rank.avgExecutionPercentile === 'number',
+            typeof rank.avgExecutionPercentile === 'number' &&
+            typeof rank.totalSubmitCount === 'number' &&
+            typeof rank.successSubmitCount === 'number',
         )
         .map(toRankingEntry),
     };

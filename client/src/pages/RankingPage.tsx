@@ -10,8 +10,8 @@ import './HomePage.css';
 import './SubmitHistoryPage.css';
 import './RankingPage.css';
 
-const PAGE_SIZE = 100;
-const rankingLoadingRows = Array.from({ length: 8 }, (_, index) => index);
+const PAGE_SIZE = 10;
+const rankingLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 
 const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
   { value: 'postgresql', label: 'PostgreSQL' },
@@ -150,6 +150,7 @@ export default function RankingPage() {
       try {
         const fetchedRankPage = await fetchRanks({
           page: requestedPage,
+          pageSize: PAGE_SIZE,
           dbms: selectedDbms,
           query: submittedQuery,
           sortKey,
@@ -218,6 +219,12 @@ export default function RankingPage() {
   }, [linkMenuState]);
 
   function applySearch() {
+    const willReload = draftQuery.trim() !== submittedQuery.trim() || requestedPage !== 1;
+    if (!willReload) {
+      return;
+    }
+
+    setIsLoading(true);
     setSubmittedQuery(draftQuery);
     setRequestedPage(1);
   }
@@ -232,13 +239,23 @@ export default function RankingPage() {
     setIsPageJumpEditing(false);
 
     if (nextPage !== rankPage.currentPage) {
-      setRequestedPage(nextPage);
+      requestRankPage(nextPage);
     }
   }
 
   function cancelPageJump() {
     setPageJumpDraft(String(rankPage.currentPage));
     setIsPageJumpEditing(false);
+  }
+
+  function requestRankPage(nextPage: number) {
+    const normalizedPage = Math.min(rankPage.totalPages, Math.max(1, nextPage));
+    if (normalizedPage === rankPage.currentPage) {
+      return;
+    }
+
+    setIsLoading(true);
+    setRequestedPage(normalizedPage);
   }
 
   function openHandleMenu(handle: string, button: HTMLButtonElement) {
@@ -281,7 +298,7 @@ export default function RankingPage() {
   return (
     <div className="page-stack ranking-page submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card ranking-toolbar-card">
-        <div className="problem-toolbar submit-history-toolbar-stack ranking-toolbar-stack">
+        <div className="problem-toolbar home-problem-toolbar-stack submit-history-toolbar-stack ranking-toolbar-stack">
           <div className="solve-dbms-tab-row ranking-dbms-tab-row" role="tablist" aria-label="랭킹 DBMS 선택">
             {dbmsOptions.map((option) => {
               const isSelected = option.value === selectedDbms;
@@ -294,8 +311,11 @@ export default function RankingPage() {
                   role="tab"
                   aria-selected={isSelected}
                   onClick={() => {
-                    setSelectedDbms(option.value);
-                    setRequestedPage(1);
+                    if (!isSelected) {
+                      setIsLoading(true);
+                      setSelectedDbms(option.value);
+                      setRequestedPage(1);
+                    }
                   }}
                 >
                   {option.label}
@@ -320,7 +340,7 @@ export default function RankingPage() {
           </div>
 
           <form
-            className="home-problem-search-form ranking-search-form"
+            className="problem-search-form home-problem-search-form ranking-search-form"
             onSubmit={(event) => {
               event.preventDefault();
               applySearch();
@@ -347,88 +367,99 @@ export default function RankingPage() {
         {loadFailed ? (
           <PageLoadFailureState className="submit-history-empty-state" />
         ) : (
-          <div className={`submit-history-table-shell ranking-table-shell ${isLoading ? 'is-loading' : ''}`}>
-            <div className="submit-history-table ranking-table" role="table" aria-label="랭킹 목록">
-              <div className="submit-history-row submit-history-head ranking-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">순위</div>
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>해결한 문제</span>
-                  <button
-                    type="button"
-                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'solvedCount' ? 'is-active' : ''}`}
-                    aria-label="해결한 문제 내림차순 정렬"
-                    onClick={() => {
-                      if (sortKey !== 'solvedCount') {
-                        setSortKey('solvedCount');
-                        setRequestedPage(1);
-                      }
-                    }}
-                  >
-                    {sortKey === 'solvedCount' ? <SortDescendingIcon /> : <SortNeutralIcon />}
-                  </button>
-                </div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>평균 Cost 백분위</span>
-                  <button
-                    type="button"
-                    className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'avgExecutionPercentile' ? 'is-active' : ''}`}
-                    aria-label="평균 Cost 백분위 오름차순 정렬"
-                    onClick={() => {
-                      if (sortKey !== 'avgExecutionPercentile') {
-                        setSortKey('avgExecutionPercentile');
-                        setRequestedPage(1);
-                      }
-                    }}
-                  >
-                    {sortKey === 'avgExecutionPercentile' ? <SortAscendingIcon /> : <SortNeutralIcon />}
-                  </button>
-                </div>
+          <div className={`submit-history-table ranking-table ${isLoading ? 'is-loading' : ''}`} role="table" aria-label="랭킹 목록">
+            <div className="submit-history-row submit-history-head ranking-head" role="row">
+              <div role="columnheader" className="submit-history-head-cell">순위</div>
+              <div role="columnheader" className="submit-history-head-cell ranking-head-handle-cell">Handle</div>
+              <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                <span>해결한 문제</span>
+                <button
+                  type="button"
+                  className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'solvedCount' ? 'is-active' : ''}`}
+                  aria-label="해결한 문제 내림차순 정렬"
+                  onClick={() => {
+                    if (sortKey !== 'solvedCount') {
+                      setIsLoading(true);
+                      setSortKey('solvedCount');
+                      setRequestedPage(1);
+                    }
+                  }}
+                >
+                  {sortKey === 'solvedCount' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                </button>
               </div>
-
-              {isLoading && rankedEntries.length === 0 ? (
-                rankingLoadingRows.map((rowIndex) => (
-                  <div key={`ranking-loading-${rowIndex}`} className="submit-history-row submit-history-body ranking-body" role="row" aria-hidden="true">
-                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
-                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
-                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
-                    <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
-                  </div>
-                ))
-              ) : rankedEntries.length === 0 ? (
-                <div className="submit-history-row submit-history-empty-row" role="row">
-                  <span className="submit-history-empty-cell" role="cell">
-                    조건에 맞는 랭킹이 없습니다.
-                  </span>
-                </div>
-              ) : (
-                rankedEntries.map((entry) => (
-                  <article key={`${selectedDbms}-${entry.handle}`} className="submit-history-row submit-history-body ranking-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="순위">
-                      {entry.rank}
-                    </span>
-                    <span className="submit-history-cell" role="cell" data-label="Handle">
-                      <button
-                        type="button"
-                        className="submit-history-link-button"
-                        onClick={(event) => openHandleMenu(entry.handle, event.currentTarget)}
-                        aria-label={`${entry.handle} Handle 메뉴 열기`}
-                      >
-                        {entry.handle}
-                      </button>
-                    </span>
-                    <span className="submit-history-cell" role="cell" data-label="해결한 문제">
-                      {entry.solvedCount}
-                    </span>
-                    <span className="submit-history-cell" role="cell" data-label="평균 Cost 백분위">
-                      {formatPercentile(entry.avgExecutionPercentile)}
-                    </span>
-                  </article>
-                ))
-              )}
+              <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                <span>평균 Cost 백분위</span>
+                <button
+                  type="button"
+                  className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'avgExecutionPercentile' ? 'is-active' : ''}`}
+                  aria-label="평균 Cost 백분위 오름차순 정렬"
+                  onClick={() => {
+                    if (sortKey !== 'avgExecutionPercentile') {
+                      setIsLoading(true);
+                      setSortKey('avgExecutionPercentile');
+                      setRequestedPage(1);
+                    }
+                  }}
+                >
+                  {sortKey === 'avgExecutionPercentile' ? <SortAscendingIcon /> : <SortNeutralIcon />}
+                </button>
+              </div>
+              <div role="columnheader" className="submit-history-head-cell">전체 제출 수</div>
+              <div role="columnheader" className="submit-history-head-cell">정답 제출 수</div>
             </div>
+
+            {isLoading && rankedEntries.length === 0 ? (
+              rankingLoadingRows.map((rowIndex) => (
+                <div key={`ranking-loading-${rowIndex}`} className="submit-history-row submit-history-body ranking-body" role="row" aria-hidden="true">
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-mini" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
+                </div>
+              ))
+            ) : rankedEntries.length === 0 ? (
+              <div className="submit-history-row submit-history-empty-row" role="row">
+                <span className="submit-history-empty-cell" role="cell">
+                  조건에 맞는 랭킹이 없습니다.
+                </span>
+              </div>
+            ) : (
+              rankedEntries.map((entry) => (
+                <article key={`${selectedDbms}-${entry.handle}`} className="submit-history-row submit-history-body ranking-body" role="row">
+                  <span className="submit-history-cell" role="cell" data-label="순위">
+                    {entry.rank}
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="Handle">
+                    <button
+                      type="button"
+                      className="submit-history-link-button"
+                      onClick={(event) => openHandleMenu(entry.handle, event.currentTarget)}
+                      aria-label={`${entry.handle} Handle 메뉴 열기`}
+                    >
+                      {entry.handle}
+                    </button>
+                  </span>
+                  <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label="해결한 문제">
+                    {entry.solvedCount}
+                  </span>
+                  <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label="평균 Cost 백분위">
+                    {formatPercentile(entry.avgExecutionPercentile)}
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="전체 제출 수">
+                    {entry.totalSubmitCount}
+                  </span>
+                  <span className="submit-history-cell" role="cell" data-label="정답 제출 수">
+                    {entry.successSubmitCount}
+                  </span>
+                </article>
+              ))
+            )}
+
             {isLoading ? (
-              <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
+              <div className="ranking-table-loading-overlay" aria-live="polite" aria-label="로딩 중">
                 <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
               </div>
             ) : null}
@@ -440,7 +471,7 @@ export default function RankingPage() {
             <button
               type="button"
               className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
+              onClick={() => requestRankPage(rankPage.currentPage - 1)}
               disabled={rankPage.currentPage === 1}
             >
               이전
@@ -486,7 +517,7 @@ export default function RankingPage() {
             <button
               type="button"
               className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.min(rankPage.totalPages, page + 1))}
+              onClick={() => requestRankPage(rankPage.currentPage + 1)}
               disabled={rankPage.currentPage >= rankPage.totalPages}
             >
               다음

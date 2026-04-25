@@ -238,6 +238,8 @@ export interface RankingEntry {
   handle: string;
   solvedCount: number;
   avgExecutionPercentile: number;
+  totalSubmitCount: number;
+  successSubmitCount: number;
   monthlyRankDelta: Record<RankingMetricKey, number>;
 }
 

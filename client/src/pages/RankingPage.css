@@ -1,9 +1,18 @@
 .ranking-page.submit-history-page.home-page.page-stack {
-  gap: 1.5rem;
+  gap: 0;
 }
 
+.main-content:has(.ranking-page) {
+  padding-bottom: 0.68rem;
+}
+
+.app-shell:has(.ranking-page) .app-footer-inner {
+  padding-top: 0.44rem;
+}
+
+.ranking-page .submit-history-toolbar-stack,
 .ranking-toolbar-stack {
-  gap: 0.72rem;
+  gap: 0.9rem;
 }
 
 .ranking-dbms-tab-row {
@@ -30,18 +39,41 @@
   font-weight: 400;
 }
 
+.ranking-page .submit-history-board,
 .ranking-board {
-  margin-top: -1rem;
-}
-
-.ranking-table-shell {
+  display: grid;
+  gap: 0.56rem;
   margin-top: 0;
 }
 
+.ranking-table-loading-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.ranking-table-loading-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
+  animation: submit-history-loading-wave 1.8s ease-in-out infinite;
+}
+
+.ranking-page .submit-history-head,
 .ranking-head {
   border: 0;
   border-bottom: 1px solid rgba(219, 230, 242, 0.82);
   background: transparent;
+  padding-top: 0;
+  padding-bottom: 0.58rem;
+  justify-items: center;
+  text-align: center;
 }
 
 .ranking-head::before,
@@ -50,24 +82,50 @@
 }
 
 .ranking-table {
-  min-width: 36rem;
+  position: relative;
+  min-width: 52rem;
+}
+
+.ranking-table.is-loading > :not(.ranking-table-loading-overlay) {
+  filter: blur(1.75px);
 }
 
 .ranking-table .submit-history-row {
-  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+}
+
+.ranking-head .submit-history-head-cell {
+  justify-content: center;
+}
+
+.ranking-head .ranking-head-handle-cell {
+  justify-content: flex-start;
+  justify-self: stretch;
+  text-align: left;
 }
 
 .ranking-body .submit-history-cell {
+  justify-content: center;
   font-size: 0.74rem;
+  text-align: center;
+}
+
+.ranking-body .submit-history-cell[data-label='Handle'] {
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .ranking-body .submit-history-link-button {
   font-weight: 800;
 }
 
+.ranking-body .ranking-emphasis-cell {
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   .ranking-table {
-    min-width: 30rem;
+    min-width: 44rem;
   }
 }
 

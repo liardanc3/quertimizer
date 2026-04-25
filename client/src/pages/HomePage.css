@@ -1529,7 +1529,7 @@ body.handle-setup-locked {
 
 /* 2026-04-20 home table header/popover/loading overrides */
 .home-page.page-stack {
-  gap: 1.5rem;
+  gap: 0.92rem;
 }
 
 .home-page .problem-list {
