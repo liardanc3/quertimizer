@@ -1,4 +1,4 @@
-package com.quertimizer.problem.presentation.realtime.interceptor;
+package com.quertimizer.global.realtime.interceptor;
 
 import com.quertimizer.global.log.LogFormatter;
 import jakarta.servlet.http.HttpSession;

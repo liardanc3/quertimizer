@@ -1,8 +1,18 @@
 package com.quertimizer.problem.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.judge.application.input.GenerateAnswerHashInput;
+import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
+import com.quertimizer.judge.application.input.RefreshTemplateDatasetInput;
+import com.quertimizer.judge.application.output.ProblemOutputPreviewOutput;
+import com.quertimizer.judge.application.usecase.GenerateProblemAnswerHash;
+import com.quertimizer.judge.application.usecase.RefreshTemplateDataset;
+import com.quertimizer.judge.application.usecase.BuildProblemOutputPreview;
+import com.quertimizer.judge.domain.service.JudgeTemplateVersionSupport;
 import com.quertimizer.problem.application.input.ProblemCreateInput;
 import com.quertimizer.problem.application.output.AdminProblemOptionOutput;
 import com.quertimizer.problem.application.output.ProblemCreateOutput;
@@ -52,6 +62,10 @@ public class ProblemService {
     private final ProblemGeneratorPermissionRepository problemGeneratorPermissionRepository;
     private final AuthService authService;
     private final ProblemManagementPolicy problemManagementPolicy;
+    private final BuildProblemOutputPreview buildProblemOutputPreview;
+    private final GenerateProblemAnswerHash generateProblemAnswerHash;
+    private final RefreshTemplateDataset refreshTemplateDataset;
+    private final ObjectMapper objectMapper;
 
     public ProblemPageOutput getProblems(int page,
                                          String query,
@@ -200,14 +214,47 @@ public class ProblemService {
 
         validateProblemWriteAccess(currentUser, useExistingProblemSet, useExistingProblem, scopedProblemSetId, request.getProblemId());
 
+        String canonicalDdl;
+        String actualDataSql;
         if (useExistingProblemSet) {
-            requireExistingProblemSet(scopedProblemSetId);
+            ProblemSet existingProblemSet = requireExistingProblemSet(scopedProblemSetId);
+            canonicalDdl = normalizeOptionalText(existingProblemSet.getDdl());
+            actualDataSql = normalizeOptionalText(existingProblemSet.getActualDataSql());
         } else {
-            createProblemSet(scopedProblemSetId, request, dbmsType);
+            canonicalDdl = resolveScopedDdl(request, dbmsType);
+            actualDataSql = resolveScopedActualData(request, dbmsType);
+        }
+
+        String sampleDataSql = resolveScopedSampleData(request, dbmsType, useExistingProblemSet ? actualDataSql : "");
+        String normalizedAnswerSql = requireText(request.getAnswerSql(), "정답 SQL이 필요하다.");
+        String templateVersion = JudgeTemplateVersionSupport.createVersion(canonicalDdl, actualDataSql);
+        ProblemOutputPreviewOutput sampleOutput = buildProblemOutputPreview.execute(new ProblemOutputPreviewInput(
+                dbmsType,
+                scopedDdl,
+                sampleDataSql,
+                normalizedAnswerSql
+        ));
+        String answerHash = generateProblemAnswerHash.execute(new GenerateAnswerHashInput(
+                dbmsType,
+                canonicalDdl,
+                actualDataSql,
+                normalizedAnswerSql
+        ));
+
+        if (useExistingProblemSet) {
+            refreshTemplateDataset.execute(new RefreshTemplateDatasetInput(
+                    scopedProblemSetId,
+                    dbmsType,
+                    canonicalDdl,
+                    actualDataSql,
+                    templateVersion
+            ));
+        } else {
+            createProblemSet(scopedProblemSetId, canonicalDdl, actualDataSql, templateVersion, dbmsType);
         }
 
         if (useExistingProblem) {
-            return updateProblem(request, scopedProblemSetId, scopedDdl, dbmsType);
+            return updateProblem(request, scopedProblemSetId, scopedDdl, dbmsType, sampleDataSql, sampleOutput, answerHash, normalizedAnswerSql);
         }
 
         String baseProblemSetId = extractBaseProblemSetId(scopedProblemSetId);
@@ -223,9 +270,10 @@ public class ProblemService {
                 dbmsType == DbmsType.ORACLE,
                 request.getCondition().trim(),
                 request.getOutput().trim(),
-                normalizeOptionalText(request.getOutputSample()),
-                normalizeOptionalText(request.getAnswer()),
-                normalizeOptionalText(request.getAnswerSql())
+                sampleDataSql,
+                serializeSampleOutput(sampleOutput),
+                answerHash,
+                normalizedAnswerSql
         ));
 
         addCreatedProblemPermissionIfNeeded(currentUser, problemId);
@@ -279,21 +327,32 @@ public class ProblemService {
                 .orElseThrow(() -> new BusinessException(PROBLEM_SET_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST));
     }
 
-    private ProblemSet createProblemSet(String problemSetId, ProblemCreateInput request, DbmsType dbmsType) {
+    private ProblemSet createProblemSet(String problemSetId,
+                                        String canonicalDdl,
+                                        String actualDataSql,
+                                        String templateVersion,
+                                        DbmsType dbmsType) {
         // 문제 테이블셋 생성
-        return problemSetRepository.save(ProblemSet.create(
+        ProblemSet createdProblemSet = problemSetRepository.save(ProblemSet.create(
                 problemSetId,
-                resolveScopedDdl(request, dbmsType),
-                resolveScopedData(request, dbmsType),
+                canonicalDdl,
+                actualDataSql,
+                templateVersion,
                 dbmsType == DbmsType.POSTGRESQL,
                 dbmsType == DbmsType.ORACLE
         ));
+        refreshTemplateDataset.execute(new RefreshTemplateDatasetInput(problemSetId, dbmsType, canonicalDdl, actualDataSql, templateVersion));
+        return createdProblemSet;
     }
 
     private ProblemCreateOutput updateProblem(ProblemCreateInput request,
                                               String problemSetId,
                                               String scopedDdl,
-                                              DbmsType dbmsType) {
+                                              DbmsType dbmsType,
+                                              String sampleDataSql,
+                                              ProblemOutputPreviewOutput sampleOutput,
+                                              String answerHash,
+                                              String answerSql) {
         String problemId = requireText(request.getProblemId(), EXISTING_PROBLEM_ID_REQUIRED.getMessage());
         Problem problem = problemRepository.findById(problemId)
                 .orElseThrow(() -> new BusinessException(PROBLEM_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST));
@@ -310,9 +369,10 @@ public class ProblemService {
                 dbmsType == DbmsType.ORACLE,
                 request.getCondition().trim(),
                 request.getOutput().trim(),
-                normalizeOptionalText(request.getOutputSample()),
-                normalizeOptionalText(request.getAnswer()),
-                normalizeOptionalText(request.getAnswerSql())
+                sampleDataSql,
+                serializeSampleOutput(sampleOutput),
+                answerHash,
+                answerSql
         );
 
         problemStore.loadProblems();
@@ -345,6 +405,7 @@ public class ProblemService {
                 normalizeOptionalText(problem.getCondition()),
                 normalizeOptionalText(problem.getOutput()),
                 normalizeOptionalText(problem.getOutputSample()),
+                normalizeOptionalText(problem.getSampleDataSql()),
                 normalizeAnswerSql(problem),
                 normalizeOptionalText(problem.getAnswer()),
                 problem.getDbmsType().getValue()
@@ -364,6 +425,7 @@ public class ProblemService {
                 normalizeOptionalText(problem.getCondition()),
                 normalizeOptionalText(problem.getOutput()),
                 normalizeOptionalText(problem.getOutputSample()),
+                normalizeOptionalText(problem.getSampleDataSql()),
                 normalizeAnswerSql(problem),
                 normalizeOptionalText(problem.getAnswer()),
                 problem.getDbmsType().getValue()
@@ -376,7 +438,12 @@ public class ProblemService {
             return problem.getAnswerSql();
         }
 
-        return normalizeOptionalText(problem.getAnswer());
+        String legacyAnswer = normalizeOptionalText(problem.getAnswer());
+        if (legacyAnswer.toUpperCase().startsWith("SELECT ") || legacyAnswer.toUpperCase().startsWith("WITH ")) {
+            return legacyAnswer;
+        }
+
+        return "";
     }
 
     private String resolveScopedDdl(ProblemCreateInput request, DbmsType dbmsType) {
@@ -388,13 +455,24 @@ public class ProblemService {
         return requireText(request.getDdlPostgresql(), "PostgreSQL DDL이 필요하다.");
     }
 
-    private String resolveScopedData(ProblemCreateInput request, DbmsType dbmsType) {
-        // 스코프 데이터 결정
+    private String resolveScopedActualData(ProblemCreateInput request, DbmsType dbmsType) {
+        // 스코프 실제 채점 데이터 SQL 결정
         if (dbmsType == DbmsType.ORACLE) {
-            return requireText(request.getDataOracle(), "Oracle 데이터 SQL이 필요하다.");
+            return requireText(request.getActualDataOracle(), "Oracle 실제 채점 데이터 SQL이 필요하다.");
         }
 
-        return requireText(request.getDataPostgresql(), "PostgreSQL 데이터 SQL이 필요하다.");
+        return requireText(request.getActualDataPostgresql(), "PostgreSQL 실제 채점 데이터 SQL이 필요하다.");
+    }
+
+    private String resolveScopedSampleData(ProblemCreateInput request, DbmsType dbmsType, String fallbackDataSql) {
+        // 스코프 예시 데이터 SQL 결정
+        if (dbmsType == DbmsType.ORACLE) {
+            String sampleDataSql = normalizeOptionalText(request.getSampleDataOracle());
+            return !sampleDataSql.isBlank() ? sampleDataSql : requireText(fallbackDataSql, "Oracle 예시 데이터 SQL이 필요하다.");
+        }
+
+        String sampleDataSql = normalizeOptionalText(request.getSampleDataPostgresql());
+        return !sampleDataSql.isBlank() ? sampleDataSql : requireText(fallbackDataSql, "PostgreSQL 예시 데이터 SQL이 필요하다.");
     }
 
     private ProblemSetPair findProblemSetPair(String problemSetId) {
@@ -566,6 +644,15 @@ public class ProblemService {
     private String normalizeOptionalText(String value) {
         // Optional 텍스트 정규화
         return value != null ? value.trim() : "";
+    }
+
+    private String serializeSampleOutput(ProblemOutputPreviewOutput sampleOutput) {
+        // sample output 구조를 JSON 문자열로 저장
+        try {
+            return objectMapper.writeValueAsString(sampleOutput);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("sample output 직렬화에 실패했다.", exception);
+        }
     }
 
     private record ProblemSetPair(ProblemSet postgresqlProblemSet, ProblemSet oracleProblemSet) {

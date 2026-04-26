@@ -44,18 +44,21 @@ public class Problem {
     private String output;
 
     @Column(name = "output_sample", columnDefinition = "TEXT")
-    private String outputSample;
+    private String sampleOutput;
 
     @Column(columnDefinition = "TEXT")
-    private String answer;
+    private String answerHash;
 
     @Column(name = "answer_sql", columnDefinition = "TEXT")
     private String answerSql;
 
+    @Column(name = "sample_data_sql", columnDefinition = "TEXT")
+    private String sampleDataSql;
+
     public static Problem create(String problemId, String title, String description) {
         // 문제 생성
         DbmsType dbmsType = problemId != null && problemId.startsWith("O") ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
-        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType == DbmsType.POSTGRESQL, dbmsType == DbmsType.ORACLE, "", "", "", "", "");
+        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType == DbmsType.POSTGRESQL, dbmsType == DbmsType.ORACLE, "", "", "", "", "", "");
     }
 
     public static Problem create(String problemId,
@@ -67,10 +70,11 @@ public class Problem {
                                  boolean isOracle,
                                  String condition,
                                  String output,
-                                 String outputSample,
-                                 String answer,
+                                 String sampleDataSql,
+                                 String sampleOutput,
+                                 String answerHash,
                                  String answerSql) {
-        return new Problem(problemId, problemSetId, title, description, ddl, isPostgresql, isOracle, condition, output, outputSample, answer, answerSql);
+        return new Problem(problemId, problemSetId, title, description, ddl, isPostgresql, isOracle, condition, output, sampleDataSql, sampleOutput, answerHash, answerSql);
     }
 
     public void changeContent(String title,
@@ -80,8 +84,9 @@ public class Problem {
                               boolean isOracle,
                               String condition,
                               String output,
-                              String outputSample,
-                              String answer,
+                              String sampleDataSql,
+                              String sampleOutput,
+                              String answerHash,
                               String answerSql) {
         this.title = title;
         this.description = description;
@@ -90,9 +95,20 @@ public class Problem {
         this.isOracle = isOracle;
         this.condition = condition;
         this.output = output;
-        this.outputSample = outputSample;
-        this.answer = answer;
+        this.sampleDataSql = sampleDataSql;
+        this.sampleOutput = sampleOutput;
+        this.answerHash = answerHash;
         this.answerSql = answerSql;
+    }
+
+    public String getOutputSample() {
+        // 기존 outputSample 접근 코드를 위한 호환 getter
+        return sampleOutput;
+    }
+
+    public String getAnswer() {
+        // 기존 answer 접근 코드를 위한 호환 getter
+        return answerHash;
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
@@ -152,8 +168,9 @@ public class Problem {
                     boolean isOracle,
                     String condition,
                     String output,
-                    String outputSample,
-                    String answer,
+                    String sampleDataSql,
+                    String sampleOutput,
+                    String answerHash,
                     String answerSql) {
         this.problemId = problemId;
         this.problemSetId = problemSetId;
@@ -164,8 +181,9 @@ public class Problem {
         this.isOracle = isOracle;
         this.condition = condition;
         this.output = output;
-        this.outputSample = outputSample;
-        this.answer = answer;
+        this.sampleDataSql = sampleDataSql;
+        this.sampleOutput = sampleOutput;
+        this.answerHash = answerHash;
         this.answerSql = answerSql;
     }
 

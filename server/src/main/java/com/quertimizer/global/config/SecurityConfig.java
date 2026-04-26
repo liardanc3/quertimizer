@@ -60,7 +60,7 @@ public class SecurityConfig {
                            // 로그인, 회원가입, OAuth2 진입점은 비로그인 상태에서도 접근 가능해야 한다.
                            .requestMatchers("/login", "/login/*", "/logout", "/signup", "/signup/*", "/oauth2/**").permitAll()
                            .requestMatchers("/admin/auth-manage/**").hasRole(UserRole.ADMIN.name())
-                           .requestMatchers("/admin/problem-sets/**", "/admin/problems").hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
+                           .requestMatchers("/admin/problem-sets/**", "/admin/problems", "/admin/problems/output-preview").hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
                            .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                            .anyRequest().permitAll())
                    .build();

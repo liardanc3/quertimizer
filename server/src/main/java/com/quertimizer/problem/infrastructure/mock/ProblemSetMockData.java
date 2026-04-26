@@ -182,6 +182,7 @@ public class ProblemSetMockData {
                 "P00001",
                 TABLE_SET_00001_POSTGRESQL_DDL,
                 TABLE_SET_00001_POSTGRESQL_DATA,
+                "",
                 true,
                 false
         ));
@@ -189,6 +190,7 @@ public class ProblemSetMockData {
                 "O00001",
                 TABLE_SET_00001_ORACLE_DDL,
                 TABLE_SET_00001_ORACLE_DATA,
+                "",
                 false,
                 true
         ));

@@ -9,8 +9,8 @@ import com.quertimizer.auth.presentation.dto.request.DuplicateCheckHandleReq;
 import com.quertimizer.auth.presentation.dto.request.LoginReq;
 import com.quertimizer.auth.presentation.dto.request.ResetPasswordReq;
 import com.quertimizer.auth.presentation.dto.request.SignupReq;
+import com.quertimizer.global.realtime.sender.SessionSocketSender;
 import com.quertimizer.global.handler.ApiExceptionHandler;
-import com.quertimizer.problem.presentation.realtime.handler.SessionWebSocketHandler;
 import com.quertimizer.global.log.LogFormatter;
 import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.auth.infrastructure.store.SessionStore;
@@ -60,7 +60,7 @@ class AuthControllerTest {
     private TokenBasedRememberMeServices rememberMeServices;
 
     @MockitoBean
-    private SessionWebSocketHandler sessionWebSocketHandler;
+    private SessionSocketSender sessionSocketSender;
 
     @MockitoBean
     private LogFormatter logFormatter;

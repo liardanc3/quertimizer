@@ -1,9 +1,9 @@
-package com.quertimizer.problem.presentation.realtime.interceptor;
+package com.quertimizer.global.realtime.interceptor;
 
+import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.global.log.LogFormatter;
-import com.quertimizer.auth.application.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -86,7 +86,7 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private String resolveActor(ServerHttpRequest request) {
-        // 주체 결정
+        // WebSocket handshake 로그 주체를 결정
         if (!(request instanceof ServletServerHttpRequest servletRequest)) {
             return "unknown";
         }
@@ -102,7 +102,7 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private Authentication resolveAuthentication(HttpServletRequest httpServletRequest, HttpSession session) {
-        // Authentication 결정
+        // HttpSession 또는 Servlet principal에서 Authentication을 조회
         if (session != null) {
             Object context = session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
             if (context instanceof SecurityContext securityContext) {
@@ -121,23 +121,22 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private boolean isAuthenticatedUser(Authentication authentication) {
-        // 인증 사용자 여부 확인
+        // 인증된 일반 사용자 여부를 확인
         return authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName());
     }
 
     private boolean isBlockedUser(Authentication authentication) {
-        // 차단 사용자 여부 확인
+        // 차단된 사용자 여부를 확인
         try {
             loginPolicy.validateBlockedUser(authentication.getName());
             return false;
-
         } catch (BusinessException exception) {
             return true;
         }
     }
 
     private void logLines(java.util.List<String> logLines) {
-        // 로그 라인 생성
+        // 로그 라인을 순서대로 기록
         for (String logLine : logLines) {
             log.info("{}", logLine);
         }

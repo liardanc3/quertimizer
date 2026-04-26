@@ -55,6 +55,26 @@ public class ProblemMockData {
             ORDER BY total_amount DESC, c.customer_id ASC;
             """;
 
+    private static final String SAMPLE_DATA_SQL = """
+            INSERT INTO customers (customer_id, customer_name, region, signup_date)
+            VALUES
+                (1, '고객00001', 'BUSAN', DATE '2023-01-18'),
+                (2, '고객00002', 'DAEGU', DATE '2023-02-04');
+
+            INSERT INTO orders (order_id, customer_id, ordered_at, order_status, payment_method)
+            VALUES
+                (1101, 1, TIMESTAMP '2024-03-03 09:12:00', 'DELIVERED', 'CARD'),
+                (1102, 1, TIMESTAMP '2024-03-18 14:26:00', 'DELIVERED', 'WALLET'),
+                (1201, 2, TIMESTAMP '2024-03-07 11:05:00', 'PENDING', 'BANK_TRANSFER');
+
+            INSERT INTO order_items (order_item_id, order_id, product_category, quantity, unit_price, discount_amount)
+            VALUES
+                (1, 1101, 'LIVING', 2, 12000.00, 0.00),
+                (2, 1101, 'FOOD', 1, 18000.00, 0.00),
+                (3, 1102, 'DIGITAL', 1, 92000.00, 11040.00),
+                (4, 1201, 'BEAUTY', 3, 26000.00, 0.00);
+            """;
+
     private final ProblemRepository problemRepository;
 
     @PostConstruct
@@ -95,6 +115,7 @@ public class ProblemMockData {
                 isOracle,
                 CONDITION,
                 OUTPUT,
+                SAMPLE_DATA_SQL,
                 OUTPUT_SAMPLE,
                 ANSWER,
                 ANSWER_SQL

@@ -18,7 +18,8 @@ public class ProblemDetailRes {
     private final String condition;
     private final String output;
     private final String outputSample;
-    private final String answer;
+    private final String sampleDataSql;
+    private final String answerSql;
     private final String answerHash;
     private final String dbms;
 
@@ -34,7 +35,8 @@ public class ProblemDetailRes {
                 result.condition(),
                 result.output(),
                 result.outputSample(),
-                result.answer(),
+                result.sampleDataSql(),
+                result.answerSql(),
                 result.answerHash(),
                 result.dbms()
         );

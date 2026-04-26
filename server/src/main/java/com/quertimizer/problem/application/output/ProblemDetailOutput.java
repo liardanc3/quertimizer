@@ -10,7 +10,8 @@ public record ProblemDetailOutput(String problemId,
                                   String condition,
                                   String output,
                                   String outputSample,
-                                  String answer,
+                                  String sampleDataSql,
+                                  String answerSql,
                                   String answerHash,
                                   String dbms) {
 }

@@ -42,7 +42,8 @@ interface ProblemDetailResponse {
   condition?: string;
   output?: string;
   outputSample?: string;
-  answer?: string;
+  sampleDataSql?: string;
+  answerSql?: string;
   answerHash?: string;
   dbms?: string;
 }
@@ -85,7 +86,8 @@ export interface ProblemDetailData {
   condition: string;
   output: string;
   outputSample: string;
-  answer: string;
+  sampleDataSql: string;
+  answerSql: string;
   answerHash: string;
   dbms: DbmsType;
 }
@@ -105,20 +107,32 @@ export interface ProblemSetDetailData {
 export interface CreateProblemPayload {
   title: string;
   description: string;
-  ddlPostgresql: string;
-  ddlOracle: string;
   condition: string;
   output: string;
-  outputSample: string;
-  answer: string;
-  answerSql?: string;
+  ddlPostgresql?: string;
+  ddlOracle?: string;
+  actualDataPostgresql?: string;
+  actualDataOracle?: string;
+  sampleDataPostgresql?: string;
+  sampleDataOracle?: string;
+  answerSql: string;
   problemSetMode: 'existing' | 'new';
   problemMode: 'existing' | 'new';
   problemSetId?: string;
   problemId?: string;
   dbms?: DbmsType;
-  dataPostgresql?: string;
-  dataOracle?: string;
+}
+
+interface ProblemOutputPreviewResponse {
+  columns?: string[];
+  rows?: unknown[][];
+  rowCount?: number;
+}
+
+export interface ProblemOutputPreviewData {
+  columns: string[];
+  rows: Array<Array<string | number | boolean | null>>;
+  rowCount: number;
 }
 
 export interface FetchProblemsParams {
@@ -234,7 +248,8 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       typeof data.condition !== 'string' ||
       typeof data.output !== 'string' ||
       typeof data.outputSample !== 'string' ||
-      typeof data.answer !== 'string' ||
+      typeof data.sampleDataSql !== 'string' ||
+      typeof data.answerSql !== 'string' ||
       typeof data.answerHash !== 'string'
     ) {
       throw new Error();
@@ -251,7 +266,8 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       condition: data.condition,
       output: data.output,
       outputSample: data.outputSample,
-      answer: data.answer,
+      sampleDataSql: data.sampleDataSql,
+      answerSql: data.answerSql,
       answerHash: data.answerHash,
       dbms: toDbmsType(data.dbms),
     };
@@ -475,5 +491,64 @@ export async function createProblem(payload: CreateProblemPayload): Promise<stri
     return data.problemId;
   } catch {
     throw new Error('문제 생성에 실패했다.');
+  }
+}
+
+function normalizePreviewRows(rows: unknown[][] | undefined): Array<Array<string | number | boolean | null>> {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.map((row) =>
+    Array.isArray(row)
+      ? row.map((value) =>
+          typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null
+            ? value
+            : value === undefined
+              ? null
+            : String(value),
+        )
+      : [],
+  );
+}
+
+export async function previewProblemOutput(payload: {
+  dbms: DbmsType;
+  ddl: string;
+  sampleDataSql: string;
+  answerSql: string;
+}): Promise<ProblemOutputPreviewData> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/admin/problems/output-preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('출력 예시 생성에 실패했다.');
+  }
+
+  if (!response.ok) {
+    throw new Error('출력 예시 생성에 실패했다.');
+  }
+
+  try {
+    const data = (await response.json()) as ProblemOutputPreviewResponse;
+    if (!Array.isArray(data.columns) || typeof data.rowCount !== 'number') {
+      throw new Error();
+    }
+
+    return {
+      columns: data.columns.filter((column): column is string => typeof column === 'string'),
+      rows: normalizePreviewRows(data.rows),
+      rowCount: data.rowCount,
+    };
+  } catch {
+    throw new Error('출력 예시 생성에 실패했다.');
   }
 }

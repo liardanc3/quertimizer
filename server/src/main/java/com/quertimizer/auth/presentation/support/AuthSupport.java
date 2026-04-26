@@ -1,7 +1,7 @@
 package com.quertimizer.auth.presentation.support;
 
 import com.quertimizer.global.util.CanonicalCode;
-import com.quertimizer.problem.presentation.realtime.handler.SessionWebSocketHandler;
+import com.quertimizer.global.realtime.sender.SessionSocketSender;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ public class AuthSupport {
 
     private final TokenBasedRememberMeServices rememberMeServices;
     private final SecurityContextRepository securityContextRepository;
-    private final SessionWebSocketHandler sessionWebSocketHandler;
+    private final SessionSocketSender sessionSocketSender;
 
     @Value("${app.frontend-base-url}")
     private String frontendBaseUrl;
@@ -41,7 +41,7 @@ public class AuthSupport {
 
     public void closeSessionSocket(String sessionId) {
         // 세션에 연결된 소켓 종료
-        sessionWebSocketHandler.closeSessionSockets(sessionId);
+        sessionSocketSender.closeSessionSockets(sessionId);
     }
 
     @CanonicalCode

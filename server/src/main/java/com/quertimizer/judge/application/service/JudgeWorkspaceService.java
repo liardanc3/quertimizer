@@ -1,7 +1,7 @@
-package com.quertimizer.problem.application.service;
+package com.quertimizer.judge.application.service;
 
-import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.application.store.ProblemStore;
+import com.quertimizer.problem.domain.entity.Problem;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +37,7 @@ import static com.quertimizer.problem.domain.model.ProblemLogMessage.WORKSPACE_C
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ProblemWorkspaceService {
+public class JudgeWorkspaceService {
 
     private static final Duration DISCONNECTED_CLEANUP_DELAY = Duration.ofMinutes(10);
     private static final Duration WORKSPACE_INACTIVITY_TIMEOUT = Duration.ofMinutes(30);
@@ -428,7 +428,7 @@ public class ProblemWorkspaceService {
         @Override
         public Thread newThread(Runnable runnable) {
             // 작업 스키마 정리 전용 데몬 스레드를 생성
-            Thread thread = new Thread(runnable, "problem-workspace-cleanup");
+            Thread thread = new Thread(runnable, "judge-workspace-cleanup");
             thread.setDaemon(true);
             return thread;
         }

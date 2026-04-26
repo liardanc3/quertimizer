@@ -1,5 +1,8 @@
 package com.quertimizer.problem.presentation.controller;
 
+import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
+import com.quertimizer.judge.application.usecase.BuildProblemOutputPreview;
 import com.quertimizer.problem.application.usecase.CreateProblem;
 import com.quertimizer.problem.application.usecase.GetProblemOptions;
 import com.quertimizer.problem.application.usecase.GetProblemSet;
@@ -8,9 +11,11 @@ import com.quertimizer.problem.application.usecase.GetProblem;
 import com.quertimizer.problem.application.usecase.GetProblems;
 import com.quertimizer.problem.presentation.support.ProblemSupport;
 import com.quertimizer.problem.presentation.dto.request.ProblemCreateReq;
+import com.quertimizer.problem.presentation.dto.request.ProblemOutputPreviewReq;
 import com.quertimizer.problem.presentation.dto.response.AdminProblemOptionRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemCreateRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemDetailRes;
+import com.quertimizer.problem.presentation.dto.response.ProblemOutputPreviewRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemPageRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemSetDetailRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemSetSummaryRes;
@@ -38,6 +43,7 @@ public class ProblemController {
     private final GetProblemSet getProblemSet;
     private final GetProblemOptions getProblemOptions;
     private final CreateProblem createProblem;
+    private final BuildProblemOutputPreview buildProblemOutputPreview;
 
     private final ProblemSupport problemSupport;
 
@@ -120,5 +126,18 @@ public class ProblemController {
         // 새 문제를 생성
         ProblemCreateRes response = ProblemCreateRes.from(createProblem.execute(request.toProblemCreateInput(), authenticatedEmail));
         return ResponseEntity.created(URI.create("/problems/" + response.getProblemId())).body(response);
+    }
+
+    @PostMapping("/admin/problems/output-preview")
+    public ResponseEntity<ProblemOutputPreviewRes> previewProblemOutput(@Valid @RequestBody ProblemOutputPreviewReq request) {
+        // 문제 생성용 출력 예시 preview를 judge 임시 실행 환경에서 생성
+        ProblemOutputPreviewInput input = new ProblemOutputPreviewInput(
+                "oracle".equalsIgnoreCase(request.getDbms()) ? DbmsType.ORACLE : DbmsType.POSTGRESQL,
+                request.getDdl(),
+                request.getSampleDataSql(),
+                request.getAnswerSql()
+        );
+
+        return ResponseEntity.ok(ProblemOutputPreviewRes.from(buildProblemOutputPreview.execute(input)));
     }
 }

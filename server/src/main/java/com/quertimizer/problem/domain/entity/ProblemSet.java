@@ -22,8 +22,11 @@ public class ProblemSet {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String ddl;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String data;
+    @Column(name = "data", nullable = false, columnDefinition = "TEXT")
+    private String actualDataSql;
+
+    @Column(name = "template_version", length = 64)
+    private String templateVersion;
 
     @Column(name = "is_postgresql", nullable = false)
     private boolean isPostgresql;
@@ -33,20 +36,28 @@ public class ProblemSet {
 
     public static ProblemSet create(String problemSetId,
                                     String ddl,
-                                    String data,
+                                    String actualDataSql,
+                                    String templateVersion,
                                     boolean isPostgresql,
                                     boolean isOracle) {
-        return new ProblemSet(problemSetId, ddl, data, isPostgresql, isOracle);
+        return new ProblemSet(problemSetId, ddl, actualDataSql, templateVersion, isPostgresql, isOracle);
     }
 
     public void changeContent(String ddl,
-                              String data,
+                              String actualDataSql,
+                              String templateVersion,
                               boolean isPostgresql,
                               boolean isOracle) {
         this.ddl = ddl;
-        this.data = data;
+        this.actualDataSql = actualDataSql;
+        this.templateVersion = templateVersion;
         this.isPostgresql = isPostgresql;
         this.isOracle = isOracle;
+    }
+
+    public String getData() {
+        // 기존 data 접근 코드를 위한 호환 getter
+        return actualDataSql;
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
@@ -79,12 +90,14 @@ public class ProblemSet {
 
     private ProblemSet(String problemSetId,
                        String ddl,
-                       String data,
+                       String actualDataSql,
+                       String templateVersion,
                        boolean isPostgresql,
                        boolean isOracle) {
         this.problemSetId = problemSetId;
         this.ddl = ddl;
-        this.data = data;
+        this.actualDataSql = actualDataSql;
+        this.templateVersion = templateVersion;
         this.isPostgresql = isPostgresql;
         this.isOracle = isOracle;
     }

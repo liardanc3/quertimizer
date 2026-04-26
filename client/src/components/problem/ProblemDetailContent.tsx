@@ -415,6 +415,25 @@ function parseSqlValue(token: string): string | number | boolean | null {
 
 function parseOutputSampleCsv(outputSampleCsv: string): ProblemOutputSampleData {
   try {
+    const structuredOutput = JSON.parse(outputSampleCsv) as { columns?: unknown; rows?: unknown };
+    if (Array.isArray(structuredOutput.columns) && Array.isArray(structuredOutput.rows)) {
+      return {
+        columns: structuredOutput.columns.filter((column): column is string => typeof column === 'string'),
+        rows: structuredOutput.rows.map((row) =>
+          Array.isArray(row)
+            ? row.map((value) =>
+                typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null
+                  ? value
+                  : String(value),
+              )
+            : [],
+        ),
+      };
+    }
+  } catch {
+  }
+
+  try {
     const lines = outputSampleCsv
       .split(/\r?\n/)
       .map((line) => line.trim())
