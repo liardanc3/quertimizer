@@ -39,7 +39,7 @@ export default function App() {
         <AppRouter />
       </MainLayout>
 
-      <SessionToast open={sessionAlert?.display === 'toast'} message={sessionAlert?.message ?? ''} />
+      <SessionToast open={sessionAlert?.display === 'toast'} message={sessionAlert?.message ?? ''} tone={sessionAlert?.tone} />
 
       <StatusPopup
         open={sessionAlert != null && sessionAlert.display !== 'toast'}

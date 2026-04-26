@@ -79,6 +79,23 @@ interface UserProfileCommunityCommentsResponse {
   comments?: UserProfileCommunityCommentResponse[];
 }
 
+interface UserProfileCommunityActivityResponse {
+  activityType?: string;
+  postId?: string;
+  postTitle?: string;
+  commentId?: number | null;
+  content?: string;
+  happenedAt?: string;
+}
+
+interface UserProfileCommunityActivitiesResponse {
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  totalPages?: number;
+  activities?: UserProfileCommunityActivityResponse[];
+}
+
 export interface FetchCommunityPostsParams {
   page: number;
   search: string;
@@ -167,6 +184,23 @@ export interface ProfileCommunityComment {
   content: string;
   createdAt: string;
   reply: boolean;
+}
+
+export interface ProfileCommunityActivity {
+  activityType: 'post' | 'likedPost' | 'comment' | 'likedComment';
+  postId: string;
+  postTitle: string;
+  commentId?: number;
+  content: string;
+  happenedAt: string;
+}
+
+export interface ProfileCommunityActivityPage {
+  currentPage: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  activities: ProfileCommunityActivity[];
 }
 
 function normalizeComment(comment: CommunityCommentResponse): CommunityComment {
@@ -589,6 +623,51 @@ async function fetchProfileCommunityComments(path: string): Promise<ProfileCommu
   );
 }
 
+async function fetchProfileCommunityActivities(path: string, page: number, pageSize: number): Promise<ProfileCommunityActivityPage> {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  return requestCommunity(
+    `${path}?${params.toString()}`,
+    { method: 'GET' },
+    '프로필 커뮤니티 활동 조회에 실패했다.',
+    (data) => {
+      const response = data as UserProfileCommunityActivitiesResponse;
+      if (!Array.isArray(response.activities)) {
+        throw new Error();
+      }
+
+      return {
+        currentPage: response.currentPage ?? 1,
+        pageSize: response.pageSize ?? pageSize,
+        totalCount: response.totalCount ?? 0,
+        totalPages: Math.max(1, response.totalPages ?? 1),
+        activities: response.activities
+          .filter(
+            (activity): activity is Required<Pick<UserProfileCommunityActivityResponse, 'activityType' | 'postId' | 'postTitle' | 'happenedAt'>> & UserProfileCommunityActivityResponse =>
+              (activity.activityType === 'post' ||
+                activity.activityType === 'likedPost' ||
+                activity.activityType === 'comment' ||
+                activity.activityType === 'likedComment') &&
+              typeof activity.postId === 'string' &&
+              typeof activity.postTitle === 'string' &&
+              typeof activity.happenedAt === 'string',
+          )
+          .map((activity) => ({
+            activityType: activity.activityType as ProfileCommunityActivity['activityType'],
+            postId: activity.postId,
+            postTitle: activity.postTitle,
+            commentId: typeof activity.commentId === 'number' ? activity.commentId : undefined,
+            content: activity.content ?? '',
+            happenedAt: activity.happenedAt,
+          })),
+      };
+    },
+  );
+}
+
 export function fetchMyCommunityPosts() {
   return fetchProfileCommunityPosts('/profile/me/community/posts');
 }
@@ -619,4 +698,12 @@ export function fetchMyLikedComments() {
 
 export function fetchLikedCommentsByUser(handle: string) {
   return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(handle)}/community/liked-comments`);
+}
+
+export function fetchMyCommunityActivities(page: number, pageSize: number) {
+  return fetchProfileCommunityActivities('/profile/me/community/activities', page, pageSize);
+}
+
+export function fetchCommunityActivitiesByUser(handle: string, page: number, pageSize: number) {
+  return fetchProfileCommunityActivities(`/profiles/${encodeURIComponent(handle)}/community/activities`, page, pageSize);
 }

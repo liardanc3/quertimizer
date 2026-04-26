@@ -237,7 +237,7 @@ export function AnomalyManageContent() {
   const [isBlockedIpLoading, setIsBlockedIpLoading] = useState(false);
   const [blockedIpErrorMessage, setBlockedIpErrorMessage] = useState<string | null>(null);
   const [actingKey, setActingKey] = useState<string | null>(null);
-  const [trendReloadSequence, setTrendReloadSequence] = useState(0);
+  const [trendReloadSequence] = useState(0);
   const [blockedUserReloadSequence, setBlockedUserReloadSequence] = useState(0);
   const [blockedIpReloadSequence, setBlockedIpReloadSequence] = useState(0);
 

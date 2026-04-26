@@ -13,8 +13,8 @@ public class GetUserProfileLikedPosts {
 
     private final UserProfileService userProfileService;
 
-    public Optional<UserProfileCommunityPostsOutput> execute(String targetHandle) {
+    public Optional<UserProfileCommunityPostsOutput> execute(String targetHandle, String currentHandle) {
         // 프로필 좋아요 게시글 목록을 조회
-        return userProfileService.getLikedPosts(targetHandle);
+        return userProfileService.getLikedPosts(targetHandle, currentHandle);
     }
 }

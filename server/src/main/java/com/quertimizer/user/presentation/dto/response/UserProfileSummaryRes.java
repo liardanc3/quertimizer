@@ -4,6 +4,7 @@ import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -12,12 +13,16 @@ public class UserProfileSummaryRes {
 
     private final String handle;
     private final String bio;
+    private final String profileImageUrl;
+    private final String backgroundImageUrl;
+    private final LocalDateTime signupAt;
     private final List<UserProfileLinkRes> links;
     private final String defaultDbms;
     private final boolean sqlPublic;
     private final boolean executionPercentilePublic;
     private final boolean solvedRecordsPublic;
     private final boolean solvedProblemCountPublic;
+    private final boolean communityActivityPublic;
     private final Double averageExecutionPercentilePostgresql;
     private final Double averageExecutionPercentileOracle;
     private final long authoredPostCount;
@@ -28,6 +33,9 @@ public class UserProfileSummaryRes {
         return new UserProfileSummaryRes(
                 result.getHandle(),
                 result.getBio(),
+                result.getProfileImageUrl(),
+                result.getBackgroundImageUrl(),
+                result.getSignupAt(),
                 result.getLinks().stream()
                         .map(UserProfileLinkRes::from)
                         .toList(),
@@ -36,6 +44,7 @@ public class UserProfileSummaryRes {
                 result.isExecutionPercentilePublic(),
                 result.isSolvedRecordsPublic(),
                 result.isSolvedProblemCountPublic(),
+                result.isCommunityActivityPublic(),
                 result.getAverageExecutionPercentilePostgresql(),
                 result.getAverageExecutionPercentileOracle(),
                 result.getAuthoredPostCount(),

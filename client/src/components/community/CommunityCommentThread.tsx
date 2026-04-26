@@ -71,7 +71,7 @@ export default function CommunityCommentThread({
     .join(' ');
 
   return (
-    <article id={`community-comment-${comment.id}`} className={articleClassName}>
+    <article id={`community-comment-${comment.id}`} className={articleClassName} tabIndex={-1}>
       <div className="community-comment-meta">
         <div className="community-comment-author-group">
           <button

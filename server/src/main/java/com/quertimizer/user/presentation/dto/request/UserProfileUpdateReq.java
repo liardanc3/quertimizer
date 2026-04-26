@@ -22,6 +22,12 @@ public class UserProfileUpdateReq {
     @Size(max = 1000, message = "자기소개는 최대 1000자까지 입력할 수 있습니다.")
     private String bio;
 
+    @Size(max = 512, message = "프로필 이미지 URL은 최대 512자까지 입력할 수 있습니다.")
+    private String profileImageUrl;
+
+    @Size(max = 512, message = "프로필 배경 이미지 URL은 최대 512자까지 입력할 수 있습니다.")
+    private String backgroundImageUrl;
+
     @Valid
     @NotNull
     @Size(max = 10, message = "프로필 링크는 최대 10개까지 등록할 수 있습니다.")
@@ -39,9 +45,13 @@ public class UserProfileUpdateReq {
 
     private boolean solvedProblemCountPublic;
 
+    private boolean communityActivityPublic;
+
     public UserProfileUpdateInput toUserProfileUpdateInput() {
         return new UserProfileUpdateInput(
                 bio,
+                profileImageUrl,
+                backgroundImageUrl,
                 links.stream()
                         .map(UserProfileLinkReq::toUserProfileLinkInput)
                         .toList(),
@@ -49,7 +59,8 @@ public class UserProfileUpdateReq {
                 sqlPublic,
                 executionPercentilePublic,
                 solvedRecordsPublic,
-                solvedProblemCountPublic
+                solvedProblemCountPublic,
+                communityActivityPublic
         );
     }
 }

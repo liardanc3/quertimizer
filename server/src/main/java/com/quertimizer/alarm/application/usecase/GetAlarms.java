@@ -11,8 +11,8 @@ public class GetAlarms {
 
     private final AlarmService alarmService;
 
-    public AlarmPageOutput execute(String handle, int page, Integer pageSize) {
+    public AlarmPageOutput execute(String handle, int page, Integer pageSize, String createdAtSort) {
         // 사용자 알람 목록을 조회
-        return alarmService.getAlarms(handle, page, pageSize);
+        return alarmService.getAlarms(handle, page, pageSize, createdAtSort);
     }
 }

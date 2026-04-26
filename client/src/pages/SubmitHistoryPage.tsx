@@ -1151,7 +1151,7 @@ export default function SubmitHistoryPage() {
                   >
                     {visibleBucketFilters.map((filter) => {
                       const filterFieldKey = toPlanFilterFieldKey(filter.key);
-                      const selectedValues = activePlanFilters[filterFieldKey];
+                      const selectedValues = activePlanFilters[filterFieldKey] as readonly BucketFilterValue[];
                       const isAllSelected =
                         filter.options.length > 0 && filter.options.every((value) => selectedValues.includes(value));
 

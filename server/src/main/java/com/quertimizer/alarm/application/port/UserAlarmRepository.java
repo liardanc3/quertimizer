@@ -11,6 +11,8 @@ public interface UserAlarmRepository {
 
     Page<UserAlarm> findAllByHandleOrderByCreatedAtDescAlarmIdDesc(String handle, Pageable pageable);
 
+    Page<UserAlarm> findAllByHandle(String handle, Pageable pageable);
+
     Optional<UserAlarm> findByAlarmIdAndHandle(Long alarmId, String handle);
 
     List<UserAlarm> findAllByHandleAndReadFalseOrderByCreatedAtDescAlarmIdDesc(String handle);

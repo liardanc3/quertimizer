@@ -4,6 +4,8 @@ import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.user.application.input.UserProfileLinkInput;
 import com.quertimizer.user.application.input.UserProfileUpdateInput;
 import com.quertimizer.user.application.output.UserProfileLinkOutput;
+import com.quertimizer.user.application.output.UserProfileCommunityActivitiesOutput;
+import com.quertimizer.user.application.output.UserProfileCommunityActivityOutput;
 import com.quertimizer.user.application.output.UserProfileCommunityCommentOutput;
 import com.quertimizer.user.application.output.UserProfileCommunityCommentsOutput;
 import com.quertimizer.user.application.output.UserProfileCommunityPostOutput;
@@ -11,6 +13,8 @@ import com.quertimizer.user.application.output.UserProfileCommunityPostsOutput;
 import com.quertimizer.user.application.output.UserProfileSolvedProblemsOutput;
 import com.quertimizer.user.application.output.UserProfileSolvedRecordOutput;
 import com.quertimizer.user.application.output.UserProfileSolvedRecordsOutput;
+import com.quertimizer.user.application.output.UserProfileSubmissionActivityOutput;
+import com.quertimizer.user.application.output.UserProfileSubmissionSummaryOutput;
 import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityCommentLike;
@@ -19,6 +23,7 @@ import com.quertimizer.community.domain.entity.CommunityPostLike;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
 import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
+import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.user.domain.entity.UserExternalLink;
 import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
@@ -27,6 +32,7 @@ import com.quertimizer.community.application.port.CommunityPostLikeRepository;
 import com.quertimizer.community.application.port.CommunityPostRepository;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
+import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
 import com.quertimizer.user.application.port.UserExternalLinkRepository;
 import com.quertimizer.user.application.port.UserRepository;
 import com.quertimizer.problem.application.store.ProblemStore;
@@ -49,6 +55,7 @@ public class UserProfileService {
 
     private final UserRepository userRepository;
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
+    private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
     private final UserExternalLinkRepository userExternalLinkRepository;
     private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
@@ -56,6 +63,9 @@ public class UserProfileService {
     private final CommunityCommentLikeRepository communityCommentLikeRepository;
     private final CommunityPostLikeRepository communityPostLikeRepository;
     private final ProblemStore problemStore;
+
+    private static final int DEFAULT_COMMUNITY_ACTIVITY_PAGE_SIZE = 10;
+    private static final int MAX_COMMUNITY_ACTIVITY_PAGE_SIZE = 50;
 
     public Optional<UserProfileSummaryOutput> getProfileSummary(String targetHandle, String currentHandle) {
         // 프로필 요약 정보를 조회
@@ -81,18 +91,32 @@ public class UserProfileService {
                 .map(user -> buildSolvedRecords(user, isOwnProfile));
     }
 
-    public Optional<UserProfileCommunityPostsOutput> getCommunityPosts(String targetHandle) {
+    public Optional<UserProfileSubmissionSummaryOutput> getSubmissionSummary(String targetHandle, String currentHandle) {
+        // 프로필 제출 요약 정보를 조회
+        boolean isOwnProfile = targetHandle.equals(currentHandle);
+
+        return userRepository.findByHandle(targetHandle)
+                .map(user -> buildSubmissionSummary(user, isOwnProfile));
+    }
+
+    public Optional<UserProfileCommunityPostsOutput> getCommunityPosts(String targetHandle, String currentHandle) {
         // 작성한 게시글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> new UserProfileCommunityPostsOutput(
-                        createCommunityPostResponses(communityPostRepository.findAllByHandleOrderByCreatedAtDesc(targetHandle))
+                        canShowCommunityActivity(user, currentHandle)
+                                ? createCommunityPostResponses(communityPostRepository.findAllByHandleOrderByCreatedAtDesc(targetHandle))
+                                : List.of()
                 ));
     }
 
-    public Optional<UserProfileCommunityPostsOutput> getLikedPosts(String targetHandle) {
+    public Optional<UserProfileCommunityPostsOutput> getLikedPosts(String targetHandle, String currentHandle) {
         // 좋아요한 게시글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
+                    if (!canShowCommunityActivity(user, currentHandle)) {
+                        return new UserProfileCommunityPostsOutput(List.of());
+                    }
+
                     List<CommunityPostLike> likedPosts = communityPostLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(targetHandle);
                     Map<Long, CommunityPost> postById = communityPostRepository.findAllByPostIdIn(
                                     likedPosts.stream()
@@ -112,10 +136,14 @@ public class UserProfileService {
                 });
     }
 
-    public Optional<UserProfileCommunityCommentsOutput> getCommunityComments(String targetHandle) {
+    public Optional<UserProfileCommunityCommentsOutput> getCommunityComments(String targetHandle, String currentHandle) {
         // 작성한 댓글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
+                    if (!canShowCommunityActivity(user, currentHandle)) {
+                        return new UserProfileCommunityCommentsOutput(List.of());
+                    }
+
                     List<CommunityComment> comments = communityCommentRepository.findAllByHandleOrderByCreatedAtDesc(targetHandle);
                     Map<Long, String> postTitleByPostId = createPostTitleByPostId(comments.stream()
                             .map(CommunityComment::getPostId)
@@ -130,10 +158,14 @@ public class UserProfileService {
                 });
     }
 
-    public Optional<UserProfileCommunityCommentsOutput> getLikedComments(String targetHandle) {
+    public Optional<UserProfileCommunityCommentsOutput> getLikedComments(String targetHandle, String currentHandle) {
         // 좋아요한 댓글 목록을 조회
         return userRepository.findByHandle(targetHandle)
                 .map(user -> {
+                    if (!canShowCommunityActivity(user, currentHandle)) {
+                        return new UserProfileCommunityCommentsOutput(List.of());
+                    }
+
                     List<CommunityCommentLike> likedComments = communityCommentLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(targetHandle);
                     Map<Long, CommunityComment> commentById = communityCommentRepository.findAllByCommentIdIn(
                                     likedComments.stream()
@@ -157,6 +189,15 @@ public class UserProfileService {
                 });
     }
 
+    public Optional<UserProfileCommunityActivitiesOutput> getCommunityActivities(String targetHandle,
+                                                                                String currentHandle,
+                                                                                int requestedPage,
+                                                                                Integer requestedPageSize) {
+        // 커뮤니티 활동을 최신순 페이지로 조회
+        return userRepository.findByHandle(targetHandle)
+                .map(user -> buildCommunityActivities(user, currentHandle, requestedPage, requestedPageSize));
+    }
+
     public Optional<UserProfileSummaryOutput> updateProfile(String handle, UserProfileUpdateInput input) {
         // 프로필 정보를 수정
         return userRepository.findByHandle(handle)
@@ -164,11 +205,14 @@ public class UserProfileService {
                     // 소개글, 기본 설정 수정
                     user.changeProfile(
                             normalizeBio(input.getBio()),
+                            normalizeProfileImageUrl(input.getProfileImageUrl()),
+                            normalizeBackgroundImageUrl(input.getBackgroundImageUrl()),
                             input.getDefaultDbms(),
                             input.isSqlPublic(),
                             input.isExecutionPercentilePublic(),
                             input.isSolvedRecordsPublic(),
-                            input.isSolvedProblemCountPublic()
+                            input.isSolvedProblemCountPublic(),
+                            input.isCommunityActivityPublic()
                     );
 
                     // 프로필 링크를 입력값으로 교체
@@ -189,19 +233,24 @@ public class UserProfileService {
         // 프로필 기본 정보에 필요한 최고 기록 계산
         List<ProblemSolveHistory> bestSolvedHistories = createBestSolvedHistories(histories);
         boolean executionPercentileVisible = isOwnProfile || user.isExecutionPercentilePublicEnabled();
-        long authoredPostCount = communityPostRepository.countByHandle(user.getHandle());
-        long likedPostCount = communityPostLikeRepository.countByIdHandle(user.getHandle());
-        long commentCount = communityCommentRepository.countByHandle(user.getHandle());
+        boolean communityActivityVisible = isOwnProfile || user.isCommunityActivityPublicEnabled();
+        long authoredPostCount = communityActivityVisible ? communityPostRepository.countByHandle(user.getHandle()) : 0;
+        long likedPostCount = communityActivityVisible ? communityPostLikeRepository.countByIdHandle(user.getHandle()) : 0;
+        long commentCount = communityActivityVisible ? communityCommentRepository.countByHandle(user.getHandle()) : 0;
 
         return new UserProfileSummaryOutput(
                 user.getHandle(),
                 user.getResolvedBio(),
+                user.getResolvedProfileImageUrl(),
+                user.getResolvedBackgroundImageUrl(),
+                user.getSignupAt(),
                 createProfileLinkResponses(externalLinks),
                 user.getResolvedDefaultDbms().getValue(),
                 user.isSqlPublicEnabled(),
                 user.isExecutionPercentilePublicEnabled(),
                 user.isSolvedRecordsPublicEnabled(),
                 user.isSolvedProblemCountPublicEnabled(),
+                user.isCommunityActivityPublicEnabled(),
                 executionPercentileVisible ? calculateAverageExecutionPercentile(bestSolvedHistories, DbmsType.POSTGRESQL) : null,
                 executionPercentileVisible ? calculateAverageExecutionPercentile(bestSolvedHistories, DbmsType.ORACLE) : null,
                 authoredPostCount,
@@ -234,6 +283,173 @@ public class UserProfileService {
         ));
 
         return new UserProfileSolvedRecordsOutput(solvedRecordResponses);
+    }
+
+    private UserProfileSubmissionSummaryOutput buildSubmissionSummary(User user, boolean isOwnProfile) {
+        // 프로필 본문에 필요한 제출 요약 정보를 구성
+        List<ProblemSubmitHistory> submitHistories = problemSubmitHistoryRepository.findAllByHandleOrderBySubmittedAtDesc(user.getHandle());
+        return new UserProfileSubmissionSummaryOutput(
+                createAttemptedProblemIds(submitHistories),
+                createSubmissionActivityOutputs(submitHistories)
+        );
+    }
+
+    private UserProfileCommunityActivitiesOutput buildCommunityActivities(User user,
+                                                                         String currentHandle,
+                                                                         int requestedPage,
+                                                                         Integer requestedPageSize) {
+        // 공개 여부를 반영한 커뮤니티 활동 페이지 생성
+        if (!canShowCommunityActivity(user, currentHandle)) {
+            return createCommunityActivitiesPage(List.of(), requestedPage, requestedPageSize);
+        }
+
+        return createCommunityActivitiesPage(createCommunityActivityResponses(user.getHandle()), requestedPage, requestedPageSize);
+    }
+
+    private List<UserProfileCommunityActivityOutput> createCommunityActivityResponses(String handle) {
+        // 작성, 좋아요, 댓글 활동을 하나의 목록으로 병합
+        List<UserProfileCommunityActivityOutput> activities = new ArrayList<>();
+        activities.addAll(createAuthoredPostActivities(handle));
+        activities.addAll(createLikedPostActivities(handle));
+        activities.addAll(createAuthoredCommentActivities(handle));
+        activities.addAll(createLikedCommentActivities(handle));
+
+        return activities.stream()
+                .sorted(Comparator.comparing(UserProfileCommunityActivityOutput::getHappenedAt).reversed())
+                .toList();
+    }
+
+    private List<UserProfileCommunityActivityOutput> createAuthoredPostActivities(String handle) {
+        // 작성한 게시글 활동 목록 생성
+        return communityPostRepository.findAllByHandleOrderByCreatedAtDesc(handle).stream()
+                .map(post -> new UserProfileCommunityActivityOutput(
+                        "post",
+                        CommunityPostIdPolicy.format(post.getPostId()),
+                        post.getTitle(),
+                        null,
+                        createCommunityExcerpt(post.getPlainTextSummary()),
+                        post.getCreatedAt()
+                ))
+                .toList();
+    }
+
+    private List<UserProfileCommunityActivityOutput> createLikedPostActivities(String handle) {
+        // 좋아요한 게시글 활동 목록 생성
+        List<CommunityPostLike> likedPosts = communityPostLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(handle);
+        Map<Long, CommunityPost> postById = communityPostRepository.findAllByPostIdIn(likedPosts.stream()
+                        .map(CommunityPostLike::getId)
+                        .map(postLikeId -> postLikeId.getPostId())
+                        .distinct()
+                        .toList()).stream()
+                .collect(java.util.stream.Collectors.toMap(CommunityPost::getPostId, post -> post));
+
+        return likedPosts.stream()
+                .map(postLike -> createLikedPostActivity(postLike, postById))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private Optional<UserProfileCommunityActivityOutput> createLikedPostActivity(CommunityPostLike postLike,
+                                                                                 Map<Long, CommunityPost> postById) {
+        // 좋아요한 게시글 활동 항목 생성
+        return Optional.ofNullable(postById.get(postLike.getId().getPostId()))
+                .map(post -> new UserProfileCommunityActivityOutput(
+                        "likedPost",
+                        CommunityPostIdPolicy.format(post.getPostId()),
+                        post.getTitle(),
+                        null,
+                        "",
+                        postLike.getCreatedAt()
+                ));
+    }
+
+    private List<UserProfileCommunityActivityOutput> createAuthoredCommentActivities(String handle) {
+        // 작성한 댓글 활동 목록 생성
+        List<CommunityComment> comments = communityCommentRepository.findAllByHandleOrderByCreatedAtDesc(handle);
+        Map<Long, String> postTitleByPostId = createPostTitleByPostId(comments.stream()
+                .map(CommunityComment::getPostId)
+                .distinct()
+                .toList());
+
+        return comments.stream()
+                .map(comment -> createCommentActivity("comment", comment, postTitleByPostId, comment.getCreatedAt()))
+                .toList();
+    }
+
+    private List<UserProfileCommunityActivityOutput> createLikedCommentActivities(String handle) {
+        // 좋아요한 댓글 활동 목록 생성
+        List<CommunityCommentLike> likedComments = communityCommentLikeRepository.findAllByIdHandleOrderByCreatedAtDesc(handle);
+        Map<Long, CommunityComment> commentById = communityCommentRepository.findAllByCommentIdIn(likedComments.stream()
+                        .map(CommunityCommentLike::getId)
+                        .map(commentLikeId -> commentLikeId.getCommentId())
+                        .distinct()
+                        .toList()).stream()
+                .collect(java.util.stream.Collectors.toMap(CommunityComment::getCommentId, comment -> comment));
+        Map<Long, String> postTitleByPostId = createPostTitleByPostId(commentById.values().stream()
+                .map(CommunityComment::getPostId)
+                .distinct()
+                .toList());
+
+        return likedComments.stream()
+                .map(commentLike -> createLikedCommentActivity(commentLike, commentById, postTitleByPostId))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private Optional<UserProfileCommunityActivityOutput> createLikedCommentActivity(CommunityCommentLike commentLike,
+                                                                                    Map<Long, CommunityComment> commentById,
+                                                                                    Map<Long, String> postTitleByPostId) {
+        // 좋아요한 댓글 활동 항목 생성
+        return Optional.ofNullable(commentById.get(commentLike.getId().getCommentId()))
+                .map(comment -> createCommentActivity("likedComment", comment, postTitleByPostId, commentLike.getCreatedAt()));
+    }
+
+    private UserProfileCommunityActivityOutput createCommentActivity(String activityType,
+                                                                     CommunityComment comment,
+                                                                     Map<Long, String> postTitleByPostId,
+                                                                     java.time.LocalDateTime happenedAt) {
+        // 댓글 기반 커뮤니티 활동 항목 생성
+        return new UserProfileCommunityActivityOutput(
+                activityType,
+                CommunityPostIdPolicy.format(comment.getPostId()),
+                postTitleByPostId.getOrDefault(comment.getPostId(), CommunityPostIdPolicy.format(comment.getPostId())),
+                comment.getCommentId(),
+                comment.getContent(),
+                happenedAt
+        );
+    }
+
+    private UserProfileCommunityActivitiesOutput createCommunityActivitiesPage(List<UserProfileCommunityActivityOutput> activities,
+                                                                              int requestedPage,
+                                                                              Integer requestedPageSize) {
+        // 커뮤니티 활동 목록을 요청 페이지로 분할
+        int pageSize = normalizeCommunityActivityPageSize(requestedPageSize);
+        int totalPages = Math.max(1, (int) Math.ceil(activities.size() / (double) pageSize));
+        int currentPage = Math.min(totalPages, Math.max(1, requestedPage));
+        int fromIndex = Math.min(activities.size(), (currentPage - 1) * pageSize);
+        int toIndex = Math.min(activities.size(), fromIndex + pageSize);
+
+        return new UserProfileCommunityActivitiesOutput(
+                currentPage,
+                pageSize,
+                activities.size(),
+                totalPages,
+                activities.subList(fromIndex, toIndex)
+        );
+    }
+
+    private int normalizeCommunityActivityPageSize(Integer requestedPageSize) {
+        // 커뮤니티 활동 페이지 크기 정규화
+        if (requestedPageSize == null) {
+            return DEFAULT_COMMUNITY_ACTIVITY_PAGE_SIZE;
+        }
+
+        return Math.min(MAX_COMMUNITY_ACTIVITY_PAGE_SIZE, Math.max(1, requestedPageSize));
+    }
+
+    private boolean canShowCommunityActivity(User user, String currentHandle) {
+        // 본인 또는 공개 설정된 사용자만 커뮤니티 활동을 볼 수 있다.
+        return user.getHandle().equals(currentHandle) || user.isCommunityActivityPublicEnabled();
     }
 
     private void syncSolvedStatistics(User user, List<ProblemSolveHistory> histories) {
@@ -284,6 +500,29 @@ public class UserProfileService {
                 .map(ProblemSolveHistory::getProblemId)
                 .distinct()
                 .sorted()
+                .toList();
+    }
+
+    private List<String> createAttemptedProblemIds(List<ProblemSubmitHistory> histories) {
+        // 제출한 문제 번호 목록 생성
+        return histories.stream()
+                .map(ProblemSubmitHistory::getProblemId)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private List<UserProfileSubmissionActivityOutput> createSubmissionActivityOutputs(List<ProblemSubmitHistory> histories) {
+        // 제출 일자별 횟수 목록 생성
+        Map<String, Long> countByDate = new LinkedHashMap<>();
+
+        histories.forEach(history -> {
+            String submittedDate = history.getSubmittedAt().toLocalDate().toString();
+            countByDate.put(submittedDate, countByDate.getOrDefault(submittedDate, 0L) + 1);
+        });
+
+        return countByDate.entrySet().stream()
+                .map(entry -> new UserProfileSubmissionActivityOutput(entry.getKey(), entry.getValue()))
                 .toList();
     }
 
@@ -505,6 +744,16 @@ public class UserProfileService {
     private String normalizeBio(String bio) {
         // Bio 정규화
         return bio != null ? bio.trim() : "";
+    }
+
+    private String normalizeProfileImageUrl(String profileImageUrl) {
+        // 프로필 이미지 URL 정규화
+        return profileImageUrl != null ? profileImageUrl.trim() : "";
+    }
+
+    private String normalizeBackgroundImageUrl(String backgroundImageUrl) {
+        // 프로필 배경 이미지 URL 정규화
+        return backgroundImageUrl != null ? backgroundImageUrl.trim() : "";
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {

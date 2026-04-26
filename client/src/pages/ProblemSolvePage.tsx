@@ -599,8 +599,6 @@ const SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT = 4;
 const FLOATING_EDITOR_BACKGROUND_MIN_ALPHA = 0.12;
 const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 1;
 const SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO = 1.7;
-const SQL_EDITOR_INLINE_PADDING_TOP_REM = 1.08;
-const SQL_EDITOR_FLOATING_PADDING_TOP_REM = 1.34;
 const SUBMIT_STEP_ORDER = ['validate', 'answer', 'ddl', 'plan'] as const;
 const SUBMIT_INDEX_DDL_PATTERN = /^(CREATE|DROP|ALTER)\s+INDEX\b/i;
 
@@ -1818,7 +1816,7 @@ function upsertSubmitProgressStep(
   }
 
   const nextSteps = [...currentSteps, nextStep];
-  const orderedKeys = new Map(SUBMIT_STEP_ORDER.map((stepKey, index) => [stepKey, index]));
+  const orderedKeys = new Map<string, number>(SUBMIT_STEP_ORDER.map((stepKey, index) => [stepKey, index]));
 
   return nextSteps.sort((left, right) => {
     const leftIndex = orderedKeys.get(left.stepKey) ?? Number.MAX_SAFE_INTEGER;
@@ -4294,14 +4292,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         }
 
         setSubmitMessage(null);
-        if (progressMessage.stepKey) {
+        const stepKey = progressMessage.stepKey;
+        if (stepKey) {
           setSubmitProgressSteps((current) =>
             upsertSubmitProgressStep(
               current,
               createSubmitProgressStep(
-                progressMessage.stepKey,
-                progressMessage.status,
-                progressMessage.message,
+                stepKey,
+                progressMessage.status ?? 'running',
+                progressMessage.message ?? '',
                 Array.isArray(progressMessage.detailLines) ? progressMessage.detailLines : [],
               ),
             ),
@@ -4837,7 +4836,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           break;
         }
         const shouldContinue = !executionStopRequestedRef.current;
-        const completedRunKey = createExecutionStatementRunKey(statementSegment.start, statementSegment.end);
 
         setExecutionRuns((current) =>
           current.map((run, runIndex) => {
@@ -6295,7 +6293,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     !externalWindowPanels.submit
       ? renderSubmitPanel(false)
       : null;
-  const inlineDetailPanels = [inlineEditorPanel, inlineSubmitPanel].filter((panel): panel is ReactNode => panel != null);
+  const inlineDetailPanels = [inlineEditorPanel, inlineSubmitPanel].filter((panel) => panel != null);
   const problemAfterSections = contentTab === 'problem' && problemDetail
     ? inlineDetailPanels.map((panel, index) => (
         <section key={`solve-problem-after-section-${index}`} className="solve-detail-section solve-detail-section-after-content">

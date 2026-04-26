@@ -28,6 +28,7 @@ public class AlarmController {
     @GetMapping("/alarms")
     public ResponseEntity<AlarmPageRes> getAlarms(@RequestParam(defaultValue = "1") int page,
                                                   @RequestParam(required = false) Integer pageSize,
+                                                  @RequestParam(defaultValue = "desc") String createdAtSort,
                                                   Authentication authentication) {
         // 현재 사용자 Handle을 해석
         String currentHandle = alarmSupport.resolveCurrentHandle(authentication);
@@ -36,7 +37,7 @@ public class AlarmController {
         }
 
         // 현재 사용자 알람 목록을 조회
-        return ResponseEntity.ok(AlarmPageRes.from(getAlarms.execute(currentHandle, page, pageSize)));
+        return ResponseEntity.ok(AlarmPageRes.from(getAlarms.execute(currentHandle, page, pageSize, createdAtSort)));
     }
 
     @PostMapping("/alarms/read-all")

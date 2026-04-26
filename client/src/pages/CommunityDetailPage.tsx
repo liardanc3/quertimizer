@@ -282,12 +282,35 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       return;
     }
 
+    let clearHighlightTimerId = 0;
     const timerId = window.setTimeout(() => {
-      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const resolvedTargetId =
+        document.getElementById(targetId) != null
+          ? targetId
+          : targetId.startsWith('comment-')
+            ? `community-${targetId}`
+            : targetId.startsWith('community-comment-')
+              ? targetId
+              : `community-comment-${targetId}`;
+      const targetElement = document.getElementById(resolvedTargetId);
+
+      if (!targetElement) {
+        return;
+      }
+
+      targetElement.classList.remove('is-hash-target');
+      void targetElement.getBoundingClientRect();
+      targetElement.classList.add('is-hash-target');
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetElement.focus({ preventScroll: true });
+      clearHighlightTimerId = window.setTimeout(() => {
+        targetElement.classList.remove('is-hash-target');
+      }, 10000);
     }, 0);
 
     return () => {
       window.clearTimeout(timerId);
+      window.clearTimeout(clearHighlightTimerId);
     };
   }, [locationHash, post]);
 

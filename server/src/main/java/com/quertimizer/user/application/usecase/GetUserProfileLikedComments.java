@@ -13,8 +13,8 @@ public class GetUserProfileLikedComments {
 
     private final UserProfileService userProfileService;
 
-    public Optional<UserProfileCommunityCommentsOutput> execute(String targetHandle) {
+    public Optional<UserProfileCommunityCommentsOutput> execute(String targetHandle, String currentHandle) {
         // 프로필 좋아요 댓글 목록을 조회
-        return userProfileService.getLikedComments(targetHandle);
+        return userProfileService.getLikedComments(targetHandle, currentHandle);
     }
 }

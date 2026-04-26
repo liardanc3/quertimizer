@@ -11,10 +11,13 @@ import java.util.List;
 public class UserProfileUpdateInput {
 
     private final String bio;
+    private final String profileImageUrl;
+    private final String backgroundImageUrl;
     private final List<UserProfileLinkInput> links;
     private final DbmsType defaultDbms;
     private final boolean sqlPublic;
     private final boolean executionPercentilePublic;
     private final boolean solvedRecordsPublic;
     private final boolean solvedProblemCountPublic;
+    private final boolean communityActivityPublic;
 }

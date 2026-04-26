@@ -14,6 +14,8 @@ public interface ProblemSubmitHistoryRepository {
 
     List<ProblemSubmitHistory> findAll(Sort sort);
 
+    List<ProblemSubmitHistory> findAllByHandleOrderBySubmittedAtDesc(String handle);
+
     <S extends ProblemSubmitHistory> S save(S problemSubmitHistory);
 
     Page<UserSubmitCountProjection> findUserSubmitCounts(Pageable pageable);

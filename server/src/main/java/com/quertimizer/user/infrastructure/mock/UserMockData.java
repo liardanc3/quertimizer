@@ -100,7 +100,7 @@ public class UserMockData {
         User user = User.create(handle, encodeForClientLogin(RAW_PASSWORD), email);
 
         user.changeRole(role);
-        user.changeProfile(bio, defaultDbms, false, true, true, true);
+        user.changeProfile(bio, "", "", defaultDbms, true, true, true, true, true);
         return user;
     }
 

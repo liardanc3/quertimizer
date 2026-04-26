@@ -12,6 +12,7 @@ export interface SessionAlert {
   message: string;
   confirmLabel: string;
   display?: 'popup' | 'toast';
+  tone?: 'success' | 'error';
   autoDismissMs?: number;
 }
 
@@ -285,6 +286,22 @@ export function showSessionToast(message: string, autoDismissMs = 2200) {
     message,
     confirmLabel: '확인',
     display: 'toast',
+    tone: 'success',
+    autoDismissMs,
+  });
+}
+
+export function showSessionErrorToast(message: string, autoDismissMs = 2600) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  updateSessionAlert({
+    level: 3,
+    message,
+    confirmLabel: '확인',
+    display: 'toast',
+    tone: 'error',
     autoDismissMs,
   });
 }

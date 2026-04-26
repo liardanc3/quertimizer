@@ -32,6 +32,15 @@
   flex: 0 0 auto;
 }
 
+.session-toast.is-error {
+  border-color: rgba(248, 113, 113, 0.82);
+}
+
+.session-toast.is-error .session-toast-icon-shell {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
 .session-toast-icon {
   width: 0.82rem;
   height: 0.82rem;
@@ -74,6 +83,15 @@
   color: #8ec5ff;
 }
 
+:root.dark .session-toast.is-error {
+  border-color: rgba(248, 113, 113, 0.48);
+}
+
+:root.dark .session-toast.is-error .session-toast-icon-shell {
+  background: rgba(220, 38, 38, 0.18);
+  color: #fca5a5;
+}
+
 @media (prefers-color-scheme: dark) {
   .session-toast {
     border-color: var(--line-soft);
@@ -85,5 +103,14 @@
   .session-toast-icon-shell {
     background: var(--accent-soft-strong);
     color: var(--accent-ink);
+  }
+
+  .session-toast.is-error {
+    border-color: rgba(248, 113, 113, 0.48);
+  }
+
+  .session-toast.is-error .session-toast-icon-shell {
+    background: rgba(220, 38, 38, 0.18);
+    color: #fca5a5;
   }
 }

@@ -58,6 +58,8 @@ export interface AlarmPageData {
   alarms: AlarmEntry[];
 }
 
+export type AlarmSortDirection = 'asc' | 'desc';
+
 function normalizeBinding(binding: AlarmBindingResponse): AlarmBinding {
   return {
     text: binding.text ?? '',
@@ -127,9 +129,10 @@ async function requestAlarm<T>(path: string, init: RequestInit, fallbackMessage:
   }
 }
 
-export function fetchAlarms(page: number, pageSize?: number): Promise<AlarmPageData> {
+export function fetchAlarms(page: number, pageSize?: number, createdAtSort: AlarmSortDirection = 'desc'): Promise<AlarmPageData> {
   const params = new URLSearchParams({
     page: String(page),
+    createdAtSort,
   });
 
   if (typeof pageSize === 'number' && Number.isFinite(pageSize) && pageSize > 0) {

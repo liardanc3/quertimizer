@@ -51,16 +51,16 @@ public class AlarmService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public AlarmPageOutput getAlarms(String handle, int requestedPage, Integer requestedPageSize) {
+    public AlarmPageOutput getAlarms(String handle, int requestedPage, Integer requestedPageSize, String createdAtSort) {
         // 사용자 알람 페이지를 조회
         int normalizedPage = Math.max(1, requestedPage);
         int pageSize = normalizePageSize(requestedPageSize);
-        Page<UserAlarm> alarmPage = findAlarmPage(handle, normalizedPage, pageSize);
+        Page<UserAlarm> alarmPage = findAlarmPage(handle, normalizedPage, pageSize, createdAtSort);
         int totalPages = Math.max(1, alarmPage.getTotalPages());
         int currentPage = Math.min(normalizedPage, totalPages);
 
         if (currentPage != normalizedPage) {
-            alarmPage = findAlarmPage(handle, currentPage, pageSize);
+            alarmPage = findAlarmPage(handle, currentPage, pageSize, createdAtSort);
         }
 
         return new AlarmPageOutput(
@@ -150,14 +150,16 @@ public class AlarmService {
         }
     }
 
-    private Page<UserAlarm> findAlarmPage(String handle, int page, int pageSize) {
+    private Page<UserAlarm> findAlarmPage(String handle, int page, int pageSize, String createdAtSort) {
         // 알람 페이지 조회
-        return userAlarmRepository.findAllByHandleOrderByCreatedAtDescAlarmIdDesc(
+        Sort.Direction direction = "asc".equalsIgnoreCase(createdAtSort) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        return userAlarmRepository.findAllByHandle(
                 handle,
                 PageRequest.of(
                         page - 1,
                         pageSize,
-                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("alarmId"))
+                        Sort.by(new Sort.Order(direction, "createdAt"), new Sort.Order(direction, "alarmId"))
                 )
         );
     }

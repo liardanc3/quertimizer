@@ -34,6 +34,12 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String bio;
 
+    @Column(name = "profile_image_url", length = 512)
+    private String profileImageUrl;
+
+    @Column(name = "background_image_url", length = 512)
+    private String backgroundImageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserRole role;
@@ -53,6 +59,9 @@ public class User {
 
     @Column(name = "solved_problem_count_public")
     private Boolean solvedProblemCountPublic;
+
+    @Column(name = "community_activity_public")
+    private Boolean communityActivityPublic;
 
     @Column(name = "solved_problem_count")
     private Integer solvedProblemCount;
@@ -82,9 +91,12 @@ public class User {
                 handle,
                 encodedPassword,
                 "",
+                "",
+                "",
                 UserRole.USER,
                 DbmsType.POSTGRESQL,
-                false,
+                true,
+                true,
                 true,
                 true,
                 true,
@@ -105,9 +117,12 @@ public class User {
                 null,
                 encodedPassword,
                 "",
+                "",
+                "",
                 UserRole.USER,
                 DbmsType.POSTGRESQL,
-                false,
+                true,
+                true,
                 true,
                 true,
                 true,
@@ -137,18 +152,24 @@ public class User {
     }
 
     public void changeProfile(String bio,
+                              String profileImageUrl,
+                              String backgroundImageUrl,
                               DbmsType defaultDbms,
                               boolean sqlPublic,
                               boolean executionPercentilePublic,
                               boolean solvedRecordsPublic,
-                              boolean solvedProblemCountPublic) {
+                              boolean solvedProblemCountPublic,
+                              boolean communityActivityPublic) {
         // 프로필 공개 설정과 기본 DBMS를 한 번에 갱신한다.
         this.bio = bio;
+        this.profileImageUrl = profileImageUrl;
+        this.backgroundImageUrl = backgroundImageUrl;
         this.defaultDbms = defaultDbms;
         this.sqlPublic = sqlPublic;
         this.executionPercentilePublic = executionPercentilePublic;
         this.solvedRecordsPublic = solvedRecordsPublic;
         this.solvedProblemCountPublic = solvedProblemCountPublic;
+        this.communityActivityPublic = communityActivityPublic;
     }
 
     public void changeSolvedStatistics(int solvedProblemCount, long solvedExecutionTimeSumMs) {
@@ -190,6 +211,16 @@ public class User {
         return bio != null ? bio : "";
     }
 
+    public String getResolvedProfileImageUrl() {
+        // 프로필 이미지 응답에서는 null 대신 빈 문자열을 사용한다.
+        return profileImageUrl != null ? profileImageUrl : "";
+    }
+
+    public String getResolvedBackgroundImageUrl() {
+        // 프로필 배경 이미지 응답에서는 null 대신 빈 문자열을 사용한다.
+        return backgroundImageUrl != null ? backgroundImageUrl : "";
+    }
+
     public UserRole getResolvedRole() {
         // Resolved 역할 조회
         return role != null ? role : UserRole.USER;
@@ -202,22 +233,27 @@ public class User {
 
     public boolean isSqlPublicEnabled() {
         // SQL Public Enabled 여부 확인
-        return Boolean.TRUE.equals(sqlPublic);
+        return sqlPublic == null || Boolean.TRUE.equals(sqlPublic);
     }
 
     public boolean isExecutionPercentilePublicEnabled() {
         // 실행 백분위 Public Enabled 여부 확인
-        return Boolean.TRUE.equals(executionPercentilePublic);
+        return executionPercentilePublic == null || Boolean.TRUE.equals(executionPercentilePublic);
     }
 
     public boolean isSolvedRecordsPublicEnabled() {
         // 풀이 기록 목록 Public Enabled 여부 확인
-        return Boolean.TRUE.equals(solvedRecordsPublic);
+        return solvedRecordsPublic == null || Boolean.TRUE.equals(solvedRecordsPublic);
     }
 
     public boolean isSolvedProblemCountPublicEnabled() {
         // 해결한 문제 Count Public Enabled 여부 확인
-        return Boolean.TRUE.equals(solvedProblemCountPublic);
+        return solvedProblemCountPublic == null || Boolean.TRUE.equals(solvedProblemCountPublic);
+    }
+
+    public boolean isCommunityActivityPublicEnabled() {
+        // 커뮤니티 활동 Public Enabled 여부 확인
+        return communityActivityPublic == null || Boolean.TRUE.equals(communityActivityPublic);
     }
 
     public int getResolvedSolvedProblemCount() {
@@ -244,12 +280,15 @@ public class User {
                  String handle,
                  String password,
                  String bio,
+                 String profileImageUrl,
+                 String backgroundImageUrl,
                  UserRole role,
                  DbmsType defaultDbms,
                  Boolean sqlPublic,
                  Boolean executionPercentilePublic,
                  Boolean solvedRecordsPublic,
                  Boolean solvedProblemCountPublic,
+                 Boolean communityActivityPublic,
                  Integer solvedProblemCount,
                  Long solvedExecutionTimeSumMs,
                  LocalDateTime signupAt,
@@ -261,12 +300,15 @@ public class User {
         this.handle = handle;
         this.password = password;
         this.bio = bio;
+        this.profileImageUrl = profileImageUrl;
+        this.backgroundImageUrl = backgroundImageUrl;
         this.role = role;
         this.defaultDbms = defaultDbms;
         this.sqlPublic = sqlPublic;
         this.executionPercentilePublic = executionPercentilePublic;
         this.solvedRecordsPublic = solvedRecordsPublic;
         this.solvedProblemCountPublic = solvedProblemCountPublic;
+        this.communityActivityPublic = communityActivityPublic;
         this.solvedProblemCount = solvedProblemCount;
         this.solvedExecutionTimeSumMs = solvedExecutionTimeSumMs;
         this.signupAt = signupAt;

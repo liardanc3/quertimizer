@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement } from 'react';
 import {
   ADMIN_PATH,
   COMMUNITY_PATH,
@@ -230,8 +230,9 @@ export default function Header() {
       if (!isAlarmCreatedMessage(message) || message.alarm == null) {
         return;
       }
+      const alarm = message.alarm;
 
-      setIncomingAlarm(message.alarm);
+      setIncomingAlarm(alarm);
 
       setAlarmPage((currentAlarmPage) => {
         const nextTotalCount = currentAlarmPage.totalCount + 1;
@@ -247,7 +248,7 @@ export default function Header() {
           };
         }
 
-        const nextAlarms = [message.alarm, ...currentAlarmPage.alarms.filter((alarm) => alarm.alarmId !== message.alarm?.alarmId)]
+        const nextAlarms = [alarm, ...currentAlarmPage.alarms.filter((currentAlarm) => currentAlarm.alarmId !== alarm.alarmId)]
           .slice(0, currentAlarmPage.pageSize);
 
         return {
@@ -473,7 +474,7 @@ export default function Header() {
       return alarm.message;
     }
 
-    const parts: Array<string | JSX.Element> = [];
+    const parts: Array<string | ReactElement> = [];
     const tokenPattern = /(\{[^{}]+\}|\([^()]+\))/g;
     let lastIndex = 0;
 

@@ -1,0 +1,149 @@
+.image-crop-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(4px);
+}
+
+.image-crop-modal {
+  position: relative;
+  width: min(100%, 52rem);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  border: 1px solid rgba(219, 230, 242, 0.92);
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.image-crop-modal.is-applying .image-crop-modal-body,
+.image-crop-modal.is-applying .image-crop-modal-actions {
+  filter: blur(1.75px);
+}
+
+.image-crop-modal-body {
+  display: grid;
+  gap: 0.86rem;
+  padding: 1rem;
+}
+
+.image-crop-canvas-shell {
+  position: relative;
+  min-height: min(52vh, 26rem);
+  border-radius: 0.92rem;
+  background:
+    linear-gradient(45deg, rgba(226, 232, 240, 0.52) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(226, 232, 240, 0.52) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(226, 232, 240, 0.52) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(226, 232, 240, 0.52) 75%);
+  background-position: 0 0, 0 0.5rem, 0.5rem -0.5rem, -0.5rem 0;
+  background-size: 1rem 1rem;
+  overflow: hidden;
+}
+
+.image-crop-modal-controls {
+  display: flex;
+  justify-content: center;
+}
+
+.image-crop-zoom-field {
+  display: inline-grid;
+  grid-template-columns: auto minmax(14rem, 20rem);
+  align-items: center;
+  gap: 0.72rem;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.image-crop-zoom-field input {
+  width: 100%;
+  accent-color: #2563eb;
+}
+
+.image-crop-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.54rem;
+  padding: 0.9rem 1rem 1rem;
+  border-top: 1px solid rgba(219, 230, 242, 0.88);
+}
+
+.image-crop-modal-progress-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.image-crop-modal-loading-spinner {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 2.5px solid rgba(37, 99, 235, 0.16);
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  animation: image-crop-modal-spin 0.9s linear infinite;
+}
+
+@keyframes image-crop-modal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .image-crop-modal {
+    width: min(100%, 100vw - 1rem);
+  }
+
+  .image-crop-canvas-shell {
+    min-height: min(48vh, 20rem);
+  }
+
+  .image-crop-zoom-field {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .image-crop-modal {
+    border-color: var(--line-soft);
+    background: rgba(15, 23, 42, 0.96);
+  }
+
+  .image-crop-modal-progress-overlay {
+    background: rgba(15, 23, 42, 0.14);
+  }
+
+  .image-crop-modal-actions {
+    border-color: var(--line-soft);
+  }
+
+  .image-crop-zoom-field {
+    color: var(--ink-subtle);
+  }
+
+  .image-crop-canvas-shell {
+    background:
+      linear-gradient(45deg, rgba(51, 65, 85, 0.42) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(51, 65, 85, 0.42) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(51, 65, 85, 0.42) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(51, 65, 85, 0.42) 75%);
+    background-position: 0 0, 0 0.5rem, 0.5rem -0.5rem, -0.5rem 0;
+    background-size: 1rem 1rem;
+  }
+
+  .image-crop-modal-loading-spinner {
+    border-color: rgba(96, 165, 250, 0.16);
+    border-top-color: #8ec5ff;
+  }
+}

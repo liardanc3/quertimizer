@@ -161,7 +161,7 @@ export function getPlanElementButtonLabel(dbms: DbmsType, executionPlanElement: 
 }
 
 export function getExecutionPlanDetailGroups(dbms: DbmsType, executionPlanElement: number): ExecutionPlanDetailGroup[] {
-  const groups = BUCKET_FILTERS_BY_DBMS[dbms].flatMap((definition) => {
+  const groups: ExecutionPlanDetailGroup[] = BUCKET_FILTERS_BY_DBMS[dbms].flatMap((definition) => {
     const labels = definition.options
       .filter((value) => value !== 'NONE' && value !== 'OTHERS')
       .filter((value) => matchesBucketFilter(executionPlanElement, dbms, definition.key, value))
