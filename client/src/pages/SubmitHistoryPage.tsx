@@ -119,7 +119,7 @@ const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 
 
 function readSubmitHistoryDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
-  return dbms === 'oracle' ? 'oracle' : 'postgresql';
+  return dbms === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function buildSubmitHistoryPath(dbms: DbmsType) {
@@ -243,7 +243,7 @@ function createEmptySubmitHistoryPage(): SubmitHistoryPageData {
 function createEmptyPlanFiltersByDbms(): SubmitHistoryPlanFiltersByDbms {
   return {
     postgresql: createEmptySubmitHistoryPlanFilters(),
-    oracle: createEmptySubmitHistoryPlanFilters(),
+    mysql: createEmptySubmitHistoryPlanFilters(),
   };
 }
 
@@ -355,7 +355,7 @@ function updatePlanMatchModeForAllDbms(planFiltersByDbms: SubmitHistoryPlanFilte
                                        matchMode: SubmitHistoryPlanFilters['matchMode']): SubmitHistoryPlanFiltersByDbms {
   return {
     postgresql: { ...planFiltersByDbms.postgresql, matchMode },
-    oracle: { ...planFiltersByDbms.oracle, matchMode },
+    mysql: { ...planFiltersByDbms.mysql, matchMode },
   };
 }
 
@@ -363,7 +363,7 @@ function applySelectedPlanSectionsToFiltersByDbms(planFiltersByDbms: SubmitHisto
                                                   selectedPlanSections: PlanSectionKey[]): SubmitHistoryPlanFiltersByDbms {
   return {
     postgresql: applySelectedPlanSectionsToFilters(planFiltersByDbms.postgresql, selectedPlanSections, 'postgresql'),
-    oracle: applySelectedPlanSectionsToFilters(planFiltersByDbms.oracle, selectedPlanSections, 'oracle'),
+    mysql: applySelectedPlanSectionsToFilters(planFiltersByDbms.mysql, selectedPlanSections, 'mysql'),
   };
 }
 
@@ -383,14 +383,14 @@ function clearPlanSectionFiltersByDbms(planFiltersByDbms: SubmitHistoryPlanFilte
                                        sectionKey: PlanSectionKey): SubmitHistoryPlanFiltersByDbms {
   return {
     postgresql: clearPlanSectionFilters(planFiltersByDbms.postgresql, sectionKey),
-    oracle: clearPlanSectionFilters(planFiltersByDbms.oracle, sectionKey),
+    mysql: clearPlanSectionFilters(planFiltersByDbms.mysql, sectionKey),
   };
 }
 
 function clearAllPlanSectionFiltersByDbms(planFiltersByDbms: SubmitHistoryPlanFiltersByDbms): SubmitHistoryPlanFiltersByDbms {
   return {
     postgresql: clearAllPlanSectionFilters(planFiltersByDbms.postgresql),
-    oracle: clearAllPlanSectionFilters(planFiltersByDbms.oracle),
+    mysql: clearAllPlanSectionFilters(planFiltersByDbms.mysql),
   };
 }
 
@@ -574,7 +574,7 @@ export default function SubmitHistoryPage() {
   const submitHistoryDbmsOptions = useMemo(
     () => [
       { value: 'postgresql' as const, label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
-      { value: 'oracle' as const, label: text('COMMON_ORACLE_LABEL', 'Oracle') },
+      { value: 'mysql' as const, label: text('COMMON_MYSQL_LABEL', 'MySQL') },
     ],
     [text],
   );
@@ -585,8 +585,8 @@ export default function SubmitHistoryPage() {
     ],
     [text],
   );
-  const selectedDbmsLabel = selectedDbms === 'oracle'
-    ? text('COMMON_ORACLE_LABEL', 'Oracle')
+  const selectedDbmsLabel = selectedDbms === 'mysql'
+    ? text('COMMON_MYSQL_LABEL', 'MySQL')
     : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
   const availablePlanSections = useMemo(
     () => [

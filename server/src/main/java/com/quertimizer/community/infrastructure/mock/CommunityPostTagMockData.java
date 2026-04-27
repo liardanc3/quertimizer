@@ -56,7 +56,7 @@ public class CommunityPostTagMockData {
         if (postNumber <= 15) {
             return List.of(
                     "00001-00001",
-                    postNumber % 2 == 0 ? "postgresql" : "oracle",
+                    postNumber % 2 == 0 ? "postgresql" : "mysql",
                     "sql",
                     postNumber % 3 == 0 ? "group-by" : "join",
                     postNumber % 4 == 0 ? "execution-plan" : "aggregate"
@@ -65,7 +65,7 @@ public class CommunityPostTagMockData {
 
         return switch (postNumber) {
             case 16 -> List.of("postgresql", "group-by", "성능");
-            case 17 -> List.of("oracle", "execution-plan", "질문");
+            case 17 -> List.of("mysql", "execution-plan", "질문");
             case 18 -> List.of("index", "postgresql", "질문");
             case 19 -> List.of("aggregate", "having", "sql");
             case 20 -> List.of("sort", "tuning", "질문");

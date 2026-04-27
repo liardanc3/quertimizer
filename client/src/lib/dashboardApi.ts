@@ -81,7 +81,7 @@ function normalizeCategory(value: string | undefined): DashboardCommunityPost['c
 }
 
 function normalizeDbms(value: string | undefined): DbmsType {
-  return value === 'oracle' ? 'oracle' : 'postgresql';
+  return value === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function toCommunityPost(data: DashboardCommunityPostResponse): DashboardCommunityPost {

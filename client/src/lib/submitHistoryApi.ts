@@ -46,7 +46,7 @@ export interface FetchSubmitHistoriesParams {
 const submitHistoryGetRequestPromises = new Map<string, Promise<unknown>>();
 
 function toDbmsType(value?: string) {
-  return value === 'oracle' ? 'oracle' : 'postgresql';
+  return value === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function toSubmitHistoryEntry(item: Required<SubmitHistoryItemResponse>): SubmitHistoryEntry {
@@ -127,7 +127,7 @@ export async function fetchSubmitHistories(params: FetchSubmitHistoriesParams): 
   if (hasPlanFilters) {
     searchParams.set('planMatchMode', planFiltersByDbms.postgresql.matchMode);
 
-    (['postgresql', 'oracle'] as const).forEach((dbmsKey) => {
+    (['postgresql', 'mysql'] as const).forEach((dbmsKey) => {
       const planFilters = planFiltersByDbms[dbmsKey];
       appendCsv(searchParams, `${dbmsKey}ScanBuckets`, planFilters.scanBuckets);
       appendCsv(searchParams, `${dbmsKey}JoinBuckets`, planFilters.joinBuckets);

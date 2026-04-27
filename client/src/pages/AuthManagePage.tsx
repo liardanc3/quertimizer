@@ -98,8 +98,8 @@ function normalizePermissionKey(value: string) {
 
 function sortPermissionKeys(permissionKeys: string[]) {
   return [...permissionKeys].sort((left, right) => {
-    const leftRank = left === 'NEW' ? 0 : /^[PO]\d{5}$/.test(left) ? 1 : /^[PO]\d{5}-\d{5}$/.test(left) ? 2 : 3;
-    const rightRank = right === 'NEW' ? 0 : /^[PO]\d{5}$/.test(right) ? 1 : /^[PO]\d{5}-\d{5}$/.test(right) ? 2 : 3;
+    const leftRank = left === 'NEW' ? 0 : /^[PM]\d{5}$/.test(left) ? 1 : /^[PM]\d{5}-\d{5}$/.test(left) ? 2 : 3;
+    const rightRank = right === 'NEW' ? 0 : /^[PM]\d{5}$/.test(right) ? 1 : /^[PM]\d{5}-\d{5}$/.test(right) ? 2 : 3;
 
     if (leftRank !== rightRank) {
       return leftRank - rightRank;

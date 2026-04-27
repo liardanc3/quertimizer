@@ -12,9 +12,9 @@ public class ProblemDetailRes {
     private final String title;
     private final String description;
     private final String ddlPostgresql;
-    private final String ddlOracle;
+    private final String ddlMysql;
     private final String dataPostgresql;
-    private final String dataOracle;
+    private final String dataMysql;
     private final String condition;
     private final String output;
     private final String outputSample;
@@ -29,9 +29,9 @@ public class ProblemDetailRes {
                 result.title(),
                 result.description(),
                 result.ddlPostgresql(),
-                result.ddlOracle(),
+                result.ddlMysql(),
                 result.dataPostgresql(),
-                result.dataOracle(),
+                result.dataMysql(),
                 result.condition(),
                 result.output(),
                 result.outputSample(),

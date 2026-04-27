@@ -90,7 +90,7 @@ public class JudgeQueryService {
                                                       Integer page,
                                                       Integer pageSize) {
         if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(INTERACTIVE_POSTGRESQL_ONLY.getMessage());
+            throw new IllegalArgumentException(INTERACTIVE_DBMS_UNSUPPORTED.getMessage());
         }
 
         String trimmedSql = trimTrailingSemicolon(sql);
@@ -789,7 +789,7 @@ public class JudgeQueryService {
                                           String sql,
         DbmsType dbmsType) {
         if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_POSTGRESQL_ONLY.getMessage());
+            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
         }
 
         JudgeWorkspaceService.WorkspaceHandle workspaceHandle =
@@ -822,7 +822,7 @@ public class JudgeQueryService {
                                                               List<SubmittedStatement> statements,
                                                               DbmsType dbmsType) {
         if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_POSTGRESQL_ONLY.getMessage());
+            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
         }
 
         SubmittedStatement referenceStatement = resolveReferenceStatement(statements);
@@ -852,7 +852,7 @@ public class JudgeQueryService {
                                                  List<SubmittedStatement> ddlStatements,
                                                  DbmsType dbmsType) {
         if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_POSTGRESQL_ONLY.getMessage());
+            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
         }
 
         if (ddlStatements.isEmpty()) {
@@ -895,7 +895,7 @@ public class JudgeQueryService {
                                                           String sql,
                                                           DbmsType dbmsType) {
         if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_POSTGRESQL_ONLY.getMessage());
+            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
         }
 
         JudgeWorkspaceService.WorkspaceHandle workspaceHandle =

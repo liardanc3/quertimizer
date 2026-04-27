@@ -16,7 +16,7 @@ const DIFFICULTY_BEGINNER: ProblemDetail['difficulty'] = '입문';
 const DIFFICULTY_INTERMEDIATE: ProblemDetail['difficulty'] = '중급';
 const DIFFICULTY_ADVANCED: ProblemDetail['difficulty'] = '고급';
 
-const DEFAULT_DBMS_OPTIONS: DbmsType[] = ['postgresql', 'oracle'];
+const DEFAULT_DBMS_OPTIONS: DbmsType[] = ['postgresql', 'mysql'];
 
 interface SampleSeed {
   nickname: string;
@@ -57,7 +57,7 @@ interface ProblemSeed {
   resultFullScan: boolean;
   resultRows: string[][];
   postgresqlSamples: SampleSeed[];
-  oracleSamples: SampleSeed[];
+  mysqlSamples: SampleSeed[];
 }
 
 function toIsoLabel(offsetHours: number) {
@@ -147,7 +147,7 @@ function createDistribution(samples: SampleSeed[], bucketSizeMs: number): Runtim
 function createProblem(seed: ProblemSeed): ProblemDetail {
   const runtimeDistributions = {
     postgresql: createDistribution(seed.postgresqlSamples, 5),
-    oracle: createDistribution(seed.oracleSamples, 5),
+    mysql: createDistribution(seed.mysqlSamples, 5),
   };
 
   return {
@@ -217,12 +217,12 @@ const problemSeeds: ProblemSeed[] = [
       { nickname: 'latencylab', timeMs: 21.3, rowsScanned: 14400, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'PLAIN_SORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 49 },
       { nickname: 'coveridx', timeMs: 17.5, rowsScanned: 10330, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'INDEX_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 55 },
     ],
-    oracleSamples: [
-      { nickname: 'quertimizer_me', timeMs: 20.1, rowsScanned: 11980, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'GROUP_SORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 13, isMine: true },
-      { nickname: 'indexnova', timeMs: 17.9, rowsScanned: 9500, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'ROWID_ACCESS', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 29 },
-      { nickname: 'joinpilot', timeMs: 18.7, rowsScanned: 10020, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'INDEX_SCAN', joinBucket: 'MERGE_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'ORDER_SORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 36 },
-      { nickname: 'planforge', timeMs: 22.8, rowsScanned: 15100, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'GROUP_SORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 46 },
-      { nickname: 'costwave', timeMs: 19.5, rowsScanned: 11040, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 58 },
+    mysqlSamples: [
+      { nickname: 'quertimizer_me', timeMs: 20.1, rowsScanned: 11980, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 13, isMine: true },
+      { nickname: 'indexnova', timeMs: 17.9, rowsScanned: 9500, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'REF_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 29 },
+      { nickname: 'joinpilot', timeMs: 18.7, rowsScanned: 10020, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'INDEX_SCAN', joinBucket: 'MERGE_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 36 },
+      { nickname: 'planforge', timeMs: 22.8, rowsScanned: 15100, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 46 },
+      { nickname: 'costwave', timeMs: 19.5, rowsScanned: 11040, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 58 },
       { nickname: 'vectorkim', timeMs: 18.4, rowsScanned: 10220, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'INDEX_SCAN', joinBucket: 'NESTED_LOOP', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 63 },
     ],
   },
@@ -258,11 +258,11 @@ const problemSeeds: ProblemSeed[] = [
       { nickname: 'costwave', timeMs: 35.8, rowsScanned: 40110, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'PLAIN_SORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 53 },
       { nickname: 'rowfinder', timeMs: 31.2, rowsScanned: 34080, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'BITMAP_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'INCREMENTAL_SORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 70 },
     ],
-    oracleSamples: [
-      { nickname: 'fastjoin', timeMs: 28.1, rowsScanned: 29510, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'BITMAP_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'ORDER_SORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 18 },
-      { nickname: 'subquerycat', timeMs: 31.9, rowsScanned: 33620, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'DERIVED_SCAN', joinBucket: 'MERGE_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'GROUP_SORT', aggregateBucket: 'WINDOW_AGG', submittedOffsetHours: 34 },
-      { nickname: 'quertimizer_me', timeMs: 34.2, rowsScanned: 36180, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'ORDER_SORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 41, isMine: true },
-      { nickname: 'costwave', timeMs: 38.7, rowsScanned: 43000, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'ORDER_SORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 57 },
+    mysqlSamples: [
+      { nickname: 'fastjoin', timeMs: 28.1, rowsScanned: 29510, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'BITMAP_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 18 },
+      { nickname: 'subquerycat', timeMs: 31.9, rowsScanned: 33620, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'DERIVED_SCAN', joinBucket: 'MERGE_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'WINDOW_AGG', submittedOffsetHours: 34 },
+      { nickname: 'quertimizer_me', timeMs: 34.2, rowsScanned: 36180, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 41, isMine: true },
+      { nickname: 'costwave', timeMs: 38.7, rowsScanned: 43000, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 57 },
       { nickname: 'rowfinder', timeMs: 30.4, rowsScanned: 32110, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'INDEX_SCAN', joinBucket: 'NESTED_LOOP', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 69 },
     ],
   },
@@ -299,11 +299,11 @@ const problemSeeds: ProblemSeed[] = [
       { nickname: 'bitmapfox', timeMs: 20.1, rowsScanned: 16110, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'BITMAP_SCAN', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 34 },
       { nickname: 'filterlab', timeMs: 24.5, rowsScanned: 19600, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 43 },
     ],
-    oracleSamples: [
-      { nickname: 'aggnerd', timeMs: 19.7, rowsScanned: 15080, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'ROWID_ACCESS', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 15 },
-      { nickname: 'quertimizer_me', timeMs: 24.6, rowsScanned: 18840, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'GROUP_SORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 22, isMine: true },
+    mysqlSamples: [
+      { nickname: 'aggnerd', timeMs: 19.7, rowsScanned: 15080, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'REF_SCAN', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 15 },
+      { nickname: 'quertimizer_me', timeMs: 24.6, rowsScanned: 18840, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 22, isMine: true },
       { nickname: 'bitmapfox', timeMs: 21.8, rowsScanned: 17020, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'BITMAP_SCAN', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 40 },
-      { nickname: 'filterlab', timeMs: 27.3, rowsScanned: 20800, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'GROUP_SORT', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 52 },
+      { nickname: 'filterlab', timeMs: 27.3, rowsScanned: 20800, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 52 },
     ],
   },
   {
@@ -338,11 +338,11 @@ const problemSeeds: ProblemSeed[] = [
       { nickname: 'couponcat', timeMs: 17.5, rowsScanned: 10220, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'INDEX_SCAN', joinBucket: 'NESTED_LOOP', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 37 },
       { nickname: 'seggraph', timeMs: 20.2, rowsScanned: 12110, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 48 },
     ],
-    oracleSamples: [
-      { nickname: 'retentor', timeMs: 14.9, rowsScanned: 8900, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 14 },
-      { nickname: 'quertimizer_me', timeMs: 17.8, rowsScanned: 10140, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 24, isMine: true },
+    mysqlSamples: [
+      { nickname: 'retentor', timeMs: 14.9, rowsScanned: 8900, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 14 },
+      { nickname: 'quertimizer_me', timeMs: 17.8, rowsScanned: 10140, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'HASH_AGG', submittedOffsetHours: 24, isMine: true },
       { nickname: 'couponcat', timeMs: 18.6, rowsScanned: 10820, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'INDEX_SCAN', joinBucket: 'NESTED_LOOP', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 33 },
-      { nickname: 'seggraph', timeMs: 21.5, rowsScanned: 12600, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'GROUP_SORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 45 },
+      { nickname: 'seggraph', timeMs: 21.5, rowsScanned: 12600, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'HASH_JOIN', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 45 },
     ],
   },
   {
@@ -377,11 +377,11 @@ const problemSeeds: ProblemSeed[] = [
       { nickname: 'cardwave', timeMs: 12.2, rowsScanned: 8010, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'BITMAP_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 41 },
       { nickname: 'retrylane', timeMs: 14.1, rowsScanned: 9800, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 60 },
     ],
-    oracleSamples: [
-      { nickname: 'paychart', timeMs: 10.3, rowsScanned: 6550, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 12 },
-      { nickname: 'quertimizer_me', timeMs: 12.1, rowsScanned: 7700, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'ROWID_ACCESS', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 21, isMine: true },
+    mysqlSamples: [
+      { nickname: 'paychart', timeMs: 10.3, rowsScanned: 6550, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 12 },
+      { nickname: 'quertimizer_me', timeMs: 12.1, rowsScanned: 7700, indexUsed: true, fullScan: false, hintUsed: false, scanBucket: 'REF_SCAN', joinBucket: 'NONE', filterBucket: 'ACCESS_FILTER', sortBucket: 'NONE', aggregateBucket: 'GROUP_AGG', submittedOffsetHours: 21, isMine: true },
       { nickname: 'cardwave', timeMs: 12.9, rowsScanned: 8220, indexUsed: true, fullScan: false, hintUsed: true, scanBucket: 'BITMAP_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'NONE', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 38 },
-      { nickname: 'retrylane', timeMs: 15.4, rowsScanned: 10280, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'ORDER_SORT', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 64 },
+      { nickname: 'retrylane', timeMs: 15.4, rowsScanned: 10280, indexUsed: false, fullScan: true, hintUsed: false, scanBucket: 'FULL_SCAN', joinBucket: 'NONE', filterBucket: 'POST_FILTER', sortBucket: 'FILESORT', aggregateBucket: 'PLAIN_AGG', submittedOffsetHours: 64 },
     ],
   },
 ];

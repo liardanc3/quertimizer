@@ -30,7 +30,7 @@ WITH expanded AS (
     CROSS JOIN LATERAL generate_series(1, 2 + (o.order_id % 3)) AS line_no
 )
 SELECT
-    ROW_NUMBER() OVER (ORDER BY order_id, line_no),
+    row_number() OVER (ORDER BY order_id, line_no),
     order_id,
     (ARRAY['LIVING', 'FOOD', 'BEAUTY', 'DIGITAL', 'SPORTS', 'BOOK'])[1 + ((order_id + line_no) % 6)],
     CASE

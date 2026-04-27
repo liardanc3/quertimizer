@@ -1,5 +1,6 @@
 package com.quertimizer.judge.infrastructure.execution;
 
+import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.judge.domain.service.JudgeSqlStatementParser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -12,13 +13,17 @@ import java.sql.Statement;
 public class SqlReplayProvisioningStrategy implements DatasetProvisioningStrategy {
 
     private final JudgeSqlStatementParser judgeSqlStatementParser;
+    private final DbmsSqlDialects dbmsSqlDialects;
 
     @Override
-    public void provision(Connection connection, String schemaName, String ddl, String dataSql) throws Exception {
+    public void provision(Connection connection, DbmsType dbmsType, String schemaName, String ddl, String dataSql) throws Exception {
         // DDL + data SQL을 execution schema에서 매번 재생해 dataset을 준비
+        DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
         try (Statement statement = connection.createStatement()) {
-            statement.execute("CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(schemaName));
-            statement.execute("SET LOCAL search_path TO " + quoteIdentifier(schemaName) + ", public");
+            statement.execute(dialect.createSchemaIfMissingSql(schemaName));
+            for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {
+                statement.execute(useSchemaSql);
+            }
         }
 
         executeStatements(connection, ddl);
@@ -35,7 +40,4 @@ public class SqlReplayProvisioningStrategy implements DatasetProvisioningStrateg
         }
     }
 
-    private String quoteIdentifier(String identifier) {
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
-    }
 }

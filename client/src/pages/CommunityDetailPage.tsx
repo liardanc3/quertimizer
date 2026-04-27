@@ -67,7 +67,7 @@ function formatBoardDate(value: string) {
 }
 
 function isProblemTag(tag: string) {
-  return /^[PO]?\d{5}-\d{5}$/.test(tag.trim());
+  return /^[PM]?\d{5}-\d{5}$/.test(tag.trim());
 }
 
 function getCategoryLabel(value: CommunityPostDetail['category']) {

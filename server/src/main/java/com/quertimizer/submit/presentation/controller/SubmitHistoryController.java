@@ -35,12 +35,12 @@ public class SubmitHistoryController {
                                                                    @RequestParam(required = false) String postgresqlSortBuckets,
                                                                    @RequestParam(required = false) String postgresqlAggregateBuckets,
                                                                    @RequestParam(required = false) String postgresqlHintFilters,
-                                                                   @RequestParam(required = false) String oracleScanBuckets,
-                                                                   @RequestParam(required = false) String oracleJoinBuckets,
-                                                                   @RequestParam(required = false) String oracleFilterBuckets,
-                                                                   @RequestParam(required = false) String oracleSortBuckets,
-                                                                   @RequestParam(required = false) String oracleAggregateBuckets,
-                                                                   @RequestParam(required = false) String oracleHintFilters) {
+                                                                   @RequestParam(required = false) String mysqlScanBuckets,
+                                                                   @RequestParam(required = false) String mysqlJoinBuckets,
+                                                                   @RequestParam(required = false) String mysqlFilterBuckets,
+                                                                   @RequestParam(required = false) String mysqlSortBuckets,
+                                                                   @RequestParam(required = false) String mysqlAggregateBuckets,
+                                                                   @RequestParam(required = false) String mysqlHintFilters) {
 
         return ResponseEntity.ok(SubmitHistoryPageRes.from(getSubmitHistories.execute(
                 page,
@@ -63,12 +63,12 @@ public class SubmitHistoryController {
                 postgresqlSortBuckets,
                 postgresqlAggregateBuckets,
                 postgresqlHintFilters,
-                oracleScanBuckets,
-                oracleJoinBuckets,
-                oracleFilterBuckets,
-                oracleSortBuckets,
-                oracleAggregateBuckets,
-                oracleHintFilters
+                mysqlScanBuckets,
+                mysqlJoinBuckets,
+                mysqlFilterBuckets,
+                mysqlSortBuckets,
+                mysqlAggregateBuckets,
+                mysqlHintFilters
         )));
     }
 

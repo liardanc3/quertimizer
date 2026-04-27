@@ -37,9 +37,9 @@ interface ProblemDetailResponse {
   title?: string;
   description?: string;
   ddlPostgresql?: string;
-  ddlOracle?: string;
+  ddlMysql?: string;
   dataPostgresql?: string;
-  dataOracle?: string;
+  dataMysql?: string;
   condition?: string;
   output?: string;
   outputSample?: string;
@@ -56,9 +56,9 @@ interface ProblemSetSummaryResponse {
 interface ProblemSetDetailResponse {
   problemSetId?: string;
   ddlPostgresql?: string;
-  ddlOracle?: string;
+  ddlMysql?: string;
   dataPostgresql?: string;
-  dataOracle?: string;
+  dataMysql?: string;
 }
 
 interface AdminProblemOptionResponse {
@@ -81,9 +81,9 @@ export interface ProblemDetailData {
   title: string;
   description: string;
   ddlPostgresql: string;
-  ddlOracle: string;
+  ddlMysql: string;
   dataPostgresql: string;
-  dataOracle: string;
+  dataMysql: string;
   condition: string;
   output: string;
   outputSample: string;
@@ -100,9 +100,9 @@ export interface ProblemSetSummary {
 export interface ProblemSetDetailData {
   problemSetId: string;
   ddlPostgresql: string;
-  ddlOracle: string;
+  ddlMysql: string;
   dataPostgresql: string;
-  dataOracle: string;
+  dataMysql: string;
 }
 
 export interface CreateProblemPayload {
@@ -111,11 +111,11 @@ export interface CreateProblemPayload {
   condition: string;
   output: string;
   ddlPostgresql?: string;
-  ddlOracle?: string;
+  ddlMysql?: string;
   actualDataPostgresql?: string;
-  actualDataOracle?: string;
+  actualDataMysql?: string;
   sampleDataPostgresql?: string;
-  sampleDataOracle?: string;
+  sampleDataMysql?: string;
   answerSql: string;
   problemSetMode: 'existing' | 'new';
   problemMode: 'existing' | 'new';
@@ -165,7 +165,7 @@ const DEFAULT_PROBLEM_DIFFICULTY = '중급' as ProblemSummary['difficulty'];
 const problemGetRequestPromises = new Map<string, Promise<unknown>>();
 
 function toDbmsType(value?: string) {
-  return value === 'oracle' ? 'oracle' : 'postgresql';
+  return value === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function toProblemNumber(problemId: string) {
@@ -244,9 +244,9 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       typeof data.title !== 'string' ||
       typeof data.description !== 'string' ||
       typeof data.ddlPostgresql !== 'string' ||
-      typeof data.ddlOracle !== 'string' ||
+      typeof data.ddlMysql !== 'string' ||
       typeof data.dataPostgresql !== 'string' ||
-      typeof data.dataOracle !== 'string' ||
+      typeof data.dataMysql !== 'string' ||
       typeof data.condition !== 'string' ||
       typeof data.output !== 'string' ||
       typeof data.outputSample !== 'string' ||
@@ -262,9 +262,9 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       title: data.title,
       description: data.description,
       ddlPostgresql: data.ddlPostgresql,
-      ddlOracle: data.ddlOracle,
+      ddlMysql: data.ddlMysql,
       dataPostgresql: data.dataPostgresql,
-      dataOracle: data.dataOracle,
+      dataMysql: data.dataMysql,
       condition: data.condition,
       output: data.output,
       outputSample: data.outputSample,
@@ -435,9 +435,9 @@ export async function fetchProblemSetDetail(problemSetId: string): Promise<Probl
     if (
       typeof data.problemSetId !== 'string' ||
       typeof data.ddlPostgresql !== 'string' ||
-      typeof data.ddlOracle !== 'string' ||
+      typeof data.ddlMysql !== 'string' ||
       typeof data.dataPostgresql !== 'string' ||
-      typeof data.dataOracle !== 'string'
+      typeof data.dataMysql !== 'string'
     ) {
       throw new Error();
     }
@@ -445,9 +445,9 @@ export async function fetchProblemSetDetail(problemSetId: string): Promise<Probl
     return {
       problemSetId: data.problemSetId,
       ddlPostgresql: data.ddlPostgresql,
-      ddlOracle: data.ddlOracle,
+      ddlMysql: data.ddlMysql,
       dataPostgresql: data.dataPostgresql,
-      dataOracle: data.dataOracle,
+      dataMysql: data.dataMysql,
     };
   } catch {
     throw new Error(getUiTextValue('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));

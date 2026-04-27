@@ -139,7 +139,7 @@ function createEmptySolvePlanFilters(): SubmitHistoryPlanFilters {
 function createEmptySolvePlanFiltersByDbms(): Record<DbmsType, SubmitHistoryPlanFilters> {
   return {
     postgresql: createEmptySolvePlanFilters(),
-    oracle: createEmptySolvePlanFilters(),
+    mysql: createEmptySolvePlanFilters(),
   };
 }
 
@@ -191,7 +191,7 @@ function getSolveRelatedCommunityCategoryLabel(value: CommunityPostSummary['cate
 }
 
 function getSolveRelatedCommunitySearchTerm(problemId: string) {
-  return /^[PO]\d{5}-\d{5}$/.test(problemId) ? problemId.slice(1) : problemId;
+  return /^[PM]\d{5}-\d{5}$/.test(problemId) ? problemId.slice(1) : problemId;
 }
 
 type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
@@ -596,7 +596,7 @@ function clamp(value: number, min: number, max: number) {
 function getDbmsLabel(dbms: DbmsType) {
   return dbms === 'postgresql'
     ? getUiTextValue('COMMON_POSTGRESQL_LABEL', 'PostgreSQL')
-    : getUiTextValue('COMMON_ORACLE_LABEL', 'Oracle');
+    : getUiTextValue('COMMON_MYSQL_LABEL', 'MySQL');
 }
 
 function getAvailableDbms(problem: ProblemDetail) {
@@ -689,7 +689,7 @@ function resolveColumnWidths(containerWidth: number, columnCount: number, initia
 }
 
 function createFallbackProblemDetail(problemId: string): ProblemDetail {
-  const scopedDbms = problemId.startsWith('O') ? 'oracle' : problemId.startsWith('P') ? 'postgresql' : null;
+  const scopedDbms = problemId.startsWith('M') ? 'mysql' : problemId.startsWith('P') ? 'postgresql' : null;
   const matchedProblem = mockProblemDetailById[problemId];
 
   if (matchedProblem) {
@@ -697,7 +697,7 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
       ...matchedProblem,
       problemNumber: matchedProblem.problemNumber ?? problemId,
       dbmsOptions: scopedDbms ? [scopedDbms] : matchedProblem.dbmsOptions,
-      disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['oracle'] : ['postgresql']) : matchedProblem.disabledDbms,
+      disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['mysql'] : ['postgresql']) : matchedProblem.disabledDbms,
     };
   }
 
@@ -710,7 +710,7 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
     preview: '',
     description: '',
     dbmsOptions: scopedDbms ? [scopedDbms] : mockProblemDetails[0].dbmsOptions,
-    disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['oracle'] : ['postgresql']) : mockProblemDetails[0].disabledDbms,
+    disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['mysql'] : ['postgresql']) : mockProblemDetails[0].disabledDbms,
   };
 }
 
@@ -832,7 +832,7 @@ function consumeSolvePageAuthReturn(problemId: string) {
       path: typeof parsedValue.path === 'string' ? parsedValue.path : null,
       sql: typeof parsedValue.sql === 'string' ? parsedValue.sql : '',
       selectedDbms:
-        parsedValue.selectedDbms === 'oracle' || parsedValue.selectedDbms === 'postgresql'
+        parsedValue.selectedDbms === 'mysql' || parsedValue.selectedDbms === 'postgresql'
           ? parsedValue.selectedDbms
           : null,
     };
@@ -842,8 +842,8 @@ function consumeSolvePageAuthReturn(problemId: string) {
 }
 
 function resolveProblemDdl(detail: ProblemDetailData | null, dbms: DbmsType) {
-  const preferredDdl = dbms === 'oracle' ? detail?.ddlOracle ?? '' : detail?.ddlPostgresql ?? '';
-  const fallbackDdl = dbms === 'oracle' ? detail?.ddlPostgresql ?? '' : detail?.ddlOracle ?? '';
+  const preferredDdl = dbms === 'mysql' ? detail?.ddlMysql ?? '' : detail?.ddlPostgresql ?? '';
+  const fallbackDdl = dbms === 'mysql' ? detail?.ddlPostgresql ?? '' : detail?.ddlMysql ?? '';
 
   return preferredDdl.trim() !== '' ? preferredDdl : fallbackDdl;
 }

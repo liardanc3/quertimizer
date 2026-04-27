@@ -1,7 +1,7 @@
 package com.quertimizer.problem.infrastructure.mock;
 
 import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.global.constant.OracleExecutionPlanElementIndex;
+import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.application.port.ProblemRepository;
 import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
@@ -120,7 +120,7 @@ public class ProblemSubmitHistoryMockData {
                 SELECT c.customer_id, c.customer_name, COUNT(*) AS order_count
                 FROM customers c
                 JOIN orders o ON o.customer_id = c.customer_id
-                WHERE o.ordered_at >= DATE '2024-03-01'
+                WHERE o.ordered_at >= '2024-03-01'
                 GROUP BY c.customer_id, c.customer_name
                 ORDER BY order_count DESC;
                 -- %s %s %d
@@ -129,8 +129,8 @@ public class ProblemSubmitHistoryMockData {
 
     private long createExecutionPlanElement(DbmsType dbmsType, int attempt, int sequence) {
         // DBMS별 실행계획 요소 Mock 데이터 생성
-        if (dbmsType == DbmsType.ORACLE) {
-            return createOracleExecutionPlanElement(attempt, sequence);
+        if (dbmsType == DbmsType.MYSQL) {
+            return createMySqlExecutionPlanElement(attempt, sequence);
         }
 
         return createPostgreSqlExecutionPlanElement(attempt, sequence);
@@ -162,32 +162,30 @@ public class ProblemSubmitHistoryMockData {
         return element;
     }
 
-    private long createOracleExecutionPlanElement(int attempt, int sequence) {
-        // Oracle 실행계획 요소 조합 생성
+    private long createMySqlExecutionPlanElement(int attempt, int sequence) {
+        // MySQL 실행계획 요소 조합 생성
         long element = switch (attempt % 6) {
-            case 0 -> bit(OracleExecutionPlanElementIndex.FULL_SCAN);
-            case 1 -> bit(OracleExecutionPlanElementIndex.INDEX_SCAN);
-            case 2 -> bit(OracleExecutionPlanElementIndex.BITMAP_SCAN);
-            case 3 -> bit(OracleExecutionPlanElementIndex.ROWID_ACCESS);
-            case 4 -> bit(OracleExecutionPlanElementIndex.DERIVED_SCAN);
-            default -> bit(OracleExecutionPlanElementIndex.REMOTE_SCAN);
+            case 0 -> bit(MySqlExecutionPlanElementIndex.FULL_TABLE_SCAN);
+            case 1 -> bit(MySqlExecutionPlanElementIndex.INDEX_SCAN);
+            case 2 -> bit(MySqlExecutionPlanElementIndex.RANGE_SCAN);
+            case 3 -> bit(MySqlExecutionPlanElementIndex.REF_SCAN);
+            case 4 -> bit(MySqlExecutionPlanElementIndex.EQ_REF_SCAN);
+            default -> bit(MySqlExecutionPlanElementIndex.DERIVED_TABLE);
         };
 
-        element |= switch ((attempt + sequence) % 5) {
-            case 0 -> bit(OracleExecutionPlanElementIndex.NESTED_LOOP);
-            case 1 -> bit(OracleExecutionPlanElementIndex.MERGE_JOIN);
-            case 2 -> bit(OracleExecutionPlanElementIndex.HASH_JOIN);
-            case 3 -> bit(OracleExecutionPlanElementIndex.CARTESIAN_JOIN);
+        element |= switch ((attempt + sequence) % 4) {
+            case 0 -> bit(MySqlExecutionPlanElementIndex.NESTED_LOOP_JOIN);
+            case 1 -> bit(MySqlExecutionPlanElementIndex.HASH_JOIN);
+            case 2 -> bit(MySqlExecutionPlanElementIndex.USING_JOIN_BUFFER);
             default -> 0L;
         };
-        element |= attempt % 3 == 0 ? bit(OracleExecutionPlanElementIndex.ACCESS_FILTER) : 0L;
-        element |= attempt % 4 == 0 ? bit(OracleExecutionPlanElementIndex.POST_FILTER) : 0L;
-        element |= attempt % 6 == 0 ? bit(OracleExecutionPlanElementIndex.JOIN_FILTER) : 0L;
-        element |= attempt % 5 == 0 ? bit(OracleExecutionPlanElementIndex.ORDER_SORT) : 0L;
-        element |= attempt % 7 == 0 ? bit(OracleExecutionPlanElementIndex.GROUP_SORT) : 0L;
-        element |= attempt % 8 == 0 ? bit(OracleExecutionPlanElementIndex.HASH_AGGREGATE) : 0L;
-        element |= attempt % 9 == 0 ? bit(OracleExecutionPlanElementIndex.PLAIN_AGGREGATE) : 0L;
-        element |= attempt % 10 == 0 ? bit(OracleExecutionPlanElementIndex.HINT) : 0L;
+        element |= attempt % 3 == 0 ? bit(MySqlExecutionPlanElementIndex.INDEX_CONDITION) : 0L;
+        element |= attempt % 4 == 0 ? bit(MySqlExecutionPlanElementIndex.ATTACHED_CONDITION) : 0L;
+        element |= attempt % 5 == 0 ? bit(MySqlExecutionPlanElementIndex.FILESORT) : 0L;
+        element |= attempt % 7 == 0 ? bit(MySqlExecutionPlanElementIndex.TEMPORARY_TABLE) : 0L;
+        element |= attempt % 8 == 0 ? bit(MySqlExecutionPlanElementIndex.GROUPING_OPERATION) : 0L;
+        element |= attempt % 9 == 0 ? bit(MySqlExecutionPlanElementIndex.AGGREGATE) : 0L;
+        element |= attempt % 10 == 0 ? bit(MySqlExecutionPlanElementIndex.HINT) : 0L;
         return element;
     }
 

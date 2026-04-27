@@ -25,6 +25,7 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
     private final ExecutionDatabaseQueue executionDatabaseQueue;
     private final SqlReplayProvisioningStrategy sqlReplayProvisioningStrategy;
     private final TemplateSchemaCopyProvisioningStrategy templateSchemaCopyProvisioningStrategy;
+    private final DbmsSqlDialects dbmsSqlDialects;
 
     @Override
     public ProblemOutputPreviewOutput executeProblemOutputPreview(ProblemOutputPreviewInput input) {
@@ -43,10 +44,6 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
                                                            String dataSql,
                                                            String answerSql,
                                                            String purpose) {
-        if (dbmsType == DbmsType.ORACLE) {
-            throw new IllegalStateException("Oracle execution orchestrator는 아직 지원하지 않는다.");
-        }
-
         ExecutionDatabasePool.ExecutionDatabaseWorker worker = executionDatabaseQueue.acquire(dbmsType);
         String schemaName = createExecutionSchemaName(purpose);
 
@@ -56,7 +53,7 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
                 worker.getConnectionInfo().password())) {
             connection.setAutoCommit(false);
             provisionDataset(connection, dbmsType, schemaName, ddl, dataSql);
-            ProblemOutputPreviewOutput output = executeSelect(connection, schemaName, answerSql);
+            ProblemOutputPreviewOutput output = executeSelect(connection, dbmsType, schemaName, answerSql);
             connection.commit();
             return output;
         } catch (Exception exception) {
@@ -71,13 +68,13 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
         // properties 전략에 따라 execution schema dataset을 준비
         String strategy = judgeDatabaseProperties.getProvisioningStrategy();
         if ("sql-replay".equalsIgnoreCase(strategy)) {
-            sqlReplayProvisioningStrategy.provision(connection, schemaName, ddl, dataSql);
+            sqlReplayProvisioningStrategy.provision(connection, dbmsType, schemaName, ddl, dataSql);
             return;
         }
 
         if ("template-copy".equalsIgnoreCase(strategy)) {
             validateTemplateCopyConfiguration(dbmsType);
-            templateSchemaCopyProvisioningStrategy.provision(connection, schemaName, ddl, dataSql);
+            templateSchemaCopyProvisioningStrategy.provision(connection, dbmsType, schemaName, ddl, dataSql);
             return;
         }
 
@@ -92,10 +89,13 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
         }
     }
 
-    private ProblemOutputPreviewOutput executeSelect(Connection connection, String schemaName, String sql) throws Exception {
+    private ProblemOutputPreviewOutput executeSelect(Connection connection, DbmsType dbmsType, String schemaName, String sql) throws Exception {
+        DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(60);
-            statement.execute("SET LOCAL search_path TO " + quoteIdentifier(schemaName) + ", public");
+            for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {
+                statement.execute(useSchemaSql);
+            }
             statement.execute(sql);
 
             try (ResultSet resultSet = statement.getResultSet()) {
@@ -128,7 +128,7 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
         // 임시 execution schema만 정리하고 template schema는 남겨 둔다
         try (Connection connection = DriverManager.getConnection(connectionInfo.url(), connectionInfo.username(), connectionInfo.password());
              Statement statement = connection.createStatement()) {
-            statement.execute("DROP SCHEMA IF EXISTS " + quoteIdentifier(schemaName) + " CASCADE");
+            statement.execute(dbmsSqlDialects.get(connectionInfo.dbmsType()).dropSchemaIfExistsSql(schemaName));
         } catch (Exception ignored) {
         }
     }
@@ -141,7 +141,4 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
         return value == null || value.isBlank();
     }
 
-    private String quoteIdentifier(String identifier) {
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
-    }
 }

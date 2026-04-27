@@ -82,7 +82,7 @@ export interface DuplicateCheckResult {
 export interface SessionMeResult {
   authenticated: boolean;
   handle: string | null;
-  defaultDbms: 'postgresql' | 'oracle' | null;
+  defaultDbms: 'postgresql' | 'mysql' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
   handleSetupRequired: boolean;
 }
@@ -139,7 +139,7 @@ function parseSessionMeResult(data: SessionMeResponse) {
   return {
     authenticated: data.authenticated === true,
     handle: typeof data.handle === 'string' && data.handle.trim() !== '' ? data.handle : null,
-    defaultDbms: data.defaultDbms === 'oracle' ? 'oracle' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
+    defaultDbms: data.defaultDbms === 'mysql' ? 'mysql' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
     role:
       data.role === 'admin'
         ? 'admin'

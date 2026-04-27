@@ -14,7 +14,7 @@ interface SqlEditorPanelProps {
 }
 
 function getDbmsLabel(dbms: DbmsType) {
-  return dbms === 'postgresql' ? 'PostgreSQL' : 'Oracle';
+  return dbms === 'postgresql' ? 'PostgreSQL' : 'MySQL';
 }
 
 export default function SqlEditorPanel({

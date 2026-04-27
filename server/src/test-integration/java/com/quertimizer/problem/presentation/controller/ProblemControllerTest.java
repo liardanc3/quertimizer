@@ -1,7 +1,7 @@
 package com.quertimizer.problem.presentation.controller;
 
 import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.global.constant.OracleExecutionPlanElementIndex;
+import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
@@ -83,11 +83,11 @@ class ProblemControllerTest {
                 ProblemSolveHistory.create(
                         problem.getProblemId(),
                         "problemuser1",
-                        DbmsType.ORACLE,
+                        DbmsType.MYSQL,
                         "select 3",
                         150,
                         0,
-                        bitMask(OracleExecutionPlanElementIndex.ACCESS_FILTER, OracleExecutionPlanElementIndex.HINT),
+                        bitMask(MySqlExecutionPlanElementIndex.INDEX_CONDITION, MySqlExecutionPlanElementIndex.HINT),
                         LocalDateTime.of(2026, 4, 5, 10, 10, 0)
                 )
         );
@@ -150,11 +150,11 @@ class ProblemControllerTest {
                 .andExpect(jsonPath("$.problems[0].submittedHistories[1].executionTimeMs").value(120))
                 .andExpect(jsonPath("$.problems[0].submittedHistories[1].executionPlanElement")
                         .value(bitMask(PostgreSqlExecutionPlanElementIndex.BITMAP_INDEX_SCAN, PostgreSqlExecutionPlanElementIndex.SORT)))
-                .andExpect(jsonPath("$.problems[0].submittedHistories[2].dbms").value("oracle"))
+                .andExpect(jsonPath("$.problems[0].submittedHistories[2].dbms").value("mysql"))
                 .andExpect(jsonPath("$.problems[0].submittedHistories[2].handle").value("problemuser1"))
                 .andExpect(jsonPath("$.problems[0].submittedHistories[2].executionTimeMs").value(150))
                 .andExpect(jsonPath("$.problems[0].submittedHistories[2].executionPlanElement")
-                        .value(bitMask(OracleExecutionPlanElementIndex.ACCESS_FILTER, OracleExecutionPlanElementIndex.HINT)));
+                        .value(bitMask(MySqlExecutionPlanElementIndex.INDEX_CONDITION, MySqlExecutionPlanElementIndex.HINT)));
     }
 
     @Test

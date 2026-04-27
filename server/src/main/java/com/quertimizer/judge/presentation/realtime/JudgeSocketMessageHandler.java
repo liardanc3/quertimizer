@@ -251,7 +251,7 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
 
     private DbmsType resolveDbmsType(String dbms) {
         // DBMS 유형을 해석
-        return "oracle".equalsIgnoreCase(dbms) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+        return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 
     private String resolveErrorMessage(Exception exception) {

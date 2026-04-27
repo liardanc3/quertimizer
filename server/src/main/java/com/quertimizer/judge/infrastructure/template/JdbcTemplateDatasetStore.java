@@ -1,10 +1,11 @@
 package com.quertimizer.judge.infrastructure.template;
 
-import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.judge.application.input.RefreshTemplateDatasetInput;
 import com.quertimizer.judge.application.port.JudgeTemplateDatasetPort;
 import com.quertimizer.judge.domain.service.JudgeSqlStatementParser;
 import com.quertimizer.judge.infrastructure.config.JudgeDatabaseProperties;
+import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialect;
+import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,31 +15,31 @@ import java.sql.Statement;
 
 @Component
 @RequiredArgsConstructor
-public class PostgreSqlTemplateDatasetStore implements JudgeTemplateDatasetPort {
+public class JdbcTemplateDatasetStore implements JudgeTemplateDatasetPort {
 
     private final JudgeDatabaseProperties judgeDatabaseProperties;
     private final JudgeSqlStatementParser judgeSqlStatementParser;
+    private final DbmsSqlDialects dbmsSqlDialects;
 
     @Override
     public void refreshTemplateDataset(RefreshTemplateDatasetInput input) {
-        // PostgreSQL template schema를 canonical DDL + actualDataSql 기준으로 재생성
-        if (input.dbmsType() == DbmsType.ORACLE) {
-            throw new IllegalStateException("Oracle template dataset store는 아직 지원하지 않는다.");
-        }
-
+        // DBMS별 template schema를 canonical DDL + actualDataSql 기준으로 재생성
         JudgeDatabaseProperties.NamedDatabaseProperties properties = judgeDatabaseProperties.getTemplateDatabase(input.dbmsType());
         if (properties == null || isBlank(properties.getUrl()) || isBlank(properties.getUsername())) {
             throw new IllegalStateException("%s template DB 설정이 없다.".formatted(input.dbmsType().getValue()));
         }
 
         String schemaName = resolveTemplateSchemaName(input.problemSetId());
+        DbmsSqlDialect dialect = dbmsSqlDialects.get(input.dbmsType());
         try (Connection connection = DriverManager.getConnection(properties.getUrl(), properties.getUsername(), properties.getPassword())) {
             connection.setAutoCommit(false);
 
             try (Statement statement = connection.createStatement()) {
-                statement.execute("DROP SCHEMA IF EXISTS " + quoteIdentifier(schemaName) + " CASCADE");
-                statement.execute("CREATE SCHEMA " + quoteIdentifier(schemaName));
-                statement.execute("SET LOCAL search_path TO " + quoteIdentifier(schemaName) + ", public");
+                statement.execute(dialect.dropSchemaIfExistsSql(schemaName));
+                statement.execute(dialect.createSchemaSql(schemaName));
+                for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {
+                    statement.execute(useSchemaSql);
+                }
             }
 
             executeStatements(connection, input.ddl());
@@ -64,9 +65,5 @@ public class PostgreSqlTemplateDatasetStore implements JudgeTemplateDatasetPort 
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
-    }
-
-    private String quoteIdentifier(String identifier) {
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 }

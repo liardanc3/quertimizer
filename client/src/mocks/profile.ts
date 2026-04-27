@@ -67,13 +67,13 @@ export const mockProfiles: Profile[] = [
     handle: 'park-optimizer',
     name: '박옵티마이저',
     tier: 'Diamond 1',
-    bio: '힌트 없이도 실행계획이 예쁘게 나오는 쿼리를 좋아합니다. Oracle과 PostgreSQL을 번갈아 쓰며 기록을 정리합니다.',
+    bio: '힌트 없이도 실행계획이 예쁘게 나오는 쿼리를 좋아합니다. MySQL과 PostgreSQL을 번갈아 쓰며 기록을 정리합니다.',
     links: {
       github: 'https://github.com/park-optimizer',
       blog: 'https://optimizer-notes.dev',
     },
     settings: {
-      defaultDbms: 'oracle',
+      defaultDbms: 'mysql',
       sqlEditorPreset: 'analysis',
       sqlVisibility: 'followers',
     },

@@ -10,17 +10,17 @@ public class ProblemSetDetailRes {
 
     private final String problemSetId;
     private final String ddlPostgresql;
-    private final String ddlOracle;
+    private final String ddlMysql;
     private final String dataPostgresql;
-    private final String dataOracle;
+    private final String dataMysql;
 
     public static ProblemSetDetailRes from(ProblemSetDetailOutput result) {
         return new ProblemSetDetailRes(
                 result.problemSetId(),
                 result.ddlPostgresql(),
-                result.ddlOracle(),
+                result.ddlMysql(),
                 result.dataPostgresql(),
-                result.dataOracle()
+                result.dataMysql()
         );
     }
 }

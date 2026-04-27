@@ -24,7 +24,7 @@ public class UserProfileSummaryRes {
     private final boolean solvedProblemCountPublic;
     private final boolean communityActivityPublic;
     private final Double averageExecutionPercentilePostgresql;
-    private final Double averageExecutionPercentileOracle;
+    private final Double averageExecutionPercentileMysql;
     private final long authoredPostCount;
     private final long likedPostCount;
     private final long commentCount;
@@ -46,7 +46,7 @@ public class UserProfileSummaryRes {
                 result.isSolvedProblemCountPublic(),
                 result.isCommunityActivityPublic(),
                 result.getAverageExecutionPercentilePostgresql(),
-                result.getAverageExecutionPercentileOracle(),
+                result.getAverageExecutionPercentileMysql(),
                 result.getAuthoredPostCount(),
                 result.getLikedPostCount(),
                 result.getCommentCount()

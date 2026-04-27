@@ -33,11 +33,11 @@ interface HomePageFavoriteSnapshot {
 }
 const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
 const PROBLEM_PAGE_SIZE = 10;
-const dbmsOptions: DbmsType[] = ['postgresql', 'oracle'];
+const dbmsOptions: DbmsType[] = ['postgresql', 'mysql'];
 
 function readProblemsDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
-  return dbms === 'oracle' ? 'oracle' : 'postgresql';
+  return dbms === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function buildProblemsPath(dbms: DbmsType) {
@@ -357,7 +357,7 @@ export default function HomePage() {
           <div className="solve-dbms-tab-row home-problem-dbms-tab-row" role="tablist" aria-label={text('HOME_DBMS_TABLIST_LABEL', '문제 목록 DBMS 선택')}>
             {dbmsOptions.map((dbmsOption) => {
               const isSelected = dbmsOption === selectedDbms;
-              const dbmsLabel = dbmsOption === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
+              const dbmsLabel = dbmsOption === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
 
               return (
                 <button
@@ -381,7 +381,7 @@ export default function HomePage() {
               className="favorite-tab-toggle-end"
               label={text(
                 'HOME_FAVORITE_LABEL',
-                { dbms: selectedDbms === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                { dbms: selectedDbms === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
                 '문제 / {dbms}',
               )}
               path={buildProblemsPath(selectedDbms)}

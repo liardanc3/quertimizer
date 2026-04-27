@@ -38,7 +38,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -161,17 +163,17 @@ public class ProblemService {
                     .map(problemSet -> createScopedProblemSetDetail(problemSet));
         }
 
-        ProblemSetPair problemSetPair = findProblemSetPair(normalizedProblemSetId);
-        if (problemSetPair.isEmpty()) {
+        ProblemSetGroup problemSetGroup = findProblemSetGroup(normalizedProblemSetId);
+        if (problemSetGroup.isEmpty()) {
             return Optional.empty();
         }
 
         return Optional.of(new ProblemSetDetailOutput(
                 normalizedProblemSetId,
-                problemSetPair.postgresqlProblemSet() != null ? normalizeOptionalText(problemSetPair.postgresqlProblemSet().getDdl()) : "",
-                problemSetPair.oracleProblemSet() != null ? normalizeOptionalText(problemSetPair.oracleProblemSet().getDdl()) : "",
-                problemSetPair.postgresqlProblemSet() != null ? normalizeOptionalText(problemSetPair.postgresqlProblemSet().getData()) : "",
-                problemSetPair.oracleProblemSet() != null ? normalizeOptionalText(problemSetPair.oracleProblemSet().getData()) : ""
+                problemSetGroup.getDdl(DbmsType.POSTGRESQL),
+                problemSetGroup.getDdl(DbmsType.MYSQL),
+                problemSetGroup.getData(DbmsType.POSTGRESQL),
+                problemSetGroup.getData(DbmsType.MYSQL)
         ));
     }
 
@@ -266,8 +268,7 @@ public class ProblemService {
                 request.getTitle().trim(),
                 request.getDescription().trim(),
                 scopedDdl,
-                dbmsType == DbmsType.POSTGRESQL,
-                dbmsType == DbmsType.ORACLE,
+                dbmsType,
                 request.getCondition().trim(),
                 request.getOutput().trim(),
                 sampleDataSql,
@@ -283,7 +284,7 @@ public class ProblemService {
 
     private DbmsType resolveDbmsType(String dbms) {
         // DBMS 유형 결정
-        return "oracle".equalsIgnoreCase(dbms) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+        return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 
     private DbmsType resolveTargetDbmsType(ProblemCreateInput request,
@@ -302,7 +303,7 @@ public class ProblemService {
 
     private ProblemSetDetailOutput createScopedProblemSetDetail(ProblemSet problemSet) {
         // 스코프 문제 테이블셋 상세 생성
-        if (problemSet.getDbmsType() == DbmsType.ORACLE) {
+        if (problemSet.getDbmsType() == DbmsType.MYSQL) {
             return new ProblemSetDetailOutput(
                     problemSet.getProblemSetId(),
                     "",
@@ -338,8 +339,7 @@ public class ProblemService {
                 canonicalDdl,
                 actualDataSql,
                 templateVersion,
-                dbmsType == DbmsType.POSTGRESQL,
-                dbmsType == DbmsType.ORACLE
+                dbmsType
         ));
         refreshTemplateDataset.execute(new RefreshTemplateDatasetInput(problemSetId, dbmsType, canonicalDdl, actualDataSql, templateVersion));
         return createdProblemSet;
@@ -365,8 +365,7 @@ public class ProblemService {
                 request.getTitle().trim(),
                 request.getDescription().trim(),
                 scopedDdl,
-                dbmsType == DbmsType.POSTGRESQL,
-                dbmsType == DbmsType.ORACLE,
+                dbmsType,
                 request.getCondition().trim(),
                 request.getOutput().trim(),
                 sampleDataSql,
@@ -399,9 +398,9 @@ public class ProblemService {
                 problem.getTitle(),
                 normalizeOptionalText(problem.getDescription()),
                 problem.getDbmsType() == DbmsType.POSTGRESQL ? normalizeOptionalText(problem.getDdl()) : "",
-                problem.getDbmsType() == DbmsType.ORACLE ? normalizeOptionalText(problem.getDdl()) : "",
+                problem.getDbmsType() == DbmsType.MYSQL ? normalizeOptionalText(problem.getDdl()) : "",
                 problemSet.getDbmsType() == DbmsType.POSTGRESQL ? normalizeOptionalText(problemSet.getData()) : "",
-                problemSet.getDbmsType() == DbmsType.ORACLE ? normalizeOptionalText(problemSet.getData()) : "",
+                problemSet.getDbmsType() == DbmsType.MYSQL ? normalizeOptionalText(problemSet.getData()) : "",
                 normalizeOptionalText(problem.getCondition()),
                 normalizeOptionalText(problem.getOutput()),
                 normalizeOptionalText(problem.getOutputSample()),
@@ -419,7 +418,7 @@ public class ProblemService {
                 problem.getTitle(),
                 normalizeOptionalText(problem.getDescription()),
                 problem.getDbmsType() == DbmsType.POSTGRESQL ? normalizeOptionalText(problem.getDdl()) : "",
-                problem.getDbmsType() == DbmsType.ORACLE ? normalizeOptionalText(problem.getDdl()) : "",
+                problem.getDbmsType() == DbmsType.MYSQL ? normalizeOptionalText(problem.getDdl()) : "",
                 "",
                 "",
                 normalizeOptionalText(problem.getCondition()),
@@ -448,8 +447,8 @@ public class ProblemService {
 
     private String resolveScopedDdl(ProblemCreateInput request, DbmsType dbmsType) {
         // 스코프 DDL 결정
-        if (dbmsType == DbmsType.ORACLE) {
-            return requireText(request.getDdlOracle(), "Oracle DDL이 필요하다.");
+        if (dbmsType == DbmsType.MYSQL) {
+            return requireText(request.getDdlMysql(), "MySQL DDL이 필요하다.");
         }
 
         return requireText(request.getDdlPostgresql(), "PostgreSQL DDL이 필요하다.");
@@ -457,8 +456,8 @@ public class ProblemService {
 
     private String resolveScopedActualData(ProblemCreateInput request, DbmsType dbmsType) {
         // 스코프 실제 채점 데이터 SQL 결정
-        if (dbmsType == DbmsType.ORACLE) {
-            return requireText(request.getActualDataOracle(), "Oracle 실제 채점 데이터 SQL이 필요하다.");
+        if (dbmsType == DbmsType.MYSQL) {
+            return requireText(request.getActualDataMysql(), "MySQL 실제 채점 데이터 SQL이 필요하다.");
         }
 
         return requireText(request.getActualDataPostgresql(), "PostgreSQL 실제 채점 데이터 SQL이 필요하다.");
@@ -466,21 +465,24 @@ public class ProblemService {
 
     private String resolveScopedSampleData(ProblemCreateInput request, DbmsType dbmsType, String fallbackDataSql) {
         // 스코프 예시 데이터 SQL 결정
-        if (dbmsType == DbmsType.ORACLE) {
-            String sampleDataSql = normalizeOptionalText(request.getSampleDataOracle());
-            return !sampleDataSql.isBlank() ? sampleDataSql : requireText(fallbackDataSql, "Oracle 예시 데이터 SQL이 필요하다.");
+        if (dbmsType == DbmsType.MYSQL) {
+            String sampleDataSql = normalizeOptionalText(request.getSampleDataMysql());
+            return !sampleDataSql.isBlank() ? sampleDataSql : requireText(fallbackDataSql, "MySQL 예시 데이터 SQL이 필요하다.");
         }
 
         String sampleDataSql = normalizeOptionalText(request.getSampleDataPostgresql());
         return !sampleDataSql.isBlank() ? sampleDataSql : requireText(fallbackDataSql, "PostgreSQL 예시 데이터 SQL이 필요하다.");
     }
 
-    private ProblemSetPair findProblemSetPair(String problemSetId) {
-        // 문제 테이블셋 쌍 조회
-        return new ProblemSetPair(
-                problemSetRepository.findById(createProblemSetId(DbmsType.POSTGRESQL, problemSetId)).orElse(null),
-                problemSetRepository.findById(createProblemSetId(DbmsType.ORACLE, problemSetId)).orElse(null)
-        );
+    private ProblemSetGroup findProblemSetGroup(String problemSetId) {
+        // DBMS별 문제 테이블셋 조회
+        Map<DbmsType, ProblemSet> problemSetsByDbms = new EnumMap<>(DbmsType.class);
+        for (DbmsType dbmsType : DbmsType.values()) {
+            problemSetRepository.findById(createProblemSetId(dbmsType, problemSetId))
+                    .ifPresent(problemSet -> problemSetsByDbms.put(dbmsType, problemSet));
+        }
+
+        return new ProblemSetGroup(problemSetsByDbms);
     }
 
     private String createNextProblemSetBaseId() {
@@ -521,7 +523,7 @@ public class ProblemService {
 
     private String createProblemSetId(DbmsType dbmsType, String baseProblemSetId) {
         // 문제 테이블셋 번호 생성
-        return (dbmsType == DbmsType.POSTGRESQL ? "P" : "O") + normalizeBaseProblemSetId(baseProblemSetId);
+        return dbmsType.getIdPrefix() + normalizeBaseProblemSetId(baseProblemSetId);
     }
 
     private String createProblemId(DbmsType dbmsType, String baseProblemSetId, int sequence) {
@@ -553,7 +555,7 @@ public class ProblemService {
 
     private DbmsType resolveScopedDbmsType(String scopedId) {
         // 스코프 DBMS 유형 결정
-        return scopedId != null && scopedId.trim().startsWith("O") ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+        return DbmsType.fromScopedId(scopedId).orElse(DbmsType.POSTGRESQL);
     }
 
     private String extractBaseProblemSetId(String scopedValue) {
@@ -564,13 +566,13 @@ public class ProblemService {
 
         String[] tokens = scopedValue.split("-");
         String scopedProblemSetId = tokens.length > 0 ? tokens[0] : scopedValue;
-        return problemManagementPolicy.isScopedProblemSetId(scopedProblemSetId) ? scopedProblemSetId.substring(1) : scopedProblemSetId;
+        return DbmsType.extractBaseProblemSetId(scopedProblemSetId);
     }
 
     private String normalizeBaseProblemSetId(String problemSetId) {
         // 기준 문제 테이블셋 번호 정규화
         String normalizedProblemSetId = normalizeProblemSetId(problemSetId);
-        return normalizedProblemSetId.matches("^[PO]\\d{5}$") ? normalizedProblemSetId.substring(1) : normalizedProblemSetId;
+        return DbmsType.extractBaseProblemSetId(normalizedProblemSetId);
     }
 
     private String formatFiveDigits(int value) {
@@ -655,12 +657,24 @@ public class ProblemService {
         }
     }
 
-    private record ProblemSetPair(ProblemSet postgresqlProblemSet, ProblemSet oracleProblemSet) {
-        // 문제 테이블셋 쌍 처리
+    private record ProblemSetGroup(Map<DbmsType, ProblemSet> problemSetsByDbms) {
+        // DBMS별 문제 테이블셋 묶음 처리
 
         private boolean isEmpty() {
             // Empty 여부 확인
-            return postgresqlProblemSet == null && oracleProblemSet == null;
+            return problemSetsByDbms.isEmpty();
+        }
+
+        private String getDdl(DbmsType dbmsType) {
+            // DBMS별 DDL 조회
+            ProblemSet problemSet = problemSetsByDbms.get(dbmsType);
+            return problemSet != null && problemSet.getDdl() != null ? problemSet.getDdl().trim() : "";
+        }
+
+        private String getData(DbmsType dbmsType) {
+            // DBMS별 데이터 SQL 조회
+            ProblemSet problemSet = problemSetsByDbms.get(dbmsType);
+            return problemSet != null && problemSet.getData() != null ? problemSet.getData().trim() : "";
         }
     }
 }

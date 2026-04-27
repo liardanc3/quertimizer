@@ -30,7 +30,7 @@ interface UserProfileSummaryResponse {
   solvedProblemCountPublic?: boolean;
   communityActivityPublic?: boolean;
   averageExecutionPercentilePostgresql?: number | null;
-  averageExecutionPercentileOracle?: number | null;
+  averageExecutionPercentileMysql?: number | null;
   authoredPostCount?: number;
   likedPostCount?: number;
   commentCount?: number;
@@ -85,7 +85,7 @@ export interface UserProfileSummary {
   solvedProblemCountPublic: boolean;
   communityActivityPublic: boolean;
   averageExecutionPercentilePostgresql: number | null;
-  averageExecutionPercentileOracle: number | null;
+  averageExecutionPercentileMysql: number | null;
   authoredPostCount: number;
   likedPostCount: number;
   commentCount: number;
@@ -128,7 +128,7 @@ interface UpdateUserProfileRequestBody {
   profileImageUrl: string;
   backgroundImageUrl: string;
   links: UserProfileLink[];
-  defaultDbms: 'POSTGRESQL' | 'ORACLE';
+  defaultDbms: 'POSTGRESQL' | 'MYSQL';
   sqlPublic: boolean;
   executionPercentilePublic: boolean;
   solvedRecordsPublic: boolean;
@@ -137,7 +137,7 @@ interface UpdateUserProfileRequestBody {
 }
 
 function toDbmsType(value?: string): DbmsType {
-  return value === 'oracle' ? 'oracle' : 'postgresql';
+  return value === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function normalizeLinks(links?: UserProfileLinkResponse[]) {
@@ -197,8 +197,8 @@ function normalizeProfileSummary(data: UserProfileSummaryResponse): UserProfileS
     communityActivityPublic: data.communityActivityPublic !== false,
     averageExecutionPercentilePostgresql:
       typeof data.averageExecutionPercentilePostgresql === 'number' ? data.averageExecutionPercentilePostgresql : null,
-    averageExecutionPercentileOracle:
-      typeof data.averageExecutionPercentileOracle === 'number' ? data.averageExecutionPercentileOracle : null,
+    averageExecutionPercentileMysql:
+      typeof data.averageExecutionPercentileMysql === 'number' ? data.averageExecutionPercentileMysql : null,
     authoredPostCount: typeof data.authoredPostCount === 'number' ? data.authoredPostCount : 0,
     likedPostCount: typeof data.likedPostCount === 'number' ? data.likedPostCount : 0,
     commentCount: typeof data.commentCount === 'number' ? data.commentCount : 0,
@@ -308,7 +308,7 @@ function requestProfile<T>(
 function createUpdateUserProfileRequestBody(payload: UpdateUserProfilePayload): UpdateUserProfileRequestBody {
   return {
     ...payload,
-    defaultDbms: payload.defaultDbms === 'oracle' ? 'ORACLE' : 'POSTGRESQL',
+    defaultDbms: payload.defaultDbms === 'mysql' ? 'MYSQL' : 'POSTGRESQL',
   };
 }
 

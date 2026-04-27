@@ -3,6 +3,8 @@ package com.quertimizer.problem.domain.entity;
 import com.quertimizer.global.constant.DbmsType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -31,11 +33,9 @@ public class Problem {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String ddl;
 
-    @Column(name = "is_postgresql", nullable = false)
-    private boolean isPostgresql;
-
-    @Column(name = "is_oracle", nullable = false)
-    private boolean isOracle;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dbms_type", nullable = false, length = 20)
+    private DbmsType dbmsType;
 
     @Column(columnDefinition = "TEXT")
     private String condition;
@@ -55,10 +55,9 @@ public class Problem {
     @Column(name = "sample_data_sql", columnDefinition = "TEXT")
     private String sampleDataSql;
 
-    public static Problem create(String problemId, String title, String description) {
+    public static Problem create(String problemId, String title, String description, DbmsType dbmsType) {
         // 문제 생성
-        DbmsType dbmsType = problemId != null && problemId.startsWith("O") ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
-        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType == DbmsType.POSTGRESQL, dbmsType == DbmsType.ORACLE, "", "", "", "", "", "");
+        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "");
     }
 
     public static Problem create(String problemId,
@@ -66,22 +65,20 @@ public class Problem {
                                  String title,
                                  String description,
                                  String ddl,
-                                 boolean isPostgresql,
-                                 boolean isOracle,
+                                 DbmsType dbmsType,
                                  String condition,
                                  String output,
                                  String sampleDataSql,
                                  String sampleOutput,
                                  String answerHash,
                                  String answerSql) {
-        return new Problem(problemId, problemSetId, title, description, ddl, isPostgresql, isOracle, condition, output, sampleDataSql, sampleOutput, answerHash, answerSql);
+        return new Problem(problemId, problemSetId, title, description, ddl, dbmsType, condition, output, sampleDataSql, sampleOutput, answerHash, answerSql);
     }
 
     public void changeContent(String title,
                               String description,
                               String ddl,
-                              boolean isPostgresql,
-                              boolean isOracle,
+                              DbmsType dbmsType,
                               String condition,
                               String output,
                               String sampleDataSql,
@@ -91,8 +88,7 @@ public class Problem {
         this.title = title;
         this.description = description;
         this.ddl = ddl;
-        this.isPostgresql = isPostgresql;
-        this.isOracle = isOracle;
+        this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
         this.sampleDataSql = sampleDataSql;
@@ -113,21 +109,17 @@ public class Problem {
 
     public boolean supportsDbms(DbmsType dbmsType) {
         // 지원 DBMS 여부 확인
-        if (dbmsType == DbmsType.ORACLE) {
-            return isOracle;
-        }
-
-        return isPostgresql;
+        return this.dbmsType == dbmsType;
     }
 
     public boolean hasSupportedDbms() {
         // 지원 DBMS 보유 여부 확인
-        return isPostgresql || isOracle;
+        return dbmsType != null;
     }
 
     public DbmsType getDbmsType() {
         // DBMS 유형 조회
-        return isOracle ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+        return dbmsType;
     }
 
     public String getResolvedProblemSetId() {
@@ -152,11 +144,7 @@ public class Problem {
 
     private static String extractBaseProblemSetId(String problemSetId) {
         // 기준 문제 테이블셋 번호 추출
-        if (problemSetId == null || problemSetId.isBlank()) {
-            return "";
-        }
-
-        return problemSetId.matches("^[PO]\\d{5}$") ? problemSetId.substring(1) : problemSetId;
+        return DbmsType.extractBaseProblemSetId(problemSetId);
     }
 
     private Problem(String problemId,
@@ -164,8 +152,7 @@ public class Problem {
                     String title,
                     String description,
                     String ddl,
-                    boolean isPostgresql,
-                    boolean isOracle,
+                    DbmsType dbmsType,
                     String condition,
                     String output,
                     String sampleDataSql,
@@ -177,8 +164,7 @@ public class Problem {
         this.title = title;
         this.description = description;
         this.ddl = ddl;
-        this.isPostgresql = isPostgresql;
-        this.isOracle = isOracle;
+        this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
         this.sampleDataSql = sampleDataSql;

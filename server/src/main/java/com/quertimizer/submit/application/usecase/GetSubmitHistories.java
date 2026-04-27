@@ -2,7 +2,7 @@ package com.quertimizer.submit.application.usecase;
 
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.ExecutionPlanElementIndexes;
-import com.quertimizer.global.constant.OracleExecutionPlanElementIndex;
+import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
@@ -52,12 +52,12 @@ public class GetSubmitHistories {
                                            String postgresqlSortBuckets,
                                            String postgresqlAggregateBuckets,
                                            String postgresqlHintFilters,
-                                           String oracleScanBuckets,
-                                           String oracleJoinBuckets,
-                                           String oracleFilterBuckets,
-                                           String oracleSortBuckets,
-                                           String oracleAggregateBuckets,
-                                           String oracleHintFilters) {
+                                           String mysqlScanBuckets,
+                                           String mysqlJoinBuckets,
+                                           String mysqlFilterBuckets,
+                                           String mysqlSortBuckets,
+                                           String mysqlAggregateBuckets,
+                                           String mysqlHintFilters) {
         DbmsType dbmsType = resolveDbmsType(dbms);
         JudgeFilter judgeFilter = resolveJudgeFilter(judge);
         PlanFilterSelectionsByDbms planFilterSelections = resolvePlanFilterSelections(
@@ -74,12 +74,12 @@ public class GetSubmitHistories {
                 postgresqlSortBuckets,
                 postgresqlAggregateBuckets,
                 postgresqlHintFilters,
-                oracleScanBuckets,
-                oracleJoinBuckets,
-                oracleFilterBuckets,
-                oracleSortBuckets,
-                oracleAggregateBuckets,
-                oracleHintFilters
+                mysqlScanBuckets,
+                mysqlJoinBuckets,
+                mysqlFilterBuckets,
+                mysqlSortBuckets,
+                mysqlAggregateBuckets,
+                mysqlHintFilters
         );
 
         List<ProblemSubmitHistory> histories = problemSubmitHistoryRepository.findAll(
@@ -144,7 +144,7 @@ public class GetSubmitHistories {
             return null;
         }
 
-        return dbms.equalsIgnoreCase(DbmsType.ORACLE.getValue()) ? DbmsType.ORACLE : DbmsType.POSTGRESQL;
+        return DbmsType.fromValue(dbms).orElse(DbmsType.POSTGRESQL);
     }
 
     private JudgeFilter resolveJudgeFilter(String judge) {
@@ -188,12 +188,12 @@ public class GetSubmitHistories {
                                                                    String postgresqlSortBuckets,
                                                                    String postgresqlAggregateBuckets,
                                                                    String postgresqlHintFilters,
-                                                                   String oracleScanBuckets,
-                                                                   String oracleJoinBuckets,
-                                                                   String oracleFilterBuckets,
-                                                                   String oracleSortBuckets,
-                                                                   String oracleAggregateBuckets,
-                                                                   String oracleHintFilters) {
+                                                                   String mysqlScanBuckets,
+                                                                   String mysqlJoinBuckets,
+                                                                   String mysqlFilterBuckets,
+                                                                   String mysqlSortBuckets,
+                                                                   String mysqlAggregateBuckets,
+                                                                   String mysqlHintFilters) {
         PlanMatchMode matchMode = resolvePlanMatchMode(planMatchMode);
         PlanFilterSelection legacySelection = createPlanFilterSelection(
                 matchMode,
@@ -213,18 +213,18 @@ public class GetSubmitHistories {
                 postgresqlAggregateBuckets,
                 postgresqlHintFilters
         );
-        PlanFilterSelection oracleSelection = createPlanFilterSelection(
+        PlanFilterSelection mysqlSelection = createPlanFilterSelection(
                 matchMode,
-                oracleScanBuckets,
-                oracleJoinBuckets,
-                oracleFilterBuckets,
-                oracleSortBuckets,
-                oracleAggregateBuckets,
-                oracleHintFilters
+                mysqlScanBuckets,
+                mysqlJoinBuckets,
+                mysqlFilterBuckets,
+                mysqlSortBuckets,
+                mysqlAggregateBuckets,
+                mysqlHintFilters
         );
 
-        return postgresqlSelection.hasFilters() || oracleSelection.hasFilters()
-                ? new PlanFilterSelectionsByDbms(postgresqlSelection, oracleSelection)
+        return postgresqlSelection.hasFilters() || mysqlSelection.hasFilters()
+                ? new PlanFilterSelectionsByDbms(postgresqlSelection, mysqlSelection)
                 : new PlanFilterSelectionsByDbms(legacySelection, legacySelection);
     }
 
@@ -403,12 +403,12 @@ public class GetSubmitHistories {
     private List<String> getSectionSupportedValues(DbmsType dbmsType, String sectionKey) {
         // Section Supported 값 목록 조회
         return switch (dbmsType) {
-            case ORACLE -> switch (sectionKey) {
-                case "scanBucket" -> List.of("FULL_SCAN", "ROWID_ACCESS", "INDEX_SCAN", "BITMAP_SCAN", "DERIVED_SCAN", "REMOTE_SCAN", "OTHERS");
-                case "joinBucket" -> List.of("NONE", "NESTED_LOOP", "MERGE_JOIN", "HASH_JOIN", "CARTESIAN_JOIN", "OTHERS");
-                case "filterBucket" -> List.of("NONE", "ACCESS_FILTER", "POST_FILTER", "JOIN_FILTER", "OTHERS");
-                case "sortBucket" -> List.of("NONE", "ORDER_SORT", "GROUP_SORT", "UNIQUE_SORT", "WINDOW_SORT", "OTHERS");
-                case "aggregateBucket" -> List.of("NONE", "PLAIN_AGG", "GROUP_AGG", "HASH_AGG", "WINDOW_AGG", "OTHERS");
+            case MYSQL -> switch (sectionKey) {
+                case "scanBucket" -> List.of("FULL_TABLE_SCAN", "INDEX_SCAN", "RANGE_SCAN", "REF_SCAN", "CONST_SCAN", "DERIVED_SCAN", "OTHERS");
+                case "joinBucket" -> List.of("NONE", "NESTED_LOOP", "HASH_JOIN", "JOIN_BUFFER", "OTHERS");
+                case "filterBucket" -> List.of("NONE", "INDEX_CONDITION", "ATTACHED_CONDITION", "FILTER_CONDITION", "OTHERS");
+                case "sortBucket" -> List.of("NONE", "FILESORT", "TEMPORARY_TABLE", "OTHERS");
+                case "aggregateBucket" -> List.of("NONE", "GROUPING_OPERATION", "WINDOW_OPERATION", "AGGREGATE", "OTHERS");
                 default -> List.of();
             };
             case POSTGRESQL -> switch (sectionKey) {
@@ -425,7 +425,7 @@ public class GetSubmitHistories {
     private int[] getBucketPlanIndexes(DbmsType dbmsType, String sectionKey, String value) {
         // 버킷 실행 계획 Indexes 조회
         return switch (dbmsType) {
-            case ORACLE -> getOracleBucketPlanIndexes(sectionKey, value);
+            case MYSQL -> getMySqlBucketPlanIndexes(sectionKey, value);
             case POSTGRESQL -> getPostgreSqlBucketPlanIndexes(sectionKey, value);
         };
     }
@@ -472,43 +472,39 @@ public class GetSubmitHistories {
         };
     }
 
-    private int[] getOracleBucketPlanIndexes(String sectionKey, String value) {
-        // Oracle 버킷 실행 계획 Indexes 조회
+    private int[] getMySqlBucketPlanIndexes(String sectionKey, String value) {
+        // MySQL 버킷 실행 계획 Indexes 조회
         return switch (sectionKey) {
             case "scanBucket" -> switch (value) {
-                case "FULL_SCAN" -> new int[]{OracleExecutionPlanElementIndex.FULL_SCAN};
-                case "ROWID_ACCESS" -> new int[]{OracleExecutionPlanElementIndex.ROWID_ACCESS};
-                case "INDEX_SCAN" -> new int[]{OracleExecutionPlanElementIndex.INDEX_SCAN};
-                case "BITMAP_SCAN" -> new int[]{OracleExecutionPlanElementIndex.BITMAP_SCAN};
-                case "DERIVED_SCAN" -> new int[]{OracleExecutionPlanElementIndex.DERIVED_SCAN};
-                case "REMOTE_SCAN" -> new int[]{OracleExecutionPlanElementIndex.REMOTE_SCAN};
+                case "FULL_TABLE_SCAN" -> new int[]{MySqlExecutionPlanElementIndex.FULL_TABLE_SCAN};
+                case "INDEX_SCAN" -> new int[]{MySqlExecutionPlanElementIndex.INDEX_SCAN};
+                case "RANGE_SCAN" -> new int[]{MySqlExecutionPlanElementIndex.RANGE_SCAN};
+                case "REF_SCAN" -> new int[]{MySqlExecutionPlanElementIndex.REF_SCAN, MySqlExecutionPlanElementIndex.EQ_REF_SCAN};
+                case "CONST_SCAN" -> new int[]{MySqlExecutionPlanElementIndex.CONST_SCAN};
+                case "DERIVED_SCAN" -> new int[]{MySqlExecutionPlanElementIndex.DERIVED_TABLE, MySqlExecutionPlanElementIndex.MATERIALIZED_SUBQUERY};
                 default -> new int[0];
             };
             case "joinBucket" -> switch (value) {
-                case "NESTED_LOOP" -> new int[]{OracleExecutionPlanElementIndex.NESTED_LOOP};
-                case "MERGE_JOIN" -> new int[]{OracleExecutionPlanElementIndex.MERGE_JOIN};
-                case "HASH_JOIN" -> new int[]{OracleExecutionPlanElementIndex.HASH_JOIN};
-                case "CARTESIAN_JOIN" -> new int[]{OracleExecutionPlanElementIndex.CARTESIAN_JOIN};
+                case "NESTED_LOOP" -> new int[]{MySqlExecutionPlanElementIndex.NESTED_LOOP_JOIN};
+                case "HASH_JOIN" -> new int[]{MySqlExecutionPlanElementIndex.HASH_JOIN};
+                case "JOIN_BUFFER" -> new int[]{MySqlExecutionPlanElementIndex.USING_JOIN_BUFFER};
                 default -> new int[0];
             };
             case "filterBucket" -> switch (value) {
-                case "ACCESS_FILTER" -> new int[]{OracleExecutionPlanElementIndex.ACCESS_FILTER};
-                case "POST_FILTER" -> new int[]{OracleExecutionPlanElementIndex.POST_FILTER};
-                case "JOIN_FILTER" -> new int[]{OracleExecutionPlanElementIndex.JOIN_FILTER};
+                case "INDEX_CONDITION" -> new int[]{MySqlExecutionPlanElementIndex.INDEX_CONDITION};
+                case "ATTACHED_CONDITION" -> new int[]{MySqlExecutionPlanElementIndex.ATTACHED_CONDITION};
+                case "FILTER_CONDITION" -> new int[]{MySqlExecutionPlanElementIndex.FILTER_CONDITION};
                 default -> new int[0];
             };
             case "sortBucket" -> switch (value) {
-                case "ORDER_SORT" -> new int[]{OracleExecutionPlanElementIndex.ORDER_SORT};
-                case "GROUP_SORT" -> new int[]{OracleExecutionPlanElementIndex.GROUP_SORT};
-                case "UNIQUE_SORT" -> new int[]{OracleExecutionPlanElementIndex.UNIQUE_SORT};
-                case "WINDOW_SORT" -> new int[]{OracleExecutionPlanElementIndex.WINDOW_SORT};
+                case "FILESORT" -> new int[]{MySqlExecutionPlanElementIndex.FILESORT};
+                case "TEMPORARY_TABLE" -> new int[]{MySqlExecutionPlanElementIndex.TEMPORARY_TABLE};
                 default -> new int[0];
             };
             case "aggregateBucket" -> switch (value) {
-                case "PLAIN_AGG" -> new int[]{OracleExecutionPlanElementIndex.PLAIN_AGGREGATE};
-                case "GROUP_AGG" -> new int[]{OracleExecutionPlanElementIndex.GROUP_AGGREGATE};
-                case "HASH_AGG" -> new int[]{OracleExecutionPlanElementIndex.HASH_AGGREGATE};
-                case "WINDOW_AGG" -> new int[]{OracleExecutionPlanElementIndex.WINDOW_AGGREGATE};
+                case "GROUPING_OPERATION" -> new int[]{MySqlExecutionPlanElementIndex.GROUPING_OPERATION};
+                case "WINDOW_OPERATION" -> new int[]{MySqlExecutionPlanElementIndex.WINDOW_OPERATION};
+                case "AGGREGATE" -> new int[]{MySqlExecutionPlanElementIndex.AGGREGATE};
                 default -> new int[0];
             };
             default -> new int[0];
@@ -561,10 +557,10 @@ public class GetSubmitHistories {
     }
 
     private record PlanFilterSelectionsByDbms(PlanFilterSelection postgresql,
-                                              PlanFilterSelection oracle) {
+                                              PlanFilterSelection mysql) {
         private PlanFilterSelection get(DbmsType dbmsType) {
             // get 조회
-            return dbmsType == DbmsType.ORACLE ? oracle : postgresql;
+            return dbmsType == DbmsType.MYSQL ? mysql : postgresql;
         }
     }
 

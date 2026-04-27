@@ -2,7 +2,7 @@ package com.quertimizer.problem.domain.model;
 
 public enum ProblemQueryFailReason {
 
-    INTERACTIVE_POSTGRESQL_ONLY("인터랙티브 실행은 PostgreSQL만 지원한다."),
+    INTERACTIVE_DBMS_UNSUPPORTED("선택한 DBMS의 인터랙티브 실행은 아직 지원하지 않는다."),
     SINGLE_SQL_ONLY("한 번에 하나의 SQL만 실행할 수 있다."),
     SQL_REQUIRED("실행할 SQL을 입력해라."),
     SQL_LENGTH_EXCEEDED("SQL 길이 제한을 초과했다."),
@@ -26,7 +26,7 @@ public enum ProblemQueryFailReason {
     PLAN_RESULT_UNAVAILABLE("실행 계획을 확인할 수 없다."),
     WRITE_CTE_UNSUPPORTED("데이터를 수정하는 CTE는 지원하지 않는다."),
     UNSUPPORTED_SQL_COMMAND("SELECT, EXPLAIN, EXPLAIN ANALYZE, CREATE INDEX, DROP INDEX, ALTER INDEX만 실행할 수 있다."),
-    SUBMIT_POSTGRESQL_ONLY("제출은 PostgreSQL만 지원한다."),
+    SUBMIT_DBMS_UNSUPPORTED("선택한 DBMS의 제출은 아직 지원하지 않는다."),
     SUBMIT_SELECT_ONLY("제출은 SELECT 1개만 가능하다."),
     SUBMIT_SELECT_FOLLOWED_BY_STATEMENTS("제출에서는 SELECT 아래 구문을 함께 보낼 수 없다."),
     SUBMIT_SQL_REQUIRED("제출할 SQL을 입력해라."),

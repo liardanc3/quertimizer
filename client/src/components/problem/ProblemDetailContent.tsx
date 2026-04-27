@@ -758,12 +758,12 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   const [openedSampleTableNames, setOpenedSampleTableNames] = useState<string[]>([]);
   const selectedDdl = useMemo(
     () => {
-      const preferredDdl = selectedDbms === 'oracle' ? detail?.ddlOracle ?? '' : detail?.ddlPostgresql ?? '';
-      const fallbackDdl = selectedDbms === 'oracle' ? detail?.ddlPostgresql ?? '' : detail?.ddlOracle ?? '';
+      const preferredDdl = selectedDbms === 'mysql' ? detail?.ddlMysql ?? '' : detail?.ddlPostgresql ?? '';
+      const fallbackDdl = selectedDbms === 'mysql' ? detail?.ddlPostgresql ?? '' : detail?.ddlMysql ?? '';
 
       return preferredDdl.trim() !== '' ? preferredDdl : fallbackDdl;
     },
-    [detail?.ddlOracle, detail?.ddlPostgresql, selectedDbms],
+    [detail?.ddlMysql, detail?.ddlPostgresql, selectedDbms],
   );
   const parsedDdl = useMemo(() => parseTableDefinitionSql(selectedDdl), [selectedDdl]);
   const descriptionLines = useMemo(() => parseLineItems(detail?.description ?? ''), [detail?.description]);
@@ -771,12 +771,12 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   const outputLines = useMemo(() => parseLineItems(detail?.output ?? ''), [detail?.output]);
   const selectedDataSampleSql = useMemo(
     () => {
-      const preferredData = selectedDbms === 'oracle' ? detail?.dataOracle ?? '' : detail?.dataPostgresql ?? '';
-      const fallbackData = selectedDbms === 'oracle' ? detail?.dataPostgresql ?? '' : detail?.dataOracle ?? '';
+      const preferredData = selectedDbms === 'mysql' ? detail?.dataMysql ?? '' : detail?.dataPostgresql ?? '';
+      const fallbackData = selectedDbms === 'mysql' ? detail?.dataPostgresql ?? '' : detail?.dataMysql ?? '';
 
       return preferredData.trim() !== '' ? preferredData : fallbackData;
     },
-    [detail?.dataOracle, detail?.dataPostgresql, selectedDbms],
+    [detail?.dataMysql, detail?.dataPostgresql, selectedDbms],
   );
   const sampleTables = useMemo(() => {
     const availableTables = parseDataSampleSql(selectedDataSampleSql);

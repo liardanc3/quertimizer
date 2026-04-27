@@ -42,7 +42,7 @@ function createEmptyDashboard(): DashboardData {
 }
 
 function formatDbmsLabel(dbms: DbmsType) {
-  return dbms === 'oracle' ? 'Oracle' : 'PostgreSQL';
+  return dbms === 'mysql' ? 'MySQL' : 'PostgreSQL';
 }
 
 function formatCount(value: number) {

@@ -93,6 +93,7 @@ dependencies {
 	implementation 'org.springframework.session:spring-session-jdbc'
 
 	runtimeOnly 'org.postgresql:postgresql'
+	runtimeOnly 'com.mysql:mysql-connector-j'
 
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'

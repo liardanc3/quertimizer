@@ -105,19 +105,19 @@ judge:
       url: ${JUDGE_POSTGRESQL_TEMPLATE_URL:}
       username: ${JUDGE_POSTGRESQL_TEMPLATE_USERNAME:}
       password: ${JUDGE_POSTGRESQL_TEMPLATE_PASSWORD:}
-    oracle:
-      name: ${JUDGE_ORACLE_TEMPLATE_NAME:oracle-template}
-      url: ${JUDGE_ORACLE_TEMPLATE_URL:}
-      username: ${JUDGE_ORACLE_TEMPLATE_USERNAME:}
-      password: ${JUDGE_ORACLE_TEMPLATE_PASSWORD:}
+    mysql:
+      name: ${JUDGE_MYSQL_TEMPLATE_NAME:mysql-template}
+      url: ${JUDGE_MYSQL_TEMPLATE_URL:}
+      username: ${JUDGE_MYSQL_TEMPLATE_USERNAME:}
+      password: ${JUDGE_MYSQL_TEMPLATE_PASSWORD:}
   execution-databases:
     postgresql:
       - name: ${JUDGE_POSTGRESQL_WORKER_1_NAME:pg-worker-1}
         url: ${JUDGE_POSTGRESQL_WORKER_1_URL:}
         username: ${JUDGE_POSTGRESQL_WORKER_1_USERNAME:}
         password: ${JUDGE_POSTGRESQL_WORKER_1_PASSWORD:}
-    oracle:
-      - name: ${JUDGE_ORACLE_WORKER_1_NAME:oracle-worker-1}
-        url: ${JUDGE_ORACLE_WORKER_1_URL:}
-        username: ${JUDGE_ORACLE_WORKER_1_USERNAME:}
-        password: ${JUDGE_ORACLE_WORKER_1_PASSWORD:}
+    mysql:
+      - name: ${JUDGE_MYSQL_WORKER_1_NAME:mysql-worker-1}
+        url: ${JUDGE_MYSQL_WORKER_1_URL:}
+        username: ${JUDGE_MYSQL_WORKER_1_USERNAME:}
+        password: ${JUDGE_MYSQL_WORKER_1_PASSWORD:}

@@ -62,7 +62,7 @@ public class DashboardService {
         Map<String, ProblemStore.ProblemListEntry> candidatesByProblemId = new LinkedHashMap<>();
 
         addProblemCandidates(candidatesByProblemId, DbmsType.POSTGRESQL, currentHandle);
-        addProblemCandidates(candidatesByProblemId, DbmsType.ORACLE, currentHandle);
+        addProblemCandidates(candidatesByProblemId, DbmsType.MYSQL, currentHandle);
 
         return candidatesByProblemId.values().stream()
                 .sorted(problemRecommendationPolicy.createPopularityComparator())

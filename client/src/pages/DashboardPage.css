@@ -457,7 +457,7 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   padding: 0.48rem 0.72rem;
 }
 
-.dashboard-dbms-badge.is-oracle {
+.dashboard-dbms-badge.is-mysql {
   color: #dc2626;
 }
 
@@ -625,7 +625,7 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
     border-color: rgba(96, 165, 250, 0.48);
   }
 
-  .dashboard-dbms-badge.is-oracle {
+  .dashboard-dbms-badge.is-mysql {
     color: #fca5a5;
   }
 

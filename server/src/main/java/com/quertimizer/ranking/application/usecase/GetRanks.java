@@ -370,11 +370,7 @@ public class GetRanks {
 
     private DbmsType resolveDbmsType(String dbms) {
         // DBMS 유형 결정
-        if ("oracle".equalsIgnoreCase(dbms)) {
-            return DbmsType.ORACLE;
-        }
-
-        return DbmsType.POSTGRESQL;
+        return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {

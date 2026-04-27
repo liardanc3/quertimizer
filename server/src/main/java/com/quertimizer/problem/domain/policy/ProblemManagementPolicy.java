@@ -1,5 +1,6 @@
 package com.quertimizer.problem.domain.policy;
 
+import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.user.domain.entity.User;
@@ -88,12 +89,12 @@ public class ProblemManagementPolicy {
 
     public boolean isScopedProblemSetId(String problemSetId) {
         // 스코프 문제 테이블셋 번호 여부 확인
-        return problemSetId.matches("^[PO]\\d{5}$");
+        return DbmsType.isScopedProblemSetId(problemSetId);
     }
 
     public boolean isScopedProblemId(String permissionKey) {
         // 스코프 문제 번호 여부 확인
-        return permissionKey.matches("^[PO]\\d{5}-\\d{5}$");
+        return DbmsType.isScopedProblemId(permissionKey);
     }
 
 }

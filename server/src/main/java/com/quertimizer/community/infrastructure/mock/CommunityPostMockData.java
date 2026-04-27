@@ -23,7 +23,7 @@ public class CommunityPostMockData {
             "00001-00001 WHERE 조건을 주문 테이블에만 둔 이유",
             "00001-00001 초보자 풀이 공유: 먼저 정답부터 맞춘 버전",
             "00001-00001 SUM 계산이 두 배로 나왔던 원인",
-            "00001-00001 Oracle에서 주문 금액 집계할 때 주의한 점",
+            "00001-00001 MySQL에서 주문 금액 집계할 때 주의한 점",
             "00001-00001 PostgreSQL 실행 계획 보고 수정한 부분",
             "00001-00001 GROUP BY 컬럼을 최소화한 버전",
             "00001-00001 고객 없는 주문은 없다고 가정해도 될까요?",
@@ -36,7 +36,7 @@ public class CommunityPostMockData {
 
     private static final String[] GENERAL_POST_TITLES = {
             "PostgreSQL에서 GROUP BY 성능 볼 때 먼저 확인하는 것들",
-            "Oracle 실행 계획에서 HASH JOIN 해석이 헷갈립니다",
+            "MySQL 실행 계획에서 조인 버퍼 해석이 헷갈립니다",
             "INDEX SCAN과 INDEX ONLY SCAN 차이를 쉽게 설명해 주세요",
             "집계 쿼리에서 WHERE와 HAVING을 나누는 기준",
             "정렬이 많은 쿼리에서 SORT 비용을 줄이는 방법이 있나요?",
@@ -56,7 +56,7 @@ public class CommunityPostMockData {
             "실행 계획 바뀐 뒤 Cost는 내려갔는데 실제 체감은 달랐던 후기",
             "인덱스 하나 추가하고 JOIN 순서를 다시 본 전체 과정 정리",
             "대시보드 미리보기 확인용으로 길게 적어본 SQL 튜닝 회고",
-            "PostgreSQL과 Oracle에서 같은 문제를 풀 때 다르게 봐야 했던 부분"
+            "PostgreSQL과 MySQL에서 같은 문제를 풀 때 다르게 봐야 했던 부분"
     };
 
     private final CommunityPostRepository communityPostRepository;
@@ -189,7 +189,7 @@ public class CommunityPostMockData {
                     대시보드 카드에서 본문 미리보기가 실제 게시글 본문과 같은 기준으로 보이는지 확인하려고 작성한 긴 Mock Data다. 제목 블록은 상세 화면에서 제거되므로 미리보기에서도 같은 기준이 적용되어야 하고, 이미지나 긴 문단은 카드 높이를 해치지 않게 처리되어야 한다.
                     """.trim();
             default -> """
-                    PostgreSQL과 Oracle에서 같은 문제를 풀 때 실행 계획 용어와 비용 해석 방식이 달라지는 부분을 정리했다. 같은 SELECT라도 DBMS에 따라 Scan, Join, Sort 요소가 달라질 수 있으므로 현재 선택한 DBMS 기준으로 계획 요소를 보는 것이 더 읽기 좋았다.
+                    PostgreSQL과 MySQL에서 같은 문제를 풀 때 실행 계획 용어와 비용 해석 방식이 달라지는 부분을 정리했다. 같은 SELECT라도 DBMS에 따라 Scan, Join, Sort 요소가 달라질 수 있으므로 현재 선택한 DBMS 기준으로 계획 요소를 보는 것이 더 읽기 좋았다.
                     """.trim();
         };
     }

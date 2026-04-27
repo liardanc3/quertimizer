@@ -40,8 +40,8 @@ class ProblemStoreTest {
     @DisplayName("findProblemPage : 문제 목록 필터링 + 유저별 최고 제출 유지")
     void findProblemPageAndKeepBestSubmittedHistories() {
         // given
-        Problem secondProblem = Problem.create("00001-00002", "두 번째 문제", "설명 2");
-        Problem firstProblem = Problem.create("00001-00001", "첫 번째 문제", "설명 1");
+        Problem secondProblem = Problem.create("00001-00002", "두 번째 문제", "설명 2", DbmsType.POSTGRESQL);
+        Problem firstProblem = Problem.create("00001-00001", "첫 번째 문제", "설명 1", DbmsType.POSTGRESQL);
 
         when(problemRepository.findAll()).thenReturn(List.of(secondProblem, firstProblem));
         when(problemSetRepository.findAll()).thenReturn(List.of());
@@ -98,8 +98,8 @@ class ProblemStoreTest {
     @DisplayName("findProblemPage : 속도 편차 범위 필터와 정렬을 적용한다")
     void findProblemPageAndApplySpreadRateFilterAndSort() {
         // given
-        Problem highSpreadProblem = Problem.create("00001-00002", "편차 큰 문제", "설명 2");
-        Problem lowSpreadProblem = Problem.create("00001-00001", "편차 작은 문제", "설명 1");
+        Problem highSpreadProblem = Problem.create("00001-00002", "편차 큰 문제", "설명 2", DbmsType.POSTGRESQL);
+        Problem lowSpreadProblem = Problem.create("00001-00001", "편차 작은 문제", "설명 1", DbmsType.POSTGRESQL);
 
         when(problemRepository.findAll()).thenReturn(List.of(highSpreadProblem, lowSpreadProblem));
         when(problemSetRepository.findAll()).thenReturn(List.of());

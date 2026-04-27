@@ -58,7 +58,7 @@ public class UserMockData {
                 "problemgen02@example.com",
                 UserRole.PROBLEM_GENERATOR,
                 "문제셋 구성과 예시 데이터를 관리하는 계정",
-                DbmsType.ORACLE
+                DbmsType.MYSQL
         ));
         users.add(createUser(
                 "problemgen03",
@@ -81,14 +81,14 @@ public class UserMockData {
                     "intermediate" + formatTwoDigits(index) + "@example.com",
                     UserRole.USER,
                     "조인과 집계를 자주 연습하는 사용자",
-                    index % 2 == 0 ? DbmsType.ORACLE : DbmsType.POSTGRESQL
+                    index % 2 == 0 ? DbmsType.MYSQL : DbmsType.POSTGRESQL
             ));
             users.add(createUser(
                     "advanced" + formatTwoDigits(index),
                     "advanced" + formatTwoDigits(index) + "@example.com",
                     UserRole.USER,
                     "실행 계획과 인덱스 실험을 자주 하는 사용자",
-                    DbmsType.ORACLE
+                    DbmsType.MYSQL
             ));
         }
 

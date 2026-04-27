@@ -17,7 +17,7 @@ export const mockCommunityTagLibrary: CommunityTagDefinition[] = [
   { id: 'execution-plan', label: '실행계획', kind: 'topic', aliases: ['plan', 'explain', 'explain-analyze'], usageCount: 26, description: '플랜 해석, 연산자 선택, 병목 구간 분석에 쓰는 태그입니다.' },
   { id: 'cte', label: 'CTE', kind: 'tech', aliases: ['with', 'common-table-expression'], usageCount: 16, description: 'CTE 인라인, materialize, 재사용 패턴을 다루는 태그입니다.' },
   { id: 'postgresql', label: 'PostgreSQL', kind: 'topic', aliases: ['postgres', 'pg'], usageCount: 21, description: 'PostgreSQL 전용 동작과 튜닝 차이를 정리하는 태그입니다.' },
-  { id: 'oracle', label: 'Oracle', kind: 'topic', aliases: ['ora', 'oracle-db'], usageCount: 14, description: 'Oracle 전용 실행계획과 문법 차이를 다루는 태그입니다.' },
+  { id: 'mysql', label: 'MySQL', kind: 'topic', aliases: ['mysql', 'mysql-db'], usageCount: 14, description: 'MySQL 전용 실행계획과 문법 차이를 다루는 태그입니다.' },
   { id: 'tuning', label: '튜닝', kind: 'topic', aliases: ['optimize', 'performance'], usageCount: 24, description: 'SQL 챌린지의 성능 개선 패턴을 모아보는 태그입니다.' },
 ];
 
@@ -68,11 +68,11 @@ const postTemplates: Array<{
     baseComments: 12,
   },
   {
-    title: 'Oracle 제출에서 실행계획을 읽을 때 먼저 보는 체크리스트',
+    title: 'MySQL 제출에서 실행계획을 읽을 때 먼저 보는 체크리스트',
     excerpt: 'Rows, Cost, Predicate Information, 조인 순서를 어떤 순서로 보는지 정리했습니다.',
     content:
-      'Oracle 제출은 먼저 row estimate를 보고, 그다음 access predicate와 조인 순서를 확인한 뒤 마지막으로 sort와 aggregate 연산자를 비교합니다. 이렇게 보면 인덱스 튜닝 전 대부분의 회귀를 빨리 잡을 수 있습니다.',
-    tags: ['Oracle', '실행계획', '튜닝'],
+      'MySQL 제출은 먼저 row estimate를 보고, 그다음 access predicate와 조인 순서를 확인한 뒤 마지막으로 sort와 aggregate 연산자를 비교합니다. 이렇게 보면 인덱스 튜닝 전 대부분의 회귀를 빨리 잡을 수 있습니다.',
+    tags: ['MySQL', '실행계획', '튜닝'],
     category: 'discussion',
     baseViews: 244,
     baseLikes: 31,
@@ -154,7 +154,7 @@ const authorHandles = [
   'minseo_db',
   'junho_plan',
   'seoyoon_sql',
-  'dohyun_ora',
+  'dohyun_mysql',
   'haneul_exec',
   'quertimizer',
   'yujin_idx',
@@ -163,7 +163,7 @@ const authorHandles = [
   'sua_notes',
   'leftjoin_lab',
   'hashjoiner',
-  'oracle_tune',
+  'mysql_tune',
   'groupby_dev',
   'cte_runner',
   'plan_reader',
@@ -243,7 +243,7 @@ const commentTemplates = [
   '저도 같은 문제를 겪었는데 마지막 정렬 전에 폭을 줄이니 해결됐습니다.',
   '조건을 인덱스 컬럼 쪽으로 옮기니 실행계획이 훨씬 건강해졌습니다.',
   '좋은 포인트네요. 샘플 입력이 최악 케이스를 가리고 있었던 것 같습니다.',
-  'PostgreSQL과 Oracle 결과를 모두 비교해봤는데 이 해석이 둘 다 잘 맞았습니다.',
+  'PostgreSQL과 MySQL 결과를 모두 비교해봤는데 이 해석이 둘 다 잘 맞았습니다.',
 ];
 
 function getPostNumber(postId: string) {

@@ -36,29 +36,29 @@ public final class ExecutionPlanElementIndexes {
             PostgreSqlExecutionPlanElementIndex.HINT
     };
 
-    private static final int[] ORACLE_INDEXES = {
-            OracleExecutionPlanElementIndex.FULL_SCAN,
-            OracleExecutionPlanElementIndex.ROWID_ACCESS,
-            OracleExecutionPlanElementIndex.INDEX_SCAN,
-            OracleExecutionPlanElementIndex.BITMAP_SCAN,
-            OracleExecutionPlanElementIndex.DERIVED_SCAN,
-            OracleExecutionPlanElementIndex.REMOTE_SCAN,
-            OracleExecutionPlanElementIndex.NESTED_LOOP,
-            OracleExecutionPlanElementIndex.MERGE_JOIN,
-            OracleExecutionPlanElementIndex.HASH_JOIN,
-            OracleExecutionPlanElementIndex.CARTESIAN_JOIN,
-            OracleExecutionPlanElementIndex.ACCESS_FILTER,
-            OracleExecutionPlanElementIndex.POST_FILTER,
-            OracleExecutionPlanElementIndex.JOIN_FILTER,
-            OracleExecutionPlanElementIndex.ORDER_SORT,
-            OracleExecutionPlanElementIndex.GROUP_SORT,
-            OracleExecutionPlanElementIndex.UNIQUE_SORT,
-            OracleExecutionPlanElementIndex.WINDOW_SORT,
-            OracleExecutionPlanElementIndex.PLAIN_AGGREGATE,
-            OracleExecutionPlanElementIndex.GROUP_AGGREGATE,
-            OracleExecutionPlanElementIndex.HASH_AGGREGATE,
-            OracleExecutionPlanElementIndex.WINDOW_AGGREGATE,
-            OracleExecutionPlanElementIndex.HINT
+    private static final int[] MYSQL_INDEXES = {
+            MySqlExecutionPlanElementIndex.FULL_TABLE_SCAN,
+            MySqlExecutionPlanElementIndex.INDEX_SCAN,
+            MySqlExecutionPlanElementIndex.RANGE_SCAN,
+            MySqlExecutionPlanElementIndex.REF_SCAN,
+            MySqlExecutionPlanElementIndex.EQ_REF_SCAN,
+            MySqlExecutionPlanElementIndex.CONST_SCAN,
+            MySqlExecutionPlanElementIndex.INDEX_MERGE,
+            MySqlExecutionPlanElementIndex.DERIVED_TABLE,
+            MySqlExecutionPlanElementIndex.MATERIALIZED_SUBQUERY,
+            MySqlExecutionPlanElementIndex.NESTED_LOOP_JOIN,
+            MySqlExecutionPlanElementIndex.HASH_JOIN,
+            MySqlExecutionPlanElementIndex.FILTER_CONDITION,
+            MySqlExecutionPlanElementIndex.INDEX_CONDITION,
+            MySqlExecutionPlanElementIndex.ATTACHED_CONDITION,
+            MySqlExecutionPlanElementIndex.FILESORT,
+            MySqlExecutionPlanElementIndex.TEMPORARY_TABLE,
+            MySqlExecutionPlanElementIndex.GROUPING_OPERATION,
+            MySqlExecutionPlanElementIndex.WINDOW_OPERATION,
+            MySqlExecutionPlanElementIndex.AGGREGATE,
+            MySqlExecutionPlanElementIndex.LIMIT,
+            MySqlExecutionPlanElementIndex.USING_JOIN_BUFFER,
+            MySqlExecutionPlanElementIndex.HINT
     };
 
     private ExecutionPlanElementIndexes() {
@@ -79,7 +79,10 @@ public final class ExecutionPlanElementIndexes {
 
     private static int[] getIndexes(DbmsType dbmsType) {
         // Indexes 조회
-        return dbmsType == DbmsType.ORACLE ? ORACLE_INDEXES : POSTGRESQL_INDEXES;
+        return switch (dbmsType) {
+            case POSTGRESQL -> POSTGRESQL_INDEXES;
+            case MYSQL -> MYSQL_INDEXES;
+        };
     }
 
 }

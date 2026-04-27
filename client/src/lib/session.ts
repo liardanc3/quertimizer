@@ -21,14 +21,14 @@ interface SessionSnapshot {
   isAuthenticated: boolean;
   isReady: boolean;
   handle: string | null;
-  defaultDbms: 'postgresql' | 'oracle' | null;
+  defaultDbms: 'postgresql' | 'mysql' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
   handleSetupRequired: boolean;
 }
 
 interface PersistedSessionSnapshot {
   handle: string | null;
-  defaultDbms: 'postgresql' | 'oracle' | null;
+  defaultDbms: 'postgresql' | 'mysql' | null;
   role: 'user' | 'admin' | 'problemGenerator' | null;
   handleSetupRequired: boolean;
 }
@@ -188,7 +188,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
 
     const parsedValue = JSON.parse(rawValue) as PersistedSessionSnapshot;
     const handle = typeof parsedValue.handle === 'string' && parsedValue.handle.trim() !== '' ? parsedValue.handle : null;
-    const defaultDbms = parsedValue.defaultDbms === 'oracle' || parsedValue.defaultDbms === 'postgresql' ? parsedValue.defaultDbms : null;
+    const defaultDbms = parsedValue.defaultDbms === 'mysql' || parsedValue.defaultDbms === 'postgresql' ? parsedValue.defaultDbms : null;
     const role =
       parsedValue.role === 'admin'
         || parsedValue.role === 'user'

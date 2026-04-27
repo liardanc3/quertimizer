@@ -2,6 +2,7 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.output.AuthManageOutput;
 import com.quertimizer.auth.application.output.AuthManageUserRowOutput;
+import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.domain.entity.Problem;
@@ -214,12 +215,12 @@ public class AuthManageService {
 
     private boolean isScopedProblemId(String permissionKey) {
         // 문제 번호 형식 권한인지 확인
-        return permissionKey.matches("^[PO]\\d{5}-\\d{5}$");
+        return DbmsType.isScopedProblemId(permissionKey);
     }
 
     private boolean isScopedProblemSetId(String permissionKey) {
         // 테이블셋 번호 형식 권한인지 확인
-        return permissionKey.matches("^[PO]\\d{5}$");
+        return DbmsType.isScopedProblemSetId(permissionKey);
     }
 
     private List<String> sortPermissionKeys(List<String> permissionKeys) {

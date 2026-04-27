@@ -17,11 +17,11 @@ import './RankingPage.css';
 const PAGE_SIZE = 10;
 const rankingLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 
-const dbmsOptions: DbmsType[] = ['postgresql', 'oracle'];
+const dbmsOptions: DbmsType[] = ['postgresql', 'mysql'];
 
 function readRankingDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
-  return dbms === 'oracle' ? 'oracle' : 'postgresql';
+  return dbms === 'mysql' ? 'mysql' : 'postgresql';
 }
 
 function buildRankingPath(dbms: DbmsType) {
@@ -311,7 +311,7 @@ export default function RankingPage() {
           <div className="solve-dbms-tab-row ranking-dbms-tab-row" role="tablist" aria-label={text('RANKING_DBMS_TABLIST_LABEL', '랭킹 DBMS 선택')}>
             {dbmsOptions.map((dbmsOption) => {
               const isSelected = dbmsOption === selectedDbms;
-              const dbmsLabel = dbmsOption === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
+              const dbmsLabel = dbmsOption === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
 
               return (
                 <button
@@ -336,7 +336,7 @@ export default function RankingPage() {
               className="favorite-tab-toggle-end"
               label={text(
                 'RANKING_FAVORITE_LABEL',
-                { dbms: selectedDbms === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                { dbms: selectedDbms === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
                 '랭킹 / {dbms}',
               )}
               path={buildRankingPath(selectedDbms)}

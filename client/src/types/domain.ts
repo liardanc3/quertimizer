@@ -6,31 +6,34 @@ export type ProblemViewMode = 'tagged' | 'spoilerFree';
 
 export type Difficulty = '입문' | '중급' | '고급';
 
-export type DbmsType = 'postgresql' | 'oracle';
+export type DbmsType = 'postgresql' | 'mysql';
 export type ScanBucket =
   | 'FULL_SCAN'
-  | 'ROWID_ACCESS'
+  | 'FULL_TABLE_SCAN'
   | 'INDEX_SCAN'
   | 'BITMAP_SCAN'
   | 'TID_SCAN'
+  | 'RANGE_SCAN'
+  | 'REF_SCAN'
+  | 'CONST_SCAN'
   | 'DERIVED_SCAN'
-  | 'REMOTE_SCAN'
   | 'OTHERS';
-export type JoinBucket = 'NONE' | 'NESTED_LOOP' | 'HASH_JOIN' | 'MERGE_JOIN' | 'CARTESIAN_JOIN' | 'OTHERS';
+export type JoinBucket = 'NONE' | 'NESTED_LOOP' | 'HASH_JOIN' | 'MERGE_JOIN' | 'JOIN_BUFFER' | 'OTHERS';
 export type FilterBucket =
   | 'NONE'
   | 'ACCESS_FILTER'
   | 'POST_FILTER'
   | 'JOIN_FILTER'
+  | 'INDEX_CONDITION'
+  | 'ATTACHED_CONDITION'
+  | 'FILTER_CONDITION'
   | 'OTHERS';
 export type SortBucket =
   | 'NONE'
   | 'PLAIN_SORT'
   | 'INCREMENTAL_SORT'
-  | 'ORDER_SORT'
-  | 'GROUP_SORT'
-  | 'UNIQUE_SORT'
-  | 'WINDOW_SORT'
+  | 'FILESORT'
+  | 'TEMPORARY_TABLE'
   | 'OTHERS';
 export type AggregateBucket =
   | 'NONE'
@@ -41,6 +44,9 @@ export type AggregateBucket =
   | 'WINDOW_AGG'
   | 'UNIQUE_AGG'
   | 'SET_AGG'
+  | 'GROUPING_OPERATION'
+  | 'WINDOW_OPERATION'
+  | 'AGGREGATE'
   | 'OTHERS';
 
 export type PlanFilterMatchMode = 'and' | 'or';

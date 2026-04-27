@@ -12,7 +12,7 @@ interface ResultPanelProps {
 const countFormatter = new Intl.NumberFormat('ko-KR');
 
 function getDbmsLabel(dbms: DbmsType) {
-  return dbms === 'postgresql' ? 'PostgreSQL' : 'Oracle';
+  return dbms === 'postgresql' ? 'PostgreSQL' : 'MySQL';
 }
 
 function getRuntimeDistribution(problem: ProblemDetail, selectedDbms: DbmsType): RuntimeDistribution | undefined {

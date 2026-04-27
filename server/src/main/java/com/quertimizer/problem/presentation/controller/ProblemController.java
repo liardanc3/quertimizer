@@ -132,7 +132,7 @@ public class ProblemController {
     public ResponseEntity<ProblemOutputPreviewRes> previewProblemOutput(@Valid @RequestBody ProblemOutputPreviewReq request) {
         // 문제 생성용 출력 예시 preview를 judge 임시 실행 환경에서 생성
         ProblemOutputPreviewInput input = new ProblemOutputPreviewInput(
-                "oracle".equalsIgnoreCase(request.getDbms()) ? DbmsType.ORACLE : DbmsType.POSTGRESQL,
+                DbmsType.fromValueOrDefault(request.getDbms(), DbmsType.POSTGRESQL),
                 request.getDdl(),
                 request.getSampleDataSql(),
                 request.getAnswerSql()

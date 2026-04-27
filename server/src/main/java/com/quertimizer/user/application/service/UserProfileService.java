@@ -252,7 +252,7 @@ public class UserProfileService {
                 user.isSolvedProblemCountPublicEnabled(),
                 user.isCommunityActivityPublicEnabled(),
                 executionPercentileVisible ? calculateAverageExecutionPercentile(bestSolvedHistories, DbmsType.POSTGRESQL) : null,
-                executionPercentileVisible ? calculateAverageExecutionPercentile(bestSolvedHistories, DbmsType.ORACLE) : null,
+                executionPercentileVisible ? calculateAverageExecutionPercentile(bestSolvedHistories, DbmsType.MYSQL) : null,
                 authoredPostCount,
                 likedPostCount,
                 commentCount

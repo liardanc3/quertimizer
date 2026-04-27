@@ -13,14 +13,14 @@ public class ProblemCreateInput {
     private final String output;
     private final String answerSql;
     private final String sampleDataPostgresql;
-    private final String sampleDataOracle;
+    private final String sampleDataMysql;
     private final String actualDataPostgresql;
-    private final String actualDataOracle;
+    private final String actualDataMysql;
     private final String problemSetMode;
     private final String problemMode;
     private final String problemSetId;
     private final String problemId;
     private final String dbms;
     private final String ddlPostgresql;
-    private final String ddlOracle;
+    private final String ddlMysql;
 }

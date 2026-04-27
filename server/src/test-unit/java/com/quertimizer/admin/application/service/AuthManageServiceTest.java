@@ -5,6 +5,7 @@ import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.admin.presentation.dto.request.AuthManageProblemPermissionUpdateReq;
 import com.quertimizer.admin.presentation.dto.request.AuthManageRoleUpdateReq;
 import com.quertimizer.admin.presentation.dto.response.AuthManageRes;
+import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
 import com.quertimizer.user.domain.entity.User;
@@ -121,8 +122,8 @@ class AuthManageServiceTest {
 
         when(userRepository.findById("problemgen01")).thenReturn(Optional.of(problemGenerator));
         when(problemRepository.findAllById(List.of("00001-00001", "00001-00002"))).thenReturn(List.of(
-                Problem.create("00001-00001", "problem-01", "description"),
-                Problem.create("00001-00002", "problem-02", "description")
+                Problem.create("00001-00001", "problem-01", "description", DbmsType.POSTGRESQL),
+                Problem.create("00001-00002", "problem-02", "description", DbmsType.POSTGRESQL)
         ));
 
         // when

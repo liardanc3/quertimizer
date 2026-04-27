@@ -35,7 +35,7 @@ interface EditableDraftState<T> {
 
 interface SourceDraft {
   postgresql: string;
-  oracle: string;
+  mysql: string;
 }
 
 interface PopupState {
@@ -66,9 +66,9 @@ interface SectionRefs {
 const EMPTY_PROBLEM_SET_DETAIL: ProblemSetDetailData = {
   problemSetId: '',
   ddlPostgresql: '',
-  ddlOracle: '',
+  ddlMysql: '',
   dataPostgresql: '',
-  dataOracle: '',
+  dataMysql: '',
 };
 
 const EMPTY_PREVIEW_OUTPUT: ProblemOutputPreviewData = {
@@ -139,7 +139,7 @@ function getProblemNumberLabel(problemSetMode: ProblemSetMode, problemMode: Prob
 }
 
 function resolveScopedDbms(value: string | null | undefined): DbmsType {
-  return value?.trim().startsWith('O') ? 'oracle' : 'postgresql';
+  return value?.trim().startsWith('M') ? 'mysql' : 'postgresql';
 }
 
 function getTableNamesFromDdl(ddl: string) {
@@ -162,7 +162,7 @@ function filterDdlByTableNames(ddl: string, includedTableNames: string[]) {
   }
 
   const tableNameSet = new Set(includedTableNames);
-  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\([\s\S]*?\);/gi;
+  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\([\s\S]*?\)\s*(?:ENGINE\s*=\s*\w+\s*)?(?:COMMENT\s*=\s*'[^']*'\s*)?;/gi;
   const commentPattern = /COMMENT ON (TABLE|COLUMN)\s+([\s\S]*?);/gi;
   const fragments: string[] = [];
   let match: RegExpExecArray | null;
@@ -581,8 +581,8 @@ export function ProblemCreateContent() {
   const heroState = useEditableDraft({ title: '', description: '' });
   const conditionState = useEditableDraft('');
   const outputState = useEditableDraft('');
-  const ddlState = useEditableDraft<SourceDraft>({ postgresql: '', oracle: '' });
-  const actualDataState = useEditableDraft<SourceDraft>({ postgresql: '', oracle: '' });
+  const ddlState = useEditableDraft<SourceDraft>({ postgresql: '', mysql: '' });
+  const actualDataState = useEditableDraft<SourceDraft>({ postgresql: '', mysql: '' });
   const sampleDataState = useEditableDraft('');
   const answerSqlState = useEditableDraft('');
 
@@ -624,12 +624,12 @@ export function ProblemCreateContent() {
   }, [problemSetMode, selectedDbms, selectedProblemId, selectedProblemSetId]);
 
   const currentFullProblemSetDdl = useMemo(
-    () => (currentDbms === 'oracle' ? loadedProblemSetDetail.ddlOracle : loadedProblemSetDetail.ddlPostgresql),
-    [currentDbms, loadedProblemSetDetail.ddlOracle, loadedProblemSetDetail.ddlPostgresql],
+    () => (currentDbms === 'mysql' ? loadedProblemSetDetail.ddlMysql : loadedProblemSetDetail.ddlPostgresql),
+    [currentDbms, loadedProblemSetDetail.ddlMysql, loadedProblemSetDetail.ddlPostgresql],
   );
   const currentFullActualData = useMemo(
-    () => (currentDbms === 'oracle' ? loadedProblemSetDetail.dataOracle : loadedProblemSetDetail.dataPostgresql),
-    [currentDbms, loadedProblemSetDetail.dataOracle, loadedProblemSetDetail.dataPostgresql],
+    () => (currentDbms === 'mysql' ? loadedProblemSetDetail.dataMysql : loadedProblemSetDetail.dataPostgresql),
+    [currentDbms, loadedProblemSetDetail.dataMysql, loadedProblemSetDetail.dataPostgresql],
   );
 
   const availableTableNames = useMemo(() => {
@@ -647,7 +647,7 @@ export function ProblemCreateContent() {
     }
 
     if (problemSetMode === 'existing' && problemMode === 'existing' && loadedProblemDetail) {
-      const problemDdl = currentDbms === 'oracle' ? loadedProblemDetail.ddlOracle : loadedProblemDetail.ddlPostgresql;
+      const problemDdl = currentDbms === 'mysql' ? loadedProblemDetail.ddlMysql : loadedProblemDetail.ddlPostgresql;
       const nextIncludedTableNames = getTableNamesFromDdl(problemDdl).filter((tableName) => availableTableNames.includes(tableName));
       const normalizedIncludedTableNames = nextIncludedTableNames.length > 0 ? nextIncludedTableNames : availableTableNames;
       setIncludedTableNames((current) => (arraysEqual(current, normalizedIncludedTableNames) ? current : normalizedIncludedTableNames));
@@ -663,19 +663,19 @@ export function ProblemCreateContent() {
 
   const scopedProblemSetDdl = useMemo(() => {
     if (problemSetMode === 'new') {
-      return currentDbms === 'oracle' ? ddlState.appliedValue.oracle : ddlState.appliedValue.postgresql;
+      return currentDbms === 'mysql' ? ddlState.appliedValue.mysql : ddlState.appliedValue.postgresql;
     }
 
     return filterDdlByTableNames(currentFullProblemSetDdl, includedTableNames);
-  }, [currentDbms, currentFullProblemSetDdl, ddlState.appliedValue.oracle, ddlState.appliedValue.postgresql, includedTableNames, problemSetMode]);
+  }, [currentDbms, currentFullProblemSetDdl, ddlState.appliedValue.mysql, ddlState.appliedValue.postgresql, includedTableNames, problemSetMode]);
 
   const currentActualData = useMemo(() => {
     if (problemSetMode === 'new') {
-      return currentDbms === 'oracle' ? actualDataState.appliedValue.oracle : actualDataState.appliedValue.postgresql;
+      return currentDbms === 'mysql' ? actualDataState.appliedValue.mysql : actualDataState.appliedValue.postgresql;
     }
 
     return currentFullActualData;
-  }, [actualDataState.appliedValue.oracle, actualDataState.appliedValue.postgresql, currentDbms, currentFullActualData, problemSetMode]);
+  }, [actualDataState.appliedValue.mysql, actualDataState.appliedValue.postgresql, currentDbms, currentFullActualData, problemSetMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -742,7 +742,7 @@ export function ProblemCreateContent() {
         if (nextProblemOptions.length === 0) {
           setProblemMode('new');
           setSelectedProblemId(null);
-          resetProblemDrafts(targetProblemSetDbms === 'oracle' ? nextDetail.dataOracle : nextDetail.dataPostgresql);
+          resetProblemDrafts(targetProblemSetDbms === 'mysql' ? nextDetail.dataMysql : nextDetail.dataPostgresql);
           return;
         }
 
@@ -984,11 +984,11 @@ export function ProblemCreateContent() {
         condition: conditionState.appliedValue.trim(),
         output: outputState.appliedValue.trim(),
         ddlPostgresql: currentDbms === 'postgresql' ? scopedProblemSetDdl : undefined,
-        ddlOracle: currentDbms === 'oracle' ? scopedProblemSetDdl : undefined,
+        ddlMysql: currentDbms === 'mysql' ? scopedProblemSetDdl : undefined,
         actualDataPostgresql: problemSetMode === 'new' && currentDbms === 'postgresql' ? currentActualData.trim() : undefined,
-        actualDataOracle: problemSetMode === 'new' && currentDbms === 'oracle' ? currentActualData.trim() : undefined,
+        actualDataMysql: problemSetMode === 'new' && currentDbms === 'mysql' ? currentActualData.trim() : undefined,
         sampleDataPostgresql: currentDbms === 'postgresql' ? sampleDataState.appliedValue.trim() : undefined,
-        sampleDataOracle: currentDbms === 'oracle' ? sampleDataState.appliedValue.trim() : undefined,
+        sampleDataMysql: currentDbms === 'mysql' ? sampleDataState.appliedValue.trim() : undefined,
         answerSql: answerSqlState.appliedValue.trim(),
         problemSetMode,
         problemMode,
@@ -1034,7 +1034,7 @@ export function ProblemCreateContent() {
                   className="problem-create-select problem-create-problem-select"
                   options={[
                     { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
-                    { value: 'oracle', label: text('COMMON_ORACLE_LABEL', 'Oracle') },
+                    { value: 'mysql', label: text('COMMON_MYSQL_LABEL', 'MySQL') },
                   ]}
                   onChange={(nextValue) => setSelectedDbms(nextValue as DbmsType)}
                 />
@@ -1170,13 +1170,13 @@ export function ProblemCreateContent() {
           {problemSetMode === 'new' && ddlState.isEditing ? (
             <textarea
               className="text-field problem-create-code-textarea"
-              value={currentDbms === 'oracle' ? ddlState.draftValue.oracle : ddlState.draftValue.postgresql}
+              value={currentDbms === 'mysql' ? ddlState.draftValue.mysql : ddlState.draftValue.postgresql}
               onChange={(event) =>
                 ddlState.setDraftValue((current) =>
-                  currentDbms === 'oracle' ? { ...current, oracle: event.target.value } : { ...current, postgresql: event.target.value },
+                  currentDbms === 'mysql' ? { ...current, mysql: event.target.value } : { ...current, postgresql: event.target.value },
                 )
               }
-              placeholder={currentDbms === 'oracle' ? 'Oracle DDL' : 'PostgreSQL DDL'}
+              placeholder={currentDbms === 'mysql' ? 'MySQL DDL' : 'PostgreSQL DDL'}
             />
           ) : (
             <pre className="problem-create-code-preview">{scopedProblemSetDdl.trim() !== '' ? scopedProblemSetDdl : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL')}</span>}</pre>
@@ -1201,13 +1201,13 @@ export function ProblemCreateContent() {
           {problemSetMode === 'new' && actualDataState.isEditing ? (
             <textarea
               className="text-field problem-create-code-textarea"
-              value={currentDbms === 'oracle' ? actualDataState.draftValue.oracle : actualDataState.draftValue.postgresql}
+              value={currentDbms === 'mysql' ? actualDataState.draftValue.mysql : actualDataState.draftValue.postgresql}
               onChange={(event) =>
                 actualDataState.setDraftValue((current) =>
-                  currentDbms === 'oracle' ? { ...current, oracle: event.target.value } : { ...current, postgresql: event.target.value },
+                  currentDbms === 'mysql' ? { ...current, mysql: event.target.value } : { ...current, postgresql: event.target.value },
                 )
               }
-              placeholder={currentDbms === 'oracle' ? text('PROBLEM_CREATE_ACTUAL_DATA_ORACLE_PLACEHOLDER', 'Oracle 실제 채점 데이터 INSERT') : text('PROBLEM_CREATE_ACTUAL_DATA_POSTGRES_PLACEHOLDER', 'PostgreSQL 실제 채점 데이터 INSERT')}
+              placeholder={currentDbms === 'mysql' ? text('PROBLEM_CREATE_ACTUAL_DATA_MYSQL_PLACEHOLDER', 'MySQL 실제 채점 데이터 INSERT') : text('PROBLEM_CREATE_ACTUAL_DATA_POSTGRES_PLACEHOLDER', 'PostgreSQL 실제 채점 데이터 INSERT')}
             />
           ) : (
             <pre className="problem-create-code-preview">{currentActualData.trim() !== '' ? currentActualData : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ACTUAL_DATA_TITLE', '실제 채점 데이터 INSERT')}</span>}</pre>

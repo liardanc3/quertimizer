@@ -554,7 +554,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const resolvedProfileId = profileHandle ?? currentHandle;
   const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
     { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
-    { value: 'oracle', label: text('COMMON_ORACLE_LABEL', 'Oracle') },
+    { value: 'mysql', label: text('COMMON_MYSQL_LABEL', 'MySQL') },
   ];
   const isOwnProfile = shouldLoadOwnProfile || (isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle);
   const profileRequestKey = profileHandle ?? (shouldLoadOwnProfile ? '__my-profile__' : resolvedProfileId ?? '__empty-profile__');

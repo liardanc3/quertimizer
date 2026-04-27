@@ -28,11 +28,11 @@ public class ProblemCreateReq {
 
     private String sampleDataPostgresql;
 
-    private String sampleDataOracle;
+    private String sampleDataMysql;
 
     private String actualDataPostgresql;
 
-    private String actualDataOracle;
+    private String actualDataMysql;
 
     @NotBlank
     private String problemSetMode;
@@ -48,7 +48,7 @@ public class ProblemCreateReq {
 
     private String ddlPostgresql;
 
-    private String ddlOracle;
+    private String ddlMysql;
 
     public ProblemCreateInput toProblemCreateInput() {
         return new ProblemCreateInput(
@@ -58,16 +58,16 @@ public class ProblemCreateReq {
                 output,
                 answerSql,
                 sampleDataPostgresql,
-                sampleDataOracle,
+                sampleDataMysql,
                 actualDataPostgresql,
-                actualDataOracle,
+                actualDataMysql,
                 problemSetMode,
                 problemMode,
                 problemSetId,
                 problemId,
                 dbms,
                 ddlPostgresql,
-                ddlOracle
+                ddlMysql
         );
     }
 }

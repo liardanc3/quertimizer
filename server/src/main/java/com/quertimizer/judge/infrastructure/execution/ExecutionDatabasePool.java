@@ -15,24 +15,17 @@ public class ExecutionDatabasePool {
     private final Map<DbmsType, List<ExecutionDatabaseWorker>> workersByDbms = new EnumMap<>(DbmsType.class);
 
     public ExecutionDatabasePool(JudgeDatabaseProperties judgeDatabaseProperties) {
-        workersByDbms.put(DbmsType.POSTGRESQL, judgeDatabaseProperties.getExecutionDatabases(DbmsType.POSTGRESQL).stream()
-                .map(properties -> new ExecutionDatabaseWorker(new ExecutionDatabaseConnectionInfo(
-                        DbmsType.POSTGRESQL,
-                        properties.getName(),
-                        properties.getUrl(),
-                        properties.getUsername(),
-                        properties.getPassword()
-                )))
-                .toList());
-        workersByDbms.put(DbmsType.ORACLE, judgeDatabaseProperties.getExecutionDatabases(DbmsType.ORACLE).stream()
-                .map(properties -> new ExecutionDatabaseWorker(new ExecutionDatabaseConnectionInfo(
-                        DbmsType.ORACLE,
-                        properties.getName(),
-                        properties.getUrl(),
-                        properties.getUsername(),
-                        properties.getPassword()
-                )))
-                .toList());
+        for (DbmsType dbmsType : DbmsType.values()) {
+            workersByDbms.put(dbmsType, judgeDatabaseProperties.getExecutionDatabases(dbmsType).stream()
+                    .map(properties -> new ExecutionDatabaseWorker(new ExecutionDatabaseConnectionInfo(
+                            dbmsType,
+                            properties.getName(),
+                            properties.getUrl(),
+                            properties.getUsername(),
+                            properties.getPassword()
+                    )))
+                    .toList());
+        }
     }
 
     public List<ExecutionDatabaseWorker> getWorkers(DbmsType dbmsType) {

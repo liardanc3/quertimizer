@@ -51,8 +51,7 @@ export default function DbmsSelector({
       </div>
 
       <p className="hint-text">
-        문제별 허용 DBMS와 실행 통계가 함께 바뀌도록 구성했습니다. 지금은 PostgreSQL 중심 흐름이며 Oracle은 이후 확장
-        지점으로 남겨두었습니다.
+        선택한 DBMS 기준으로 문제 설명과 실행 통계를 표시합니다.
       </p>
     </section>
   );
