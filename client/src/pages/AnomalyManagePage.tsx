@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import {
   blockAdminUser,
   fetchAdminAnomalyTrends,
@@ -15,6 +18,7 @@ import {
   type AdminBlockedUserItem,
   type AdminBlockedUserPageData,
 } from '../lib/adminAnomalyApi';
+import { useUiText } from '../lib/uiText';
 import './SubmitHistoryPage.css';
 import './AnomalyManagePage.css';
 
@@ -42,18 +46,6 @@ const emptyBlockedIpPage: AdminBlockedIpPageData = {
   totalPages: 1,
   items: [],
 };
-const anomalySections: Array<{ id: AnomalySection; label: string }> = [
-  { id: 'trend', label: '실행/제출 추이' },
-  { id: 'blockedUsers', label: '차단 계정 목록' },
-  { id: 'blockedIps', label: '차단 IP 목록' },
-];
-const anomalyRanges: Array<{ value: AdminAnomalyRange; label: string }> = [
-  { value: '10m', label: '최근 10분' },
-  { value: '1h', label: '최근 1시간' },
-  { value: '24h', label: '최근 24시간' },
-  { value: 'all', label: '전체' },
-  { value: 'custom', label: '사용자 지정' },
-];
 const anomalyLoadingRows = Array.from({ length: 6 }, (_, index) => index);
 
 function formatDateTime(value: string) {
@@ -132,7 +124,10 @@ interface PaginationProps {
   totalPages: number;
   draft: string;
   isEditing: boolean;
-  label: string;
+  navigationLabel: string;
+  inputLabel: string;
+  previousLabel: string;
+  nextLabel: string;
   onDraftChange: (value: string) => void;
   onStartEditing: () => void;
   onCancelEditing: () => void;
@@ -145,7 +140,10 @@ function Pagination({
   totalPages,
   draft,
   isEditing,
-  label,
+  navigationLabel,
+  inputLabel,
+  previousLabel,
+  nextLabel,
   onDraftChange,
   onStartEditing,
   onCancelEditing,
@@ -157,14 +155,14 @@ function Pagination({
   }
 
   return (
-    <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={label}>
+    <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={navigationLabel}>
       <button
         type="button"
         className="mini-toggle problem-page-button"
         onClick={() => onPageChange(Math.max(1, currentPage - 1))}
         disabled={currentPage === 1}
       >
-        이전
+        {previousLabel}
       </button>
 
       {isEditing ? (
@@ -187,7 +185,7 @@ function Pagination({
               onCancelEditing();
             }
           }}
-          aria-label={label}
+          aria-label={inputLabel}
           autoFocus
         />
       ) : (
@@ -202,15 +200,34 @@ function Pagination({
         onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
         disabled={currentPage >= totalPages}
       >
-        다음
+        {nextLabel}
       </button>
     </div>
   );
 }
 
 export function AnomalyManageContent() {
+  const { text } = useUiText();
   const initialCustomEnd = formatDateTimeInputValue(new Date());
   const initialCustomStart = formatDateTimeInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const anomalySections: Array<{ id: AnomalySection; label: string }> = useMemo(
+    () => [
+      { id: 'trend', label: text('ANOMALY_TREND_TAB_LABEL', '실행/제출 추이') },
+      { id: 'blockedUsers', label: text('ANOMALY_BLOCKED_USERS_TAB_LABEL', '차단 계정 목록') },
+      { id: 'blockedIps', label: text('ANOMALY_BLOCKED_IPS_TAB_LABEL', '차단 IP 목록') },
+    ],
+    [text],
+  );
+  const anomalyRanges: Array<{ value: AdminAnomalyRange; label: string }> = useMemo(
+    () => [
+      { value: '10m', label: text('ANOMALY_RANGE_10M_LABEL', '최근 10분') },
+      { value: '1h', label: text('ANOMALY_RANGE_1H_LABEL', '최근 1시간') },
+      { value: '24h', label: text('ANOMALY_RANGE_24H_LABEL', '최근 24시간') },
+      { value: 'all', label: text('ANOMALY_RANGE_ALL_LABEL', '전체') },
+      { value: 'custom', label: text('ANOMALY_RANGE_CUSTOM_LABEL', '사용자 지정') },
+    ],
+    [text],
+  );
   const [activeSection, setActiveSection] = useState<AnomalySection>('trend');
   const [activeRange, setActiveRange] = useState<AdminAnomalyRange>('10m');
   const [customRangeStartDraft, setCustomRangeStartDraft] = useState(initialCustomStart);
@@ -224,18 +241,21 @@ export function AnomalyManageContent() {
   const [trendPageData, setTrendPageData] = useState<AdminAnomalyTrendPageData>(emptyTrendPage);
   const [isTrendLoading, setIsTrendLoading] = useState(true);
   const [trendErrorMessage, setTrendErrorMessage] = useState<string | null>(null);
+  const [trendErrorStatus, setTrendErrorStatus] = useState<number | null>(null);
   const [blockedUserPage, setBlockedUserPage] = useState(1);
   const [blockedUserPageDraft, setBlockedUserPageDraft] = useState('1');
   const [isBlockedUserPageEditing, setIsBlockedUserPageEditing] = useState(false);
   const [blockedUserPageData, setBlockedUserPageData] = useState<AdminBlockedUserPageData>(emptyBlockedUserPage);
   const [isBlockedUserLoading, setIsBlockedUserLoading] = useState(false);
   const [blockedUserErrorMessage, setBlockedUserErrorMessage] = useState<string | null>(null);
+  const [blockedUserErrorStatus, setBlockedUserErrorStatus] = useState<number | null>(null);
   const [blockedIpPage, setBlockedIpPage] = useState(1);
   const [blockedIpPageDraft, setBlockedIpPageDraft] = useState('1');
   const [isBlockedIpPageEditing, setIsBlockedIpPageEditing] = useState(false);
   const [blockedIpPageData, setBlockedIpPageData] = useState<AdminBlockedIpPageData>(emptyBlockedIpPage);
   const [isBlockedIpLoading, setIsBlockedIpLoading] = useState(false);
   const [blockedIpErrorMessage, setBlockedIpErrorMessage] = useState<string | null>(null);
+  const [blockedIpErrorStatus, setBlockedIpErrorStatus] = useState<number | null>(null);
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [trendReloadSequence] = useState(0);
   const [blockedUserReloadSequence, setBlockedUserReloadSequence] = useState(0);
@@ -245,6 +265,7 @@ export function AnomalyManageContent() {
     let cancelled = false;
     setIsTrendLoading(true);
     setTrendErrorMessage(null);
+    setTrendErrorStatus(null);
 
     fetchAdminAnomalyTrends(
       activeRange,
@@ -265,7 +286,9 @@ export function AnomalyManageContent() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setTrendErrorMessage(error instanceof Error ? error.message : '이상계정 추이를 불러오지 못했다.');
+          setTrendErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+          const status = getApiErrorStatus(error);
+          setTrendErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
         }
       })
       .finally(() => {
@@ -287,6 +310,7 @@ export function AnomalyManageContent() {
     let cancelled = false;
     setIsBlockedUserLoading(true);
     setBlockedUserErrorMessage(null);
+    setBlockedUserErrorStatus(null);
 
     fetchAdminBlockedUsers(blockedUserPage, ADMIN_ANOMALY_PAGE_SIZE)
       .then((nextBlockedUserPageData) => {
@@ -301,7 +325,9 @@ export function AnomalyManageContent() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setBlockedUserErrorMessage(error instanceof Error ? error.message : '차단 계정 목록을 불러오지 못했다.');
+          setBlockedUserErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+          const status = getApiErrorStatus(error);
+          setBlockedUserErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
         }
       })
       .finally(() => {
@@ -323,6 +349,7 @@ export function AnomalyManageContent() {
     let cancelled = false;
     setIsBlockedIpLoading(true);
     setBlockedIpErrorMessage(null);
+    setBlockedIpErrorStatus(null);
 
     fetchAdminBlockedIps(blockedIpPage, ADMIN_ANOMALY_PAGE_SIZE)
       .then((nextBlockedIpPageData) => {
@@ -337,7 +364,9 @@ export function AnomalyManageContent() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setBlockedIpErrorMessage(error instanceof Error ? error.message : '차단 IP 목록을 불러오지 못했다.');
+          setBlockedIpErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+          const status = getApiErrorStatus(error);
+          setBlockedIpErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
         }
       })
       .finally(() => {
@@ -467,12 +496,12 @@ export function AnomalyManageContent() {
     const parsedStart = parseDateTimeInputValue(customRangeStartDraft);
     const parsedEnd = parseDateTimeInputValue(customRangeEndDraft);
     if (!parsedStart || !parsedEnd) {
-      setCustomRangeErrorMessage('YYYY-MM-DD HH24:Mi 형식으로 입력해 주세요.');
+      setCustomRangeErrorMessage(text('ANOMALY_RANGE_FORMAT_FAIL_MESSAGE', 'YYYY-MM-DD HH24:Mi 형식으로 입력해 주세요.'));
       return;
     }
 
     if (parsedStart.getTime() > parsedEnd.getTime()) {
-      setCustomRangeErrorMessage('시작 일시는 종료 일시보다 늦을 수 없습니다.');
+      setCustomRangeErrorMessage(text('ANOMALY_RANGE_ORDER_FAIL_MESSAGE', '시작 일시는 종료 일시보다 늦을 수 없습니다.'));
       return;
     }
 
@@ -483,13 +512,15 @@ export function AnomalyManageContent() {
 
   function renderTrendBody() {
     if (trendErrorMessage) {
-      return <PageLoadFailureState className="submit-history-empty-state" />;
+      return trendErrorStatus != null
+        ? <HttpErrorState status={trendErrorStatus} className="submit-history-empty-state" message={trendErrorMessage} />
+        : <PageLoadFailureState className="submit-history-empty-state" message={trendErrorMessage} />;
     }
 
     return (
       <>
         <div className="admin-anomaly-range-toolbar">
-          <div className="solve-dbms-tab-row admin-anomaly-range-tabs" role="tablist" aria-label="이상계정 조회 범위">
+          <div className="solve-dbms-tab-row admin-anomaly-range-tabs" role="tablist" aria-label={text('ANOMALY_RANGE_TABLIST_LABEL', '이상계정 조회 범위')}>
             {anomalyRanges.map((range) => {
               const isSelected = range.value === activeRange;
               return (
@@ -521,8 +552,8 @@ export function AnomalyManageContent() {
                     applyCustomRangeDraft();
                   }
                 }}
-                placeholder="YYYY-MM-DD HH24:Mi"
-                aria-label="조회 시작 일시"
+                placeholder={text('ANOMALY_RANGE_INPUT_PLACEHOLDER', 'YYYY-MM-DD HH24:Mi')}
+                aria-label={text('ANOMALY_RANGE_START_INPUT_LABEL', '조회 시작 일시')}
               />
               <span className="admin-anomaly-custom-range-separator">~</span>
               <input
@@ -537,8 +568,8 @@ export function AnomalyManageContent() {
                     applyCustomRangeDraft();
                   }
                 }}
-                placeholder="YYYY-MM-DD HH24:Mi"
-                aria-label="조회 종료 일시"
+                placeholder={text('ANOMALY_RANGE_INPUT_PLACEHOLDER', 'YYYY-MM-DD HH24:Mi')}
+                aria-label={text('ANOMALY_RANGE_END_INPUT_LABEL', '조회 종료 일시')}
               />
             </div>
           ) : null}
@@ -548,12 +579,12 @@ export function AnomalyManageContent() {
 
         <div className={`submit-history-table-shell ${isTrendLoading ? 'is-loading' : ''}`.trim()}>
           {isTrendLoading && trendPageData.items.length === 0 ? (
-            <div className="submit-history-table admin-anomaly-table admin-anomaly-trend-table" role="table" aria-label="이상계정 추이 목록" aria-hidden="true">
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-trend-table" role="table" aria-label={text('ANOMALY_TREND_TABLE_LABEL', '이상계정 추이 목록')} aria-hidden="true">
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell">실행/제출</div>
-                <div role="columnheader" className="submit-history-head-cell">횟수</div>
-                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단" />
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_ACTION_TYPE_COLUMN_LABEL', '실행/제출')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_COUNT_COLUMN_LABEL', '횟수')}</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label={text('ANOMALY_BLOCK_ACTION_LABEL', '차단')} />
               </div>
 
               {anomalyLoadingRows.map((rowIndex) => (
@@ -566,14 +597,14 @@ export function AnomalyManageContent() {
               ))}
             </div>
           ) : trendPageData.items.length === 0 ? (
-            <div className="submit-history-empty-state">표시할 데이터가 없다.</div>
+            <div className="submit-history-empty-state">{text('ANOMALY_EMPTY_STATE', '표시할 데이터가 없습니다.')}</div>
           ) : (
-            <div className="submit-history-table admin-anomaly-table admin-anomaly-trend-table" role="table" aria-label="이상계정 추이 목록">
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-trend-table" role="table" aria-label={text('ANOMALY_TREND_TABLE_LABEL', '이상계정 추이 목록')}>
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell">실행/제출</div>
-                <div role="columnheader" className="submit-history-head-cell">횟수</div>
-                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단" />
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_ACTION_TYPE_COLUMN_LABEL', '실행/제출')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_COUNT_COLUMN_LABEL', '횟수')}</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label={text('ANOMALY_BLOCK_ACTION_LABEL', '차단')} />
               </div>
 
               {trendPageData.items.map((item: AdminAnomalyTrendItem) => {
@@ -581,15 +612,15 @@ export function AnomalyManageContent() {
                 const isActing = actingKey === `block:${item.handle}`;
                 return (
                   <article key={`${item.handle}-${item.actionType}`} className="submit-history-row submit-history-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="Handle">{item.handle}</span>
-                    <span className="submit-history-cell" role="cell" data-label="실행/제출">{item.actionType}</span>
-                    <span className="submit-history-cell" role="cell" data-label="횟수">{item.count}</span>
-                    <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label="차단">
+                    <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>{item.handle}</span>
+                    <span className="submit-history-cell" role="cell" data-label={text('ANOMALY_ACTION_TYPE_COLUMN_LABEL', '실행/제출')}>{item.actionType}</span>
+                    <span className="submit-history-cell" role="cell" data-label={text('ANOMALY_COUNT_COLUMN_LABEL', '횟수')}>{item.count}</span>
+                    <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label={text('ANOMALY_BLOCK_ACTION_LABEL', '차단')}>
                       <button
                         type="button"
                         className={`submit-history-detail-button admin-anomaly-action-button ${isBlocked ? 'is-blocked' : ''}`.trim()}
-                        aria-label={isBlocked ? '이미 차단된 계정' : `${item.handle} 차단`}
-                        title={isBlocked ? '이미 차단됨' : '계정 차단'}
+                        aria-label={isBlocked ? text('ANOMALY_ALREADY_BLOCKED_LABEL', '이미 차단된 계정') : `${item.handle} ${text('ANOMALY_BLOCK_ACTION_LABEL', '차단')}`}
+                        title={isBlocked ? text('ANOMALY_ALREADY_BLOCKED_TITLE', '이미 차단됨') : text('ANOMALY_BLOCK_TITLE', '계정 차단')}
                         onClick={() => {
                           void handleBlockUser(item.handle);
                         }}
@@ -604,11 +635,7 @@ export function AnomalyManageContent() {
             </div>
           )}
 
-          {isTrendLoading ? (
-            <div className="submit-history-loading-overlay" aria-hidden="true">
-              <span className="page-loading-spinner submit-history-loading-badge" />
-            </div>
-          ) : null}
+          {isTrendLoading ? <LoadingOverlay ariaHidden /> : null}
         </div>
 
         <Pagination
@@ -616,7 +643,10 @@ export function AnomalyManageContent() {
           totalPages={trendPageData.totalPages}
           draft={trendPageDraft}
           isEditing={isTrendPageEditing}
-          label="이상계정 추이 페이지 번호"
+          navigationLabel={text('ANOMALY_TREND_PAGE_LABEL', '이상계정 추이 페이지')}
+          inputLabel={text('ANOMALY_TREND_PAGE_INPUT_LABEL', '이상계정 추이 페이지 번호')}
+          previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+          nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
           onDraftChange={setTrendPageDraft}
           onStartEditing={() => {
             setTrendPageDraft(String(trendPageData.currentPage));
@@ -635,19 +665,21 @@ export function AnomalyManageContent() {
 
   function renderBlockedUsersBody() {
     if (blockedUserErrorMessage) {
-      return <PageLoadFailureState className="submit-history-empty-state" />;
+      return blockedUserErrorStatus != null
+        ? <HttpErrorState status={blockedUserErrorStatus} className="submit-history-empty-state" message={blockedUserErrorMessage} />
+        : <PageLoadFailureState className="submit-history-empty-state" message={blockedUserErrorMessage} />;
     }
 
     return (
       <>
         <div className={`submit-history-table-shell ${isBlockedUserLoading ? 'is-loading' : ''}`.trim()}>
           {isBlockedUserLoading && blockedUserPageData.items.length === 0 ? (
-            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-user-table" role="table" aria-label="차단 계정 목록" aria-hidden="true">
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-user-table" role="table" aria-label={text('ANOMALY_BLOCKED_USERS_TABLE_LABEL', '차단 계정 목록')} aria-hidden="true">
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell">IP</div>
-                <div role="columnheader" className="submit-history-head-cell">차단 일시</div>
-                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단 해제" />
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_IP_LABEL', 'IP')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_BLOCKED_AT_COLUMN_LABEL', '차단 일시')}</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')} />
               </div>
 
               {anomalyLoadingRows.map((rowIndex) => (
@@ -660,29 +692,29 @@ export function AnomalyManageContent() {
               ))}
             </div>
           ) : blockedUserPageData.items.length === 0 ? (
-            <div className="submit-history-empty-state">차단된 계정이 없다.</div>
+            <div className="submit-history-empty-state">{text('ANOMALY_BLOCKED_USERS_EMPTY_STATE', '차단된 계정이 없습니다.')}</div>
           ) : (
-            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-user-table" role="table" aria-label="차단 계정 목록">
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-user-table" role="table" aria-label={text('ANOMALY_BLOCKED_USERS_TABLE_LABEL', '차단 계정 목록')}>
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell">IP</div>
-                <div role="columnheader" className="submit-history-head-cell">차단 일시</div>
-                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단 해제" />
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_IP_LABEL', 'IP')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_BLOCKED_AT_COLUMN_LABEL', '차단 일시')}</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')} />
               </div>
 
               {blockedUserPageData.items.map((item: AdminBlockedUserItem) => {
                 const isActing = actingKey === `unblock-user:${item.handle}`;
                 return (
                   <article key={item.handle} className="submit-history-row submit-history-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="Handle">{item.handle}</span>
-                    <span className="submit-history-cell" role="cell" data-label="IP">{item.ipAddress || '-'}</span>
-                    <span className="submit-history-cell" role="cell" data-label="차단 일시">{formatDateTime(item.blockedAt)}</span>
-                    <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label="차단 해제">
+                    <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>{item.handle}</span>
+                    <span className="submit-history-cell" role="cell" data-label={text('COMMON_IP_LABEL', 'IP')}>{item.ipAddress || '-'}</span>
+                    <span className="submit-history-cell" role="cell" data-label={text('ANOMALY_BLOCKED_AT_COLUMN_LABEL', '차단 일시')}>{formatDateTime(item.blockedAt)}</span>
+                    <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')}>
                       <button
                         type="button"
                         className="submit-history-detail-button admin-anomaly-action-button"
-                        aria-label={`${item.handle} 차단 해제`}
-                        title="차단 해제"
+                        aria-label={`${item.handle} ${text('ANOMALY_UNBLOCK_TITLE', '차단 해제')}`}
+                        title={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')}
                         onClick={() => {
                           void handleUnblockUser(item.handle);
                         }}
@@ -697,11 +729,7 @@ export function AnomalyManageContent() {
             </div>
           )}
 
-          {isBlockedUserLoading ? (
-            <div className="submit-history-loading-overlay" aria-hidden="true">
-              <span className="page-loading-spinner submit-history-loading-badge" />
-            </div>
-          ) : null}
+          {isBlockedUserLoading ? <LoadingOverlay ariaHidden /> : null}
         </div>
 
         <Pagination
@@ -709,7 +737,10 @@ export function AnomalyManageContent() {
           totalPages={blockedUserPageData.totalPages}
           draft={blockedUserPageDraft}
           isEditing={isBlockedUserPageEditing}
-          label="차단 계정 목록 페이지 번호"
+          navigationLabel={text('ANOMALY_BLOCKED_USERS_PAGE_LABEL', '차단 계정 목록 페이지')}
+          inputLabel={text('ANOMALY_BLOCKED_USERS_PAGE_INPUT_LABEL', '차단 계정 목록 페이지 번호')}
+          previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+          nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
           onDraftChange={setBlockedUserPageDraft}
           onStartEditing={() => {
             setBlockedUserPageDraft(String(blockedUserPageData.currentPage));
@@ -728,18 +759,20 @@ export function AnomalyManageContent() {
 
   function renderBlockedIpsBody() {
     if (blockedIpErrorMessage) {
-      return <PageLoadFailureState className="submit-history-empty-state" />;
+      return blockedIpErrorStatus != null
+        ? <HttpErrorState status={blockedIpErrorStatus} className="submit-history-empty-state" message={blockedIpErrorMessage} />
+        : <PageLoadFailureState className="submit-history-empty-state" message={blockedIpErrorMessage} />;
     }
 
     return (
       <>
         <div className={`submit-history-table-shell ${isBlockedIpLoading ? 'is-loading' : ''}`.trim()}>
           {isBlockedIpLoading && blockedIpPageData.items.length === 0 ? (
-            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-ip-table" role="table" aria-label="차단 IP 목록" aria-hidden="true">
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-ip-table" role="table" aria-label={text('ANOMALY_BLOCKED_IPS_TABLE_LABEL', '차단 IP 목록')} aria-hidden="true">
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">IP</div>
-                <div role="columnheader" className="submit-history-head-cell">차단 일시</div>
-                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단 해제" />
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_IP_LABEL', 'IP')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_BLOCKED_AT_COLUMN_LABEL', '차단 일시')}</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')} />
               </div>
 
               {anomalyLoadingRows.map((rowIndex) => (
@@ -751,27 +784,27 @@ export function AnomalyManageContent() {
               ))}
             </div>
           ) : blockedIpPageData.items.length === 0 ? (
-            <div className="submit-history-empty-state">차단된 IP가 없다.</div>
+            <div className="submit-history-empty-state">{text('ANOMALY_BLOCKED_IPS_EMPTY_STATE', '차단된 IP가 없습니다.')}</div>
           ) : (
-            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-ip-table" role="table" aria-label="차단 IP 목록">
+            <div className="submit-history-table admin-anomaly-table admin-anomaly-blocked-ip-table" role="table" aria-label={text('ANOMALY_BLOCKED_IPS_TABLE_LABEL', '차단 IP 목록')}>
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">IP</div>
-                <div role="columnheader" className="submit-history-head-cell">차단 일시</div>
-                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label="차단 해제" />
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_IP_LABEL', 'IP')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('ANOMALY_BLOCKED_AT_COLUMN_LABEL', '차단 일시')}</div>
+                <div role="columnheader" className="submit-history-head-cell admin-anomaly-action-head" aria-label={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')} />
               </div>
 
               {blockedIpPageData.items.map((item: AdminBlockedIpItem) => {
                 const isActing = actingKey === `unblock-ip:${item.ipAddress}`;
                 return (
                   <article key={item.ipAddress} className="submit-history-row submit-history-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="IP">{item.ipAddress}</span>
-                    <span className="submit-history-cell" role="cell" data-label="차단 일시">{formatDateTime(item.blockedAt)}</span>
-                    <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label="차단 해제">
+                    <span className="submit-history-cell" role="cell" data-label={text('COMMON_IP_LABEL', 'IP')}>{item.ipAddress}</span>
+                    <span className="submit-history-cell" role="cell" data-label={text('ANOMALY_BLOCKED_AT_COLUMN_LABEL', '차단 일시')}>{formatDateTime(item.blockedAt)}</span>
+                    <span className="submit-history-cell admin-anomaly-action-cell" role="cell" data-label={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')}>
                       <button
                         type="button"
                         className="submit-history-detail-button admin-anomaly-action-button"
-                        aria-label={`${item.ipAddress} 차단 해제`}
-                        title="차단 해제"
+                        aria-label={`${item.ipAddress} ${text('ANOMALY_UNBLOCK_TITLE', '차단 해제')}`}
+                        title={text('ANOMALY_UNBLOCK_TITLE', '차단 해제')}
                         onClick={() => {
                           void handleUnblockIp(item.ipAddress);
                         }}
@@ -786,11 +819,7 @@ export function AnomalyManageContent() {
             </div>
           )}
 
-          {isBlockedIpLoading ? (
-            <div className="submit-history-loading-overlay" aria-hidden="true">
-              <span className="page-loading-spinner submit-history-loading-badge" />
-            </div>
-          ) : null}
+          {isBlockedIpLoading ? <LoadingOverlay ariaHidden /> : null}
         </div>
 
         <Pagination
@@ -798,7 +827,10 @@ export function AnomalyManageContent() {
           totalPages={blockedIpPageData.totalPages}
           draft={blockedIpPageDraft}
           isEditing={isBlockedIpPageEditing}
-          label="차단 IP 목록 페이지 번호"
+          navigationLabel={text('ANOMALY_BLOCKED_IPS_PAGE_LABEL', '차단 IP 목록 페이지')}
+          inputLabel={text('ANOMALY_BLOCKED_IPS_PAGE_INPUT_LABEL', '차단 IP 목록 페이지 번호')}
+          previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+          nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
           onDraftChange={setBlockedIpPageDraft}
           onStartEditing={() => {
             setBlockedIpPageDraft(String(blockedIpPageData.currentPage));
@@ -818,7 +850,7 @@ export function AnomalyManageContent() {
   return (
     <section className="panel-card admin-anomaly-panel">
       <div className="admin-anomaly-layout">
-        <aside className="admin-anomaly-side-nav" aria-label="이상계정 감지 섹션">
+        <aside className="admin-anomaly-side-nav" aria-label={text('ANOMALY_SECTION_NAV_LABEL', '이상계정 감지 섹션')}>
           {anomalySections.map((section) => {
             const isSelected = section.id === activeSection;
             return (

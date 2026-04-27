@@ -1,4 +1,4 @@
-.page-load-failure-state {
+.http-error-state {
   display: grid;
   place-items: center;
   width: 100%;
@@ -12,7 +12,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .page-load-failure-state {
+  .http-error-state {
     color: var(--ink-subtle);
   }
 }

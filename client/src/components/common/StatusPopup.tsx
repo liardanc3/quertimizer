@@ -1,3 +1,5 @@
+import { useUiText } from '../../lib/uiText';
+
 interface StatusPopupProps {
   open: boolean;
   level: 1 | 2 | 3;
@@ -10,15 +12,17 @@ export default function StatusPopup({
   open,
   level,
   message,
-  confirmLabel = '확인',
+  confirmLabel,
   onConfirm,
 }: StatusPopupProps) {
+  const { text } = useUiText();
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="status-popup-scrim" role="dialog" aria-modal="true" aria-label="상태 안내">
+    <div className="status-popup-scrim" role="dialog" aria-modal="true" aria-label={text('COMMON_STATUS_DIALOG_LABEL', '상태 안내')}>
       <div className={`status-popup status-popup-level-${level}`}>
         <div className={`status-popup-visual status-popup-visual-level-${level}`} aria-hidden="true">
           <StatusPopupIcon level={level} />
@@ -27,7 +31,7 @@ export default function StatusPopup({
         <p className="status-popup-message">{message}</p>
 
         <button type="button" className="btn primary status-popup-button" onClick={onConfirm}>
-          {confirmLabel}
+          {confirmLabel ?? text('COMMON_CONFIRM_BUTTON', '확인')}
         </button>
       </div>
     </div>

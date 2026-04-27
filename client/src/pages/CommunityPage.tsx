@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import HttpErrorState from '../components/common/HttpErrorState';
+import ContentLoading from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import CommunityWritePage from './CommunityWritePage';
 import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
 import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, subscribeLocation, navigate } from '../lib/navigation';
 import { useMockSession } from '../lib/session';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 import './HomePage.css';
 import './SubmitHistoryPage.css';
 import './CommunityPage.css';
@@ -23,13 +27,6 @@ interface CommunityPageFavoriteSnapshot {
 
 const PAGE_SIZE = 10;
 const numberFormatter = new Intl.NumberFormat('ko-KR');
-const loadingPlaceholderRows = Array.from({ length: 6 }, (_, index) => index);
-const categoryTabs: Array<{ value: CommunityCategoryTab; label: string }> = [
-  { value: 'all', label: '전체' },
-  { value: 'notice', label: '공지' },
-  { value: 'discussion', label: '자유' },
-  { value: 'question', label: '질문' },
-];
 
 function SortAscendingIcon() {
   return (
@@ -95,18 +92,18 @@ function readCommunityListState() {
 
 function getCommunityTabLabel(category: CommunityCategoryTab) {
   if (category === 'notice') {
-    return '공지';
+    return getUiTextValue('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지');
   }
 
   if (category === 'discussion') {
-    return '자유';
+    return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
   }
 
   if (category === 'question') {
-    return '질문';
+    return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
   }
 
-  return '전체';
+  return getUiTextValue('COMMUNITY_CATEGORY_ALL_LABEL', '전체');
 }
 
 function buildCommunityWritePath(category: CommunityCategoryTab) {
@@ -163,18 +160,18 @@ function formatBoardDate(value: string) {
 
 function getCategoryLabel(value: string) {
   if (value === 'question') {
-    return '질문';
+    return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
   }
 
   if (value === 'notice') {
-    return '공지';
+    return getUiTextValue('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지');
   }
 
   if (value === 'tip') {
-    return '팁';
+    return getUiTextValue('COMMUNITY_CATEGORY_TIP_LABEL', '팁');
   }
 
-  return '자유';
+  return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
 const emptyPage: CommunityPostPage = {
@@ -186,6 +183,7 @@ const emptyPage: CommunityPostPage = {
 };
 
 export default function CommunityPage() {
+  const { text } = useUiText();
   const { isAuthenticated } = useMockSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityPageFavoriteSnapshot>('community'), []);
@@ -209,6 +207,16 @@ export default function CommunityPage() {
   const [postPage, setPostPage] = useState<CommunityPostPage>(emptyPage);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const categoryTabs: Array<{ value: CommunityCategoryTab; label: string }> = useMemo(
+    () => [
+      { value: 'all', label: text('COMMUNITY_CATEGORY_ALL_LABEL', '전체') },
+      { value: 'notice', label: text('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지') },
+      { value: 'discussion', label: text('COMMUNITY_CATEGORY_FREE_LABEL', '자유') },
+      { value: 'question', label: text('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문') },
+    ],
+    [text],
+  );
 
   useEffect(() => {
     clearFavoriteRestoreSnapshot('community');
@@ -254,6 +262,7 @@ export default function CommunityPage() {
     if (isWriteMode) {
       setIsLoading(false);
       setErrorMessage(null);
+      setErrorStatus(null);
       return;
     }
 
@@ -261,6 +270,7 @@ export default function CommunityPage() {
 
     setIsLoading(true);
     setErrorMessage(null);
+    setErrorStatus(null);
 
     fetchCommunityPosts({
       page: requestedPage,
@@ -285,7 +295,9 @@ export default function CommunityPage() {
           return;
         }
 
-        setErrorMessage(error instanceof Error ? error.message : '커뮤니티 게시글 조회에 실패했다.');
+        setErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -299,22 +311,23 @@ export default function CommunityPage() {
   }, [isWriteMode, requestedPage, searchQuery, selectedCategory, sortKey]);
 
   function moveList(nextSearch: string, nextCategory: CommunityCategoryTab, nextSortKey: CommunitySortKey, nextPage: number) {
-  const trimmedSearch = nextSearch.trim();
-  const isSameRequest =
-    trimmedSearch === searchQuery
-    && nextCategory === selectedCategory
-    && nextSortKey === sortKey
-    && nextPage === requestedPage;
+    const trimmedSearch = nextSearch.trim();
+    const isSameRequest =
+      trimmedSearch === searchQuery
+      && nextCategory === selectedCategory
+      && nextSortKey === sortKey
+      && nextPage === requestedPage;
 
-  if (isSameRequest) {
-    return;
-  }
+    if (isSameRequest) {
+      return;
+    }
 
-  setIsLoading(true);
-  setErrorMessage(null);
-  setSearchQuery(trimmedSearch);
-  setSelectedCategory(nextCategory);
-  setSortKey(nextSortKey);
+    setIsLoading(true);
+    setErrorMessage(null);
+    setErrorStatus(null);
+    setSearchQuery(trimmedSearch);
+    setSelectedCategory(nextCategory);
+    setSortKey(nextSortKey);
     setRequestedPage(nextPage);
     replaceListHistory(trimmedSearch, nextCategory, nextSortKey, nextPage, 0);
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -403,7 +416,7 @@ export default function CommunityPage() {
     <div className="page-stack home-page community-page">
       <section className="panel-card compact community-toolbar-card">
         <div className="problem-toolbar community-toolbar submit-history-toolbar-stack">
-          <div className="solve-dbms-tab-row community-tab-row" role="tablist" aria-label="커뮤니티 구분 선택">
+          <div className="solve-dbms-tab-row community-tab-row" role="tablist" aria-label={text('COMMUNITY_TABLIST_LABEL', '커뮤니티 구분 선택')}>
             <div className="community-tab-list">
               {categoryTabs.map((tab) => {
                 const isSelected = !isWriteMode && tab.value === selectedCategory;
@@ -428,19 +441,19 @@ export default function CommunityPage() {
                 role="tab"
                 aria-selected={isWriteMode}
                 disabled={!isAuthenticated}
-                title={isAuthenticated ? undefined : '로그인 후 글쓰기를 사용할 수 있습니다.'}
+                title={isAuthenticated ? undefined : text('COMMUNITY_LOGIN_REQUIRED_TOOLTIP', '로그인 후 글쓰기를 사용할 수 있습니다.')}
                 onClick={() => {
                   if (!isWriteMode) {
                     navigate(buildCommunityWritePath(selectedCategory));
                   }
                 }}
               >
-                글쓰기
+                {text('COMMUNITY_WRITE_BUTTON', '글쓰기')}
               </button>
             </div>
             <FavoriteTabButton
               className="favorite-tab-toggle-end"
-              label={`커뮤니티 / ${getCommunityTabLabel(selectedCategory)}`}
+              label={text('COMMUNITY_FAVORITE_LABEL', { category: getCommunityTabLabel(selectedCategory) }, `커뮤니티 / ${getCommunityTabLabel(selectedCategory)}`)}
               path={buildCommunityListPath({ search: searchQuery, sortKey, category: selectedCategory, page: requestedPage })}
               snapshot={{
                 kind: 'community',
@@ -469,11 +482,11 @@ export default function CommunityPage() {
                   value={draftSearchValue}
                   onChange={(event) => setDraftSearchValue(event.target.value)}
                   className="text-field problem-search-input home-problem-search-input community-search-input"
-                  placeholder="제목, 작성자, 태그, 내용 검색"
-                  aria-label="커뮤니티 검색"
+                  placeholder={text('COMMUNITY_SEARCH_PLACEHOLDER', '제목, 작성자, 태그, 내용 검색')}
+                  aria-label={text('COMMUNITY_SEARCH_LABEL', '커뮤니티 검색')}
                 />
-                <button type="submit" className="problem-search-button home-problem-search-button" aria-label="커뮤니티 검색 실행">
-                  검색
+                <button type="submit" className="problem-search-button home-problem-search-button" aria-label={text('COMMUNITY_SEARCH_SUBMIT_LABEL', '커뮤니티 검색 실행')}>
+                  {text('COMMON_SEARCH_BUTTON', '검색')}
                 </button>
               </label>
             </form>
@@ -486,56 +499,84 @@ export default function CommunityPage() {
           <CommunityWritePage embedded />
         </section>
       ) : (
-      <section className="panel-card problem-board community-board">
-        {errorMessage ? (
-          <PageLoadFailureState className="submit-history-empty-state" />
+        <section className="panel-card problem-board community-board">
+        {isLoading ? (
+          <ContentLoading className="community-board-loading" label={text('COMMUNITY_TABLE_LOADING_LABEL', '로딩 중')} />
+        ) : errorMessage ? (
+          errorStatus != null
+            ? <HttpErrorState status={errorStatus} message={errorMessage} />
+            : <PageLoadFailureState message={errorMessage} />
         ) : (
-          <div className={`community-table-loading-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
-            <div className={`submit-history-table-shell community-table-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
-              <div className="submit-history-table community-table" role="table" aria-label="커뮤니티 목록">
+          <div className="community-table-loading-shell">
+            <div className="submit-history-table-shell community-table-shell">
+              <div className="submit-history-table community-table" role="table" aria-label={text('COMMUNITY_TABLE_LABEL', '커뮤니티 목록')}>
                 <div className="submit-history-row submit-history-head community-table-head" role="row">
-                  <div role="columnheader" className="submit-history-head-cell">구분</div>
-                  <div role="columnheader" className="submit-history-head-cell">제목</div>
-                  <div role="columnheader" className="submit-history-head-cell">Handle</div>
+                  <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}</div>
+                  <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}</div>
+                  <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
                   <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                    <span>작성일</span>
+                    <span>{text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}</span>
                     <button
                       type="button"
                       className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'latest' || sortKey === 'oldest') ? 'is-active' : ''}`.trim()}
-                      aria-label={sortKey === 'oldest' ? '작성일 오름차순 정렬' : sortKey === 'latest' ? '작성일 내림차순 정렬' : '작성일 기본 정렬'}
+                      aria-label={
+                        sortKey === 'oldest'
+                          ? text('COMMUNITY_DATE_SORT_ASC_LABEL', '작성일 오름차순 정렬')
+                          : sortKey === 'latest'
+                            ? text('COMMUNITY_DATE_SORT_DESC_LABEL', '작성일 내림차순 정렬')
+                            : text('COMMUNITY_DATE_SORT_DEFAULT_LABEL', '작성일 기본 정렬')
+                      }
                       onClick={() => toggleMetricSort('latest', 'oldest')}
                     >
                       {sortKey === 'oldest' ? <SortAscendingIcon /> : sortKey === 'latest' ? <SortDescendingIcon /> : <SortNeutralIcon />}
                     </button>
                   </div>
                   <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                    <span>조회수</span>
+                    <span>{text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}</span>
                     <button
                       type="button"
                       className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'views' || sortKey === 'viewsAsc') ? 'is-active' : ''}`.trim()}
-                      aria-label={sortKey === 'viewsAsc' ? '조회수 오름차순 정렬' : sortKey === 'views' ? '조회수 내림차순 정렬' : '조회수 기본 정렬'}
+                      aria-label={
+                        sortKey === 'viewsAsc'
+                          ? text('COMMUNITY_VIEWS_SORT_ASC_LABEL', '조회수 오름차순 정렬')
+                          : sortKey === 'views'
+                            ? text('COMMUNITY_VIEWS_SORT_DESC_LABEL', '조회수 내림차순 정렬')
+                            : text('COMMUNITY_VIEWS_SORT_DEFAULT_LABEL', '조회수 기본 정렬')
+                      }
                       onClick={() => toggleMetricSort('views', 'viewsAsc')}
                     >
                       {sortKey === 'viewsAsc' ? <SortAscendingIcon /> : sortKey === 'views' ? <SortDescendingIcon /> : <SortNeutralIcon />}
                     </button>
                   </div>
                   <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                    <span>좋아요</span>
+                    <span>{text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}</span>
                     <button
                       type="button"
                       className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'likes' || sortKey === 'likesAsc') ? 'is-active' : ''}`.trim()}
-                      aria-label={sortKey === 'likesAsc' ? '좋아요 오름차순 정렬' : sortKey === 'likes' ? '좋아요 내림차순 정렬' : '좋아요 기본 정렬'}
+                      aria-label={
+                        sortKey === 'likesAsc'
+                          ? text('COMMUNITY_LIKES_SORT_ASC_LABEL', '좋아요 오름차순 정렬')
+                          : sortKey === 'likes'
+                            ? text('COMMUNITY_LIKES_SORT_DESC_LABEL', '좋아요 내림차순 정렬')
+                            : text('COMMUNITY_LIKES_SORT_DEFAULT_LABEL', '좋아요 기본 정렬')
+                      }
                       onClick={() => toggleMetricSort('likes', 'likesAsc')}
                     >
                       {sortKey === 'likesAsc' ? <SortAscendingIcon /> : sortKey === 'likes' ? <SortDescendingIcon /> : <SortNeutralIcon />}
                     </button>
                   </div>
                   <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                    <span>댓글</span>
+                    <span>{text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}</span>
                     <button
                       type="button"
                       className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${(sortKey === 'comments' || sortKey === 'commentsAsc') ? 'is-active' : ''}`.trim()}
-                      aria-label={sortKey === 'commentsAsc' ? '댓글 수 오름차순 정렬' : sortKey === 'comments' ? '댓글 수 내림차순 정렬' : '댓글 수 기본 정렬'}
+                      aria-label={
+                        sortKey === 'commentsAsc'
+                          ? text('COMMUNITY_COMMENTS_SORT_ASC_LABEL', '댓글 수 오름차순 정렬')
+                          : sortKey === 'comments'
+                            ? text('COMMUNITY_COMMENTS_SORT_DESC_LABEL', '댓글 수 내림차순 정렬')
+                            : text('COMMUNITY_COMMENTS_SORT_DEFAULT_LABEL', '댓글 수 기본 정렬')
+                      }
                       onClick={() => toggleMetricSort('comments', 'commentsAsc')}
                     >
                       {sortKey === 'commentsAsc' ? <SortAscendingIcon /> : sortKey === 'comments' ? <SortDescendingIcon /> : <SortNeutralIcon />}
@@ -543,33 +584,18 @@ export default function CommunityPage() {
                   </div>
                 </div>
 
-                {isLoading && postPage.posts.length === 0 ? (
-                  loadingPlaceholderRows.map((rowIndex) => (
-                    <div key={`community-loading-${rowIndex}`} className="submit-history-row submit-history-body community-table-row community-loading-row" role="row" aria-hidden="true">
-                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                      <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell">
-                        <span className="community-loading-placeholder is-long" />
-                        <span className="community-loading-placeholder is-medium" />
-                      </div>
-                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
-                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-medium" /></div>
-                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                      <div role="cell" className="submit-history-cell community-table-cell"><span className="community-loading-placeholder is-short" /></div>
-                    </div>
-                  ))
-                ) : postPage.posts.length === 0 ? (
+                {postPage.posts.length === 0 ? (
                   <div className="submit-history-row submit-history-empty-row community-empty-row" role="row">
-                    <span className="submit-history-empty-cell" role="cell">조건에 맞는 게시글이 없습니다.</span>
+                    <span className="submit-history-empty-cell" role="cell">{text('COMMUNITY_EMPTY_STATE', '조건에 맞는 게시글이 없습니다.')}</span>
                   </div>
                 ) : (
                   postPage.posts.map((post) => (
                     <article key={post.id} className="submit-history-row submit-history-body community-table-row" role="row">
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label="구분">
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}>
                         <span className={`community-category-text is-${post.category}`}>{getCategoryLabel(post.category)}</span>
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell" data-label="제목">
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell" data-label={text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}>
                         <button type="button" className="community-post-title-link" onClick={() => handleOpenPost(post.id)}>
                           <span className="community-post-title-text">{post.title}</span>
                         </button>
@@ -583,7 +609,7 @@ export default function CommunityPage() {
                         ) : null}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label="Handle">
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
                         <button
                           type="button"
                           className="community-handle-link"
@@ -593,19 +619,19 @@ export default function CommunityPage() {
                         </button>
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell community-table-date-cell" data-label="작성일">
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-date-cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>
                         {formatBoardDate(post.updatedAt ?? post.createdAt)}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label="조회수">
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>
                         {formatNumber(post.views)}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label="좋아요">
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>
                         {formatNumber(post.likes)}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label="댓글">
+                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>
                         {formatNumber(post.comments)}
                       </div>
                     </article>
@@ -613,22 +639,18 @@ export default function CommunityPage() {
                 )}
               </div>
             </div>
-
-            {isLoading ? (
-              <div className="community-table-loading-overlay" aria-live="polite" aria-label="로딩 중" />
-            ) : null}
           </div>
         )}
 
-        {errorMessage == null && postPage.totalCount > 0 ? (
-          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="커뮤니티 페이지">
+        {!isLoading && errorMessage == null && postPage.totalCount > 0 ? (
+          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('COMMUNITY_PAGE_LABEL', '커뮤니티 페이지')}>
             <button
               type="button"
               className="mini-toggle problem-page-button"
               onClick={() => moveList(searchQuery, selectedCategory, sortKey, Math.max(1, postPage.currentPage - 1))}
               disabled={postPage.currentPage === 1}
             >
-              이전
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isPageJumpEditing ? (
@@ -636,7 +658,7 @@ export default function CommunityPage() {
                 type="text"
                 inputMode="numeric"
                 className="problem-pagination-meta-input"
-                aria-label="이동할 커뮤니티 페이지 입력"
+                aria-label={text('COMMUNITY_PAGE_INPUT_LABEL', '이동할 커뮤니티 페이지 입력')}
                 value={pageJumpDraft}
                 onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
                 onBlur={applyPageJump}
@@ -658,7 +680,7 @@ export default function CommunityPage() {
               <button
                 type="button"
                 className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label="이동할 커뮤니티 페이지 입력 열기"
+                aria-label={text('COMMUNITY_PAGE_INPUT_OPEN_LABEL', '이동할 커뮤니티 페이지 입력 열기')}
                 onClick={() => {
                   setPageJumpDraft(String(postPage.currentPage));
                   setIsPageJumpEditing(true);
@@ -674,11 +696,11 @@ export default function CommunityPage() {
               onClick={() => moveList(searchQuery, selectedCategory, sortKey, Math.min(postPage.totalPages, postPage.currentPage + 1))}
               disabled={postPage.currentPage >= postPage.totalPages}
             >
-              다음
+              {text('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}
-      </section>
+        </section>
       )}
     </div>
   );

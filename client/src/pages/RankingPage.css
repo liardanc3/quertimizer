@@ -46,25 +46,6 @@
   margin-top: 0;
 }
 
-.ranking-table-loading-overlay {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 4;
-}
-
-.ranking-table-loading-overlay::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -24%;
-  width: 24%;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
-  animation: submit-history-loading-wave 1.8s ease-in-out infinite;
-}
-
 .ranking-page .submit-history-head,
 .ranking-head {
   border: 0;
@@ -87,7 +68,6 @@
 }
 
 .ranking-table.is-loading > :not(.ranking-table-loading-overlay) {
-  filter: blur(1.75px);
 }
 
 .ranking-table .submit-history-row {

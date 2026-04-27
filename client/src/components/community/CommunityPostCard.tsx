@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { getCommunityPostPath, getProfilePath, navigate } from '../../lib/navigation';
+import { useUiText } from '../../lib/uiText';
 import type { CommunityPostSummary } from '../../types/domain';
 
 interface CommunityPostCardProps {
@@ -110,6 +111,8 @@ export default function CommunityPostCard({
   onOpenPost,
   onSelectTag,
 }: CommunityPostCardProps) {
+  const { text } = useUiText();
+
   function handleOpenPost(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
     onOpenPost(post.id);
@@ -119,7 +122,7 @@ export default function CommunityPostCard({
 
   return (
     <article className="community-board-row" role="row">
-      <div className="community-board-cell community-board-title-cell" data-label="제목">
+      <div className="community-board-cell community-board-title-cell" data-label={text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}>
         {post.tags.length > 0 ? (
           <div className="community-row-tags">
             {post.tags.slice(0, 5).map((tag) => (
@@ -146,7 +149,7 @@ export default function CommunityPostCard({
         ) : null}
       </div>
 
-      <div className="community-board-cell community-board-author" data-label="Handle">
+      <div className="community-board-cell community-board-author" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
         <button
           type="button"
           className="community-author-button"
@@ -156,19 +159,19 @@ export default function CommunityPostCard({
         </button>
       </div>
 
-      <div className="community-board-cell community-board-date" data-label="작성일">
+      <div className="community-board-cell community-board-date" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>
         {formatBoardDate(post.updatedAt ?? post.createdAt)}
       </div>
 
-      <div className="community-board-cell community-board-metric" data-label="조회수">
+      <div className="community-board-cell community-board-metric" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>
         {numberFormatter.format(post.views)}
       </div>
 
-      <div className="community-board-cell community-board-metric" data-label="좋아요">
+      <div className="community-board-cell community-board-metric" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>
         {numberFormatter.format(post.likes)}
       </div>
 
-      <div className="community-board-cell community-board-metric" data-label="댓글">
+      <div className="community-board-cell community-board-metric" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>
         {numberFormatter.format(post.comments)}
       </div>
     </article>

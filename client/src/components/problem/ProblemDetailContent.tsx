@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { ProblemDetailData, ProblemOutputSampleData, ProblemSampleTableData } from '../../lib/problemApi';
 import type { DbmsType } from '../../types/domain';
+import { getUiText, useUiText } from '../../lib/uiText';
 import ReactFlowDiagram from './ReactFlowDiagram';
 
 interface ProblemDetailContentProps {
@@ -182,7 +183,7 @@ function parseTableDefinitionSql(ddl: string): ParsedDdl {
 
     tables.push({
       name: tableName,
-      description: tableComments.get(tableName) ?? `${formatIdentifier(tableName)} 테이블`,
+      description: tableComments.get(tableName) ?? getUiText('PROBLEM_DETAIL_TABLE_NAME_FALLBACK', { tableName: formatIdentifier(tableName) }, `${formatIdentifier(tableName)} 테이블`),
       columns,
     });
   }
@@ -255,15 +256,15 @@ function describeColumn(columnName: string) {
   }
 
   if (columnName.endsWith('_at')) {
-    return `${formatIdentifier(columnName.replace(/_at$/, ''))} 시각`;
+    return getUiText('PROBLEM_DETAIL_COLUMN_TIME_FALLBACK', { columnName: formatIdentifier(columnName.replace(/_at$/, '')) }, `${formatIdentifier(columnName.replace(/_at$/, ''))} 시각`);
   }
 
   if (columnName.endsWith('_date')) {
-    return `${formatIdentifier(columnName.replace(/_date$/, ''))} 날짜`;
+    return getUiText('PROBLEM_DETAIL_COLUMN_DATE_FALLBACK', { columnName: formatIdentifier(columnName.replace(/_date$/, '')) }, `${formatIdentifier(columnName.replace(/_date$/, ''))} 날짜`);
   }
 
   if (columnName.endsWith('_amount')) {
-    return `${formatIdentifier(columnName.replace(/_amount$/, ''))} 금액`;
+    return getUiText('PROBLEM_DETAIL_COLUMN_AMOUNT_FALLBACK', { columnName: formatIdentifier(columnName.replace(/_amount$/, '')) }, `${formatIdentifier(columnName.replace(/_amount$/, ''))} 금액`);
   }
 
   return formatIdentifier(columnName);
@@ -677,7 +678,7 @@ function ResizableGrid({ columns, rows, emptyMessage, initialWeights, minimumWei
       <button
         type="button"
         className="solve-detail-grid-resizer"
-        aria-label={`${label} 너비 조절`}
+        aria-label={getUiText('COMMON_COLUMN_RESIZE_LABEL', { label }, `${label} 너비 조절`)}
         onMouseDown={(event) => {
           event.preventDefault();
           setResizeState({
@@ -736,6 +737,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   sectionClassNames,
   hiddenSections,
 }: ProblemDetailContentProps) {
+  const { text } = useUiText();
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSectionState>({
     table: false,
     erd: false,
@@ -830,13 +832,13 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   );
   const tableDefinitionColumns: GridColumn[] = useMemo(
     () => [
-      { key: 'name', label: '컬럼명', bodyClassName: 'solve-detail-grid-cell-name' },
-      { key: 'description', label: '설명' },
-      { key: 'type', label: '타입', bodyClassName: 'solve-detail-grid-cell-type' },
-      { key: 'key', label: '키' },
-      { key: 'reference', label: '참조' },
+      { key: 'name', label: text('PROBLEM_DETAIL_COLUMN_NAME_LABEL', '컬럼명'), bodyClassName: 'solve-detail-grid-cell-name' },
+      { key: 'description', label: text('PROBLEM_DETAIL_COLUMN_DESCRIPTION_LABEL', '설명') },
+      { key: 'type', label: text('PROBLEM_DETAIL_COLUMN_TYPE_LABEL', '타입'), bodyClassName: 'solve-detail-grid-cell-type' },
+      { key: 'key', label: text('PROBLEM_DETAIL_COLUMN_KEY_LABEL', '키') },
+      { key: 'reference', label: text('PROBLEM_DETAIL_COLUMN_REFERENCE_LABEL', '참조') },
     ],
-    [],
+    [text],
   );
   const outputSampleColumns: GridColumn[] = useMemo(
     () => outputSample.columns.map((column) => ({ key: column, label: column })),
@@ -941,7 +943,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             className="solve-detail-table-drag-handle"
             draggable
             aria-hidden="true"
-            title="드래그해 순서 변경"
+            title={text('PROBLEM_DETAIL_DRAG_REORDER_TITLE', '드래그해 순서 변경')}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >
@@ -954,8 +956,8 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
         </div>
 
         <div className="solve-detail-table-block-copy">
-          {dragState?.tableName === tableName ? <span className="solve-detail-drag-state">이동 중</span> : null}
-          {isDropTarget && dragState?.tableName !== tableName ? <span className="solve-detail-drop-state">여기에 놓기</span> : null}
+          {dragState?.tableName === tableName ? <span className="solve-detail-drag-state">{text('PROBLEM_DETAIL_MOVING_STATE', '이동 중')}</span> : null}
+          {isDropTarget && dragState?.tableName !== tableName ? <span className="solve-detail-drop-state">{text('PROBLEM_DETAIL_DROP_HERE_STATE', '여기에 놓기')}</span> : null}
           <p className="solve-detail-table-description">{description}</p>
           <p className="solve-detail-table-name">{tableName}</p>
         </div>
@@ -969,7 +971,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
     <div className="solve-detail-content">
       {!hiddenSections?.description ? (
         <section className="solve-detail-section solve-detail-section-description">
-          {descriptionContent ?? renderTextBlock(descriptionLines, '문제 설명이 없다.')}
+          {descriptionContent ?? renderTextBlock(descriptionLines, text('PROBLEM_DETAIL_DESCRIPTION_EMPTY_STATE', '문제 설명이 없습니다.'))}
         </section>
       ) : null}
 
@@ -980,7 +982,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-divider-button"
-              aria-label={collapsedSections.table ? '펼치기' : '접기'}
+              aria-label={collapsedSections.table ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
               aria-expanded={!collapsedSections.table}
               onClick={() => toggleSection('table')}
             >
@@ -991,7 +993,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
-            <h2 className="solve-detail-section-title">테이블 정보</h2>
+            <h2 className="solve-detail-section-title">{text('PROBLEM_DETAIL_TABLE_SECTION_TITLE', '테이블 정보')}</h2>
             {sectionTitleActions?.table}
           </div>
           <div className="solve-detail-section-header-actions">
@@ -999,7 +1001,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
-              aria-label="테이블 정보 레이아웃 초기화"
+              aria-label={text('COMMON_LAYOUT_RESET_LABEL', { label: text('PROBLEM_DETAIL_TABLE_SECTION_TITLE', '테이블 정보') }, '테이블 정보 레이아웃 초기화')}
               onClick={() => resetGridLayout('table')}
             >
               <RefreshIcon />
@@ -1056,7 +1058,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
                         formatColumnKey(column),
                         column.reference ? `${column.reference.tableName}.${column.reference.columnName}` : '-',
                       ])}
-                      emptyMessage="표시할 테이블 정의가 없다."
+                      emptyMessage={text('PROBLEM_DETAIL_TABLE_EMPTY_STATE', '표시할 테이블 정의가 없습니다.')}
                       initialWeights={DEFAULT_COLUMN_WEIGHTS}
                       minimumWeights={MINIMUM_COLUMN_WEIGHTS}
                       resetKey={gridResetKeys.table}
@@ -1067,7 +1069,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
                 )}
               </div>
             ) : (
-              <p className="solve-detail-empty">표시할 테이블 정의가 없다.</p>
+              <p className="solve-detail-empty">{text('PROBLEM_DETAIL_TABLE_EMPTY_STATE', '표시할 테이블 정의가 없습니다.')}</p>
             )}
           </div>
         ) : null}
@@ -1083,7 +1085,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-divider-button"
-              aria-label={collapsedSections.erd ? '펼치기' : '접기'}
+              aria-label={collapsedSections.erd ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
               aria-expanded={!collapsedSections.erd}
               onClick={() => toggleSection('erd')}
             >
@@ -1094,12 +1096,17 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
-            <h2 className="solve-detail-section-title">ERD</h2>
+            <h2 className="solve-detail-section-title">{text('PROBLEM_DETAIL_ERD_SECTION_TITLE', 'ERD')}</h2>
             {sectionTitleActions?.erd}
           </div>
           <div className="solve-detail-section-header-actions">
             {sectionActions?.erd}
-            <button type="button" className="solve-detail-section-action solve-pane-action solve-pane-action-icon" aria-label="ERD 레이아웃 초기화" onClick={() => setErdResetKey((current) => current + 1)}>
+            <button
+              type="button"
+              className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
+              aria-label={text('COMMON_LAYOUT_RESET_LABEL', { label: text('PROBLEM_DETAIL_ERD_SECTION_TITLE', 'ERD') }, 'ERD 레이아웃 초기화')}
+              onClick={() => setErdResetKey((current) => current + 1)}
+            >
               <RefreshIcon />
             </button>
           </div>
@@ -1111,7 +1118,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
                 <ReactFlowDiagram tables={parsedDdl.tables} relations={parsedDdl.relations} className="solve-erd-diagram" resetKey={erdResetKey} />
               </div>
             ) : (
-              <p className="solve-detail-empty">ERD를 만들 DDL이 없다.</p>
+              <p className="solve-detail-empty">{text('PROBLEM_DETAIL_ERD_EMPTY_STATE', 'ERD를 만들 DDL이 없습니다.')}</p>
             )}
           </div>
         ) : null}
@@ -1127,7 +1134,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-divider-button"
-              aria-label={collapsedSections.dataSample ? '펼치기' : '접기'}
+              aria-label={collapsedSections.dataSample ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
               aria-expanded={!collapsedSections.dataSample}
               onClick={() => toggleSection('dataSample')}
             >
@@ -1138,7 +1145,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
-            <h2 className="solve-detail-section-title">데이터 예시</h2>
+            <h2 className="solve-detail-section-title">{text('PROBLEM_DETAIL_SAMPLE_SECTION_TITLE', '데이터 예시')}</h2>
             {sectionTitleActions?.dataSample}
           </div>
           <div className="solve-detail-section-header-actions">
@@ -1146,7 +1153,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
-              aria-label="데이터 예시 레이아웃 초기화"
+              aria-label={text('COMMON_LAYOUT_RESET_LABEL', { label: text('PROBLEM_DETAIL_SAMPLE_SECTION_TITLE', '데이터 예시') }, '데이터 예시 레이아웃 초기화')}
               onClick={() => resetGridLayout('dataSample')}
             >
               <RefreshIcon />
@@ -1177,7 +1184,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
 
                   return renderTableBlock(
                     table.name,
-                    tableDefinition?.description ?? '예시 데이터',
+                    tableDefinition?.description ?? text('PROBLEM_DETAIL_SAMPLE_DEFAULT_TITLE', '예시 데이터'),
                     collapsedSampleTableNames.includes(table.name),
                     () => toggleCollapsedName(table.name, setCollapsedSampleTableNames),
                     sampleDropTargetName === table.name && sampleDragState?.tableName !== table.name,
@@ -1199,7 +1206,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
                     <ResizableGrid
                       columns={table.columns.map((column) => ({ key: column, label: column }))}
                       rows={table.rows}
-                      emptyMessage="표시할 데이터 예시가 없다."
+                      emptyMessage={text('PROBLEM_DETAIL_SAMPLE_EMPTY_STATE', '표시할 데이터 예시가 없습니다.')}
                       resetKey={gridResetKeys.dataSample}
                     />,
                     sampleDragState,
@@ -1208,7 +1215,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
                 })}
               </div>
             ) : (
-              <p className="solve-detail-empty">표시할 데이터 예시가 없다.</p>
+              <p className="solve-detail-empty">{text('PROBLEM_DETAIL_SAMPLE_EMPTY_STATE', '표시할 데이터 예시가 없습니다.')}</p>
             )}
           </div>
         ) : null}
@@ -1224,7 +1231,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-divider-button"
-              aria-label={collapsedSections.condition ? '펼치기' : '접기'}
+              aria-label={collapsedSections.condition ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
               aria-expanded={!collapsedSections.condition}
               onClick={() => toggleSection('condition')}
             >
@@ -1235,14 +1242,14 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
-            <h2 className="solve-detail-section-title">조건</h2>
+            <h2 className="solve-detail-section-title">{text('PROBLEM_DETAIL_CONDITION_SECTION_TITLE', '조건')}</h2>
             {sectionTitleActions?.condition}
           </div>
           <div className="solve-detail-section-header-actions">{sectionActions?.condition}</div>
         </div>
         {!collapsedSections.condition ? (
           <div className="solve-detail-section-body">
-            {conditionContent ?? renderTextBlock(conditionLines, '조건 정보가 없다.')}
+            {conditionContent ?? renderTextBlock(conditionLines, text('PROBLEM_DETAIL_CONDITION_EMPTY_STATE', '조건 정보가 없습니다.'))}
           </div>
         ) : null}
           </div>
@@ -1257,7 +1264,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-divider-button"
-              aria-label={collapsedSections.output ? '펼치기' : '접기'}
+              aria-label={collapsedSections.output ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
               aria-expanded={!collapsedSections.output}
               onClick={() => toggleSection('output')}
             >
@@ -1268,14 +1275,14 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
-            <h2 className="solve-detail-section-title">출력</h2>
+            <h2 className="solve-detail-section-title">{text('PROBLEM_DETAIL_OUTPUT_SECTION_TITLE', '출력')}</h2>
             {sectionTitleActions?.output}
           </div>
           <div className="solve-detail-section-header-actions">{sectionActions?.output}</div>
         </div>
         {!collapsedSections.output ? (
           <div className="solve-detail-section-body">
-            {outputContent ?? renderTextBlock(outputLines, '출력 정보가 없다.')}
+            {outputContent ?? renderTextBlock(outputLines, text('PROBLEM_DETAIL_OUTPUT_EMPTY_STATE', '출력 정보가 없습니다.'))}
           </div>
         ) : null}
           </div>
@@ -1290,7 +1297,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-divider-button"
-              aria-label={collapsedSections.outputSample ? '펼치기' : '접기'}
+              aria-label={collapsedSections.outputSample ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
               aria-expanded={!collapsedSections.outputSample}
               onClick={() => toggleSection('outputSample')}
             >
@@ -1301,7 +1308,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
           <div className="solve-detail-section-main">
         <div className="solve-detail-section-header">
           <div className="solve-detail-section-title-row">
-            <h2 className="solve-detail-section-title">출력 예시</h2>
+            <h2 className="solve-detail-section-title">{text('PROBLEM_DETAIL_OUTPUT_SAMPLE_SECTION_TITLE', '출력 예시')}</h2>
             {sectionTitleActions?.outputSample}
           </div>
           <div className="solve-detail-section-header-actions">
@@ -1309,7 +1316,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             <button
               type="button"
               className="solve-detail-section-action solve-pane-action solve-pane-action-icon"
-              aria-label="출력 예시 레이아웃 초기화"
+              aria-label={text('COMMON_LAYOUT_RESET_LABEL', { label: text('PROBLEM_DETAIL_OUTPUT_SAMPLE_SECTION_TITLE', '출력 예시') }, '출력 예시 레이아웃 초기화')}
               onClick={() => resetGridLayout('outputSample')}
             >
               <RefreshIcon />
@@ -1323,7 +1330,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
               <ResizableGrid
                 columns={outputSampleColumns}
                 rows={outputSample.rows}
-                emptyMessage="표시할 출력 예시가 없다."
+                emptyMessage={text('PROBLEM_DETAIL_OUTPUT_SAMPLE_EMPTY_STATE', '표시할 출력 예시가 없습니다.')}
                 resetKey={gridResetKeys.outputSample}
               />
             </div>

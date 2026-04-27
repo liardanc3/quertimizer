@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import ContentLoading from '../components/common/LoadingSpinner';
+import HttpErrorState from '../components/common/HttpErrorState';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import {
   fetchDashboard,
   type DashboardCommunityPost,
@@ -13,7 +16,7 @@ import {
   getProfilePath,
   navigate,
 } from '../lib/navigation';
-import { useHomeSiteTitle } from '../lib/uiText';
+import { getUiTextValue, useHomeSiteTitle, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './DashboardPage.css';
 
@@ -48,84 +51,18 @@ function formatCount(value: number) {
 
 function getCategoryLabel(category: string) {
   if (category === 'notice') {
-    return '공지';
+    return getUiTextValue('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지');
   }
 
   if (category === 'question') {
-    return '질문';
+    return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
   }
 
-  return '자유';
+  return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
 function buildProblemPath(problemId: string) {
   return `${PROBLEMS_PATH}/${encodeURIComponent(problemId)}`;
-}
-
-function DashboardLoadingOverlay() {
-  return <div className="dashboard-loading-overlay" aria-hidden="true" />;
-}
-
-function DashboardCommunityLoadingCards({
-  cardCount,
-  featuredLayout,
-}: {
-  cardCount: number;
-  featuredLayout: boolean;
-}) {
-  return Array.from({ length: cardCount }, (_, index) => (
-    <article
-      key={`community-loading-${index}`}
-      className={`dashboard-post-card dashboard-loading-card ${featuredLayout && index === 0 ? 'is-featured' : 'is-compact'}`.trim()}
-      aria-hidden="true"
-    >
-      <div className="dashboard-post-topline dashboard-loading-headline">
-        <span className="dashboard-loading-chip" />
-      </div>
-
-      <span className="dashboard-loading-line is-title" />
-
-      <div className="dashboard-post-tags" aria-hidden="true">
-        <span className="dashboard-loading-tag" />
-        <span className="dashboard-loading-tag" />
-      </div>
-
-      {featuredLayout && index === 0 ? (
-        <div className="dashboard-loading-copy">
-          <span className="dashboard-loading-line is-copy" />
-          <span className="dashboard-loading-line is-copy is-wide" />
-          <span className="dashboard-loading-line is-copy is-short" />
-        </div>
-      ) : null}
-
-      <div className="dashboard-post-footer dashboard-loading-footer">
-        <span className="dashboard-loading-line is-handle" />
-        <div className="dashboard-post-metrics dashboard-loading-metrics">
-          <span className="dashboard-loading-dot" />
-          <span className="dashboard-loading-dot" />
-          <span className="dashboard-loading-dot" />
-        </div>
-      </div>
-    </article>
-  ));
-}
-
-function DashboardProblemLoadingRows() {
-  return Array.from({ length: PROBLEM_PAGE_SIZE }, (_, index) => (
-    <article key={`problem-loading-${index}`} className="dashboard-problem-card dashboard-loading-row" aria-hidden="true">
-      <div className="dashboard-problem-card-head">
-        <span className="dashboard-loading-chip is-problem" />
-        <span className="dashboard-loading-line is-problem-title" />
-      </div>
-
-      <div className="dashboard-problem-meta dashboard-loading-problem-meta">
-        <span className="dashboard-loading-metric" />
-        <span className="dashboard-loading-metric" />
-        <span className="dashboard-loading-metric" />
-        <span className="dashboard-loading-metric" />
-      </div>
-    </article>
-  ));
 }
 
 function CommunitySectionIcon() {
@@ -200,6 +137,7 @@ function CarouselDots({
   pageCount: number;
   onSelect: (pageIndex: number) => void;
 }) {
+  const { text } = useUiText();
   return (
     <div className="dashboard-carousel-dots" aria-label={label}>
       {Array.from({ length: pageCount }, (_, pageIndex) => (
@@ -208,7 +146,7 @@ function CarouselDots({
           type="button"
           className={`dashboard-carousel-dot ${pageIndex === activePage ? 'is-active' : ''}`}
           onClick={() => onSelect(pageIndex)}
-          aria-label={`${pageIndex + 1}페이지 보기`}
+          aria-label={text('DASHBOARD_PAGE_BUTTON_LABEL', { page: pageIndex + 1 }, `${pageIndex + 1}페이지 보기`)}
           aria-pressed={pageIndex === activePage}
         />
       ))}
@@ -248,11 +186,16 @@ function CommunityMetric({
   type: 'views' | 'likes' | 'comments';
   value: number;
 }) {
-  const label = type === 'views' ? '조회수' : type === 'likes' ? '좋아요' : '댓글';
+  const { text } = useUiText();
+  const label = type === 'views'
+    ? text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')
+    : type === 'likes'
+      ? text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')
+      : text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글');
   const icon = type === 'views' ? <ViewIcon /> : type === 'likes' ? <LikeIcon /> : <CommentIcon />;
 
   return (
-    <span className={`dashboard-post-metric is-${type}`} aria-label={`${label} ${formatCount(value)}`}>
+    <span className={`dashboard-post-metric is-${type}`} aria-label={text('DASHBOARD_METRIC_VALUE_LABEL', { label, count: formatCount(value) }, `${label} ${formatCount(value)}`)}>
       {icon}
       <span>{formatCount(value)}</span>
     </span>
@@ -260,22 +203,24 @@ function CommunityMetric({
 }
 
 function ProblemMeta({ problem }: { problem: DashboardProblemRecommendation }) {
+  const { text } = useUiText();
+
   return (
-    <div className="dashboard-problem-meta" aria-label={`${problem.problemId} 추천 지표`}>
+    <div className="dashboard-problem-meta" aria-label={text('DASHBOARD_PROBLEM_METRICS_LABEL', { problemId: problem.problemId }, `${problem.problemId} 추천 지표`)}>
       <span className="dashboard-problem-metric">
-        <span>해결</span>
+        <span>{text('DASHBOARD_METRIC_SOLVED_LABEL', '해결')}</span>
         <strong>{`${formatCount(problem.solvedUserCount)}명`}</strong>
       </span>
       <span className="dashboard-problem-metric">
-        <span>제출</span>
+        <span>{text('DASHBOARD_METRIC_SUBMIT_LABEL', '제출')}</span>
         <strong>{`${formatCount(problem.totalSubmitCount)}회`}</strong>
       </span>
       <span className="dashboard-problem-metric">
-        <span>정답</span>
+        <span>{text('DASHBOARD_METRIC_CORRECT_LABEL', '정답')}</span>
         <strong>{`${formatCount(problem.successSubmitCount)}회`}</strong>
       </span>
       <span className="dashboard-problem-metric">
-        <span>Cost 편차</span>
+        <span>{text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}</span>
         <strong>{`${percentFormatter.format(problem.spreadRate)}%`}</strong>
       </span>
     </div>
@@ -289,13 +234,15 @@ function CommunityPostCard({
   featured: boolean;
   post: DashboardCommunityPost;
 }) {
+  const { text } = useUiText();
+
   return (
     <article className={`dashboard-post-card ${featured ? 'is-featured' : 'is-compact'}`.trim()}>
       <button
         type="button"
         className="dashboard-card-hitbox"
         onClick={() => navigate(getCommunityPostPath(post.postId))}
-        aria-label={`${post.title} 게시글로 이동`}
+        aria-label={text('DASHBOARD_POST_OPEN_LABEL', { title: post.title }, `${post.title} 게시글로 이동`)}
       />
 
       <div className="dashboard-post-topline">
@@ -306,7 +253,7 @@ function CommunityPostCard({
       {featured && post.tags.length === 0 ? null : (
         <div
           className={`dashboard-post-tags ${!featured && post.tags.length === 0 ? 'is-empty' : ''}`.trim()}
-          aria-label={post.tags.length > 0 ? '게시글 태그' : undefined}
+          aria-label={post.tags.length > 0 ? text('DASHBOARD_POST_TAGS_LABEL', '게시글 태그') : undefined}
           aria-hidden={post.tags.length === 0}
         >
           {post.tags.slice(0, featured ? 4 : 3).map((tag) => (
@@ -315,10 +262,10 @@ function CommunityPostCard({
         </div>
       )}
 
-      {featured ? <p className="dashboard-post-excerpt">{post.excerpt || '본문 미리보기가 없습니다.'}</p> : null}
+      {featured ? <p className="dashboard-post-excerpt">{post.excerpt || text('DASHBOARD_EXCERPT_EMPTY', '본문 미리보기가 없습니다.')}</p> : null}
 
       <div className="dashboard-post-footer">
-        <div className="dashboard-post-metrics" aria-label="게시글 반응">
+        <div className="dashboard-post-metrics" aria-label={text('DASHBOARD_POST_REACTION_LABEL', '게시글 반응')}>
           <CommunityMetric type="views" value={post.viewCount} />
           <CommunityMetric type="likes" value={post.likeCount} />
           <CommunityMetric type="comments" value={post.commentCount} />
@@ -340,10 +287,13 @@ function CommunityPostCard({
 }
 
 export default function DashboardPage() {
+  const { text } = useUiText();
   useHomeSiteTitle('Quertimizer Dashboard');
   const [dashboard, setDashboard] = useState<DashboardData>(createEmptyDashboard);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadFailedMessage, setLoadFailedMessage] = useState<string | null>(null);
+  const [loadFailedStatus, setLoadFailedStatus] = useState<number | null>(null);
   const [communityPageIndex, setCommunityPageIndex] = useState(0);
   const [problemPageIndex, setProblemPageIndex] = useState(0);
   const communityPages = useMemo(() => createCommunityPages(dashboard.communityPosts), [dashboard.communityPosts]);
@@ -353,15 +303,23 @@ export default function DashboardPage() {
   const visibleCommunityPosts = communityPages[communityPageIndex] ?? [];
   const visibleProblems = problemPages[problemPageIndex] ?? [];
   const isFeaturedCommunityLayout = communityPageIndex === 0;
-  const communityLoadingCardCount = isFeaturedCommunityLayout ? COMMUNITY_FEATURED_PAGE_SIZE : COMMUNITY_GRID_PAGE_SIZE;
 
   useEffect(() => {
     document.documentElement.classList.add('is-dashboard-route');
 
     return () => {
       document.documentElement.classList.remove('is-dashboard-route');
+      document.documentElement.classList.remove('is-dashboard-loading');
     };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('is-dashboard-loading', isLoading);
+
+    return () => {
+      document.documentElement.classList.remove('is-dashboard-loading');
+    };
+  }, [isLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -369,6 +327,8 @@ export default function DashboardPage() {
     async function loadDashboard() {
       setIsLoading(true);
       setLoadFailed(false);
+      setLoadFailedMessage(null);
+      setLoadFailedStatus(null);
 
       try {
         const fetchedDashboard = await fetchDashboard();
@@ -378,9 +338,12 @@ export default function DashboardPage() {
         }
 
         setDashboard(fetchedDashboard);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setLoadFailed(true);
+          setLoadFailedMessage(error instanceof Error ? error.message : text('HTTP_SERVER_ERROR_MESSAGE', '서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'));
+          const status = getApiErrorStatus(error);
+          setLoadFailedStatus(isCommonHttpErrorStatus(status) ? status : null);
         }
       } finally {
         if (!cancelled) {
@@ -415,140 +378,132 @@ export default function DashboardPage() {
     });
   }
 
+  if (isLoading) {
+    return <ContentLoading as="section" className="dashboard-page-loading-shell" />;
+  }
+
   return (
     <div className="page-stack dashboard-page">
-      <section className="dashboard-section dashboard-community-section" aria-label="커뮤니티 인기 글">
+      <section className="dashboard-section dashboard-community-section" aria-label={text('DASHBOARD_COMMUNITY_SECTION_LABEL', '커뮤니티 인기 글')}>
         <div className="dashboard-section-header">
-          <div className="dashboard-section-title">
+          <button type="button" className="dashboard-section-title dashboard-section-title-button" onClick={() => navigate(COMMUNITY_PATH)}>
             <span className="dashboard-section-icon">
               <CommunitySectionIcon />
             </span>
-            <h2>커뮤니티 하이라이트</h2>
-          </div>
+            <h2>{text('DASHBOARD_HIGHLIGHT_SECTION_TITLE', '커뮤니티 하이라이트')}</h2>
+          </button>
 
-          <CarouselDots activePage={communityPageIndex} label="커뮤니티 페이지 선택" pageCount={communityPageCount} onSelect={setCommunityPageIndex} />
+          <CarouselDots activePage={communityPageIndex} label={text('DASHBOARD_COMMUNITY_PAGE_LABEL', '커뮤니티 페이지 선택')} pageCount={communityPageCount} onSelect={setCommunityPageIndex} />
 
           <button type="button" className="dashboard-section-link" onClick={() => navigate(COMMUNITY_PATH)}>
-            전체 보기
+            {text('DASHBOARD_ALL_VIEW_BUTTON', '전체 보기')}
             <SectionLinkIcon />
           </button>
         </div>
 
-        {loadFailed ? (
-          <PageLoadFailureState className="dashboard-failure-state" />
-        ) : (
-          <>
-            <div className="dashboard-carousel-window dashboard-community-window">
-              <button
-                type="button"
-                className="dashboard-carousel-arrow is-left"
-                onClick={() => moveCommunityPage('previous')}
-                disabled={communityPageIndex === 0}
-                aria-label="이전 커뮤니티 글 보기"
-              >
-                <CarouselArrowIcon direction="previous" />
-              </button>
+        <div className="dashboard-carousel-window dashboard-community-window">
+          <button
+            type="button"
+            className="dashboard-carousel-arrow is-left"
+            onClick={() => moveCommunityPage('previous')}
+            disabled={loadFailed || communityPageIndex === 0}
+            aria-label={text('DASHBOARD_COMMUNITY_PREVIOUS_BUTTON_LABEL', '이전 커뮤니티 글 보기')}
+          >
+            <CarouselArrowIcon direction="previous" />
+          </button>
 
-              <div className={`dashboard-community-grid ${isFeaturedCommunityLayout ? 'is-featured-layout' : 'is-grid-layout'} ${isLoading ? 'is-loading' : ''}`.trim()}>
-                {visibleCommunityPosts.length > 0 ? (
-                  visibleCommunityPosts.map((post, index) => (
-                    <CommunityPostCard key={post.postId} post={post} featured={communityPageIndex === 0 && index === 0} />
-                  ))
-                ) : isLoading ? (
-                  <DashboardCommunityLoadingCards cardCount={communityLoadingCardCount} featuredLayout={isFeaturedCommunityLayout} />
-                ) : (
-                  <p className="dashboard-empty-text">표시할 게시글이 없습니다.</p>
-                )}
+          <div className={`dashboard-community-grid ${isFeaturedCommunityLayout ? 'is-featured-layout' : 'is-grid-layout'}`.trim()}>
+            {loadFailed ? (
+              loadFailedStatus != null
+                ? <HttpErrorState status={loadFailedStatus} className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
+                : <PageLoadFailureState className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
+            ) : visibleCommunityPosts.length > 0 ? (
+              visibleCommunityPosts.map((post, index) => (
+                <CommunityPostCard key={post.postId} post={post} featured={communityPageIndex === 0 && index === 0} />
+              ))
+            ) : (
+              <p className="dashboard-empty-text">{text('DASHBOARD_EMPTY_POSTS_STATE', '표시할 게시글이 없습니다.')}</p>
+            )}
+          </div>
 
-                {isLoading ? <DashboardLoadingOverlay /> : null}
-              </div>
-
-              <button
-                type="button"
-                className="dashboard-carousel-arrow is-right"
-                onClick={() => moveCommunityPage('next')}
-                disabled={communityPageIndex >= communityPageCount - 1}
-                aria-label="다음 커뮤니티 글 보기"
-              >
-                <CarouselArrowIcon direction="next" />
-              </button>
-            </div>
-          </>
-        )}
+          <button
+            type="button"
+            className="dashboard-carousel-arrow is-right"
+            onClick={() => moveCommunityPage('next')}
+            disabled={loadFailed || communityPageIndex >= communityPageCount - 1}
+            aria-label={text('DASHBOARD_COMMUNITY_NEXT_BUTTON_LABEL', '다음 커뮤니티 글 보기')}
+          >
+            <CarouselArrowIcon direction="next" />
+          </button>
+        </div>
       </section>
 
-      <section className="dashboard-section dashboard-problem-section" aria-label="문제 추천">
+      <section className="dashboard-section dashboard-problem-section" aria-label={text('DASHBOARD_PROBLEM_SECTION_LABEL', '문제 추천')}>
         <div className="dashboard-section-header">
-          <div className="dashboard-section-title">
+          <button type="button" className="dashboard-section-title dashboard-section-title-button" onClick={() => navigate(PROBLEMS_PATH)}>
             <span className="dashboard-section-icon">
               <ProblemSectionIcon />
             </span>
-            <h2>추천 문제</h2>
-          </div>
+            <h2>{text('DASHBOARD_RECOMMEND_SECTION_TITLE', '추천 문제')}</h2>
+          </button>
 
-          <CarouselDots activePage={problemPageIndex} label="문제 추천 페이지 선택" pageCount={problemPageCount} onSelect={setProblemPageIndex} />
+          <CarouselDots activePage={problemPageIndex} label={text('DASHBOARD_PROBLEM_PAGE_LABEL', '문제 추천 페이지 선택')} pageCount={problemPageCount} onSelect={setProblemPageIndex} />
 
           <button type="button" className="dashboard-section-link" onClick={() => navigate(PROBLEMS_PATH)}>
-            전체 문제 보기
+            {text('DASHBOARD_ALL_PROBLEMS_BUTTON', '전체 문제 보기')}
             <SectionLinkIcon />
           </button>
         </div>
 
-        {loadFailed ? (
-          <PageLoadFailureState className="dashboard-failure-state" />
-        ) : (
-          <>
-            <div className="dashboard-carousel-window dashboard-problem-window">
-              <button
-                type="button"
-                className="dashboard-carousel-arrow is-left"
-                onClick={() => moveProblemPage('previous')}
-                disabled={problemPageIndex === 0}
-                aria-label="이전 추천 문제 보기"
-              >
-                <CarouselArrowIcon direction="previous" />
-              </button>
+        <div className="dashboard-carousel-window dashboard-problem-window">
+          <button
+            type="button"
+            className="dashboard-carousel-arrow is-left"
+            onClick={() => moveProblemPage('previous')}
+            disabled={loadFailed || problemPageIndex === 0}
+            aria-label={text('DASHBOARD_PROBLEM_PREVIOUS_BUTTON_LABEL', '이전 추천 문제 보기')}
+          >
+            <CarouselArrowIcon direction="previous" />
+          </button>
 
-              <div className={`dashboard-problem-list ${isLoading ? 'is-loading' : ''}`.trim()}>
-                {visibleProblems.length > 0 ? (
-                  visibleProblems.map((problem) => (
-                    <article key={problem.problemId} className="dashboard-problem-card">
-                      <button
-                        type="button"
-                        className="dashboard-card-hitbox"
-                        onClick={() => navigate(buildProblemPath(problem.problemId))}
-                        aria-label={`${problem.problemId} 문제로 이동`}
-                      />
+          <div className="dashboard-problem-list">
+            {loadFailed ? (
+              loadFailedStatus != null
+                ? <HttpErrorState status={loadFailedStatus} className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
+                : <PageLoadFailureState className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
+            ) : visibleProblems.length > 0 ? (
+              visibleProblems.map((problem) => (
+                <article key={problem.problemId} className="dashboard-problem-card">
+                  <button
+                    type="button"
+                    className="dashboard-card-hitbox"
+                    onClick={() => navigate(buildProblemPath(problem.problemId))}
+                    aria-label={text('DASHBOARD_PROBLEM_OPEN_LABEL', { problemId: problem.problemId }, `${problem.problemId} 문제로 이동`)}
+                  />
 
-                      <div className="dashboard-problem-card-head">
-                        <span className={`dashboard-dbms-badge is-${problem.dbms}`}>{formatDbmsLabel(problem.dbms)}</span>
-                        <h3 className="dashboard-problem-title">{problem.title}</h3>
-                      </div>
+                  <div className="dashboard-problem-card-head">
+                    <span className={`dashboard-dbms-badge is-${problem.dbms}`}>{formatDbmsLabel(problem.dbms)}</span>
+                    <h3 className="dashboard-problem-title">{problem.title}</h3>
+                  </div>
 
-                      <ProblemMeta problem={problem} />
-                    </article>
-                  ))
-                ) : isLoading ? (
-                  <DashboardProblemLoadingRows />
-                ) : (
-                  <p className="dashboard-empty-text">추천할 문제가 없습니다.</p>
-                )}
+                  <ProblemMeta problem={problem} />
+                </article>
+              ))
+            ) : (
+              <p className="dashboard-empty-text">{text('DASHBOARD_EMPTY_PROBLEMS_STATE', '추천할 문제가 없습니다.')}</p>
+            )}
+          </div>
 
-                {isLoading ? <DashboardLoadingOverlay /> : null}
-              </div>
-
-              <button
-                type="button"
-                className="dashboard-carousel-arrow is-right"
-                onClick={() => moveProblemPage('next')}
-                disabled={problemPageIndex >= problemPageCount - 1}
-                aria-label="다음 추천 문제 보기"
-              >
-                <CarouselArrowIcon direction="next" />
-              </button>
-            </div>
-          </>
-        )}
+          <button
+            type="button"
+            className="dashboard-carousel-arrow is-right"
+            onClick={() => moveProblemPage('next')}
+            disabled={loadFailed || problemPageIndex >= problemPageCount - 1}
+            aria-label={text('DASHBOARD_PROBLEM_NEXT_BUTTON_LABEL', '다음 추천 문제 보기')}
+          >
+            <CarouselArrowIcon direction="next" />
+          </button>
+        </div>
       </section>
     </div>
   );

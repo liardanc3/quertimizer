@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 @RequiredArgsConstructor
@@ -24,10 +25,8 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
     private final LoginPolicy loginPolicy;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-
         // 차단된 IP는 인증 여부와 상관없이 즉시 요청을 거부한다.
         String clientIp = resolveClientIp(request);
         if (accountRestrictionService.isBlockedIp(clientIp)) {

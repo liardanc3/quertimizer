@@ -6,7 +6,10 @@ import './ProblemSolvePage.css';
 import './PublicHomePage.css';
 import './SubmitHistoryPage.css';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import HandleSetupGate from '../components/home/HandleSetupGate';
 import ProblemDetailContent from '../components/problem/ProblemDetailContent';
@@ -40,6 +43,7 @@ import { syncSession, useMockSession } from '../lib/session';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import { getExecutionPlanDetailGroups } from '../lib/executionPlanFilters';
+import { getUiText, getUiTextValue, useUiText } from '../lib/uiText';
 import type { CommunityPostSummary, DbmsType, ProblemDetail, SubmitHistoryEntry, SubmitHistoryPageData, SubmitHistoryPlanFilters } from '../types/domain';
 import logoImage from '../assets/logo.png';
 
@@ -80,14 +84,14 @@ function buildSolveContentTabPath(problemId: string, tab: SolveContentTab) {
 
 function getSolveContentTabLabel(tab: SolveContentTab) {
   if (tab === 'submissions') {
-    return '내 제출 목록';
+    return getUiTextValue('PROBLEM_SOLVE_TAB_MY_SUBMISSIONS_LABEL', '내 제출 목록');
   }
 
   if (tab === 'community') {
-    return '태그된 게시글';
+    return getUiTextValue('PROBLEM_SOLVE_TAB_TAGGED_POSTS_LABEL', '태그된 게시글');
   }
 
-  return '제출';
+  return getUiTextValue('PROBLEM_SOLVE_TAB_SUBMIT_LABEL', '제출');
 }
 
 type SolveRelatedModalState =
@@ -176,14 +180,14 @@ function formatSolveRelatedBoardDate(value: string) {
 
 function getSolveRelatedCommunityCategoryLabel(value: CommunityPostSummary['category']) {
   if (value === 'question') {
-    return '질문';
+    return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
   }
 
   if (value === 'notice') {
-    return '공지';
+    return getUiTextValue('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지');
   }
 
-  return '자유';
+  return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
 function getSolveRelatedCommunitySearchTerm(problemId: string) {
@@ -428,11 +432,6 @@ interface ExecutionStatementRun {
 
 const panelOrder: PanelKey[] = ['editor', 'submit'];
 
-const panelLabels: Record<PanelKey, string> = {
-  editor: '에디터',
-  submit: '제출 결과',
-};
-
 const panelMinWidths: Record<PanelKey, number> = {
   editor: 420,
   submit: 340,
@@ -446,18 +445,6 @@ const panelMinHeights: Record<PanelKey, number> = {
 const SOLVE_PAGE_AUTH_RETURN_STORAGE_KEY = 'quertimizer.solve-auth-return';
 const PASSWORD_RESET_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.';
-const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 사용 가능 여부를 확인하는 중입니다.';
-const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
-const SIGNUP_EMAIL_DUPLICATED_MESSAGE = '이미 사용 중인 이메일입니다.';
-const SIGNUP_CODE_HINT = '이메일로 받은 인증코드 6자를 입력해 주세요.';
-const SIGNUP_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
-const SIGNUP_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.';
-const SIGNUP_PASSWORD_HINT = '특수문자를 포함해 8자 이상 입력해 주세요.';
-const SIGNUP_PASSWORD_CONFIRM_HINT = '비밀번호를 다시 입력해 주세요.';
-const RESET_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
-const RESET_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.';
-const RESET_PASSWORD_CHANGED_MESSAGE = '비밀번호가 변경되었습니다. 다시 로그인해 주세요.';
 
 const SQL_AUTOCOMPLETE_KEYWORDS = [
   'SELECT',
@@ -607,7 +594,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getDbmsLabel(dbms: DbmsType) {
-  return dbms === 'postgresql' ? 'PostgreSQL' : 'Oracle';
+  return dbms === 'postgresql'
+    ? getUiTextValue('COMMON_POSTGRESQL_LABEL', 'PostgreSQL')
+    : getUiTextValue('COMMON_ORACLE_LABEL', 'Oracle');
 }
 
 function getAvailableDbms(problem: ProblemDetail) {
@@ -789,13 +778,13 @@ function isAuthenticationRequiredMessage(message: string | null | undefined) {
 function getSolveAuthSocialLoginErrorMessage(provider: SolveAuthSocialProvider | 'oauth2' | null) {
   switch (provider) {
     case 'google':
-      return 'Google 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_GOOGLE_LOGIN_FAIL_MESSAGE', 'Google 로그인에 실패했습니다.');
     case 'github':
-      return 'Github 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_GITHUB_LOGIN_FAIL_MESSAGE', 'Github 로그인에 실패했습니다.');
     case 'kakao':
-      return 'Kakao 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_KAKAO_LOGIN_FAIL_MESSAGE', 'Kakao 로그인에 실패했습니다.');
     default:
-      return '소셜 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_SOCIAL_LOGIN_FAIL_MESSAGE', '소셜 로그인에 실패했습니다.');
   }
 }
 
@@ -1250,7 +1239,7 @@ function createSubmitPickerOptions(value: string, caretIndex: number): SqlExecut
   const selectOnlyOption: SqlExecutionPickerOption = {
     key: 'submit-select-only',
     kind: 'statement',
-    label: '기준 SELECT만 제출',
+    label: getUiTextValue('PROBLEM_SOLVE_SELECT_ONLY_SUBMIT_LABEL', '기준 SELECT만 제출'),
     preview: referenceStatement.preview,
     start: referenceStatement.start,
     end: referenceStatement.end,
@@ -1267,7 +1256,7 @@ function createSubmitPickerOptions(value: string, caretIndex: number): SqlExecut
     optionCandidates.push({
       key: 'submit-ddl-with-select',
       kind: 'statement',
-      label: '위 DDL 포함 제출',
+      label: getUiTextValue('PROBLEM_SOLVE_WITH_DDL_SUBMIT_LABEL', '위 DDL 포함 제출'),
       preview: createSqlStatementPreview([...ddlSegments, referenceStatement].map((statement) => statement.sql).join(';\n')),
       start: ddlSegments[0].start,
       end: referenceStatement.end,
@@ -1301,7 +1290,7 @@ function createExecutionPickerOptions(value: string, caretIndex: number): SqlExe
     {
       key: 'current-statement',
       kind: 'statement',
-      label: '현재 구문 실행',
+      label: getUiTextValue('PROBLEM_SOLVE_CURRENT_STATEMENT_RUN_LABEL', '현재 구문 실행'),
       preview: nearestStatement.preview,
       start: nearestStatement.start,
       end: nearestStatement.end,
@@ -1310,7 +1299,7 @@ function createExecutionPickerOptions(value: string, caretIndex: number): SqlExe
     {
       key: 'loose-statement-group',
       kind: 'statement',
-      label: '인접 구문 실행',
+      label: getUiTextValue('PROBLEM_SOLVE_NEARBY_STATEMENT_RUN_LABEL', '인접 구문 실행'),
       preview: createSqlStatementPreview(looseStatementGroup.map((statement) => statement.sql).join(';\n')),
       start: looseStatementGroup[0].start,
       end: looseStatementGroup[looseStatementGroup.length - 1].end,
@@ -1319,7 +1308,7 @@ function createExecutionPickerOptions(value: string, caretIndex: number): SqlExe
     {
       key: 'all-statements',
       kind: 'all',
-      label: '전체 실행',
+      label: getUiTextValue('PROBLEM_SOLVE_RUN_ALL_LABEL', '전체 실행'),
       preview: createSqlStatementPreview(wholeSql),
       start: firstStatement.start,
       end: lastStatement.end,
@@ -1855,7 +1844,7 @@ function SubmitProgressItem({ step }: { step: ProblemSubmitProgressStep }) {
           <button
             type="button"
             className="solve-detail-section-divider-button solve-pane-section-divider-button"
-            aria-label={collapsed ? '펼치기' : '접기'}
+            aria-label={collapsed ? getUiTextValue('COMMON_EXPAND_ACTION', '펼치기') : getUiTextValue('COMMON_COLLAPSE_ACTION', '접기')}
             aria-expanded={!collapsed}
             onClick={() => setCollapsed((current) => !current)}
           >
@@ -1907,7 +1896,10 @@ function renderResultTable(
   const columnLabels =
     columns.length > 0
       ? columns
-      : Array.from({ length: rows.reduce((maxCount, row) => Math.max(maxCount, row.length), 0) }, (_, index) => `컬럼 ${index + 1}`);
+      : Array.from(
+          { length: rows.reduce((maxCount, row) => Math.max(maxCount, row.length), 0) },
+          (_, index) => getUiText('PROBLEM_SOLVE_RESULT_COLUMN_FALLBACK', { index: index + 1 }, '컬럼 {index}'),
+        );
 
   const totalPages = Math.max(1, Math.ceil(rowCount / pageSize));
   const normalizedPage = clamp(currentPage, 1, totalPages);
@@ -1926,7 +1918,7 @@ function renderResultTable(
             <button
               type="button"
               className="solve-pane-action solve-pane-action-icon solve-pane-summary-refresh"
-              aria-label="실행 결과 너비 초기화"
+              aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_WIDTH_RESET_LABEL', '실행 결과 너비 초기화')}
               onClick={onResetWidths}
             >
               <RefreshIcon />
@@ -1938,9 +1930,9 @@ function renderResultTable(
             <ExecutionResultGrid columns={gridColumns} rows={gridRows} emptyMessage={emptyMessage} resetKey={resetKey} />
           </div>
           {isPageLoading ? (
-            <div className="solve-result-table-grid-overlay" aria-live="polite" aria-label="실행 결과 페이지 로딩 중">
+            <div className="solve-result-table-grid-overlay" aria-live="polite" aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_LOADING_LABEL', '실행 결과 페이지 로딩 중')}>
               <span className="solve-result-table-grid-spinner" aria-hidden="true" />
-              <span className="solve-result-table-grid-overlay-label">로딩 중</span>
+              <span className="solve-result-table-grid-overlay-label">{getUiTextValue('COMMON_LOADING_STATUS', '로딩 중')}</span>
             </div>
           ) : null}
         </div>
@@ -1952,7 +1944,7 @@ function renderResultTable(
               onClick={() => onPageChange(normalizedPage - 1)}
               disabled={normalizedPage === 1 || isPageLoading}
             >
-              이전
+              {getUiTextValue('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isPageJumpEditing ? (
@@ -1960,7 +1952,7 @@ function renderResultTable(
                 type="text"
                 inputMode="numeric"
                 className="text-field solve-result-pagination-input"
-                aria-label="이동할 페이지 입력"
+                aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_INPUT_LABEL', '이동할 페이지 입력')}
                 value={pageInput}
                 onChange={(event) => onPageInputChange(event.target.value.replace(/\D+/g, ''))}
                 onBlur={onApplyPageJump}
@@ -1982,7 +1974,7 @@ function renderResultTable(
               <button
                 type="button"
                 className="solve-result-pagination-label solve-result-pagination-meta-button"
-                aria-label="이동할 페이지 입력 열기"
+                aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_INPUT_OPEN_LABEL', '이동할 페이지 입력 열기')}
                 disabled={isPageLoading}
                 onClick={onStartPageJumpEditing}
               >
@@ -1996,7 +1988,7 @@ function renderResultTable(
               onClick={() => onPageChange(normalizedPage + 1)}
               disabled={normalizedPage === totalPages || isPageLoading}
             >
-              다음
+              {getUiTextValue('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}
@@ -2021,14 +2013,14 @@ function renderExecutionContent(
   onResetWidths: () => void,
 ) {
   if (!executionResult.success) {
-    return <p className="solve-pane-result-message is-error">{executionResult.message ?? '실행에 실패했다.'}</p>;
+    return <p className="solve-pane-result-message is-error">{executionResult.message ?? getUiTextValue('PROBLEM_SOLVE_EXECUTION_FAIL_MESSAGE', '실행에 실패했습니다.')}</p>;
   }
 
   if (executionResult.mode === 'select') {
     return renderResultTable(
       executionResult.columns,
       executionResult.rows,
-      '표시할 실행 결과가 없다.',
+      getUiTextValue('PROBLEM_SOLVE_RESULT_EMPTY_STATE', '표시할 실행 결과가 없습니다.'),
       executionResult.rowCount,
       currentPage,
       pageSize,
@@ -2173,7 +2165,7 @@ function ExecutionStatementResultItem({
         <button
           type="button"
           className="solve-detail-section-divider-button solve-pane-section-divider-button"
-          aria-label={collapsed ? '펼치기' : '접기'}
+          aria-label={collapsed ? getUiTextValue('COMMON_EXPAND_ACTION', '펼치기') : getUiTextValue('COMMON_COLLAPSE_ACTION', '접기')}
           aria-expanded={!collapsed}
           onClick={() => setCollapsed((current) => !current)}
         >
@@ -2183,7 +2175,7 @@ function ExecutionStatementResultItem({
           <button
             type="button"
             className={`solve-pane-summary-status-button ${titleToneClass}`.trim()}
-            aria-label="실행 결과 위치로 이동"
+            aria-label={getUiTextValue('PROBLEM_SOLVE_MOVE_RESULT_BUTTON', '실행 결과 위치로 이동')}
             onClick={onStatusIndicatorClick}
           >
             {item.status === 'running' ? (
@@ -2203,7 +2195,7 @@ function ExecutionStatementResultItem({
       {!collapsed ? (
         <div className="solve-editor-inline-result-body solve-pane-result-stack">
           {item.status === 'running' ? (
-            <div className="solve-result-empty solve-result-empty-table">SQL을 실행하는 중이다.</div>
+            <div className="solve-result-empty solve-result-empty-table">{getUiTextValue('PROBLEM_SOLVE_RUNNING_MESSAGE', 'SQL을 실행하는 중입니다.')}</div>
           ) : executionResult ? (
             renderExecutionContent(
               executionResult,
@@ -2224,7 +2216,7 @@ function ExecutionStatementResultItem({
               () => setGridResetKey((current) => current + 1),
             )
           ) : (
-            <div className="solve-result-empty solve-result-empty-table">실행 대기 중</div>
+            <div className="solve-result-empty solve-result-empty-table">{getUiTextValue('PROBLEM_SOLVE_PENDING_MESSAGE', '실행 대기 중')}</div>
           )}
         </div>
       ) : null}
@@ -2253,6 +2245,7 @@ function SolvePageAuthOverlay({
   sql: string;
   selectedDbms: DbmsType;
 }) {
+  const { text } = useUiText();
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginErrors, setLoginErrors] = useState<string[]>([]);
@@ -2299,11 +2292,23 @@ function SolvePageAuthOverlay({
   const normalizedSignupCode = signupCode.trim().toUpperCase();
   const normalizedResetEmail = resetEmail.trim();
   const normalizedResetCode = resetCode.trim().toUpperCase();
-  const resetCodeSentStatusMessage = resetStatusMessage === RESET_CODE_SENT_MESSAGE ? resetStatusMessage : null;
-  const resetCodeVerifiedStatusMessage = resetStatusMessage === RESET_CODE_VERIFIED_MESSAGE ? resetStatusMessage : null;
-  const resetPasswordChangedStatusMessage = resetStatusMessage === RESET_PASSWORD_CHANGED_MESSAGE ? resetStatusMessage : null;
-  const signupCodeSentStatusMessage = signupStatusMessage === SIGNUP_CODE_SENT_MESSAGE ? signupStatusMessage : null;
-  const signupCodeVerifiedStatusMessage = signupStatusMessage === SIGNUP_CODE_VERIFIED_MESSAGE ? signupStatusMessage : null;
+  const signupEmailHint = text('AUTH_EMAIL_HINT', '올바른 이메일 형식으로 입력해 주세요.');
+  const signupEmailCheckingMessage = text('AUTH_EMAIL_CHECKING_MESSAGE', '이메일 사용 가능 여부를 확인하는 중입니다.');
+  const signupEmailAvailableMessage = text('AUTH_EMAIL_AVAILABLE_MESSAGE', '사용 가능한 이메일입니다.');
+  const signupEmailDuplicatedMessage = text('AUTH_EMAIL_DUPLICATED_MESSAGE', '이미 사용 중인 이메일입니다.');
+  const signupCodeHint = text('AUTH_CODE_HINT', '이메일로 받은 인증코드 6자를 입력해 주세요.');
+  const signupCodeSentMessage = text('AUTH_CODE_SENT_MESSAGE', '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+  const signupCodeVerifiedMessage = text('AUTH_CODE_VERIFIED_MESSAGE', '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.');
+  const signupPasswordHint = text('AUTH_PASSWORD_HINT', '특수문자를 포함해 8자 이상 입력해 주세요.');
+  const signupPasswordConfirmHint = text('AUTH_PASSWORD_CONFIRM_HINT', '비밀번호를 다시 입력해 주세요.');
+  const resetCodeSentMessage = text('AUTH_CODE_SENT_MESSAGE', '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+  const resetCodeVerifiedMessage = text('AUTH_RESET_CODE_VERIFIED_MESSAGE', '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+  const resetPasswordChangedMessage = text('AUTH_RESET_PASSWORD_CHANGED_MESSAGE', '비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
+  const resetCodeSentStatusMessage = resetStatusMessage === resetCodeSentMessage ? resetStatusMessage : null;
+  const resetCodeVerifiedStatusMessage = resetStatusMessage === resetCodeVerifiedMessage ? resetStatusMessage : null;
+  const resetPasswordChangedStatusMessage = resetStatusMessage === resetPasswordChangedMessage ? resetStatusMessage : null;
+  const signupCodeSentStatusMessage = signupStatusMessage === signupCodeSentMessage ? signupStatusMessage : null;
+  const signupCodeVerifiedStatusMessage = signupStatusMessage === signupCodeVerifiedMessage ? signupStatusMessage : null;
   const isLoginReady = normalizedLoginEmail !== '' && loginPassword.trim() !== '';
   const isSignupEmailValid = EMAIL_PATTERN.test(normalizedSignupEmail);
   const isSignupCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedSignupCode);
@@ -2322,16 +2327,16 @@ function SolvePageAuthOverlay({
   const signupEmailHintMessage =
     signupCodeSentStatusMessage ??
     (normalizedSignupEmail === ''
-      ? SIGNUP_EMAIL_HINT
+      ? signupEmailHint
       : !isSignupEmailValid
-        ? SIGNUP_EMAIL_HINT
+        ? signupEmailHint
         : signupEmailCheckStatus === 'checking'
-          ? SIGNUP_EMAIL_CHECKING_MESSAGE
+          ? signupEmailCheckingMessage
           : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'
-            ? (signupEmailCheckReason ?? SIGNUP_EMAIL_DUPLICATED_MESSAGE)
+            ? (signupEmailCheckReason ?? signupEmailDuplicatedMessage)
             : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available'
-              ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
-              : SIGNUP_EMAIL_HINT);
+              ? signupEmailAvailableMessage
+              : signupEmailHint);
   const hasSignupEmailError =
     normalizedSignupEmail !== '' &&
     (!isSignupEmailValid || (signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'));
@@ -2380,7 +2385,7 @@ function SolvePageAuthOverlay({
 
     if (!popup) {
       setIsSocialLoginSubmitting(false);
-      setLoginErrors(['팝업이 차단되어 소셜 로그인을 진행할 수 없습니다.']);
+      setLoginErrors([text('AUTH_POPUP_BLOCKED_MESSAGE', '팝업이 차단되어 소셜 로그인을 진행할 수 없습니다.')]);
       return;
     }
 
@@ -2563,7 +2568,7 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '이메일 중복 확인 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_EMAIL_DUPLICATE_CHECK_FAIL_MESSAGE', '이메일 중복 확인 중 오류가 발생했습니다.')]);
       return false;
     }
   };
@@ -2587,7 +2592,7 @@ function SolvePageAuthOverlay({
 
       await completeAuthentication(session);
       if (!session.authenticated) {
-        setLoginErrors(['로그인에 실패했습니다.']);
+        setLoginErrors([text('AUTH_LOGIN_FAIL_MESSAGE', '로그인에 실패했습니다.')]);
         return;
       }
 
@@ -2598,7 +2603,7 @@ function SolvePageAuthOverlay({
         return;
       }
 
-      setLoginErrors([error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.']);
+      setLoginErrors([error instanceof Error ? error.message : text('AUTH_LOGIN_ERROR_MESSAGE', '로그인 중 오류가 발생했습니다.')]);
     } finally {
       setIsLoginSubmitting(false);
     }
@@ -2623,7 +2628,7 @@ function SolvePageAuthOverlay({
       setSignupCode('');
       setIsSignupCodeSent(true);
       setIsSignupCodeVerified(false);
-      setSignupStatusMessage(SIGNUP_CODE_SENT_MESSAGE);
+      setSignupStatusMessage(signupCodeSentMessage);
       return true;
     } catch (error) {
       if (error instanceof SignupApiError) {
@@ -2631,7 +2636,7 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSendingSignupCode(false);
@@ -2653,7 +2658,7 @@ function SolvePageAuthOverlay({
         code: normalizedSignupCode,
       });
       setIsSignupCodeVerified(true);
-      setSignupStatusMessage(SIGNUP_CODE_VERIFIED_MESSAGE);
+      setSignupStatusMessage(signupCodeVerifiedMessage);
       return true;
     } catch (error) {
       setIsSignupCodeVerified(false);
@@ -2662,7 +2667,7 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsVerifyingSignupCode(false);
@@ -2696,7 +2701,7 @@ function SolvePageAuthOverlay({
       await completeAuthentication(session);
 
       if (!session.authenticated) {
-        setSignupErrors(['회원가입 후 세션을 확인하지 못했습니다.']);
+        setSignupErrors([text('AUTH_SIGNUP_SESSION_FAIL_MESSAGE', '회원가입 후 세션을 확인하지 못했습니다.')]);
         return false;
       }
 
@@ -2708,7 +2713,7 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_SIGNUP_ERROR_MESSAGE', '회원가입 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSignupSubmitting(false);
@@ -2727,7 +2732,7 @@ function SolvePageAuthOverlay({
       await sendPasswordResetCode({ email: normalizedResetEmail });
       setIsResetCodeSent(true);
       setIsResetCodeVerified(false);
-      setResetStatusMessage(RESET_CODE_SENT_MESSAGE);
+      setResetStatusMessage(resetCodeSentMessage);
       return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
@@ -2735,7 +2740,7 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setResetErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      setResetErrors([error instanceof Error ? error.message : text('AUTH_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSendingResetCode(false);
@@ -2756,7 +2761,7 @@ function SolvePageAuthOverlay({
         code: normalizedResetCode,
       });
       setIsResetCodeVerified(true);
-      setResetStatusMessage(RESET_CODE_VERIFIED_MESSAGE);
+      setResetStatusMessage(resetCodeVerifiedMessage);
       return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
@@ -2764,7 +2769,7 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setResetErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      setResetErrors([error instanceof Error ? error.message : text('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsVerifyingResetCode(false);
@@ -2786,7 +2791,7 @@ function SolvePageAuthOverlay({
         email: normalizedResetEmail,
         password: newPassword,
       });
-      setResetStatusMessage(RESET_PASSWORD_CHANGED_MESSAGE);
+      setResetStatusMessage(resetPasswordChangedMessage);
       setNewPassword('');
       setNewPasswordConfirm('');
       setTimeout(() => {
@@ -2799,26 +2804,31 @@ function SolvePageAuthOverlay({
         return false;
       }
 
-      setResetErrors([error instanceof Error ? error.message : '비밀번호 변경 중 오류가 발생했습니다.']);
+      setResetErrors([error instanceof Error ? error.message : text('AUTH_PASSWORD_CHANGE_FAIL_MESSAGE', '비밀번호 변경 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsResettingPassword(false);
     }
   };
 
-  const overlayTitle = mode === 'signup' ? '이메일로 가입하기' : mode === 'reset-password' ? '비밀번호 찾기' : '로그인';
+  const overlayTitle =
+    mode === 'signup'
+      ? text('AUTH_SIGNUP_TITLE', '이메일로 가입하기')
+      : mode === 'reset-password'
+        ? text('AUTH_RESET_TITLE', '비밀번호 찾기')
+        : text('AUTH_LOGIN_TITLE', '로그인');
   const overlayDescription =
     mode === 'signup'
-      ? '작성 중인 SQL은 유지됩니다. 가입 후 이어서 작성할 수 있습니다.'
+      ? text('PROBLEM_SOLVE_SIGNUP_SQL_KEEP_DESC', '작성 중인 SQL은 유지됩니다. 가입 후 이어서 작성할 수 있습니다.')
       : mode === 'reset-password'
-        ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
-        : '작성 중인 SQL은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
+        ? text('PROBLEM_SOLVE_RESET_DESC', '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.')
+        : text('PROBLEM_SOLVE_LOGIN_SQL_KEEP_DESC', '작성 중인 SQL은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.');
 
   return (
     <div className="solve-auth-overlay" role="presentation">
       <div className="solve-auth-overlay-backdrop" />
       <section className="solve-auth-modal" role="dialog" aria-modal="true" aria-label={overlayTitle}>
-        <button type="button" className="solve-auth-modal-close" aria-label="인증 팝업 닫기" onClick={onClose}>
+        <button type="button" className="solve-auth-modal-close" aria-label={text('AUTH_LOGIN_MODAL_CLOSE_LABEL', '로그인 팝업 닫기')} onClick={onClose}>
           <CloseIcon />
         </button>
         <div className="solve-auth-modal-header is-centered">
@@ -2832,10 +2842,10 @@ function SolvePageAuthOverlay({
           <div className="solve-auth-landing-body">
             <div className="minimal-auth-form solve-auth-modal-login-form">
               <div className="landing-auth-layout">
-                <form className="landing-login-panel" aria-label="로그인 입력" onSubmit={(event) => void handleLoginSubmit(event)}>
+                <form className="landing-login-panel" aria-label={text('AUTH_LOGIN_FORM_LABEL', '로그인 입력')} onSubmit={(event) => void handleLoginSubmit(event)}>
                   <div className="field-stack">
                     <label className="field-label" htmlFor="solve-auth-email">
-                      이메일
+                      {text('AUTH_EMAIL_LABEL', '이메일')}
                     </label>
                     <input
                       id="solve-auth-email"
@@ -2847,13 +2857,13 @@ function SolvePageAuthOverlay({
                         setLoginEmail(event.target.value);
                         setLoginErrors([]);
                       }}
-                      placeholder="이메일을 입력해 주세요."
+                      placeholder={text('AUTH_LOGIN_EMAIL_PLACEHOLDER', '이메일을 입력하세요')}
                     />
                   </div>
 
                   <div className="field-stack">
                     <label className="field-label" htmlFor="solve-auth-password">
-                      비밀번호
+                      {text('AUTH_PASSWORD_LABEL', '비밀번호')}
                     </label>
                     <input
                       id="solve-auth-password"
@@ -2865,7 +2875,7 @@ function SolvePageAuthOverlay({
                         setLoginPassword(event.target.value);
                         setLoginErrors([]);
                       }}
-                      placeholder="비밀번호를 입력해 주세요."
+                      placeholder={text('AUTH_LOGIN_PASSWORD_PLACEHOLDER', '비밀번호를 입력하세요')}
                     />
                   </div>
 
@@ -2885,12 +2895,12 @@ function SolvePageAuthOverlay({
                       className="btn primary landing-login-submit"
                       disabled={!isLoginReady || isLoginSubmitting}
                     >
-                      {isLoginSubmitting ? '로그인 중' : '로그인'}
+                      {isLoginSubmitting ? text('AUTH_LOGIN_IN_PROGRESS_ELLIPSIS', '로그인 중...') : text('AUTH_LOGIN_TITLE', '로그인')}
                     </button>
                   </div>
 
                   <button type="button" className="btn text landing-password-reset-link" onClick={onOpenResetPassword}>
-                    비밀번호를 잊으셨나요?
+                    {text('AUTH_FORGOT_PASSWORD_LINK', '비밀번호를 잊으셨나요?')}
                   </button>
                 </form>
 
@@ -2900,27 +2910,27 @@ function SolvePageAuthOverlay({
                   <span className="landing-auth-divider-line" />
                 </div>
 
-                <aside className="landing-access-panel" aria-label="계정 지원">
+                <aside className="landing-access-panel" aria-label={text('AUTH_ACCOUNT_SUPPORT_LABEL', '계정 지원')}>
                   <div className="landing-access-group landing-access-group-social">
                     <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <GoogleMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">Google로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GOOGLE', 'Google로 계속하기')}</span>
                     </button>
 
                     <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <GithubMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">Github로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GITHUB', 'Github로 계속하기')}</span>
                     </button>
 
                     <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <KakaoMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">Kakao로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_KAKAO', 'Kakao로 계속하기')}</span>
                     </button>
                   </div>
 
@@ -2929,7 +2939,7 @@ function SolvePageAuthOverlay({
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <EmailMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">이메일로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_EMAIL', '이메일로 계속하기')}</span>
                     </button>
                   </div>
                 </aside>
@@ -2940,7 +2950,7 @@ function SolvePageAuthOverlay({
           <form className="solve-auth-signup-form" onSubmit={(event) => void handleSignupSubmit(event)}>
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-signup-email">
-                이메일
+                {text('AUTH_EMAIL_LABEL', '이메일')}
               </label>
               <div className="solve-auth-inline-row">
                 <input
@@ -2971,11 +2981,11 @@ function SolvePageAuthOverlay({
                   onBlur={() => {
                     void checkSignupEmailDuplication();
                   }}
-                  placeholder="이메일을 입력해 주세요."
+                  placeholder={text('AUTH_EMAIL_PLACEHOLDER_POLITE', '이메일을 입력해 주세요.')}
                   aria-invalid={hasSignupEmailError}
                 />
                 <button type="button" className="btn secondary" onClick={handleSendSignupCode} disabled={!isSignupEmailValid || isSendingSignupCode}>
-                  {isSendingSignupCode ? '전송 중' : '코드 전송'}
+                  {isSendingSignupCode ? text('COMMON_SENDING_LABEL', '전송 중') : text('AUTH_CODE_SEND_BUTTON', '코드 전송')}
                 </button>
               </div>
               <p className={`solve-auth-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
@@ -2985,7 +2995,7 @@ function SolvePageAuthOverlay({
 
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-signup-code">
-                인증 코드
+                {text('AUTH_CODE_LABEL', '인증 코드')}
               </label>
               <div className="solve-auth-inline-row">
                 <input
@@ -3013,7 +3023,7 @@ function SolvePageAuthOverlay({
                       }
                     })();
                   }}
-                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                  placeholder={text('AUTH_CODE_PLACEHOLDER_POLITE', '이메일로 받은 6자리 코드를 입력해 주세요.')}
                   disabled={!isSignupCodeSent}
                 />
                 <button
@@ -3022,16 +3032,16 @@ function SolvePageAuthOverlay({
                   onClick={handleVerifySignupCode}
                   disabled={!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode}
                 >
-                  {isVerifyingSignupCode ? '확인 중' : '코드 확인'}
+                  {isVerifyingSignupCode ? text('COMMON_VERIFYING_LABEL', '확인 중') : text('AUTH_CODE_VERIFY_BUTTON', '코드 확인')}
                 </button>
               </div>
               {signupCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint is-success">{signupCodeVerifiedStatusMessage}</p> : null}
-              {!signupCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint">{SIGNUP_CODE_HINT}</p> : null}
+              {!signupCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint">{signupCodeHint}</p> : null}
             </div>
 
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-signup-password">
-                비밀번호
+                {text('AUTH_PASSWORD_LABEL', '비밀번호')}
               </label>
               <input
                 id="solve-signup-password"
@@ -3052,17 +3062,17 @@ function SolvePageAuthOverlay({
                   event.preventDefault();
                   focusNextInput(signupPasswordConfirmInputRef);
                 }}
-                placeholder="비밀번호를 입력해 주세요."
+                placeholder={text('AUTH_PASSWORD_PLACEHOLDER_POLITE', '비밀번호를 입력해 주세요.')}
                 aria-invalid={signupPassword.length > 0 && !isSignupPasswordValid}
               />
               <p className={`solve-auth-field-hint ${signupPassword.length > 0 && !isSignupPasswordValid ? 'is-error' : signupPassword.length > 0 ? 'is-success' : ''}`}>
-                {SIGNUP_PASSWORD_HINT}
+                {signupPasswordHint}
               </p>
             </div>
 
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-signup-password-confirm">
-                비밀번호 확인
+                {text('AUTH_PASSWORD_CONFIRM_LABEL', '비밀번호 확인')}
               </label>
               <input
                 id="solve-signup-password-confirm"
@@ -3083,11 +3093,11 @@ function SolvePageAuthOverlay({
                   event.preventDefault();
                   void handleSignupSubmit();
                 }}
-                placeholder="비밀번호를 다시 입력해 주세요."
+                placeholder={text('AUTH_PASSWORD_CONFIRM_PLACEHOLDER', '비밀번호를 다시 입력해 주세요.')}
                 aria-invalid={signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid}
               />
               <p className={`solve-auth-field-hint ${signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid ? 'is-error' : signupPasswordConfirm.length > 0 ? 'is-success' : ''}`}>
-                {SIGNUP_PASSWORD_CONFIRM_HINT}
+                {signupPasswordConfirmHint}
               </p>
             </div>
 
@@ -3101,10 +3111,10 @@ function SolvePageAuthOverlay({
 
             <div className="solve-auth-signup-actions">
               <button type="submit" className="btn primary" disabled={!isSignupReady || isSignupSubmitting}>
-                {isSignupSubmitting ? '가입 중' : '가입하기'}
+                {isSignupSubmitting ? text('AUTH_SIGNUP_PROGRESS_LABEL', '가입 중') : text('AUTH_SIGNUP_BUTTON', '가입하기')}
               </button>
               <button type="button" className="solve-auth-reset-link" onClick={onReturnToLogin}>
-                로그인으로 돌아가기
+                {text('AUTH_BACK_TO_LOGIN_BUTTON', '로그인으로 돌아가기')}
               </button>
             </div>
           </form>
@@ -3112,7 +3122,7 @@ function SolvePageAuthOverlay({
           <form className="solve-auth-reset-form" onSubmit={(event) => void handleResetPassword(event)}>
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-reset-email">
-                이메일
+                {text('AUTH_EMAIL_LABEL', '이메일')}
               </label>
               <div className="solve-auth-inline-row">
                 <input
@@ -3139,10 +3149,10 @@ function SolvePageAuthOverlay({
                     setResetErrors([]);
                     setResetStatusMessage(null);
                   }}
-                  placeholder="가입한 이메일을 입력해 주세요."
+                  placeholder={text('AUTH_RESET_EMAIL_PLACEHOLDER', '가입한 이메일을 입력해 주세요.')}
                 />
                 <button type="button" className="btn secondary" onClick={handleSendResetCode} disabled={!isResetEmailValid || isSendingResetCode}>
-                  {isSendingResetCode ? '전송 중' : '코드 전송'}
+                  {isSendingResetCode ? text('COMMON_SENDING_LABEL', '전송 중') : text('AUTH_CODE_SEND_BUTTON', '코드 전송')}
                 </button>
               </div>
               {resetCodeSentStatusMessage ? <p className="solve-auth-field-hint is-success">{resetCodeSentStatusMessage}</p> : null}
@@ -3150,7 +3160,7 @@ function SolvePageAuthOverlay({
 
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-reset-code">
-                인증 코드
+                {text('AUTH_CODE_LABEL', '인증 코드')}
               </label>
               <div className="solve-auth-inline-row">
                 <input
@@ -3177,7 +3187,7 @@ function SolvePageAuthOverlay({
                       }
                     })();
                   }}
-                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                  placeholder={text('AUTH_CODE_PLACEHOLDER_POLITE', '이메일로 받은 6자리 코드를 입력해 주세요.')}
                 />
                 <button
                   type="button"
@@ -3185,7 +3195,7 @@ function SolvePageAuthOverlay({
                   onClick={handleVerifyResetCode}
                   disabled={!isResetCodeSent || !isResetCodeValid || isVerifyingResetCode}
                 >
-                  {isVerifyingResetCode ? '확인 중' : '코드 확인'}
+                  {isVerifyingResetCode ? text('COMMON_VERIFYING_LABEL', '확인 중') : text('AUTH_CODE_VERIFY_BUTTON', '코드 확인')}
                 </button>
               </div>
               {resetCodeVerifiedStatusMessage ? <p className="solve-auth-field-hint is-success">{resetCodeVerifiedStatusMessage}</p> : null}
@@ -3193,7 +3203,7 @@ function SolvePageAuthOverlay({
 
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-reset-password">
-                새 비밀번호
+                {text('AUTH_NEW_PASSWORD_LABEL', '새 비밀번호')}
               </label>
               <input
                 id="solve-reset-password"
@@ -3213,14 +3223,14 @@ function SolvePageAuthOverlay({
                   event.preventDefault();
                   focusNextInput(resetPasswordConfirmInputRef);
                 }}
-                placeholder="특수문자를 포함해 8자 이상 입력해 주세요."
+                placeholder={text('AUTH_NEW_PASSWORD_PLACEHOLDER', '특수문자를 포함해 8자 이상 입력해 주세요.')}
                 disabled={!isResetCodeVerified}
               />
             </div>
 
             <div className="field-stack solve-auth-field-stack">
               <label className="field-label" htmlFor="solve-reset-password-confirm">
-                새 비밀번호 확인
+                {text('AUTH_NEW_PASSWORD_CONFIRM_LABEL', '새 비밀번호 확인')}
               </label>
               <input
                 id="solve-reset-password-confirm"
@@ -3240,7 +3250,7 @@ function SolvePageAuthOverlay({
                   event.preventDefault();
                   void handleResetPassword();
                 }}
-                placeholder="비밀번호를 다시 입력해 주세요."
+                placeholder={text('AUTH_PASSWORD_CONFIRM_PLACEHOLDER', '비밀번호를 다시 입력해 주세요.')}
                 disabled={!isResetCodeVerified}
               />
               {resetPasswordChangedStatusMessage ? <p className="solve-auth-field-hint is-success">{resetPasswordChangedStatusMessage}</p> : null}
@@ -3260,10 +3270,10 @@ function SolvePageAuthOverlay({
                 className="btn primary"
                 disabled={!isResetCodeVerified || !isResetPasswordValid || !isResetPasswordConfirmValid || isResettingPassword}
               >
-                {isResettingPassword ? '변경 중' : '비밀번호 변경'}
+                {isResettingPassword ? text('AUTH_PASSWORD_CHANGING_LABEL', '변경 중') : text('AUTH_PASSWORD_CHANGE_BUTTON', '비밀번호 변경')}
               </button>
               <button type="button" className="solve-auth-reset-link" onClick={onReturnToLogin}>
-                로그인으로 돌아가기
+                {text('AUTH_BACK_TO_LOGIN_BUTTON', '로그인으로 돌아가기')}
               </button>
             </div>
           </form>
@@ -3660,6 +3670,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const sqlEditorSelectionRef = useRef<SqlEditorSelection>({ start: 0, end: 0 });
   const sqlEditorHeightRef = useRef(SQL_EDITOR_MIN_HEIGHT);
+  const { text } = useUiText();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<ProblemSolveFavoriteSnapshot>('problemSolve'), []);
   const favoriteSelectionRestoreRef = useRef<SqlEditorSelection | null>(favoriteRestoreSnapshot?.editorSelection ?? null);
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
@@ -3674,6 +3685,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const fallbackProblem = useMemo(() => createFallbackProblemDetail(problemId), [problemId]);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
+  const [problemLoadErrorStatus, setProblemLoadErrorStatus] = useState<number | null>(null);
   const [executionRuns, setExecutionRuns] = useState<ExecutionStatementRun[]>([]);
   const [executionStatementMarkerLayout, setExecutionStatementMarkerLayout] = useState<ExecutionStatementMarkerLayout | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -3716,12 +3728,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [mySubmitHistoryPage, setMySubmitHistoryPage] = useState<SubmitHistoryPageData>(createEmptySolveSubmitHistoryPage());
   const [isMySubmitLoading, setIsMySubmitLoading] = useState(false);
   const [mySubmitLoadError, setMySubmitLoadError] = useState<string | null>(null);
+  const [mySubmitLoadErrorStatus, setMySubmitLoadErrorStatus] = useState<number | null>(null);
   const [mySubmitRequestedPage, setMySubmitRequestedPage] = useState(() => favoriteRestoreSnapshot?.mySubmitRequestedPage ?? 1);
   const [isMySubmitPageJumpEditing, setIsMySubmitPageJumpEditing] = useState(false);
   const [mySubmitPageJumpDraft, setMySubmitPageJumpDraft] = useState('1');
   const [taggedPostPage, setTaggedPostPage] = useState<CommunityPostPage>(createEmptySolveCommunityPage());
   const [isTaggedPostLoading, setIsTaggedPostLoading] = useState(false);
   const [taggedPostLoadError, setTaggedPostLoadError] = useState<string | null>(null);
+  const [taggedPostLoadErrorStatus, setTaggedPostLoadErrorStatus] = useState<number | null>(null);
   const [taggedPostRequestedPage, setTaggedPostRequestedPage] = useState(() => favoriteRestoreSnapshot?.taggedPostRequestedPage ?? 1);
   const [isTaggedPostPageJumpEditing, setIsTaggedPostPageJumpEditing] = useState(false);
   const [taggedPostPageJumpDraft, setTaggedPostPageJumpDraft] = useState('1');
@@ -3730,7 +3744,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const deferredSql = useDeferredValue(sql);
   const [sqlEditorFontSize, setSqlEditorFontSize] = useState(SQL_EDITOR_DEFAULT_FONT_SIZE);
   const getPanelTitle = (panelKey: PanelKey) =>
-    panelKey === 'editor' ? `${getDbmsLabel(selectedDbms)} 에디터` : panelLabels[panelKey];
+    panelKey === 'editor'
+      ? `${getDbmsLabel(selectedDbms)} ${text('PROBLEM_SOLVE_PANEL_EDITOR_LABEL', '에디터')}`
+      : text('PROBLEM_SOLVE_PANEL_RESULT_LABEL', '제출 결과');
   const selectedDdl = useMemo(() => resolveProblemDdl(problemDetail, selectedDbms), [problemDetail, selectedDbms]);
   const ddlAutocompleteItems = useMemo(() => extractAutocompleteItemsFromDdl(selectedDdl), [selectedDdl]);
   const sqlHighlightTableNames = useMemo(
@@ -3821,7 +3837,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
-    problemDetail?.title ?? problem.title ?? '문제';
+    problemDetail?.title ?? problem.title ?? text('HEADER_MENU_PROBLEMS', '문제');
   const taggedPostPrimarySearchTerm = displayProblemNumber;
   const taggedPostFallbackSearchTerm = getSolveRelatedCommunitySearchTerm(displayProblemNumber);
 
@@ -3919,6 +3935,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     setProblemDetail(null);
     setProblemLoadError(null);
+    setProblemLoadErrorStatus(null);
 
     void fetchProblemDetail(problemId)
       .then((detail) => {
@@ -3933,7 +3950,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           return;
         }
 
-        setProblemLoadError(error instanceof Error ? error.message : '문제 상세 조회에 실패했다.');
+        setProblemLoadError(error instanceof Error ? error.message : getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setProblemLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       });
 
     return () => {
@@ -4007,12 +4026,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setMySubmitHistoryPage(createEmptySolveSubmitHistoryPage());
     setIsMySubmitLoading(false);
     setMySubmitLoadError(null);
+    setMySubmitLoadErrorStatus(null);
     setMySubmitRequestedPage(restoredMySubmitPage);
     setIsMySubmitPageJumpEditing(false);
     setMySubmitPageJumpDraft(String(restoredMySubmitPage));
     setTaggedPostPage(createEmptySolveCommunityPage());
     setIsTaggedPostLoading(false);
     setTaggedPostLoadError(null);
+    setTaggedPostLoadErrorStatus(null);
     setTaggedPostRequestedPage(restoredTaggedPostPage);
     setIsTaggedPostPageJumpEditing(false);
     setTaggedPostPageJumpDraft(String(restoredTaggedPostPage));
@@ -4048,12 +4069,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       setMySubmitHistoryPage(createEmptySolveSubmitHistoryPage());
       setIsMySubmitLoading(false);
       setMySubmitLoadError(null);
+      setMySubmitLoadErrorStatus(null);
       return;
     }
 
     let cancelled = false;
     setIsMySubmitLoading(true);
     setMySubmitLoadError(null);
+    setMySubmitLoadErrorStatus(null);
 
     void fetchSubmitHistories({
       page: mySubmitRequestedPage,
@@ -4080,7 +4103,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           return;
         }
 
-        setMySubmitLoadError(error instanceof Error ? error.message : '내 제출을 불러오지 못했다.');
+        setMySubmitLoadError(error instanceof Error ? error.message : getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setMySubmitLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -4101,6 +4126,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     let cancelled = false;
     setIsTaggedPostLoading(true);
     setTaggedPostLoadError(null);
+    setTaggedPostLoadErrorStatus(null);
 
     async function loadTaggedPosts() {
       try {
@@ -4139,7 +4165,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           return;
         }
 
-        setTaggedPostLoadError(error instanceof Error ? error.message : '태그된 게시글을 불러오지 못했다.');
+        setTaggedPostLoadError(error instanceof Error ? error.message : getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setTaggedPostLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       } finally {
         if (!cancelled) {
           setIsTaggedPostLoading(false);
@@ -4318,7 +4346,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       if (message.type === 'problem.submit.result') {
-        const nextSubmitMessage = (message as ProblemSocketMessage).message ?? '제출을 기록하지 못했다.';
+        const nextSubmitMessage = (message as ProblemSocketMessage).message ?? text('PROBLEM_SOLVE_SUBMIT_RECORD_FAIL_MESSAGE', '제출을 기록하지 못했습니다.');
         if (isAuthenticationRequiredMessage(nextSubmitMessage)) {
           setIsSubmitting(false);
           setSubmitProgressSteps([]);
@@ -4328,7 +4356,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         }
 
         setIsSubmitting(false);
-        setSubmitMessage((message as ProblemSocketMessage).success === false && nextSubmitMessage !== '오답' ? nextSubmitMessage : null);
+        setSubmitMessage(
+          (message as ProblemSocketMessage).success === false
+            && nextSubmitMessage !== text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')
+            ? nextSubmitMessage
+            : null,
+        );
         setCollapsedCards((current) => ({
           ...current,
           submit: false,
@@ -4352,7 +4385,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       if (message.type === 'problem.execute.result' || message.type === 'error') {
         const nextExecutionResult =
           message.type === 'error'
-            ? createProblemExecutionError(((message as ProblemSocketMessage).message ?? '문제 실행에 실패했다.'))
+            ? createProblemExecutionError(((message as ProblemSocketMessage).message ?? getUiTextValue('PROBLEM_SOLVE_EXECUTION_FAIL_MESSAGE', '실행에 실패했습니다.')))
             : toProblemExecutionResult(message as ProblemSocketMessage);
 
         if (executionResponseResolverRef.current) {
@@ -4662,7 +4695,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (selectedDbms !== 'postgresql') {
       setSubmitProgressSteps([]);
-      setSubmitMessage('제출은 PostgreSQL만 지원한다.');
+      setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_NOT_SUPPORTED_MESSAGE', '제출은 PostgreSQL만 지원합니다.'));
       setCollapsedCards((current) => ({
         ...current,
         submit: false,
@@ -4676,7 +4709,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (sql.trim().length === 0) {
       setSubmitProgressSteps([]);
-      setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_SQL_REQUIRED_MESSAGE', '제출할 SQL을 입력해 주세요.'));
       setCollapsedCards((current) => ({
         ...current,
         submit: false,
@@ -4704,7 +4737,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     const parsedStatements = parseSqlStatements(sql);
     if (parsedStatements.length === 0) {
       setSubmitProgressSteps([]);
-      setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_SQL_REQUIRED_MESSAGE', '제출할 SQL을 입력해 주세요.'));
       setCollapsedCards((current) => ({
         ...current,
         submit: false,
@@ -4725,7 +4758,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (submitOptions.length === 0) {
       setSubmitProgressSteps([]);
-      setSubmitMessage('제출 가능한 SELECT 구문이 없다.');
+      setSubmitMessage(text('PROBLEM_SOLVE_SELECT_REQUIRED_MESSAGE', '제출 가능한 SELECT 구문이 없습니다.'));
       setCollapsedCards((current) => ({
         ...current,
         submit: false,
@@ -4792,7 +4825,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             ? {
                 ...run,
                 status: 'error',
-                result: createProblemExecutionError(error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.'),
+                result: createProblemExecutionError(error instanceof SessionSocketError ? error.message : getUiTextValue('PROBLEM_SOLVE_CONNECTION_FAIL_MESSAGE', '문제 실행 연결에 실패했습니다.')),
               }
             : run,
         ),
@@ -4879,7 +4912,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         return;
       }
 
-      const nextErrorResult = createProblemExecutionError(error instanceof SessionSocketError ? error.message : '문제 실행 연결에 실패했다.');
+      const nextErrorResult = createProblemExecutionError(error instanceof SessionSocketError ? error.message : getUiTextValue('PROBLEM_SOLVE_CONNECTION_FAIL_MESSAGE', '문제 실행 연결에 실패했습니다.'));
       setExecutionRuns((current) => {
         if (current.length === 0) {
           return [createSingleExecutionStatementRun(sql, nextErrorResult)];
@@ -4980,7 +5013,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (submitSql.trim().length === 0) {
       setSubmitProgressSteps([]);
-      setSubmitMessage('제출할 SQL을 입력해야 한다.');
+      setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_SQL_REQUIRED_MESSAGE', '제출할 SQL을 입력해 주세요.'));
       setCollapsedCards((current) => ({
         ...current,
         submit: false,
@@ -5022,7 +5055,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         return;
       }
 
-      setSubmitMessage(error instanceof SessionSocketError ? error.message : '제출 연결에 실패했다.');
+      setSubmitMessage(error instanceof SessionSocketError ? error.message : text('PROBLEM_SOLVE_SUBMIT_CONNECTION_FAIL_MESSAGE', '제출 연결에 실패했습니다.'));
     }
   };
 
@@ -5072,7 +5105,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (selectedDbms !== 'postgresql') {
       setExecutionRuns([
-        createSingleExecutionStatementRun(sql, createProblemExecutionError('인터랙티브 실행은 PostgreSQL만 지원한다.')),
+        createSingleExecutionStatementRun(
+          sql,
+          createProblemExecutionError(text('PROBLEM_SOLVE_INTERACTIVE_NOT_SUPPORTED_MESSAGE', '인터랙티브 실행은 PostgreSQL만 지원합니다.')),
+        ),
       ]);
       setCollapsedCards((current) => ({
         ...current,
@@ -5086,7 +5122,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     if (sql.trim().length === 0) {
-      setExecutionRuns([createSingleExecutionStatementRun(sql, createProblemExecutionError('실행할 SQL을 입력해야 한다.'))]);
+      setExecutionRuns([createSingleExecutionStatementRun(sql, createProblemExecutionError(text('PROBLEM_SOLVE_EXECUTE_SQL_REQUIRED_MESSAGE', '실행할 SQL을 입력해 주세요.')))]);
       setCollapsedCards((current) => ({
         ...current,
         execute: false,
@@ -5105,7 +5141,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     const executableSegments = parseSqlStatements(sql);
     if (executableSegments.length === 0) {
-      setExecutionRuns([createSingleExecutionStatementRun(sql, createProblemExecutionError('실행할 SQL을 입력해야 한다.'))]);
+      setExecutionRuns([createSingleExecutionStatementRun(sql, createProblemExecutionError(text('PROBLEM_SOLVE_EXECUTE_SQL_REQUIRED_MESSAGE', '실행할 SQL을 입력해 주세요.')))]);
       return;
     }
 
@@ -5133,7 +5169,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           : run,
       ),
     );
-    resolveExecution?.(createProblemExecutionError('중지됨'));
+    resolveExecution?.(createProblemExecutionError(text('PROBLEM_SOLVE_STOPPED_MESSAGE', '중지됨')));
     void sendSessionSocketMessage({
       type: 'problem.execute.stop',
       problemId,
@@ -5430,7 +5466,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className="mini-toggle solve-pane-action solve-pane-action-icon"
-        aria-label={`Close ${getPanelTitle(panelKey)}`}
+        aria-label={text('PROBLEM_SOLVE_PANEL_CLOSE_LABEL', { label: getPanelTitle(panelKey) }, '{label} 닫기')}
         onClick={() => togglePanelVisibility(panelKey)}
       >
         <CloseIcon />
@@ -5443,7 +5479,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     const sliderValue = Math.round(((editorFloatingOpacity - FLOATING_EDITOR_BACKGROUND_MIN_ALPHA) / sliderRange) * 100);
 
     return (
-      <label className="solve-floating-opacity-control" aria-label="에디터 투명도 조절">
+      <label className="solve-floating-opacity-control" aria-label={text('PROBLEM_SOLVE_EDITOR_OPACITY_LABEL', '에디터 투명도 조절')}>
         <span className="solve-floating-opacity-icon" aria-hidden="true">
           <OpacityIcon />
         </span>
@@ -5488,7 +5524,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <button
         type="button"
         className="solve-detail-section-divider-button solve-pane-section-divider-button"
-        aria-label={collapsedCards[cardKey] ? '펼치기' : '접기'}
+        aria-label={collapsedCards[cardKey] ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
         aria-expanded={!collapsedCards[cardKey]}
         onClick={() => toggleCardCollapse(cardKey)}
       >
@@ -5549,7 +5585,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           {!collapsedCards.editor ? (
             <div className="solve-editor-stack">
               <div className="solve-editor-toolbar-row">
-                <div className="solve-editor-zoom-controls" aria-label="에디터 글씨 크기 조절">
+                <div className="solve-editor-zoom-controls" aria-label={text('PROBLEM_SOLVE_EDITOR_FONT_SIZE_LABEL', '에디터 글씨 크기 조절')}>
                   <button type="button" className="mini-toggle solve-editor-zoom-button is-increase" onClick={() => changeSqlEditorFontSize(1)}>
                     +
                   </button>
@@ -5564,13 +5600,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     onClick={handleStopExecution}
                     disabled={!isExecuting}
                   >
-                    중지
+                    {text('PROBLEM_SOLVE_STOP_BUTTON', '중지')}
                   </button>
                   <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
-                    {isExecuting ? '실행 중' : '실행 (Ctrl + Enter)'}
+                    {isExecuting ? text('PROBLEM_SOLVE_EXECUTING_LABEL', '실행 중') : text('PROBLEM_SOLVE_EXECUTE_SHORTCUT_LABEL', '실행 (Ctrl + Enter)')}
                   </button>
                   <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
-                    {isSubmitting ? '제출 중' : '제출 (Ctrl + Shift + Enter)'}
+                    {isSubmitting ? text('PROBLEM_SOLVE_SUBMITTING_LABEL', '제출 중') : text('PROBLEM_SOLVE_SUBMIT_SHORTCUT_LABEL', '제출 (Ctrl + Shift + Enter)')}
                   </button>
                 </div>
               </div>
@@ -5593,7 +5629,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                               height: `${marker.height}px`,
                               fontSize: `${marker.fontSize}px`,
                             }}
-                            aria-label="실행 결과 위치로 이동"
+                            aria-label={text('PROBLEM_SOLVE_MOVE_RESULT_BUTTON', '실행 결과 위치로 이동')}
                             onClick={() => focusExecutionRun(marker.key)}
                           >
                             {marker.status === 'success' ? (
@@ -5613,7 +5649,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       style={{ fontSize: `${sqlEditorFontSize}px` }}
                     >
                       {sql.length === 0 ? (
-                        <span className="solve-sql-highlight-placeholder">이곳에 SQL을 작성하세요.</span>
+                        <span className="solve-sql-highlight-placeholder">{text('PROBLEM_SOLVE_EDITOR_PLACEHOLDER', '이곳에 SQL을 작성하세요.')}</span>
                       ) : (
                         highlightedSql
                       )}
@@ -5623,7 +5659,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       className={`solve-sql-editor ${sql.length === 0 ? 'is-empty' : 'has-content'}`}
                       spellCheck={false}
                       wrap="soft"
-                      placeholder="이곳에 SQL을 작성하세요."
+                      placeholder={text('PROBLEM_SOLVE_EDITOR_PLACEHOLDER', '이곳에 SQL을 작성하세요.')}
                       style={{ fontSize: `${sqlEditorFontSize}px` }}
                       value={sql}
                       onChange={(event) => handleEditorChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
@@ -5652,7 +5688,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                           }
                         }, 120);
                       }}
-                      aria-label="에디터"
+                      aria-label={text('PROBLEM_SOLVE_PANEL_EDITOR_LABEL', '에디터')}
                     />
                   </div>
 
@@ -5667,7 +5703,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                             maxHeight: `${autocompleteState.maxHeight}px`,
                           }}
                           role="listbox"
-                          aria-label="SQL 자동완성"
+                          aria-label={text('PROBLEM_SOLVE_AUTOCOMPLETE_TITLE', 'SQL 자동완성')}
                         >
                           {autocompleteState.items.map((item, index) => (
                             <button
@@ -5713,7 +5749,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                             maxHeight: `${executionPickerState.maxHeight}px`,
                           }}
                           role="listbox"
-                          aria-label={executionPickerState.mode === 'submit' ? 'SQL 제출 구문 선택' : 'SQL 실행 구문 선택'}
+                          aria-label={
+                            executionPickerState.mode === 'submit'
+                              ? text('PROBLEM_SOLVE_SUBMIT_PICKER_LABEL', 'SQL 제출 구문 선택')
+                              : text('PROBLEM_SOLVE_EXECUTION_PICKER_LABEL', 'SQL 실행 구문 선택')
+                          }
                         >
                           {executionPickerState.options.map((option, index) => (
                             <button
@@ -5779,12 +5819,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 ) : null}
                 {submitMessage ? (
                   <div className="solve-pane-result-stack">
-                    <p className={`solve-pane-result-message ${submitMessage === '오답' ? 'is-error' : ''}`.trim()}>{submitMessage}</p>
+                    <p className={`solve-pane-result-message ${submitMessage === text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답') ? 'is-error' : ''}`.trim()}>{submitMessage}</p>
                   </div>
                 ) : null}
               </div>
             ) : (
-              <div className="solve-result-empty">제출 결과 없음.</div>
+              <div className="solve-result-empty">{text('PROBLEM_SOLVE_SUBMIT_RESULT_EMPTY_STATE', '제출 결과 없음.')}</div>
             )
           ) : null}
         </div>
@@ -5855,16 +5895,18 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             }}
           >
             {relatedModalState.type === 'sql' ? (
-              <div className="submit-history-modal" role="dialog" aria-modal="true" aria-label="제출 결과 보기">
+              <div className="submit-history-modal" role="dialog" aria-modal="true" aria-label={text('SUBMIT_HISTORY_SQL_MODAL_LABEL', '제출 SQL 보기')}>
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
                     <div className="submit-history-modal-title-row">
-                      <strong>제출 결과</strong>
+                      <strong>{text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}</strong>
                       <span className={`submit-history-modal-title-status ${relatedModalState.history.success ? 'is-success' : 'is-fail'}`}>
-                        {relatedModalState.history.success ? '정답' : '오답'}
+                        {relatedModalState.history.success
+                          ? text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답')
+                          : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                       </span>
                     </div>
-                    <span>{`${relatedModalState.history.submitId} · ${relatedModalState.history.handle} · 문제 ${relatedModalState.history.problemId}`}</span>
+                    <span>{`${relatedModalState.history.submitId} · ${relatedModalState.history.handle} · ${text('PROBLEM_SOLVE_PROBLEM_NUMBER_LABEL', { problemId: relatedModalState.history.problemId }, '문제 {problemId}')}`}</span>
                     <div className="submit-history-modal-meta">
                       <div className="submit-history-modal-meta-stack">
                         <span className="submit-history-modal-meta-line">{getDbmsLabel(relatedModalState.history.dbms)}</span>
@@ -5876,8 +5918,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                           <button
                             type="button"
                             className="submit-history-modal-meta-action submit-history-modal-meta-icon"
-                            aria-label="실행계획 요소 보기"
-                            title="실행계획 요소 보기"
+                            aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
+                            title={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
                             onClick={() => setRelatedModalState({ type: 'plan', history: relatedModalState.history })}
                           >
                             ↗
@@ -5887,29 +5929,29 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     </div>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
-                    닫기
+                    {text('COMMON_CLOSE_BUTTON', '닫기')}
                   </button>
                 </div>
 
                 <div className="submit-history-modal-body submit-history-sql-modal-body">
-                  <pre className="solve-related-sql-viewer" aria-label="제출 SQL">{relatedModalState.history.submittedSql}</pre>
+                  <pre className="solve-related-sql-viewer" aria-label={text('SUBMIT_HISTORY_SQL_VIEWER_LABEL', '제출 SQL')}>{relatedModalState.history.submittedSql}</pre>
                 </div>
               </div>
             ) : (
-              <div className="submit-history-modal submit-history-plan-modal" role="dialog" aria-modal="true" aria-label="실행계획 요소 보기">
+              <div className="submit-history-modal submit-history-plan-modal" role="dialog" aria-modal="true" aria-label={text('SUBMIT_HISTORY_PLAN_MODAL_LABEL', '실행 계획 요소 보기')}>
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
-                    <strong>실행계획 요소</strong>
-                    <span>{`${relatedModalState.history.handle} · ${getDbmsLabel(relatedModalState.history.dbms)} · 문제 ${relatedModalState.history.problemId}`}</span>
+                    <strong>{text('SUBMIT_HISTORY_PLAN_TITLE', '실행 계획 요소')}</strong>
+                    <span>{`${relatedModalState.history.handle} · ${getDbmsLabel(relatedModalState.history.dbms)} · ${text('PROBLEM_SOLVE_PROBLEM_NUMBER_LABEL', { problemId: relatedModalState.history.problemId }, '문제 {problemId}')}`}</span>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
-                    닫기
+                    {text('COMMON_CLOSE_BUTTON', '닫기')}
                   </button>
                 </div>
 
                 <div className="submit-history-modal-body submit-history-plan-modal-body">
                   <div className="submit-history-plan-modal-summary">
-                    <span className="submit-history-plan-modal-label">Cost</span>
+                    <span className="submit-history-plan-modal-label">{text('COMMON_COST_LABEL', 'Cost')}</span>
                     <strong>{formatSolveRelatedCost(relatedModalState.history.cost)}</strong>
                   </div>
 
@@ -5923,7 +5965,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       ))}
                     </div>
                   ) : (
-                    <div className="submit-history-empty-state submit-history-modal-empty-state">감지된 대표 실행계획 요소가 없습니다.</div>
+                    <div className="submit-history-empty-state submit-history-modal-empty-state">{text('PROBLEM_SOLVE_RELATED_PLAN_EMPTY_STATE', '감지된 대표 실행계획 요소가 없습니다.')}</div>
                   )}
                 </div>
               </div>
@@ -5938,25 +5980,27 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }
 
     if (!isAuthenticated || !handle) {
-      return <div className="solve-related-empty-state">로그인 후 내 제출을 확인할 수 있습니다.</div>;
+      return <div className="solve-related-empty-state">{text('PROBLEM_SOLVE_RELATED_SUBMIT_EMPTY_STATE', '로그인 후 내 제출을 확인할 수 있습니다.')}</div>;
     }
 
     if (mySubmitLoadError) {
-      return <PageLoadFailureState className="solve-related-empty-state" />;
+      return mySubmitLoadErrorStatus != null
+        ? <HttpErrorState status={mySubmitLoadErrorStatus} className="solve-related-empty-state" message={mySubmitLoadError} />
+        : <PageLoadFailureState className="solve-related-empty-state" message={mySubmitLoadError} />;
     }
 
     return (
       <div className="solve-related-tab-panel">
         <div className={`submit-history-table-shell solve-related-table-shell ${isMySubmitLoading ? 'is-loading' : ''}`.trim()}>
-          <div className="submit-history-table solve-related-submit-table" role="table" aria-label="내 제출 목록">
+          <div className="submit-history-table solve-related-submit-table" role="table" aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_TABLE_LABEL', '내 제출 목록')}>
             <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
-              <div role="columnheader" className="submit-history-head-cell">제출번호</div>
-              <div role="columnheader" className="submit-history-head-cell">Handle</div>
-              <div role="columnheader" className="submit-history-head-cell">문제 번호</div>
-              <div role="columnheader" className="submit-history-head-cell">제출 결과</div>
-              <div role="columnheader" className="submit-history-head-cell">Cost</div>
-              <div role="columnheader" className="submit-history-head-cell">제출 시각</div>
-              <div role="columnheader" className="submit-history-head-cell">실행계획요소</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('PROBLEM_SOLVE_RELATED_PROBLEM_ID_COLUMN_LABEL', '문제 번호')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMON_COST_LABEL', 'Cost')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}</div>
             </div>
 
             {isMySubmitLoading && mySubmitHistoryPage.histories.length === 0 ? (
@@ -5973,53 +6017,53 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               ))
             ) : mySubmitHistoryPage.histories.length === 0 ? (
               <div className="submit-history-row submit-history-empty-row" role="row">
-                <span className="submit-history-empty-cell" role="cell">이 문제에 대한 내 제출이 없습니다.</span>
+                <span className="submit-history-empty-cell" role="cell">{text('PROBLEM_SOLVE_RELATED_PROBLEM_EMPTY_STATE', '이 문제에 대한 내 제출이 없습니다.')}</span>
               </div>
             ) : (
               mySubmitHistoryPage.histories.map((history) => (
                 <article key={history.submitId} className="submit-history-row submit-history-body solve-related-table-row" role="row">
-                  <span className="submit-history-cell" role="cell" data-label="제출번호">{history.submitId}</span>
-                  <span className="submit-history-cell" role="cell" data-label="Handle">
+                  <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}>{history.submitId}</span>
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
                     <button
                       type="button"
                       className="submit-history-link-button"
                       onClick={() => navigate(getProfilePath(history.handle))}
-                      aria-label={`${history.handle} 프로필로 이동`}
+                      aria-label={text('SUBMIT_HISTORY_HANDLE_PROFILE_MOVE_LABEL', { handle: history.handle }, '{handle} 프로필 이동')}
                     >
                       {history.handle}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="문제 번호">
+                  <span className="submit-history-cell" role="cell" data-label={text('PROBLEM_SOLVE_RELATED_PROBLEM_ID_COLUMN_LABEL', '문제 번호')}>
                     <button
                       type="button"
                       className="submit-history-link-button"
                       onClick={() => navigate(`/problems/${encodeURIComponent(history.problemId)}`)}
-                      aria-label={`문제 ${history.problemId}로 이동`}
+                      aria-label={text('SUBMIT_HISTORY_PROBLEM_MOVE_LABEL', { problemId: history.problemId }, '문제 {problemId} 이동')}
                     >
                       {history.problemId}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="제출 결과">
+                  <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}>
                     <button
                       type="button"
                       className={`submit-history-status-text ${history.success ? 'is-success' : 'is-fail'}`}
                       onClick={() => setRelatedModalState({ type: 'sql', history })}
                     >
-                      {history.success ? '정답' : '오답'}
+                      {history.success ? text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답') : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="Cost">
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_COST_LABEL', 'Cost')}>
                     {history.success || history.cost > 0 ? formatSolveRelatedCost(history.cost) : '-'}
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="제출 시각">
+                  <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
                     {formatSolveRelatedSubmittedAt(history.submittedAt)}
                   </span>
-                  <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label="실행계획요소">
+                  <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label={text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}>
                     {hasRelatedExecutionPlanDetails(history) ? (
                       <button
                         type="button"
                         className="submit-history-detail-button"
-                        aria-label="실행계획 요소 보기"
+                        aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
                         onClick={() => setRelatedModalState({ type: 'plan', history })}
                       >
                         ↗
@@ -6033,22 +6077,18 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             )}
           </div>
 
-          {isMySubmitLoading ? (
-            <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-              <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-            </div>
-          ) : null}
+          {isMySubmitLoading ? <LoadingOverlay /> : null}
         </div>
 
         {mySubmitHistoryPage.totalCount > 0 ? (
-          <div className="solve-related-pagination" role="navigation" aria-label="내 제출 페이지">
+          <div className="solve-related-pagination" role="navigation" aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_LABEL', '내 제출 페이지')}>
             <button
               type="button"
               className="solve-related-page-button"
               onClick={() => setMySubmitRequestedPage((page) => Math.max(1, page - 1))}
               disabled={mySubmitHistoryPage.currentPage === 1}
             >
-              이전
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isMySubmitPageJumpEditing ? (
@@ -6056,7 +6096,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 type="text"
                 inputMode="numeric"
                 className="solve-related-pagination-input"
-                aria-label="이동할 내 제출 페이지 입력"
+                aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_INPUT_LABEL', '이동할 내 제출 페이지 입력')}
                 value={mySubmitPageJumpDraft}
                 onChange={(event) => setMySubmitPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
                 onBlur={applyMySubmitPageJump}
@@ -6078,7 +6118,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               <button
                 type="button"
                 className="solve-related-pagination-meta"
-                aria-label="이동할 내 제출 페이지 입력 열기"
+                aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_INPUT_OPEN_LABEL', '이동할 내 제출 페이지 입력 열기')}
                 onClick={() => {
                   setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
                   setIsMySubmitPageJumpEditing(true);
@@ -6094,7 +6134,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               onClick={() => setMySubmitRequestedPage((page) => Math.min(mySubmitHistoryPage.totalPages, page + 1))}
               disabled={mySubmitHistoryPage.currentPage >= mySubmitHistoryPage.totalPages}
             >
-              다음
+              {text('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}
@@ -6104,21 +6144,23 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   const renderTaggedPostTabPanel = () => {
     if (taggedPostLoadError) {
-      return <PageLoadFailureState className="solve-related-empty-state" />;
+      return taggedPostLoadErrorStatus != null
+        ? <HttpErrorState status={taggedPostLoadErrorStatus} className="solve-related-empty-state" message={taggedPostLoadError} />
+        : <PageLoadFailureState className="solve-related-empty-state" message={taggedPostLoadError} />;
     }
 
     return (
       <div className="solve-related-tab-panel">
         <div className={`submit-history-table-shell solve-related-table-shell ${isTaggedPostLoading ? 'is-loading' : ''}`.trim()}>
-          <div className="submit-history-table solve-related-community-table" role="table" aria-label="태그된 게시글 목록">
+          <div className="submit-history-table solve-related-community-table" role="table" aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_TABLE_LABEL', '태그된 게시글 목록')}>
             <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
-              <div role="columnheader" className="submit-history-head-cell">구분</div>
-              <div role="columnheader" className="submit-history-head-cell">제목</div>
-              <div role="columnheader" className="submit-history-head-cell">Handle</div>
-              <div role="columnheader" className="submit-history-head-cell">작성일</div>
-              <div role="columnheader" className="submit-history-head-cell">조회수</div>
-              <div role="columnheader" className="submit-history-head-cell">좋아요</div>
-              <div role="columnheader" className="submit-history-head-cell">댓글</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('PROBLEM_SOLVE_COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}</div>
             </div>
 
             {isTaggedPostLoading && taggedPostPage.posts.length === 0 ? (
@@ -6138,15 +6180,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               ))
             ) : taggedPostPage.posts.length === 0 ? (
               <div className="submit-history-row submit-history-empty-row" role="row">
-                <span className="submit-history-empty-cell" role="cell">이 문제 번호로 태그된 게시글이 없습니다.</span>
+                <span className="submit-history-empty-cell" role="cell">{text('PROBLEM_SOLVE_RELATED_COMMUNITY_EMPTY_STATE', '이 문제 번호로 태그된 게시글이 없습니다.')}</span>
               </div>
             ) : (
               taggedPostPage.posts.map((post) => (
                 <article key={post.id} className="submit-history-row submit-history-body solve-related-table-row" role="row">
-                  <span className="submit-history-cell solve-related-community-category" role="cell" data-label="구분">
+                  <span className="submit-history-cell solve-related-community-category" role="cell" data-label={text('PROBLEM_SOLVE_COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}>
                     <span className={`solve-related-community-category-text is-${post.category}`}>{getSolveRelatedCommunityCategoryLabel(post.category)}</span>
                   </span>
-                  <div role="cell" className="submit-history-cell solve-related-community-title-cell" data-label="제목">
+                  <div role="cell" className="submit-history-cell solve-related-community-title-cell" data-label={text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}>
                     {post.tags.length > 0 ? (
                       <div className="solve-related-community-tags">
                         {post.tags.slice(0, 5).map((tag) => (
@@ -6162,41 +6204,37 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       <span className="solve-related-community-title-text">{post.title}</span>
                     </button>
                   </div>
-                  <span className="submit-history-cell" role="cell" data-label="Handle">
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
                     <button
                       type="button"
                       className="submit-history-link-button"
                       onClick={() => navigate(getProfilePath(post.authorHandle))}
-                      aria-label={`${post.authorHandle} 프로필로 이동`}
+                      aria-label={text('SUBMIT_HISTORY_HANDLE_PROFILE_MOVE_LABEL', { handle: post.authorHandle }, '{handle} 프로필 이동')}
                     >
                       {post.authorHandle}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="작성일">{formatSolveRelatedBoardDate(post.updatedAt ?? post.createdAt)}</span>
-                  <span className="submit-history-cell" role="cell" data-label="조회수">{formatGroupedNumber(post.views)}</span>
-                  <span className="submit-history-cell" role="cell" data-label="좋아요">{formatGroupedNumber(post.likes)}</span>
-                  <span className="submit-history-cell" role="cell" data-label="댓글">{formatGroupedNumber(post.comments)}</span>
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>{formatSolveRelatedBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>{formatGroupedNumber(post.views)}</span>
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>{formatGroupedNumber(post.likes)}</span>
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>{formatGroupedNumber(post.comments)}</span>
                 </article>
               ))
             )}
           </div>
 
-          {isTaggedPostLoading ? (
-            <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-              <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-            </div>
-          ) : null}
+          {isTaggedPostLoading ? <LoadingOverlay /> : null}
         </div>
 
         {taggedPostPage.totalCount > 0 ? (
-          <div className="solve-related-pagination" role="navigation" aria-label="태그된 게시글 페이지">
+          <div className="solve-related-pagination" role="navigation" aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_LABEL', '태그된 게시글 페이지')}>
             <button
               type="button"
               className="solve-related-page-button"
               onClick={() => setTaggedPostRequestedPage((page) => Math.max(1, page - 1))}
               disabled={taggedPostPage.currentPage === 1}
             >
-              이전
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isTaggedPostPageJumpEditing ? (
@@ -6204,7 +6242,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 type="text"
                 inputMode="numeric"
                 className="solve-related-pagination-input"
-                aria-label="이동할 태그된 게시글 페이지 입력"
+                aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_INPUT_LABEL', '이동할 태그된 게시글 페이지 입력')}
                 value={taggedPostPageJumpDraft}
                 onChange={(event) => setTaggedPostPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
                 onBlur={applyTaggedPostPageJump}
@@ -6226,7 +6264,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               <button
                 type="button"
                 className="solve-related-pagination-meta"
-                aria-label="이동할 태그된 게시글 페이지 입력 열기"
+                aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_INPUT_OPEN_LABEL', '이동할 태그된 게시글 페이지 입력 열기')}
                 onClick={() => {
                   setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
                   setIsTaggedPostPageJumpEditing(true);
@@ -6242,7 +6280,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               onClick={() => setTaggedPostRequestedPage((page) => Math.min(taggedPostPage.totalPages, page + 1))}
               disabled={taggedPostPage.currentPage >= taggedPostPage.totalPages}
             >
-              다음
+              {text('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}
@@ -6277,7 +6315,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         selectedDbms={selectedDbms}
       />
     ) : problemLoadError ? (
-      <PageLoadFailureState className="solve-related-empty-state" />
+      problemLoadErrorStatus != null
+        ? <HttpErrorState status={problemLoadErrorStatus} className="solve-related-empty-state" message={problemLoadError} />
+        : <PageLoadFailureState className="solve-related-empty-state" message={problemLoadError} />
     ) : null;
   };
 
@@ -6305,7 +6345,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   if (!problemLoadError && problemDetail == null) {
     return (
       <div className="page-stack solve-page-loading-state">
-        <section className="page-loading-shell solve-page-loading-shell" aria-label="Loading problem" aria-busy="true">
+        <section className="page-loading-shell solve-page-loading-shell" aria-label={text('COMMON_LOADING_STATUS', '로딩 중')} aria-busy="true">
           <div className="solve-page-loading-card" aria-hidden="true">
             <div className="solve-page-loading-tabs">
               <span className="wave-loading-placeholder is-medium" />
@@ -6333,10 +6373,22 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     );
   }
 
+  if (problemLoadError && problemDetail == null) {
+    return (
+      <div className="page-stack solve-page">
+        <section className="panel-card solve-detail-section">
+          {problemLoadErrorStatus != null
+            ? <HttpErrorState status={problemLoadErrorStatus} className="solve-related-empty-state" message={problemLoadError} />
+            : <PageLoadFailureState className="solve-related-empty-state" message={problemLoadError} />}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack solve-page">
       <div className="solve-page-topbar solve-page-topbar-content-tabs">
-        <div className="solve-dbms-tab-row solve-content-tab-row" role="tablist" aria-label="문제 상세 화면 탭 선택">
+        <div className="solve-dbms-tab-row solve-content-tab-row" role="tablist" aria-label={text('PROBLEM_SOLVE_TABLIST_LABEL', '문제 상세 화면 탭 선택')}>
           <button
             type="button"
             role="tab"
@@ -6344,7 +6396,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             className={`solve-dbms-tab ${contentTab === 'problem' ? 'is-selected' : ''}`}
             onClick={() => setContentTab('problem')}
           >
-            제출
+            {text('PROBLEM_SOLVE_TAB_SUBMIT_LABEL', '제출')}
           </button>
           <button
             type="button"
@@ -6353,7 +6405,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             className={`solve-dbms-tab ${contentTab === 'submissions' ? 'is-selected' : ''}`}
             onClick={() => setContentTab('submissions')}
           >
-            내 제출 목록
+            {text('PROBLEM_SOLVE_TAB_MY_SUBMISSIONS_LABEL', '내 제출 목록')}
           </button>
           <button
             type="button"
@@ -6362,7 +6414,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             className={`solve-dbms-tab ${contentTab === 'community' ? 'is-selected' : ''}`}
             onClick={() => setContentTab('community')}
           >
-            태그된 게시글
+            {text('PROBLEM_SOLVE_TAB_TAGGED_POSTS_LABEL', '태그된 게시글')}
           </button>
           <FavoriteTabButton
             className="favorite-tab-toggle-end"
@@ -6376,7 +6428,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       <section className="solve-page-hero solve-surface-section">
         <div className="solve-page-hero-copy solve-page-hero-copy-wide">
           <div className="solve-title-row">
-            <span className="solve-problem-number">{`문제 ${displayProblemNumber}`}</span>
+            <span className="solve-problem-number">{text('PROBLEM_SOLVE_PROBLEM_NUMBER_LABEL', { problemId: displayProblemNumber }, '문제 {problemId}')}</span>
             <h1 className="solve-problem-title">{displayProblemTitle}</h1>
           </div>
 

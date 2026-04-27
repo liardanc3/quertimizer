@@ -1,4 +1,5 @@
 import { useState, type MouseEvent } from 'react';
+import { useUiText } from '../../lib/uiText';
 import type { DbmsType, ProblemSummary } from '../../types/domain';
 import ProblemRuntimeChart from './ProblemRuntimeChart';
 
@@ -51,11 +52,12 @@ export default function ProblemCard({
   onSearchSelect,
   onSelect,
 }: ProblemCardProps) {
+  const { text } = useUiText();
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
   const hasSubmissionHistory = (problem.totalSubmitCount ?? 0) > 0;
   const visibleStatsEnabled = showStats && isStatsExpanded && hasSubmissionHistory;
   const problemNumber = problem.problemNumber ?? String(problem.number);
-  const solveStateLabel = showSolveState ? (problem.isSolved ? '해결' : '미해결') : '-';
+  const solveStateLabel = showSolveState ? (problem.isSolved ? text('PROBLEM_TABLE_SOLVED_LABEL', '해결') : text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')) : '-';
 
   return (
     <div
@@ -65,7 +67,7 @@ export default function ProblemCard({
       }`.trim()}
     >
       <div className="problem-table-row problem-table-body" role="row">
-        <div role="cell" className="problem-table-cell problem-table-cell-status" data-label="해결여부">
+        <div role="cell" className="problem-table-cell problem-table-cell-status" data-label={text('PROBLEM_TABLE_STATUS_COLUMN_LABEL', '해결여부')}>
           <span
             className={`problem-table-status-text ${
               showSolveState ? (problem.isSolved ? 'is-solved' : 'is-unsolved') : 'is-unknown'
@@ -75,7 +77,7 @@ export default function ProblemCard({
           </span>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-number" data-label="문제번호">
+        <div role="cell" className="problem-table-cell problem-table-cell-number" data-label={text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제번호')}>
           <button
             type="button"
             className="problem-card-link-area is-problem-id"
@@ -88,7 +90,7 @@ export default function ProblemCard({
           </button>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-title" data-label="문제 제목">
+        <div role="cell" className="problem-table-cell problem-table-cell-title" data-label={text('PROBLEM_TABLE_TITLE_COLUMN_LABEL', '문제 제목')}>
           <div className="problem-table-title-row">
             <div className="problem-table-title-link-slot">
               <button
@@ -105,27 +107,27 @@ export default function ProblemCard({
           </div>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label="푼 사람 수">
+        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수')}>
           {formatCount(problem.solvedCount)}
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label="전체 제출">
+        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출')}>
           {formatCount(problem.totalSubmitCount)}
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label="정답 제출">
+        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}>
           {formatCount(problem.successSubmitCount)}
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label="Cost 편차">
+        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}>
           {formatSpreadRate(problem.spreadRate)}
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-stats" data-label="통계">
+        <div role="cell" className="problem-table-cell problem-table-cell-stats" data-label={text('PROBLEM_TABLE_STATS_COLUMN_LABEL', '통계')}>
           <button
             type="button"
             className={`problem-stats-toggle-button ${visibleStatsEnabled ? 'is-open' : ''}`.trim()}
-            aria-label={visibleStatsEnabled ? '통계 접기' : '통계 펼치기'}
+            aria-label={visibleStatsEnabled ? text('PROBLEM_TABLE_STATS_COLLAPSE_LABEL', '통계 접기') : text('PROBLEM_TABLE_STATS_EXPAND_LABEL', '통계 펼치기')}
             aria-expanded={visibleStatsEnabled}
             disabled={!hasSubmissionHistory}
             onClick={(event) => {

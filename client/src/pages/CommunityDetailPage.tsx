@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
-import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import CommunityCommentThread from '../components/community/CommunityCommentThread';
 import CommunityTiptapEditor from '../components/community/CommunityTiptapEditor';
 import CommunityTiptapViewer from '../components/community/CommunityTiptapViewer';
+import HttpErrorState from '../components/common/HttpErrorState';
+import ContentLoading from '../components/common/LoadingSpinner';
+import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import {
   addCommunityComment,
   deleteCommunityPost,
@@ -14,11 +16,13 @@ import {
   uploadCommunityImage,
   type CommunityPostDetail,
 } from '../lib/communityApi';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { COMMUNITY_POST_CONTENT_MAX_BYTES } from '../lib/communityContent';
 import { createCommunityEditorSnapshotFromJson, type CommunityEditorSnapshot } from '../lib/communityTiptap';
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
 import { showSessionToast, useMockSession } from '../lib/session';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 import './CommunityPage.css';
 
 interface CommunityDetailPageProps {
@@ -40,7 +44,7 @@ function getLocationHashSnapshot() {
 }
 
 const numberFormatter = new Intl.NumberFormat('ko-KR');
-const COMMENT_LOGIN_DESCRIPTION = '작성 중인 댓글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
+const COMMENT_LOGIN_DESCRIPTION = getUiTextValue('COMMUNITY_COMMENT_LOGIN_DESC', '작성 중인 댓글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.');
 type EditableCommunityCategory = Extract<CommunityPostDetail['category'], 'discussion' | 'question' | 'notice'>;
 
 const emptyEditorSnapshot: CommunityEditorSnapshot = {
@@ -68,18 +72,18 @@ function isProblemTag(tag: string) {
 
 function getCategoryLabel(value: CommunityPostDetail['category']) {
   if (value === 'question') {
-    return '질문';
+    return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
   }
 
   if (value === 'notice') {
-    return '공지';
+    return getUiTextValue('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지');
   }
 
   if (value === 'tip') {
-    return '팁';
+    return getUiTextValue('COMMUNITY_CATEGORY_TIP_LABEL', '팁');
   }
 
-  return '자유';
+  return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
 function CategoryArrowIcon() {
@@ -199,10 +203,13 @@ function SaveEditIcon() {
 }
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
+  const { text } = useUiText();
   const { isAuthenticated, isAdmin } = useMockSession();
   const locationHash = useSyncExternalStore(subscribeLocationHash, getLocationHashSnapshot, () => '');
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
@@ -230,6 +237,8 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setLoadErrorMessage(null);
+    setLoadErrorStatus(null);
 
     fetchCommunityPostDetail(postId)
       .then((nextPost) => {
@@ -239,12 +248,15 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
         setPost(nextPost);
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) {
           return;
         }
 
         setPost(null);
+        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -320,7 +332,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       setPost(nextPost);
       return true;
     } catch {
-      setFeedback('게시글을 새로고침하지 못했다.');
+      setFeedback(text('COMMUNITY_REFRESH_FAIL_MESSAGE', '게시글을 새로고침하지 못했습니다.'));
       return false;
     }
   }
@@ -362,7 +374,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       }
 
       if (currentTags.length >= 7) {
-        setFeedback('태그는 최대 7개까지 추가할 수 있다.');
+        setFeedback(text('COMMUNITY_TAG_LIMIT_MESSAGE', '태그는 최대 7개까지 추가할 수 있습니다.'));
         return currentTags;
       }
 
@@ -390,7 +402,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           onClick={() => setIsEditCategoryMenuOpen((currentValue) => !currentValue)}
           aria-haspopup="menu"
           aria-expanded={isEditCategoryMenuOpen}
-          aria-label="게시글 구분 선택"
+          aria-label={text('COMMUNITY_CATEGORY_SELECT_LABEL', '게시글 구분 선택')}
         >
           <span>{getCategoryLabel(editCategory)}</span>
           <CategoryArrowIcon />
@@ -418,7 +430,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   function renderEditActions() {
     return (
       <div className="community-detail-tab-actions community-title-edit-actions community-detail-icon-actions">
-        <button type="button" className="community-detail-icon-button is-cancel" onClick={closeEditMode} aria-label="수정 취소">
+        <button type="button" className="community-detail-icon-button is-cancel" onClick={closeEditMode} aria-label={text('COMMUNITY_EDIT_CANCEL_LABEL', '수정 취소')}>
           <CancelEditIcon />
         </button>
         <button
@@ -426,7 +438,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           className="community-detail-icon-button is-confirm"
           onClick={() => void handleSaveEdit()}
           disabled={isSavingEdit}
-          aria-label={isSavingEdit ? '저장 중' : '저장'}
+          aria-label={isSavingEdit ? text('COMMON_PROCESSING_LABEL', '처리 중...') : text('COMMON_SAVE_BUTTON', '저장')}
         >
           <SaveEditIcon />
         </button>
@@ -438,17 +450,17 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     const normalizedTitle = editTitle.trim();
 
     if (normalizedTitle === '') {
-      setFeedback('제목을 입력해야 한다.');
+      setFeedback(text('COMMUNITY_TITLE_REQUIRED_MESSAGE', '제목 입력은 필수입니다.'));
       return;
     }
 
     if (editSnapshot.empty) {
-      setFeedback('본문을 입력해야 한다.');
+      setFeedback(text('COMMUNITY_BODY_REQUIRED_MESSAGE', '본문 입력은 필수입니다.'));
       return;
     }
 
     if (editSnapshot.contentByteLength > COMMUNITY_POST_CONTENT_MAX_BYTES) {
-      setFeedback('본문은 최대 500000 Byte까지 입력할 수 있다.');
+      setFeedback(text('COMMUNITY_CONTENT_MAX_BYTES_MESSAGE', { maxBytes: COMMUNITY_POST_CONTENT_MAX_BYTES }, '본문은 최대 500000 Byte까지 입력할 수 있습니다.'));
       return;
     }
 
@@ -467,10 +479,10 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       setFeedback(null);
       const didReload = await reloadPost();
       if (didReload) {
-        showSessionToast('게시글 수정 완료.');
+        showSessionToast(text('COMMUNITY_EDIT_SUCCESS_TOAST', '게시글 수정 완료.'));
       }
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '게시글 수정에 실패했다.');
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_EDIT_FAIL_MESSAGE', '게시글을 수정하지 못했습니다.'));
     } finally {
       setIsSavingEdit(false);
     }
@@ -495,7 +507,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           : currentPost,
       );
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '좋아요 처리에 실패했다.');
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_POST_LIKE_FAIL_MESSAGE', '좋아요 처리에 실패했습니다.'));
     }
   }
 
@@ -524,7 +536,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       setCommentDraft('');
       await reloadPost();
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '댓글 등록에 실패했다.');
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_COMMENT_SAVE_FAIL_MESSAGE', '댓글을 등록하지 못했습니다.'));
     }
   }
 
@@ -564,7 +576,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       setActiveReplyId(null);
       await reloadPost();
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '대댓글 등록에 실패했다.');
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_REPLY_SAVE_FAIL_MESSAGE', '대댓글을 등록하지 못했습니다.'));
     }
   }
 
@@ -579,7 +591,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       await toggleCommunityCommentLike(commentId);
       await reloadPost();
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '댓글 좋아요 처리에 실패했다.');
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_COMMENT_LIKE_FAIL_MESSAGE', '댓글 좋아요 처리에 실패했습니다.'));
     }
   }
 
@@ -587,14 +599,14 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     try {
       await navigator.clipboard.writeText(window.location.href);
       setFeedback(null);
-      showSessionToast('링크 복사 완료.');
+      showSessionToast(text('COMMUNITY_LINK_COPY_SUCCESS_TOAST', '링크 복사 완료.'));
     } catch {
-      setFeedback('링크 복사에 실패했다.');
+      setFeedback(text('COMMUNITY_LINK_COPY_FAIL_MESSAGE', '링크를 복사하지 못했습니다.'));
     }
   }
 
   async function handleDeletePost() {
-    if (!window.confirm('게시글을 삭제하시겠습니까?')) {
+    if (!window.confirm(text('COMMUNITY_DELETE_CONFIRM_MESSAGE', '게시글을 삭제하시겠습니까?'))) {
       return;
     }
 
@@ -602,7 +614,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       await deleteCommunityPost(postId);
       handleBack();
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '게시글 삭제에 실패했다.');
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_DELETE_FAIL_MESSAGE', '게시글을 삭제하지 못했습니다.'));
     }
   }
 
@@ -642,49 +654,20 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   if (isLoading) {
     return (
       <div className="page-stack community-detail-page">
-        <section className="panel-card community-detail-card community-detail-loading-card">
+        <section className="panel-card community-detail-card">
           <div className="community-detail-topbar">
-            <div className="solve-dbms-tab-row community-detail-tab-row" aria-hidden="true">
-              <span className="solve-dbms-tab is-selected community-detail-category-tab community-detail-loading-tab">
-                <span className="community-loading-placeholder is-short" />
-              </span>
-              <FavoriteTabButton className="favorite-tab-toggle-end" label={`커뮤니티 / ${postId}`} path={`${COMMUNITY_PATH}/${encodeURIComponent(postId)}`} />
+            <div className="solve-dbms-tab-row community-detail-tab-row" aria-label={text('COMMUNITY_CATEGORY_SELECT_LABEL', '게시글 구분 선택')}>
+              <span className="solve-dbms-tab is-selected community-detail-category-tab">{text('HEADER_MENU_COMMUNITY', '커뮤니티')}</span>
+
+              <FavoriteTabButton
+                className="favorite-tab-toggle-end"
+                label={text('COMMUNITY_FAVORITE_POST_LABEL', { postId }, `커뮤니티 / ${postId}`)}
+                path={`${COMMUNITY_PATH}/${encodeURIComponent(postId)}`}
+              />
             </div>
           </div>
 
-          <div className="community-detail-loading-shell is-loading">
-            <div className="community-detail-header community-detail-loading-body" aria-hidden="true">
-              <span className="community-loading-placeholder is-long" />
-              <div className="community-detail-tags">
-                <span className="community-loading-placeholder is-short" />
-                <span className="community-loading-placeholder is-short" />
-              </div>
-              <div className="community-detail-meta">
-                <span className="community-loading-placeholder is-medium" />
-                <span className="community-loading-placeholder is-medium" />
-                <span className="community-loading-placeholder is-short" />
-              </div>
-              <div className="community-content-body">
-                <span className="community-loading-placeholder is-long" />
-                <span className="community-loading-placeholder is-long" />
-                <span className="community-loading-placeholder is-medium" />
-              </div>
-            </div>
-
-            <div className="community-table-loading-overlay" aria-live="polite" aria-label="로딩 중" />
-          </div>
-        </section>
-
-        <section className="panel-card community-comments-card community-detail-loading-card">
-          <div className="community-detail-loading-shell is-loading">
-            <div className="community-detail-loading-comments" aria-hidden="true">
-              <span className="community-loading-placeholder is-medium" />
-              <span className="community-loading-placeholder is-long" />
-              <span className="community-loading-placeholder is-long" />
-            </div>
-
-            <div className="community-table-loading-overlay" aria-live="polite" aria-label="로딩 중" />
-          </div>
+          <ContentLoading className="community-detail-content-loading" />
         </section>
       </div>
     );
@@ -693,8 +676,22 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   if (!post) {
     return (
       <div className="page-stack community-detail-page">
-        <section id="community-post-detail" className="panel-card community-detail-card">
-          <PageLoadFailureState />
+        <section className="panel-card community-detail-card">
+          <div className="community-detail-topbar">
+            <div className="solve-dbms-tab-row community-detail-tab-row" aria-label={text('COMMUNITY_CATEGORY_SELECT_LABEL', '게시글 구분 선택')}>
+              <span className="solve-dbms-tab is-selected community-detail-category-tab">{text('HEADER_MENU_COMMUNITY', '커뮤니티')}</span>
+
+              <FavoriteTabButton
+                className="favorite-tab-toggle-end"
+                label={text('COMMUNITY_FAVORITE_POST_LABEL', { postId }, `커뮤니티 / ${postId}`)}
+                path={`${COMMUNITY_PATH}/${encodeURIComponent(postId)}`}
+              />
+            </div>
+          </div>
+
+          {loadErrorStatus != null
+            ? <HttpErrorState status={loadErrorStatus} className="community-activity-empty" message={loadErrorMessage} />
+            : <PageLoadFailureState className="community-activity-empty" message={loadErrorMessage} />}
         </section>
       </div>
     );
@@ -705,20 +702,20 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       <section className="panel-card community-detail-card">
         {!isEditing ? (
           <div className="community-detail-topbar">
-            <div className="solve-dbms-tab-row community-detail-tab-row" aria-label="게시글 구분">
+            <div className="solve-dbms-tab-row community-detail-tab-row" aria-label={text('COMMUNITY_CATEGORY_SELECT_LABEL', '게시글 구분 선택')}>
               <span className="solve-dbms-tab is-selected community-detail-category-tab">{getCategoryLabel(post.category)}</span>
 
               <div className="community-detail-tab-actions community-detail-icon-actions">
-                <button type="button" className="community-detail-icon-button" onClick={handleCopyLink} aria-label="링크 복사">
+                <button type="button" className="community-detail-icon-button" onClick={handleCopyLink} aria-label={text('COMMUNITY_COPY_LINK_LABEL', '링크 복사')}>
                   <LinkCopyIcon />
                 </button>
                 {post.editable ? (
-                  <button type="button" className="community-detail-icon-button" onClick={openEditMode} aria-label="수정하기">
+                  <button type="button" className="community-detail-icon-button" onClick={openEditMode} aria-label={text('COMMON_EDIT_BUTTON', '수정')}>
                     <EditIcon />
                   </button>
                 ) : null}
                 {post.editable ? (
-                  <button type="button" className="community-detail-icon-button is-danger" onClick={() => void handleDeletePost()} aria-label="삭제하기">
+                  <button type="button" className="community-detail-icon-button is-danger" onClick={() => void handleDeletePost()} aria-label={text('COMMON_DELETE_BUTTON', '삭제')}>
                     <DeleteIcon />
                   </button>
                 ) : null}
@@ -738,7 +735,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                 onChange={(event) => setEditTitle(event.target.value)}
                 onFocus={() => setIsEditCategoryMenuOpen(false)}
                 className="text-field community-detail-title-input"
-                placeholder="제목"
+                placeholder={text('COMMUNITY_TITLE_PLACEHOLDER', '제목')}
               />
 
               {renderEditActions()}
@@ -773,7 +770,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                   }
                 }}
                 className="text-field community-detail-edit-tag-input"
-                placeholder={editTags.length >= 7 ? '태그는 최대 7개' : '태그 추가'}
+                placeholder={editTags.length >= 7 ? text('COMMUNITY_TAG_LIMIT_PLACEHOLDER', '태그는 최대 7개') : text('COMMUNITY_TAG_PLACEHOLDER', '태그 추가')}
               />
             </div>
           ) : visibleTags.length > 0 ? (
@@ -792,11 +789,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                   {hoveredTag === tag ? (
                     <div className="community-tag-hover-menu">
                       <button type="button" className="community-tag-hover-item" onClick={() => openTagSearch(tag)}>
-                        커뮤니티에서 태그 검색
+                        {text('COMMUNITY_TAG_SEARCH_LINK', '커뮤니티에서 태그 검색')}
                       </button>
                       {isProblemTag(tag) ? (
                         <button type="button" className="community-tag-hover-item" onClick={() => openProblem(tag)}>
-                          문제로 이동
+                          {text('COMMUNITY_MOVE_TO_PROBLEM_LINK', '문제로 이동')}
                         </button>
                       ) : null}
                     </div>
@@ -811,7 +808,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <span>{post.authorHandle}</span>
             </button>
             <span>{formatBoardDate(post.createdAt)}</span>
-            <span className="community-detail-metric" aria-label={`조회수 ${numberFormatter.format(post.views)}`}>
+            <span className="community-detail-metric" aria-label={text('COMMUNITY_VIEW_COUNT_LABEL', { count: numberFormatter.format(post.views) }, `조회수 ${numberFormatter.format(post.views)}`)}>
               <ViewIcon />
               <span>{numberFormatter.format(post.views)}</span>
             </span>
@@ -820,16 +817,16 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               className={`community-meta-like-button ${post.likedByCurrentUser ? 'is-liked' : ''}`.trim()}
               onClick={handleToggleLike}
               aria-pressed={post.likedByCurrentUser}
-              aria-label={post.likedByCurrentUser ? '좋아요 취소' : '좋아요'}
+              aria-label={post.likedByCurrentUser ? text('COMMUNITY_UNLIKE_BUTTON_LABEL', '좋아요 취소') : text('COMMUNITY_LIKE_BUTTON_LABEL', '좋아요')}
             >
               <LikeIcon />
               <span>{numberFormatter.format(post.likes)}</span>
             </button>
-            <span className="community-detail-metric" aria-label={`댓글 ${numberFormatter.format(post.comments)}`}>
+            <span className="community-detail-metric" aria-label={text('COMMUNITY_COMMENT_COUNT_LABEL', { count: numberFormatter.format(post.comments) }, `댓글 ${numberFormatter.format(post.comments)}`)}>
               <CommentIcon />
               <span>{numberFormatter.format(post.comments)}</span>
             </span>
-            {post.updatedAt ? <span>수정 {formatBoardDate(post.updatedAt)}</span> : null}
+            {post.updatedAt ? <span>{text('COMMUNITY_UPDATED_PREFIX', { date: formatBoardDate(post.updatedAt) }, `수정 ${formatBoardDate(post.updatedAt)}`)}</span> : null}
           </div>
 
           <div className="community-content-body" onClick={handleContentClick}>
@@ -859,7 +856,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
       <section className="panel-card community-comments-card">
         <div className="community-comments-heading">
-          <h2 className="panel-title">댓글 {numberFormatter.format(post.comments)}개</h2>
+          <h2 className="panel-title">{text('COMMUNITY_COMMENTS_TITLE', { count: numberFormatter.format(post.comments) }, `댓글 ${numberFormatter.format(post.comments)}개`)}</h2>
         </div>
 
         <div className="community-comment-compose">
@@ -870,9 +867,9 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               value={commentDraft}
               onChange={(event) => setCommentDraft(event.target.value)}
               onKeyDown={handleCommentDraftKeyDown}
-              placeholder="댓글 추가"
+              placeholder={text('COMMUNITY_COMMENT_PLACEHOLDER', '댓글 추가')}
             />
-            <button type="button" className="community-comment-submit-icon" onClick={() => void handleSubmitComment()} aria-label="댓글 등록">
+            <button type="button" className="community-comment-submit-icon" onClick={() => void handleSubmitComment()} aria-label={text('COMMUNITY_COMMENT_SUBMIT_BUTTON', '댓글 등록')}>
               <SendIcon />
             </button>
           </div>
@@ -897,11 +894,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       </section>
 
       {lightboxImage ? (
-        <div className="community-lightbox" role="dialog" aria-modal="true" aria-label="첨부 이미지 크게 보기">
+        <div className="community-lightbox" role="dialog" aria-modal="true" aria-label={text('COMMUNITY_IMAGE_LIGHTBOX_TITLE', '첨부 이미지 크게 보기')}>
           <button type="button" className="community-lightbox-backdrop" onClick={() => setLightboxImage(null)} />
           <div className="community-lightbox-panel">
             <button type="button" className="btn ghost community-lightbox-close" onClick={() => setLightboxImage(null)}>
-              닫기
+              {text('COMMON_CLOSE_BUTTON', '닫기')}
             </button>
             <img src={lightboxImage.src} alt={lightboxImage.alt} className="community-lightbox-image" />
           </div>

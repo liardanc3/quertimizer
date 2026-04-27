@@ -1504,10 +1504,6 @@ body.handle-setup-locked {
 }
 
 @media (prefers-color-scheme: dark) {
-  .home-page .problem-table-loading-overlay::before {
-    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
-  }
-
   .home-page .problem-table-entry.is-solved {
     border-bottom-color: var(--line-soft);
   }
@@ -1543,39 +1539,6 @@ body.handle-setup-locked {
 
 .home-page .problem-table-shell-inner {
   position: relative;
-}
-
-.home-page .problem-table-shell-inner.is-loading .problem-table {
-  filter: blur(1.75px);
-}
-
-.home-page .problem-table-loading-overlay {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 4;
-}
-
-.home-page .problem-table-loading-overlay::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -24%;
-  width: 24%;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
-  animation: problem-table-loading-wave 1.8s ease-in-out infinite;
-}
-
-.home-page .problem-table-loading-overlay .submit-history-loading-badge {
-  display: none;
-}
-
-@keyframes problem-table-loading-wave {
-  to {
-    transform: translateX(520%);
-  }
 }
 
 .home-page .problem-table {

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 import type { DbmsType } from '../types/domain';
 
 export interface DashboardCommunityPost {
@@ -65,6 +66,12 @@ interface DashboardResponse {
   problems?: DashboardProblemRecommendationResponse[];
 }
 
+let dashboardInFlightPromise: Promise<DashboardData> | null = null;
+
+function getDashboardLoadFailureMessage() {
+  return getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.');
+}
+
 function normalizeCategory(value: string | undefined): DashboardCommunityPost['category'] {
   if (value === 'notice' || value === 'question') {
     return value;
@@ -106,7 +113,7 @@ function toProblemRecommendation(data: DashboardProblemRecommendationResponse): 
   };
 }
 
-export async function fetchDashboard(): Promise<DashboardData> {
+async function requestDashboard(): Promise<DashboardData> {
   let response: Response;
 
   try {
@@ -114,14 +121,20 @@ export async function fetchDashboard(): Promise<DashboardData> {
       credentials: 'include',
     });
   } catch {
-    throw new Error('Failed to fetch dashboard.');
+    throw new Error(getDashboardLoadFailureMessage());
   }
 
   if (!response.ok) {
-    throw new Error('Failed to fetch dashboard.');
+    throw await createApiErrorFromResponse(response, getDashboardLoadFailureMessage());
   }
 
-  const data = (await response.json()) as DashboardResponse;
+  let data: DashboardResponse;
+
+  try {
+    data = (await response.json()) as DashboardResponse;
+  } catch {
+    throw new Error(getDashboardLoadFailureMessage());
+  }
 
   return {
     authenticated: data.authenticated === true,
@@ -129,4 +142,16 @@ export async function fetchDashboard(): Promise<DashboardData> {
     communityPosts: Array.isArray(data.communityPosts) ? data.communityPosts.map(toCommunityPost) : [],
     problems: Array.isArray(data.problems) ? data.problems.map(toProblemRecommendation) : [],
   };
+}
+
+export async function fetchDashboard(): Promise<DashboardData> {
+  if (dashboardInFlightPromise != null) {
+    return dashboardInFlightPromise;
+  }
+
+  dashboardInFlightPromise = requestDashboard().finally(() => {
+    dashboardInFlightPromise = null;
+  });
+
+  return dashboardInFlightPromise;
 }

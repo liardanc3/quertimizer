@@ -13,6 +13,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { getUiTextValue } from '../../lib/uiText';
 
 interface ReactFlowDiagramTable {
   name: string;
@@ -243,7 +244,7 @@ export default function ReactFlowDiagram({ tables, relations, className, resetKe
   }, [fitDiagram, nodes.length]);
 
   if (nodes.length === 0) {
-    return <div className={className}>ERD를 만들 DDL이 없다.</div>;
+    return <div className={className}>{getUiTextValue('PROBLEM_DETAIL_ERD_EMPTY_STATE', 'ERD를 만들 DDL이 없습니다.')}</div>;
   }
 
   return (
@@ -282,7 +283,7 @@ export default function ReactFlowDiagram({ tables, relations, className, resetKe
         <button
           type="button"
           className="solve-erd-zoom-button"
-          aria-label="ERD 확대"
+          aria-label={getUiTextValue('PROBLEM_DETAIL_ERD_ZOOM_IN_LABEL', 'ERD 확대')}
           onClick={() => reactFlowRef.current?.zoomIn({ duration: 120 })}
         >
           +
@@ -290,7 +291,7 @@ export default function ReactFlowDiagram({ tables, relations, className, resetKe
         <button
           type="button"
           className="solve-erd-zoom-button"
-          aria-label="ERD 축소"
+          aria-label={getUiTextValue('PROBLEM_DETAIL_ERD_ZOOM_OUT_LABEL', 'ERD 축소')}
           onClick={() => reactFlowRef.current?.zoomOut({ duration: 120 })}
         >
           -

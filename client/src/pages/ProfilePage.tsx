@@ -15,8 +15,11 @@ import {
   type ProfileCommunityComment,
   type ProfileCommunityPost,
 } from '../lib/communityApi';
+import HttpErrorState from '../components/common/HttpErrorState';
 import ImageCropModal from '../components/common/ImageCropModal';
+import ContentLoading, { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
 import { createCroppedImageFile, type ImageCropAreaPixels } from '../lib/imageCrop';
 import {
@@ -34,8 +37,10 @@ import {
   type UserProfileSubmissionSummary,
   type UserProfileSummary,
 } from '../lib/profileApi';
-import { showSessionErrorToast, showSessionToast, syncSession, useMockSession } from '../lib/session';
+import PageStatePanel from '../components/common/PageStatePanel';
+import { patchSessionSnapshot, showSessionErrorToast, showSessionToast, useMockSession } from '../lib/session';
 import { fetchAlarms, markAlarmRead, type AlarmEntry, type AlarmPageData, type AlarmSortDirection } from '../lib/alarmApi';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './SubmitHistoryPage.css';
 import './ProfilePage.css';
@@ -99,10 +104,6 @@ const PROFILE_ALARM_PAGE_SIZE = 10;
 const PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE = 10;
 const PROFILE_IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 const SUPPORTED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
-const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
-  { value: 'postgresql', label: 'PostgreSQL' },
-  { value: 'oracle', label: 'Oracle' },
-];
 const emptySolvedProblems: UserProfileSolvedProblems = {
   solvedProblemCount: 0,
   solvedProblemIds: [],
@@ -155,9 +156,15 @@ function createHeroLinks(links: UserProfileLink[]) {
   const linkGroups = classifyLinkGroups(links);
 
   return [
-    linkGroups.blog ? { key: 'blog', label: 'Blog', value: linkGroups.blog.value, href: resolveLinkHref(linkGroups.blog) } : null,
-    linkGroups.email ? { key: 'email', label: 'Email', value: linkGroups.email.value, href: resolveLinkHref(linkGroups.email) } : null,
-    linkGroups.github ? { key: 'github', label: 'GitHub', value: linkGroups.github.value, href: resolveLinkHref(linkGroups.github) } : null,
+    linkGroups.blog
+      ? { key: 'blog', label: getUiTextValue('PROFILE_LINK_BLOG_LABEL', 'Blog'), value: linkGroups.blog.value, href: resolveLinkHref(linkGroups.blog) }
+      : null,
+    linkGroups.email
+      ? { key: 'email', label: getUiTextValue('PROFILE_LINK_EMAIL_LABEL', 'Email'), value: linkGroups.email.value, href: resolveLinkHref(linkGroups.email) }
+      : null,
+    linkGroups.github
+      ? { key: 'github', label: getUiTextValue('PROFILE_LINK_GITHUB_LABEL', 'GitHub'), value: linkGroups.github.value, href: resolveLinkHref(linkGroups.github) }
+      : null,
     ...linkGroups.extras.map((link, index) => ({
       key: `extra-${index}-${link.type}-${link.value}`,
       label: link.type,
@@ -459,24 +466,20 @@ function createHeatmapYears(signupAt: string) {
   return Array.from({ length: currentYear - firstYear + 1 }, (_, index) => currentYear - index);
 }
 
-function ProfileStatePage({ label, title, description }: { label: string; title: string; description: string }) {
-  return (
-    <div className="page-stack profile-page submit-history-page home-page">
-      <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
-        <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
-          <div className="solve-dbms-tab-row profile-handle-tab-row" aria-hidden="true">
-            <span className="solve-dbms-tab is-selected">{label}</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel-card profile-empty-panel">
-        <p className="panel-meta">프로필</p>
-        <h1 className="page-title">{title}</h1>
-        <p className="muted-text">{description}</p>
-      </section>
-    </div>
-  );
+function ProfileStatePage({
+  label,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  label: string;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return <PageStatePanel fullPage label={label} title={title} description={description} actionLabel={actionLabel} onAction={onAction} />;
 }
 
 function ProfileLoadingShell({ label }: { label: string }) {
@@ -484,7 +487,7 @@ function ProfileLoadingShell({ label }: { label: string }) {
     <div className="page-stack profile-page submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
         <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
-          <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label="프로필 Handle">
+          <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label={getUiTextValue('PROFILE_HANDLE_TABLIST_LABEL', '프로필 Handle')}>
             <span className="solve-dbms-tab is-selected" role="tab" aria-selected={true}>
               {label}
             </span>
@@ -492,19 +495,17 @@ function ProfileLoadingShell({ label }: { label: string }) {
         </div>
       </section>
 
-      <section className="panel-card profile-loading-panel" aria-live="polite" aria-label="프로필 로딩 중">
-        <span className="profile-loading-spinner" aria-hidden="true" />
-      </section>
+      <ContentLoading as="section" className="panel-card profile-loading-panel" label={getUiTextValue('PROFILE_LOADING_LABEL', '프로필 로딩 중')} />
     </div>
   );
 }
 
 export default function ProfilePage({ handle: profileHandle }: ProfilePageProps) {
+  const { text } = useUiText();
   const { isAuthenticated, isReady, handle: currentHandle } = useMockSession();
   const profileHeroCoverRef = useRef<HTMLDivElement | null>(null);
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
-  const [lastViewedHandle, setLastViewedHandle] = useState<string | null>(profileHandle ?? null);
   const [solvedProblems, setSolvedProblems] = useState<UserProfileSolvedProblems>(emptySolvedProblems);
   const [authoredPosts, setAuthoredPosts] = useState<ProfileCommunityPost[]>([]);
   const [likedPosts, setLikedPosts] = useState<ProfileCommunityPost[]>([]);
@@ -514,19 +515,22 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const [profileCommunityActivityPageData, setProfileCommunityActivityPageData] = useState<ProfileCommunityActivityPage>(emptyProfileCommunityActivityPage);
   const [isProfileCommunityActivityLoading, setIsProfileCommunityActivityLoading] = useState(false);
   const [profileCommunityActivityErrorMessage, setProfileCommunityActivityErrorMessage] = useState<string | null>(null);
+  const [profileCommunityActivityErrorStatus, setProfileCommunityActivityErrorStatus] = useState<number | null>(null);
   const [profileCommunityActivityPage, setProfileCommunityActivityPage] = useState(1);
   const [profileCommunityActivityPageDraft, setProfileCommunityActivityPageDraft] = useState('1');
   const [isProfileCommunityActivityPageEditing, setIsProfileCommunityActivityPageEditing] = useState(false);
   const [profileAlarmPageData, setProfileAlarmPageData] = useState<AlarmPageData>(emptyProfileAlarmPage);
   const [isProfileAlarmLoading, setIsProfileAlarmLoading] = useState(false);
   const [profileAlarmErrorMessage, setProfileAlarmErrorMessage] = useState<string | null>(null);
+  const [profileAlarmErrorStatus, setProfileAlarmErrorStatus] = useState<number | null>(null);
   const [profileAlarmPage, setProfileAlarmPage] = useState(1);
   const [profileAlarmPageDraft, setProfileAlarmPageDraft] = useState('1');
   const [isProfileAlarmPageEditing, setIsProfileAlarmPageEditing] = useState(false);
   const [profileAlarmSort, setProfileAlarmSort] = useState<AlarmSortDirection>('desc');
   const [profileReloadKey, setProfileReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [, setErrorMessage] = useState<string | null>(null);
+  const [profileLoadErrorMessage, setProfileLoadErrorMessage] = useState<string | null>(null);
+  const [profileLoadErrorStatus, setProfileLoadErrorStatus] = useState<number | null>(null);
   const [selectedHeatmapYear, setSelectedHeatmapYear] = useState(new Date().getFullYear());
   const [selectedHeatmapDates, setSelectedHeatmapDates] = useState<string[]>([]);
   const [heatmapSelectionAnchor, setHeatmapSelectionAnchor] = useState<string | null>(null);
@@ -545,10 +549,16 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const [editingSettingSnapshot, setEditingSettingSnapshot] = useState<DbmsType | boolean | null>(null);
   const [savingSection, setSavingSection] = useState<ProfileSaveSection | null>(null);
   const [isLinkEditingMode, setIsLinkEditingMode] = useState(false);
-  const [, setEditingLinkIndexes] = useState<number[]>([]);
   const [editingLinkSnapshots, setEditingLinkSnapshots] = useState<Record<number, UserProfileLink | null>>({});
-  const resolvedProfileId = profileHandle ?? currentHandle ?? lastViewedHandle;
-  const isOwnProfile = isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle;
+  const shouldLoadOwnProfile = profileHandle == null && isAuthenticated;
+  const resolvedProfileId = profileHandle ?? currentHandle;
+  const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
+    { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+    { value: 'oracle', label: text('COMMON_ORACLE_LABEL', 'Oracle') },
+  ];
+  const isOwnProfile = shouldLoadOwnProfile || (isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle);
+  const profileRequestKey = profileHandle ?? (shouldLoadOwnProfile ? '__my-profile__' : resolvedProfileId ?? '__empty-profile__');
+  const profileTabLabel = profileSummary?.handle ?? resolvedProfileId ?? currentHandle ?? text('PROFILE_PROFILE_SECTION_TITLE', '프로필');
   const profileBasePath =
     profileHandle != null
       ? getProfilePath(profileHandle)
@@ -566,7 +576,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       return;
     }
 
-    if (!resolvedProfileId) {
+    if (!shouldLoadOwnProfile && !resolvedProfileId) {
       setProfileSummary(null);
       setSolvedProblems(emptySolvedProblems);
       setAuthoredPosts([]);
@@ -576,14 +586,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       setProfileSubmissionSummary(emptyProfileSubmissionSummary);
       setProfileCommunityActivityPageData(emptyProfileCommunityActivityPage);
       setIsLoading(false);
-      setErrorMessage(null);
+      setProfileLoadErrorMessage(null);
       return;
     }
 
     let cancelled = false;
 
     setIsLoading(true);
-    setErrorMessage(null);
+    setProfileLoadErrorMessage(null);
+    setProfileLoadErrorStatus(null);
     setIsEditOpen(false);
     setIsProfileCardEditing(false);
     setProfileCardSnapshot(null);
@@ -593,16 +604,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     setEditingSettingSnapshot(null);
     setSavingSection(null);
     setIsLinkEditingMode(false);
-    setEditingLinkIndexes([]);
     setEditingLinkSnapshots({});
 
-    const profileSummaryRequest = isOwnProfile ? fetchMyProfileSummary() : fetchProfileSummary(resolvedProfileId);
-    const solvedProblemsRequest = isOwnProfile ? fetchMySolvedProblems() : fetchSolvedProblems(resolvedProfileId);
-    const postsRequest = isOwnProfile ? fetchMyCommunityPosts() : fetchCommunityPostsByUser(resolvedProfileId);
-    const likedPostsRequest = isOwnProfile ? fetchMyLikedPosts() : fetchLikedPostsByUser(resolvedProfileId);
-    const commentsRequest = isOwnProfile ? fetchMyCommunityComments() : fetchCommunityCommentsByUser(resolvedProfileId);
-    const likedCommentsRequest = isOwnProfile ? fetchMyLikedComments() : fetchLikedCommentsByUser(resolvedProfileId);
-    const submissionSummaryRequest = isOwnProfile ? fetchMySubmissionSummary() : fetchSubmissionSummary(resolvedProfileId);
+    const profileSummaryRequest = isOwnProfile ? fetchMyProfileSummary() : fetchProfileSummary(resolvedProfileId!);
+    const solvedProblemsRequest = isOwnProfile ? fetchMySolvedProblems() : fetchSolvedProblems(resolvedProfileId!);
+    const postsRequest = isOwnProfile ? fetchMyCommunityPosts() : fetchCommunityPostsByUser(resolvedProfileId!);
+    const likedPostsRequest = isOwnProfile ? fetchMyLikedPosts() : fetchLikedPostsByUser(resolvedProfileId!);
+    const commentsRequest = isOwnProfile ? fetchMyCommunityComments() : fetchCommunityCommentsByUser(resolvedProfileId!);
+    const likedCommentsRequest = isOwnProfile ? fetchMyLikedComments() : fetchLikedCommentsByUser(resolvedProfileId!);
+    const submissionSummaryRequest = isOwnProfile ? fetchMySubmissionSummary() : fetchSubmissionSummary(resolvedProfileId!);
 
     Promise.allSettled([
       profileSummaryRequest,
@@ -638,9 +648,10 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
         setEditingSettingSnapshot(null);
         setSavingSection(null);
         setIsLinkEditingMode(false);
-        setEditingLinkIndexes([]);
         setEditingLinkSnapshots({});
-        setErrorMessage(summaryResult.reason instanceof Error ? summaryResult.reason.message : '프로필을 불러오지 못했다.');
+        setProfileLoadErrorMessage(summaryResult.reason instanceof Error ? summaryResult.reason.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(summaryResult.reason);
+        setProfileLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
         setSolvedProblems(emptySolvedProblems);
         setAuthoredPosts([]);
         setLikedPosts([]);
@@ -653,7 +664,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       }
 
       setProfileSummary(summaryResult.value);
-      setLastViewedHandle(summaryResult.value.handle);
+      if (shouldLoadOwnProfile) {
+        patchSessionSnapshot({
+          handle: summaryResult.value.handle,
+          defaultDbms: summaryResult.value.defaultDbms,
+          handleSetupRequired: false,
+        });
+      }
+      setProfileLoadErrorMessage(null);
+      setProfileLoadErrorStatus(null);
       setEditDraft(createEditDraft(summaryResult.value));
       setIsProfileCardEditing(false);
       setProfileCardSnapshot(null);
@@ -663,7 +682,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       setEditingSettingSnapshot(null);
       setSavingSection(null);
       setIsLinkEditingMode(false);
-      setEditingLinkIndexes([]);
       setEditingLinkSnapshots({});
       setSolvedProblems(solvedProblemsResult.status === 'fulfilled' ? solvedProblemsResult.value : emptySolvedProblems);
       setAuthoredPosts(postsResult.status === 'fulfilled' ? postsResult.value : []);
@@ -677,26 +695,30 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     return () => {
       cancelled = true;
     };
-  }, [isOwnProfile, isReady, profileReloadKey, resolvedProfileId]);
+  }, [isOwnProfile, isReady, profileReloadKey, profileRequestKey, shouldLoadOwnProfile]);
 
   const heroLinks = useMemo(() => createHeroLinks(profileSummary?.links ?? []), [profileSummary?.links]);
   const editingHeroLinks = useMemo(() => createHeroLinks(editDraft?.links ?? []), [editDraft?.links]);
   const showSolvedProblemSection = isOwnProfile || profileSummary?.solvedProblemCountPublic === true;
   const showSubmissionSection = true;
   const showCommunityActivitySection = isOwnProfile || profileSummary?.communityActivityPublic === true;
+  const communityActivityDates = useMemo(
+    () => [
+      ...authoredPosts.map((post) => post.createdAt),
+      ...likedPosts.map((post) => post.createdAt),
+      ...communityComments.map((comment) => comment.createdAt),
+      ...likedComments.map((comment) => comment.createdAt),
+    ],
+    [authoredPosts, communityComments, likedComments, likedPosts],
+  );
   const heatmapCells = useMemo(
     () =>
       createHeatmapCells(
         selectedHeatmapYear,
         profileSubmissionSummary.submissionActivities,
-        [
-          ...authoredPosts.map((post) => post.createdAt),
-          ...likedPosts.map((post) => post.createdAt),
-          ...communityComments.map((comment) => comment.createdAt),
-          ...likedComments.map((comment) => comment.createdAt),
-        ],
+        communityActivityDates,
       ),
-    [authoredPosts, communityComments, likedComments, likedPosts, profileSubmissionSummary.submissionActivities, selectedHeatmapYear],
+    [communityActivityDates, profileSubmissionSummary.submissionActivities, selectedHeatmapYear],
   );
   const heatmapYears = useMemo(() => createHeatmapYears(profileSummary?.signupAt ?? ''), [profileSummary?.signupAt]);
   const solvedProblemIds = useMemo(() => [...solvedProblems.solvedProblemIds], [solvedProblems.solvedProblemIds]);
@@ -719,16 +741,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     setIsProfileCommunityActivityPageEditing(false);
     setProfileCommunityActivityPageData(emptyProfileCommunityActivityPage);
     setProfileCommunityActivityErrorMessage(null);
+    setProfileCommunityActivityErrorStatus(null);
     setProfileAlarmPage(1);
     setProfileAlarmPageDraft('1');
     setIsProfileAlarmPageEditing(false);
     setProfileAlarmPageData(emptyProfileAlarmPage);
     setProfileAlarmErrorMessage(null);
+    setProfileAlarmErrorStatus(null);
     setEditingSettingKey(null);
     setEditingSettingSnapshot(null);
     setSavingSection(null);
     setIsLinkEditingMode(false);
-  }, [resolvedProfileId]);
+  }, [profileRequestKey]);
 
   useEffect(() => {
     if (heatmapYears.length === 0) {
@@ -783,17 +807,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }, [isEditOpen, profileSummary?.handle]);
 
   useEffect(() => {
-    if (!resolvedProfileId) {
+    if (!isOwnProfile && !resolvedProfileId) {
       return;
     }
 
     let cancelled = false;
     setIsProfileCommunityActivityLoading(true);
     setProfileCommunityActivityErrorMessage(null);
+    setProfileCommunityActivityErrorStatus(null);
 
     const request = isOwnProfile
       ? fetchMyCommunityActivities(profileCommunityActivityPage, PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE)
-      : fetchCommunityActivitiesByUser(resolvedProfileId, profileCommunityActivityPage, PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE);
+      : fetchCommunityActivitiesByUser(resolvedProfileId!, profileCommunityActivityPage, PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE);
 
     request
       .then((nextCommunityActivityPage) => {
@@ -811,7 +836,9 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
           return;
         }
 
-        setProfileCommunityActivityErrorMessage(error instanceof Error ? error.message : '커뮤니티 활동을 불러오지 못했다.');
+        setProfileCommunityActivityErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setProfileCommunityActivityErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -822,12 +849,13 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     return () => {
       cancelled = true;
     };
-  }, [isOwnProfile, profileCommunityActivityPage, resolvedProfileId]);
+  }, [isOwnProfile, profileCommunityActivityPage, profileRequestKey]);
 
   useEffect(() => {
     if (!isOwnProfile) {
       setProfileAlarmPageData(emptyProfileAlarmPage);
       setProfileAlarmErrorMessage(null);
+      setProfileAlarmErrorStatus(null);
       return;
     }
 
@@ -838,6 +866,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     let cancelled = false;
     setIsProfileAlarmLoading(true);
     setProfileAlarmErrorMessage(null);
+    setProfileAlarmErrorStatus(null);
 
     fetchAlarms(profileAlarmPage, PROFILE_ALARM_PAGE_SIZE, profileAlarmSort)
       .then((nextAlarmPage) => {
@@ -855,7 +884,9 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
           return;
         }
 
-        setProfileAlarmErrorMessage(error instanceof Error ? error.message : '알림 목록을 불러오지 못했다.');
+        setProfileAlarmErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setProfileAlarmErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -893,11 +924,17 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }, [profileAlarmPage, profileAlarmPageData.totalPages]);
 
   if (!isReady || isLoading) {
-    return <ProfileLoadingShell label={profileSummary?.handle ?? resolvedProfileId ?? currentHandle ?? '프로필'} />;
+    return <ProfileLoadingShell label={profileTabLabel} />;
   }
 
-  if (!resolvedProfileId) {
-    return <ProfileStatePage label="프로필" title="조회할 프로필이 없다." description="로그인 후 내 프로필을 열거나 Handle 경로로 접근해라." />;
+  if (!shouldLoadOwnProfile && !resolvedProfileId) {
+    return (
+      <ProfileStatePage
+        label={text('PROFILE_PROFILE_SECTION_TITLE', '프로필')}
+        title={text('PROFILE_NOT_FOUND_TITLE', '조회할 프로필이 없습니다.')}
+        description={text('PROFILE_NOT_FOUND_DESC', '로그인 후 내 프로필을 열거나 Handle 경로로 접근해 주세요.')}
+      />
+    );
   }
 
   if (!profileSummary) {
@@ -905,14 +942,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       <div className="page-stack profile-page submit-history-page home-page">
         <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
           <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
-            <div className="solve-dbms-tab-row profile-handle-tab-row" aria-hidden="true">
-              <span className="solve-dbms-tab is-selected">{resolvedProfileId}</span>
+            <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label={text('PROFILE_HANDLE_TABLIST_LABEL', '프로필 Handle')}>
+              <span className="solve-dbms-tab is-selected" role="tab" aria-selected={true}>
+                {profileTabLabel}
+              </span>
             </div>
           </div>
         </section>
 
-        <section className="panel-card profile-empty-panel profile-load-failure-panel">
-          <p className="profile-load-failure-text">잠시 후 다시 시도해주세요</p>
+        <section className="panel-card profile-loading-panel">
+          {profileLoadErrorStatus != null
+            ? <HttpErrorState status={profileLoadErrorStatus} className="profile-inline-empty-state" message={profileLoadErrorMessage} />
+            : <PageLoadFailureState className="profile-inline-empty-state" message={profileLoadErrorMessage} />}
         </section>
       </div>
     );
@@ -937,7 +978,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
   function refreshProfileView() {
     setIsLoading(true);
-    setErrorMessage(null);
+    setProfileLoadErrorMessage(null);
     setProfileReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -952,7 +993,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }
 
   async function completeBioEditing() {
-    if (await saveProfileSection('bio', '소개 저장 완료.')) {
+    if (await saveProfileSection('bio', text('PROFILE_SAVE_BIO_SUCCESS_TOAST', '소개 저장 완료.'))) {
       setBioSnapshot(null);
       setIsBioEditing(false);
     }
@@ -971,7 +1012,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }
 
   async function completeProfileCardEditing() {
-    if (await saveProfileSection('card', '프로필 카드 저장 완료.')) {
+    if (await saveProfileSection('card', text('PROFILE_SAVE_CARD_SUCCESS_TOAST', '프로필 카드 저장 완료.'))) {
       setProfileCardSnapshot(null);
       setIsProfileCardEditing(false);
     }
@@ -997,7 +1038,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
     cancelActiveProfileEditing();
     setIsLinkEditingMode(true);
-    setEditingLinkIndexes(editDraft.links.map((_, index) => index));
     setEditingLinkSnapshots(
       editDraft.links.reduce<Record<number, UserProfileLink | null>>((nextSnapshots, link, index) => {
         nextSnapshots[index] = { ...link };
@@ -1007,9 +1047,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }
 
   async function completeAllLinksEditing() {
-    if (await saveProfileSection('links', '링크 저장 완료.')) {
+    if (await saveProfileSection('links', text('PROFILE_SAVE_LINKS_SUCCESS_TOAST', '링크 저장 완료.'))) {
       setIsLinkEditingMode(false);
-      setEditingLinkIndexes([]);
       setEditingLinkSnapshots({});
     }
   }
@@ -1039,7 +1078,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       }, []),
     }));
     setIsLinkEditingMode(false);
-    setEditingLinkIndexes([]);
     setEditingLinkSnapshots({});
   }
 
@@ -1059,9 +1097,9 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     }
 
     const successMessages: Record<EditableProfileSettingKey, string> = {
-      defaultDbms: '기본 DBMS 저장 완료.',
-      sqlPublic: 'SQL 공개 설정 저장 완료.',
-      communityActivityPublic: '커뮤니티 활동 공개 설정 저장 완료.',
+      defaultDbms: text('PROFILE_SAVE_DEFAULT_DBMS_SUCCESS_TOAST', '기본 DBMS 저장 완료.'),
+      sqlPublic: text('PROFILE_SAVE_SQL_VISIBILITY_SUCCESS_TOAST', 'SQL 공개 설정 저장 완료.'),
+      communityActivityPublic: text('PROFILE_SAVE_ACTIVITY_VISIBILITY_SUCCESS_TOAST', '커뮤니티 활동 공개 설정 저장 완료.'),
     };
 
     if (await saveProfileSection(key, successMessages[key])) {
@@ -1123,11 +1161,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       ...draft,
       links: draft.links.filter((_, currentIndex) => currentIndex !== index),
     }));
-    setEditingLinkIndexes((currentIndexes) =>
-      currentIndexes
-        .filter((currentIndex) => currentIndex !== index)
-        .map((currentIndex) => (currentIndex > index ? currentIndex - 1 : currentIndex)),
-    );
     setEditingLinkSnapshots((currentSnapshots) =>
       Object.entries(currentSnapshots).reduce<Record<number, UserProfileLink | null>>((nextSnapshots, [currentIndex, snapshot]) => {
         const parsedIndex = Number.parseInt(currentIndex, 10);
@@ -1152,7 +1185,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       ...draft,
       links: [...draft.links, { type: '', value: '' }],
     }));
-    setEditingLinkIndexes((currentIndexes) => [...currentIndexes, nextIndex]);
     setEditingLinkSnapshots((currentSnapshots) => ({
       ...currentSnapshots,
       [nextIndex]: null,
@@ -1359,7 +1391,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
         sourceUrl: URL.createObjectURL(file),
       });
     } catch {
-      showSessionErrorToast('이미지 파일을 불러오지 못했습니다.');
+      showSessionErrorToast(text('PROFILE_IMAGE_LOAD_FAIL_MESSAGE', '이미지 파일을 불러오지 못했습니다.'));
     }
   }
 
@@ -1383,7 +1415,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     }
 
     if (!isSupportedProfileImageFile(file)) {
-      showSessionErrorToast('사진 파일만 업로드할 수 있습니다.');
+      showSessionErrorToast(text('PROFILE_IMAGE_TYPE_FAIL_MESSAGE', '사진 파일만 업로드할 수 있습니다.'));
       return;
     }
 
@@ -1399,7 +1431,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     }
 
     if (!isSupportedProfileImageFile(file)) {
-      showSessionErrorToast('사진 파일만 업로드할 수 있습니다.');
+      showSessionErrorToast(text('PROFILE_IMAGE_TYPE_FAIL_MESSAGE', '사진 파일만 업로드할 수 있습니다.'));
       return;
     }
 
@@ -1434,7 +1466,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       closeImageCropModal();
       await uploadCroppedProfileAsset(target, croppedFile, previewUrl);
     } catch (error) {
-      showSessionErrorToast(error instanceof Error ? error.message : '이미지 편집에 실패했다.');
+      showSessionErrorToast(error instanceof Error ? error.message : text('PROFILE_IMAGE_EDIT_FAIL_MESSAGE', '이미지 편집에 실패했습니다.'));
       setIsImageCropApplying(false);
     }
   }
@@ -1464,7 +1496,11 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
             }
           : draft,
       );
-      showSessionToast(target === 'avatar' ? '프로필 사진 업로드 완료.' : '프로필 배경 업로드 완료.');
+      showSessionToast(
+        target === 'avatar'
+          ? text('PROFILE_AVATAR_UPLOAD_SUCCESS_TOAST', '프로필 사진 업로드 완료.')
+          : text('PROFILE_BACKGROUND_UPLOAD_SUCCESS_TOAST', '프로필 배경 업로드 완료.'),
+      );
     } catch (error) {
       updateDraft((draft) =>
         draft[draftKey] === previewUrl
@@ -1474,7 +1510,13 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
             }
           : draft,
       );
-      showSessionErrorToast(error instanceof Error ? error.message : target === 'avatar' ? '프로필 사진 업로드에 실패했다.' : '프로필 배경 업로드에 실패했다.');
+      showSessionErrorToast(
+        error instanceof Error
+          ? error.message
+          : target === 'avatar'
+            ? text('PROFILE_AVATAR_UPLOAD_FAIL_MESSAGE', '프로필 사진 업로드에 실패했습니다.')
+            : text('PROFILE_BACKGROUND_UPLOAD_FAIL_MESSAGE', '프로필 배경 업로드에 실패했습니다.'),
+      );
     } finally {
       URL.revokeObjectURL(previewUrl);
 
@@ -1519,11 +1561,17 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       const updatedProfile = await updateMyProfile(createUpdateUserProfilePayload(editDraft));
       setProfileSummary(updatedProfile);
       setEditDraft(createEditDraft(updatedProfile));
+      if (section === 'defaultDbms') {
+        patchSessionSnapshot({
+          handle: updatedProfile.handle,
+          defaultDbms: updatedProfile.defaultDbms,
+          handleSetupRequired: false,
+        });
+      }
       showSessionToast(successMessage);
-      void syncSession();
       return true;
     } catch (error) {
-      showSessionErrorToast(error instanceof Error ? error.message : '프로필 저장에 실패했다.');
+      showSessionErrorToast(error instanceof Error ? error.message : text('PROFILE_SAVE_FAIL_MESSAGE', '프로필을 저장하지 못했습니다.'));
       return false;
     } finally {
       setSavingSection((currentSection) => (currentSection === section ? null : currentSection));
@@ -1534,7 +1582,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     return (
       <section className="profile-flow-section profile-heatmap-section">
         <div className="profile-section-heading-row profile-heatmap-heading-row">
-          <div className="solve-dbms-tab-row profile-heatmap-year-tabs" role="tablist" aria-label="활동 캘린더 연도 선택">
+          <div className="solve-dbms-tab-row profile-heatmap-year-tabs" role="tablist" aria-label={text('PROFILE_HEATMAP_YEAR_TABLIST_LABEL', '활동 캘린더 연도 선택')}>
             {heatmapYears.map((year) => {
               const isSelected = year === selectedHeatmapYear;
               return (
@@ -1553,7 +1601,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
           </div>
         </div>
 
-        <div className="profile-heatmap-layout" aria-label="프로필 활동 캘린더">
+        <div className="profile-heatmap-layout" aria-label={text('PROFILE_HEATMAP_LAYOUT_LABEL', '프로필 활동 캘린더')}>
           <div className="profile-heatmap-grid">
             {heatmapCells.map((cell) => {
               const isSelected = selectedHeatmapDates.includes(cell.key);
@@ -1568,8 +1616,12 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                   <span className={`profile-heatmap-cell ${getHeatmapTone(cell.count)}`} />
                   <span className="profile-heatmap-tooltip" role="tooltip">
                     <span className="profile-heatmap-tooltip-title">{cell.key}</span>
-                    <span className="profile-heatmap-tooltip-caption">문제 제출 {numberFormatter.format(cell.submissionCount)}건</span>
-                    <span className="profile-heatmap-tooltip-caption">커뮤니티 활동 {numberFormatter.format(cell.communityCount)}건</span>
+                    <span className="profile-heatmap-tooltip-caption">
+                      {text('PROFILE_HEATMAP_SUBMISSION_COUNT_LABEL', { count: numberFormatter.format(cell.submissionCount) }, '문제 제출 {count}건')}
+                    </span>
+                    <span className="profile-heatmap-tooltip-caption">
+                      {text('PROFILE_HEATMAP_COMMUNITY_COUNT_LABEL', { count: numberFormatter.format(cell.communityCount) }, '커뮤니티 활동 {count}건')}
+                    </span>
                   </span>
                 </button>
               );
@@ -1582,7 +1634,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
   function renderSolveSection() {
     if (!showSolvedProblemSection && !showSubmissionSection) {
-      return <div className="submit-history-empty-state">공개된 문제 풀이 정보가 없다.</div>;
+      return <div className="submit-history-empty-state">{text('PROFILE_PUBLIC_SOLVED_EMPTY_STATE', '공개된 문제 풀이 정보가 없습니다.')}</div>;
     }
 
     const solvedProblemIdSet = new Set(solvedProblemIds);
@@ -1596,23 +1648,29 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       <section className="profile-flow-section profile-problem-section">
         <div className="profile-flow-title-row">
           <span className="profile-flow-title-icon is-solve" aria-hidden="true"><ProblemListIcon /></span>
-          <h2 className="profile-section-title">문제 풀이 현황</h2>
+          <h2 className="profile-section-title">{text('PROFILE_PROBLEM_SUMMARY_TITLE', '문제 풀이 현황')}</h2>
         </div>
 
         <div className="profile-problem-content-shell">
           <div className="profile-problem-toolbar is-stat-only">
-            <div className="profile-problem-stat-grid is-inline" aria-label="문제 풀이 요약">
+            <div className="profile-problem-stat-grid is-inline" aria-label={text('PROFILE_PROBLEM_SUMMARY_ARIA_LABEL', '문제 풀이 요약')}>
               <div className="profile-problem-stat-card">
-                <span className="profile-problem-stat-label">시도한 문제</span>
-                <strong className="profile-problem-stat-value">{numberFormatter.format(attemptedProblemIds.length)}개</strong>
+                <span className="profile-problem-stat-label">{text('PROFILE_ATTEMPTED_PROBLEMS_LABEL', '시도한 문제')}</span>
+                <strong className="profile-problem-stat-value">
+                  {text('PROFILE_ITEM_COUNT_LABEL', { count: numberFormatter.format(attemptedProblemIds.length) }, '{count}개')}
+                </strong>
               </div>
               <div className="profile-problem-stat-card">
-                <span className="profile-problem-stat-label">정답</span>
-                <strong className="profile-problem-stat-value is-solved">{numberFormatter.format(solvedProblemIds.length)}개</strong>
+                <span className="profile-problem-stat-label">{text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답')}</span>
+                <strong className="profile-problem-stat-value is-solved">
+                  {text('PROFILE_ITEM_COUNT_LABEL', { count: numberFormatter.format(solvedProblemIds.length) }, '{count}개')}
+                </strong>
               </div>
               <div className="profile-problem-stat-card">
-                <span className="profile-problem-stat-label">오답</span>
-                <strong className="profile-problem-stat-value is-attempted">{numberFormatter.format(wrongProblemIds.length)}개</strong>
+                <span className="profile-problem-stat-label">{text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}</span>
+                <strong className="profile-problem-stat-value is-attempted">
+                  {text('PROFILE_ITEM_COUNT_LABEL', { count: numberFormatter.format(wrongProblemIds.length) }, '{count}개')}
+                </strong>
               </div>
             </div>
           </div>
@@ -1632,7 +1690,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 ))}
               </div>
             ) : (
-              <div className="submit-history-empty-state profile-inline-empty-state">시도한 문제 없음</div>
+              <div className="submit-history-empty-state profile-inline-empty-state">{text('PROFILE_ATTEMPTED_EMPTY_STATE', '시도한 문제 없음')}</div>
             )}
           </div>
         </div>
@@ -1655,26 +1713,26 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
         type="button"
         className="submit-history-link-button profile-community-activity-word-link"
         onClick={() => navigate(`${getCommunityPostPath(activity.postId)}${activity.commentId ? `#community-comment-${activity.commentId}` : ''}`)}
-        aria-label="댓글로 이동"
+        aria-label={text('PROFILE_COMMENT_MOVE_LABEL', '댓글로 이동')}
       >
-        댓글
+        {text('PROFILE_COMMENT_LABEL', '댓글')}
       </button>
     );
-    const likeText = <span className="profile-community-activity-plain-word">좋아요</span>;
+    const likeText = <span className="profile-community-activity-plain-word">{text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}</span>;
 
     if (activity.activityType === 'post') {
-      return <>커뮤니티에 {postLink} 을 작성했습니다.</>;
+      return <>{text('PROFILE_COMMUNITY_ACTIVITY_POST_MESSAGE_PREFIX', '커뮤니티에')} {postLink} {text('PROFILE_COMMUNITY_ACTIVITY_POST_MESSAGE_SUFFIX', '을 작성했습니다.')}</>;
     }
 
     if (activity.activityType === 'likedPost') {
-      return <>{postLink} 에 {likeText}를 남겼습니다.</>;
+      return <>{postLink} {text('PROFILE_COMMUNITY_ACTIVITY_LIKE_POST_MIDDLE', '에')} {likeText}{text('PROFILE_COMMUNITY_ACTIVITY_LIKE_POST_END', '를 남겼습니다.')}</>;
     }
 
     if (activity.activityType === 'comment') {
-      return <>{postLink} 에 {commentLink}을 남겼습니다.</>;
+      return <>{postLink} {text('PROFILE_COMMUNITY_ACTIVITY_COMMENT_MIDDLE', '에')} {commentLink}{text('PROFILE_COMMUNITY_ACTIVITY_COMMENT_SUFFIX', '을 남겼습니다.')}</>;
     }
 
-    return <>{postLink} 의 {commentLink}에 {likeText}를 남겼습니다.</>;
+    return <>{postLink} {text('PROFILE_COMMUNITY_ACTIVITY_LIKED_COMMENT_MIDDLE', '의')} {commentLink}{text('PROFILE_COMMUNITY_ACTIVITY_LIKED_COMMENT_AFTER_COMMENT', '에')} {likeText}{text('PROFILE_COMMUNITY_ACTIVITY_LIKED_COMMENT_END', '를 남겼습니다.')}</>;
   }
 
   function renderCommunitySection() {
@@ -1683,23 +1741,25 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
         <div className="profile-section-heading-row profile-community-heading-row">
           <div className="profile-flow-title-row">
             <span className="profile-flow-title-icon is-community" aria-hidden="true">✎</span>
-            <h2 className="profile-section-title">커뮤니티 활동</h2>
+            <h2 className="profile-section-title">{text('PROFILE_COMMUNITY_ACTIVITY_SECTION_TITLE', '커뮤니티 활동')}</h2>
           </div>
         </div>
 
         {!showCommunityActivitySection ? (
-          <div className="submit-history-empty-state profile-inline-empty-state">공개된 커뮤니티 활동이 없다.</div>
+          <div className="submit-history-empty-state profile-inline-empty-state">{text('PROFILE_PUBLIC_ACTIVITY_EMPTY_STATE', '공개된 커뮤니티 활동이 없습니다.')}</div>
         ) : profileCommunityActivityErrorMessage ? (
-          <PageLoadFailureState className="submit-history-empty-state profile-inline-empty-state" />
+          profileCommunityActivityErrorStatus != null
+            ? <HttpErrorState status={profileCommunityActivityErrorStatus} className="submit-history-empty-state profile-inline-empty-state" message={profileCommunityActivityErrorMessage} />
+            : <PageLoadFailureState className="submit-history-empty-state profile-inline-empty-state" message={profileCommunityActivityErrorMessage} />
         ) : profileCommunityActivityPageData.activities.length === 0 && !isProfileCommunityActivityLoading ? (
-          <div className="submit-history-empty-state profile-inline-empty-state">활동 없음</div>
+          <div className="submit-history-empty-state profile-inline-empty-state">{text('PROFILE_ACTIVITY_EMPTY_STATE', '활동 없음')}</div>
         ) : (
           <>
             <div className={`submit-history-table-shell profile-table-shell ${isProfileCommunityActivityLoading ? 'is-loading' : ''}`.trim()}>
-              <div className={`submit-history-table profile-community-activity-table ${isProfileCommunityActivityLoading ? 'is-loading' : ''}`.trim()} role="table" aria-label="프로필 커뮤니티 활동">
+              <div className={`submit-history-table profile-community-activity-table ${isProfileCommunityActivityLoading ? 'is-loading' : ''}`.trim()} role="table" aria-label={text('PROFILE_COMMUNITY_ACTIVITY_TABLE_LABEL', '프로필 커뮤니티 활동')}>
                 <div className="submit-history-row submit-history-head" role="row">
-                  <div role="columnheader" className="submit-history-head-cell">내용</div>
-                  <div role="columnheader" className="submit-history-head-cell">날짜</div>
+                  <div role="columnheader" className="submit-history-head-cell">{text('COMMON_CONTENT_LABEL', '내용')}</div>
+                  <div role="columnheader" className="submit-history-head-cell">{text('COMMON_DATE_LABEL', '날짜')}</div>
                 </div>
 
                 {isProfileCommunityActivityLoading && profileCommunityActivityPageData.activities.length === 0 ? (
@@ -1711,30 +1771,26 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                   ))
                 ) : profileCommunityActivityPageData.activities.map((activity) => (
                   <article key={`${activity.activityType}-${activity.postId}-${activity.commentId ?? 'post'}-${activity.happenedAt}`} className="submit-history-row submit-history-body profile-community-activity-row" role="row">
-                    <span className="submit-history-cell profile-community-activity-cell" role="cell" data-label="내용">
+                    <span className="submit-history-cell profile-community-activity-cell" role="cell" data-label={text('COMMON_CONTENT_LABEL', '내용')}>
                       <span className="profile-community-activity-copy">{renderCommunityActivitySentence(activity)}</span>
                     </span>
-                    <span className="submit-history-cell profile-community-activity-date" role="cell" data-label="날짜">{formatDateTime(activity.happenedAt)}</span>
+                    <span className="submit-history-cell profile-community-activity-date" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatDateTime(activity.happenedAt)}</span>
                   </article>
                 ))}
               </div>
 
-              {isProfileCommunityActivityLoading ? (
-                <div className="submit-history-loading-overlay" aria-hidden="true">
-                  <span className="page-loading-spinner submit-history-loading-badge" />
-                </div>
-              ) : null}
+              {isProfileCommunityActivityLoading ? <LoadingOverlay ariaHidden /> : null}
             </div>
 
             {profileCommunityActivityPageData.totalPages > 1 ? (
-              <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="커뮤니티 활동 페이지">
+              <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_LABEL', '커뮤니티 활동 페이지')}>
                 <button
                   type="button"
                   className="mini-toggle problem-page-button"
                   onClick={() => moveProfileCommunityActivityPage(Math.max(1, profileCommunityActivityPage - 1))}
                   disabled={profileCommunityActivityPage === 1}
                 >
-                  이전
+                  {text('COMMON_PREVIOUS_BUTTON', '이전')}
                 </button>
 
                 {isProfileCommunityActivityPageEditing ? (
@@ -1760,7 +1816,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         cancelProfileCommunityActivityPageJump();
                       }
                     }}
-                    aria-label="커뮤니티 활동 페이지 번호"
+                    aria-label={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_INPUT_LABEL', '커뮤니티 활동 페이지 번호')}
                     autoFocus
                   />
                 ) : (
@@ -1782,7 +1838,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                   onClick={() => moveProfileCommunityActivityPage(Math.min(profileCommunityActivityPageData.totalPages, profileCommunityActivityPage + 1))}
                   disabled={profileCommunityActivityPage >= profileCommunityActivityPageData.totalPages}
                 >
-                  다음
+                  {text('COMMON_NEXT_BUTTON', '다음')}
                 </button>
               </div>
             ) : null}
@@ -1797,21 +1853,26 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       <div className="profile-section-stack">
         <section className="panel-card profile-summary-card">
           {profileAlarmErrorMessage ? (
-            <PageLoadFailureState className="submit-history-empty-state profile-inline-empty-state" />
+            profileAlarmErrorStatus != null
+              ? <HttpErrorState status={profileAlarmErrorStatus} className="submit-history-empty-state profile-inline-empty-state" message={profileAlarmErrorMessage} />
+              : <PageLoadFailureState className="submit-history-empty-state profile-inline-empty-state" message={profileAlarmErrorMessage} />
           ) : profileAlarmPageData.alarms.length === 0 && !isProfileAlarmLoading ? (
-            <div className="submit-history-empty-state profile-inline-empty-state">표시할 알림이 없다.</div>
+            <div className="submit-history-empty-state profile-inline-empty-state">{text('PROFILE_ALARM_EMPTY_STATE', '표시할 알림이 없습니다.')}</div>
           ) : (
             <>
               <div className={`submit-history-table-shell profile-table-shell ${isProfileAlarmLoading ? 'is-loading' : ''}`.trim()}>
-                <div className={`submit-history-table profile-alarm-table ${isProfileAlarmLoading ? 'is-loading' : ''}`.trim()} role="table" aria-label="프로필 알림 목록">
+                <div className={`submit-history-table profile-alarm-table ${isProfileAlarmLoading ? 'is-loading' : ''}`.trim()} role="table" aria-label={text('PROFILE_ALARM_TABLE_LABEL', '프로필 알림 목록')}>
                   <div className="submit-history-row submit-history-head" role="row">
-                    <div role="columnheader" className="submit-history-head-cell">알림 내용</div>
+                    <div role="columnheader" className="submit-history-head-cell">{text('PROFILE_ALARM_CONTENT_COLUMN_LABEL', '알림 내용')}</div>
                     <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter profile-alarm-sort-head">
-                      <span>날짜</span>
+                      <span>{text('COMMON_DATE_LABEL', '날짜')}</span>
                       <button
                         type="button"
                         className="submit-history-head-filter-trigger submit-history-head-sort-trigger is-active profile-alarm-sort-button"
-                        aria-label={`날짜 ${profileAlarmSort === 'desc' ? '오름차순' : '내림차순'} 정렬`}
+                        aria-label={text(
+                          profileAlarmSort === 'desc' ? 'PROFILE_DATE_SORT_ASC_LABEL' : 'PROFILE_DATE_SORT_DESC_LABEL',
+                          profileAlarmSort === 'desc' ? '날짜 오름차순 정렬' : '날짜 내림차순 정렬',
+                        )}
                         onClick={() => {
                           setProfileAlarmSort((currentSort) => (currentSort === 'desc' ? 'asc' : 'desc'));
                           setProfileAlarmPage(1);
@@ -1831,30 +1892,26 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     ))
                   ) : profileAlarmPageData.alarms.map((alarm) => (
                     <article key={alarm.alarmId} className={`submit-history-row submit-history-body profile-alarm-row ${!alarm.read ? 'is-unread' : ''}`.trim()} role="row">
-                      <span className="submit-history-cell profile-alarm-cell" role="cell" data-label="알림 내용">
+                      <span className="submit-history-cell profile-alarm-cell" role="cell" data-label={text('PROFILE_ALARM_CONTENT_COLUMN_LABEL', '알림 내용')}>
                         {renderProfileAlarmSentence(alarm)}
                       </span>
-                      <span className="submit-history-cell" role="cell" data-label="날짜">{formatDateTime(alarm.createdAt)}</span>
+                      <span className="submit-history-cell" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatDateTime(alarm.createdAt)}</span>
                     </article>
                   ))}
                 </div>
 
-                {isProfileAlarmLoading ? (
-                  <div className="submit-history-loading-overlay" aria-hidden="true">
-                    <span className="page-loading-spinner submit-history-loading-badge" />
-                  </div>
-                ) : null}
+                {isProfileAlarmLoading ? <LoadingOverlay ariaHidden /> : null}
               </div>
 
               {profileAlarmPageData.totalPages > 1 ? (
-                <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="알림 목록 페이지">
+                <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('PROFILE_ALARM_PAGE_LABEL', '알림 목록 페이지')}>
                   <button
                     type="button"
                     className="mini-toggle problem-page-button"
                     onClick={() => setProfileAlarmPage((currentPage) => Math.max(1, currentPage - 1))}
                     disabled={profileAlarmPageData.currentPage === 1}
                   >
-                    이전
+                    {text('COMMON_PREVIOUS_BUTTON', '이전')}
                   </button>
 
                   {isProfileAlarmPageEditing ? (
@@ -1875,12 +1932,12 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                           applyProfileAlarmPageJump();
                         }
 
-                        if (event.key === 'Escape') {
+                      if (event.key === 'Escape') {
                           event.preventDefault();
                           cancelProfileAlarmPageJump();
                         }
                       }}
-                      aria-label="알림 목록 페이지 번호"
+                      aria-label={text('PROFILE_ALARM_PAGE_INPUT_LABEL', '알림 목록 페이지 번호')}
                       autoFocus
                     />
                   ) : (
@@ -1902,7 +1959,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     onClick={() => setProfileAlarmPage((currentPage) => Math.min(profileAlarmPageData.totalPages, currentPage + 1))}
                     disabled={profileAlarmPageData.currentPage >= profileAlarmPageData.totalPages}
                   >
-                    다음
+                    {text('COMMON_NEXT_BUTTON', '다음')}
                   </button>
                 </div>
               ) : null}
@@ -1918,7 +1975,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       <div className="page-stack profile-page submit-history-page home-page">
         <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
           <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
-            <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label="프로필 Handle">
+            <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label={text('PROFILE_HANDLE_TABLIST_LABEL', '프로필 Handle')}>
               <button
                 type="button"
                 className={`solve-dbms-tab ${!isEditOpen && !isAlarmListOpen ? 'is-selected' : ''}`}
@@ -1949,9 +2006,9 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     setIsBioEditing(false);
                     setBioSnapshot(null);
                     navigate(`${profileBasePath}?tab=alarms`, { replace: true });
-                  }}
-                >
-                  알림 목록
+                }}
+              >
+                  {text('PROFILE_ALARM_TAB_LABEL', '알림 목록')}
                 </button>
               ) : null}
               {isOwnProfile ? (
@@ -1960,20 +2017,19 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                   className={`solve-dbms-tab ${isEditOpen ? 'is-selected' : ''}`}
                   role="tab"
                   aria-selected={isEditOpen}
-                  onClick={() => {
+                onClick={() => {
                     setEditDraft(createEditDraft(profileSummary));
                     setIsProfileCardEditing(false);
                     setProfileCardSnapshot(null);
                     setIsBioEditing(false);
                     setBioSnapshot(null);
                     setIsLinkEditingMode(false);
-                    setEditingLinkIndexes([]);
                     setEditingLinkSnapshots({});
                     setIsEditOpen(true);
                     navigate(profileBasePath, { replace: true });
-                  }}
-                >
-                  프로필 수정
+                }}
+              >
+                  {text('PROFILE_EDIT_TAB_LABEL', '프로필 수정')}
                 </button>
               ) : null}
             </div>
@@ -1984,15 +2040,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
           <section className="profile-editor-panel-next">
             <div className="profile-editor-block is-card">
               <div className="profile-editor-block-heading">
-                <p className="field-label">프로필 카드</p>
+                <p className="field-label">{text('PROFILE_CARD_SECTION_LABEL', '프로필 카드')}</p>
                 <div className="profile-editor-heading-actions">
                   {isProfileCardEditing ? (
                     <>
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button profile-editor-save-button"
-                        aria-label="프로필 카드 수정 완료"
-                        title="완료"
+                        aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                        title={text('COMMON_COMPLETE_LABEL', '완료')}
                         disabled={savingSection === 'card'}
                         onClick={() => void completeProfileCardEditing()}
                       >
@@ -2001,8 +2057,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button profile-editor-cancel-button"
-                        aria-label="프로필 카드 수정 취소"
-                        title="취소"
+                        aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                        title={text('COMMON_CANCEL_BUTTON', '취소')}
                         disabled={savingSection === 'card'}
                         onClick={cancelProfileCardEditing}
                       >
@@ -2013,8 +2069,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <button
                       type="button"
                       className="btn text profile-editor-icon-button"
-                      aria-label="프로필 카드 수정"
-                      title="수정"
+                      aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                      title={text('COMMON_EDIT_BUTTON', '수정')}
                       disabled={isProfileEditorBusy}
                       onClick={openProfileCardEditing}
                     >
@@ -2045,8 +2101,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="profile-hero-overlay-button is-delete"
-                        aria-label="배경 삭제"
-                        title="배경 삭제"
+                        aria-label={text('COMMON_DELETE_BUTTON', '삭제')}
+                        title={text('COMMON_DELETE_BUTTON', '삭제')}
                         onClick={() =>
                           updateDraft((draft) => ({
                             ...draft,
@@ -2077,8 +2133,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                             <button
                               type="button"
                               className="profile-hero-overlay-button is-delete"
-                              aria-label="프로필 사진 삭제"
-                              title="프로필 사진 삭제"
+                              aria-label={text('COMMON_DELETE_BUTTON', '삭제')}
+                              title={text('COMMON_DELETE_BUTTON', '삭제')}
                               onClick={() =>
                                 updateDraft((draft) => ({
                                   ...draft,
@@ -2100,7 +2156,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <h1 className="page-title profile-page-title">{profileSummary.handle}</h1>
                     {editingHeroLinks.length > 0 ? (
                       <div className="profile-hero-link-row profile-hero-link-row-inline">
-                        <div className="profile-hero-inline-link-list" aria-label="외부 링크">
+                        <div className="profile-hero-inline-link-list" aria-label={text('PROFILE_EXTERNAL_LINKS_LABEL', '외부 링크')}>
                           {createHeroLinkNodes(editingHeroLinks)}
                         </div>
                       </div>
@@ -2114,15 +2170,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
             <div className="profile-editor-block is-bio">
               <div className="profile-editor-block-heading">
-                <p className="field-label">소개</p>
+                <p className="field-label">{text('PROFILE_BIO_SECTION_LABEL', '소개')}</p>
                 <div className="profile-editor-heading-actions">
                   {isBioEditing ? (
                     <>
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button profile-editor-save-button"
-                        aria-label="소개 편집 완료"
-                        title="완료"
+                        aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                        title={text('COMMON_COMPLETE_LABEL', '완료')}
                         disabled={savingSection === 'bio'}
                         onClick={() => void completeBioEditing()}
                       >
@@ -2131,8 +2187,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button profile-editor-cancel-button"
-                        aria-label="소개 편집 취소"
-                        title="취소"
+                        aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                        title={text('COMMON_CANCEL_BUTTON', '취소')}
                         disabled={savingSection === 'bio'}
                         onClick={cancelBioEditing}
                       >
@@ -2143,8 +2199,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <button
                       type="button"
                       className="btn text profile-editor-icon-button"
-                      aria-label="소개 수정"
-                      title="수정"
+                      aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                      title={text('COMMON_EDIT_BUTTON', '수정')}
                       disabled={isProfileEditorBusy}
                       onClick={startBioEditing}
                     >
@@ -2154,7 +2210,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 </div>
               </div>
 
-              <div className="profile-editor-link-table" role="table" aria-label="프로필 소개">
+              <div className="profile-editor-link-table" role="table" aria-label={text('PROFILE_BIO_SECTION_LABEL', '소개')}>
                 <div className="profile-editor-link-row profile-editor-bio-row is-single-column" role="row">
                   {isBioEditing ? (
                     <input
@@ -2168,8 +2224,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                           bio: event.target.value,
                         }))
                       }
-                      placeholder="소개"
-                      aria-label="소개"
+                      placeholder={text('PROFILE_BIO_SECTION_LABEL', '소개')}
+                      aria-label={text('PROFILE_BIO_SECTION_LABEL', '소개')}
                     />
                   ) : (
                     <div className="profile-editor-config-display profile-editor-bio-display-row">
@@ -2182,15 +2238,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
             <div className="profile-editor-block is-links">
               <div className="profile-editor-block-heading">
-                <p className="field-label">링크</p>
+                <p className="field-label">{text('PROFILE_LINKS_SECTION_LABEL', '링크')}</p>
                 <div className="profile-editor-heading-actions">
                   {isLinkBatchEditing ? (
                     <>
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button profile-editor-save-button"
-                        aria-label="링크 편집 완료"
-                        title="완료"
+                        aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                        title={text('COMMON_COMPLETE_LABEL', '완료')}
                         disabled={savingSection === 'links'}
                         onClick={() => void completeAllLinksEditing()}
                       >
@@ -2199,8 +2255,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button profile-editor-cancel-button"
-                        aria-label="링크 편집 취소"
-                        title="취소"
+                        aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                        title={text('COMMON_CANCEL_BUTTON', '취소')}
                         disabled={savingSection === 'links'}
                         onClick={cancelAllLinksEditing}
                       >
@@ -2211,8 +2267,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <button
                       type="button"
                       className="btn text profile-editor-icon-button"
-                      aria-label="링크 수정"
-                      title="수정"
+                      aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                      title={text('COMMON_EDIT_BUTTON', '수정')}
                       disabled={isProfileEditorBusy}
                       onClick={startAllLinksEditing}
                     >
@@ -2222,18 +2278,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 </div>
               </div>
 
-              <div className="profile-editor-link-table" role="table" aria-label="프로필 링크">
+              <div className="profile-editor-link-table" role="table" aria-label={text('PROFILE_LINKS_SECTION_LABEL', '링크')}>
                 <div className="profile-editor-link-head" role="row">
-                  <span role="columnheader">키 (Label)</span>
-                  <span role="columnheader">URL</span>
+                  <span role="columnheader">{text('PROFILE_LINK_LABEL_FIELD', '키 (Label)')}</span>
+                  <span role="columnheader">{text('PROFILE_LINK_VALUE_FIELD', 'URL')}</span>
                   <span role="columnheader" className="profile-editor-link-head-action">
                     <button
                       type="button"
                       className="btn text profile-editor-add-link-button"
                       disabled={savingSection === 'links' || !isLinkBatchEditing || editDraft.links.length >= 10}
                       onClick={addLinkDraft}
-                      aria-label="링크 추가"
-                      title="링크 추가"
+                      aria-label={text('COMMON_ADD_BUTTON', '추가')}
+                      title={text('COMMON_ADD_BUTTON', '추가')}
                     >
                       <PlusIcon />
                     </button>
@@ -2250,15 +2306,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                           className="text-field profile-editor-link-input"
                           value={link.type}
                           onChange={(event) => updateLinkDraft(index, 'type', event.target.value)}
-                          placeholder="Blog"
-                          aria-label="링크 라벨"
+                          placeholder={text('PROFILE_LINK_LABEL_PLACEHOLDER', 'Blog')}
+                          aria-label={text('PROFILE_LINK_LABEL_FIELD', '키 (Label)')}
                         />
                         <input
                           className="text-field profile-editor-link-input"
                           value={link.value}
                           onChange={(event) => updateLinkDraft(index, 'value', event.target.value)}
-                          placeholder="https://"
-                          aria-label="링크 URL"
+                          placeholder={text('PROFILE_LINK_URL_PLACEHOLDER', 'https://')}
+                          aria-label={text('PROFILE_LINK_VALUE_FIELD', 'URL')}
                         />
                       </>
                     ) : (
@@ -2273,8 +2329,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-delete-button"
-                          aria-label="링크 삭제"
-                          title="삭제"
+                          aria-label={text('COMMON_DELETE_BUTTON', '삭제')}
+                          title={text('COMMON_DELETE_BUTTON', '삭제')}
                           disabled={savingSection === 'links'}
                           onClick={() => removeLinkDraft(index)}
                         >
@@ -2292,15 +2348,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
             <div className="profile-editor-settings">
               <div className="profile-editor-setting-block">
                 <div className="profile-editor-setting-heading">
-                  <p className="field-label">기본 DBMS</p>
+                  <p className="field-label">{text('PROFILE_DEFAULT_DBMS_LABEL', '기본 DBMS')}</p>
                   <div className="profile-editor-heading-actions">
                     {editingSettingKey === 'defaultDbms' ? (
                       <>
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-save-button"
-                          aria-label="기본 DBMS 저장"
-                          title="완료"
+                          aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                          title={text('COMMON_COMPLETE_LABEL', '완료')}
                           disabled={savingSection === 'defaultDbms'}
                           onClick={() => void completeSettingEditing('defaultDbms')}
                         >
@@ -2309,8 +2365,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-cancel-button"
-                          aria-label="기본 DBMS 편집 취소"
-                          title="취소"
+                          aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                          title={text('COMMON_CANCEL_BUTTON', '취소')}
                           disabled={savingSection === 'defaultDbms'}
                           onClick={() => cancelSettingEditing('defaultDbms')}
                         >
@@ -2321,8 +2377,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button"
-                        aria-label="기본 DBMS 수정"
-                        title="수정"
+                        aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                        title={text('COMMON_EDIT_BUTTON', '수정')}
                         disabled={isProfileEditorBusy}
                         onClick={() => startSettingEditing('defaultDbms')}
                       >
@@ -2334,7 +2390,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 <div
                   className={`profile-editor-radio-row ${editingSettingKey === 'defaultDbms' ? 'is-editing' : 'is-locked'}`.trim()}
                   role="radiogroup"
-                  aria-label="기본 DBMS 선택"
+                  aria-label={text('PROFILE_DEFAULT_DBMS_SELECT_LABEL', '기본 DBMS 선택')}
                 >
                   {dbmsOptions.map((option) => (
                     <label key={option.value} className={`profile-editor-radio-label ${editDraft.defaultDbms === option.value ? 'is-selected' : ''}`.trim()}>
@@ -2358,15 +2414,15 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
               <div className="profile-editor-setting-block">
                 <div className="profile-editor-setting-heading">
-                  <p className="field-label">작성한 SQL 공개 여부</p>
+                  <p className="field-label">{text('PROFILE_SQL_VISIBILITY_LABEL', '작성한 SQL 공개 여부')}</p>
                   <div className="profile-editor-heading-actions">
                     {editingSettingKey === 'sqlPublic' ? (
                       <>
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-save-button"
-                          aria-label="작성한 SQL 공개 여부 저장"
-                          title="완료"
+                          aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                          title={text('COMMON_COMPLETE_LABEL', '완료')}
                           disabled={savingSection === 'sqlPublic'}
                           onClick={() => void completeSettingEditing('sqlPublic')}
                         >
@@ -2375,8 +2431,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-cancel-button"
-                          aria-label="작성한 SQL 공개 여부 편집 취소"
-                          title="취소"
+                          aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                          title={text('COMMON_CANCEL_BUTTON', '취소')}
                           disabled={savingSection === 'sqlPublic'}
                           onClick={() => cancelSettingEditing('sqlPublic')}
                         >
@@ -2387,8 +2443,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button"
-                        aria-label="작성한 SQL 공개 여부 수정"
-                        title="수정"
+                        aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                        title={text('COMMON_EDIT_BUTTON', '수정')}
                         disabled={isProfileEditorBusy}
                         onClick={() => startSettingEditing('sqlPublic')}
                       >
@@ -2400,7 +2456,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 <div
                   className={`profile-editor-radio-row ${editingSettingKey === 'sqlPublic' ? 'is-editing' : 'is-locked'}`.trim()}
                   role="radiogroup"
-                  aria-label="작성한 SQL 공개 여부"
+                  aria-label={text('PROFILE_SQL_VISIBILITY_LABEL', '작성한 SQL 공개 여부')}
                 >
                   <label className={`profile-editor-radio-label ${editDraft.sqlPublic ? 'is-selected' : ''}`.trim()}>
                     <input
@@ -2415,7 +2471,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         }))
                       }
                     />
-                    <span>공개</span>
+                    <span>{text('COMMON_PUBLIC_LABEL', '공개')}</span>
                   </label>
                   <label className={`profile-editor-radio-label ${!editDraft.sqlPublic ? 'is-selected' : ''}`.trim()}>
                     <input
@@ -2430,22 +2486,22 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         }))
                       }
                     />
-                    <span>비공개</span>
+                    <span>{text('COMMON_PRIVATE_LABEL', '비공개')}</span>
                   </label>
                 </div>
               </div>
 
               <div className="profile-editor-setting-block">
                 <div className="profile-editor-setting-heading">
-                  <p className="field-label">커뮤니티 활동 공개 여부</p>
+                  <p className="field-label">{text('PROFILE_COMMUNITY_VISIBILITY_LABEL', '커뮤니티 활동 공개 여부')}</p>
                   <div className="profile-editor-heading-actions">
                     {editingSettingKey === 'communityActivityPublic' ? (
                       <>
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-save-button"
-                          aria-label="커뮤니티 활동 공개 여부 저장"
-                          title="완료"
+                          aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                          title={text('COMMON_COMPLETE_LABEL', '완료')}
                           disabled={savingSection === 'communityActivityPublic'}
                           onClick={() => void completeSettingEditing('communityActivityPublic')}
                         >
@@ -2454,8 +2510,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         <button
                           type="button"
                           className="btn text profile-editor-icon-button profile-editor-cancel-button"
-                          aria-label="커뮤니티 활동 공개 여부 편집 취소"
-                          title="취소"
+                          aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                          title={text('COMMON_CANCEL_BUTTON', '취소')}
                           disabled={savingSection === 'communityActivityPublic'}
                           onClick={() => cancelSettingEditing('communityActivityPublic')}
                         >
@@ -2466,8 +2522,8 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <button
                         type="button"
                         className="btn text profile-editor-icon-button"
-                        aria-label="커뮤니티 활동 공개 여부 수정"
-                        title="수정"
+                        aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                        title={text('COMMON_EDIT_BUTTON', '수정')}
                         disabled={isProfileEditorBusy}
                         onClick={() => startSettingEditing('communityActivityPublic')}
                       >
@@ -2479,7 +2535,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 <div
                   className={`profile-editor-radio-row ${editingSettingKey === 'communityActivityPublic' ? 'is-editing' : 'is-locked'}`.trim()}
                   role="radiogroup"
-                  aria-label="커뮤니티 활동 공개 여부"
+                  aria-label={text('PROFILE_COMMUNITY_VISIBILITY_LABEL', '커뮤니티 활동 공개 여부')}
                 >
                   <label className={`profile-editor-radio-label ${editDraft.communityActivityPublic ? 'is-selected' : ''}`.trim()}>
                     <input
@@ -2494,7 +2550,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         }))
                       }
                     />
-                    <span>공개</span>
+                    <span>{text('COMMON_PUBLIC_LABEL', '공개')}</span>
                   </label>
                   <label className={`profile-editor-radio-label ${!editDraft.communityActivityPublic ? 'is-selected' : ''}`.trim()}>
                     <input
@@ -2509,7 +2565,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                         }))
                       }
                     />
-                    <span>비공개</span>
+                    <span>{text('COMMON_PRIVATE_LABEL', '비공개')}</span>
                   </label>
                 </div>
               </div>
@@ -2536,7 +2592,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <h1 className="page-title profile-page-title">{profileSummary.handle}</h1>
                     {heroLinks.length > 0 ? (
                       <div className="profile-hero-link-row profile-hero-link-row-inline">
-                        <div className="profile-hero-inline-link-list" aria-label="외부 링크">
+                        <div className="profile-hero-inline-link-list" aria-label={text('PROFILE_EXTERNAL_LINKS_LABEL', '외부 링크')}>
                           {createHeroLinkNodes(heroLinks)}
                         </div>
                       </div>
@@ -2554,7 +2610,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
               {renderCommunitySection()}
             </div>
 
-            {isLoading ? <div className="submit-history-loading-overlay" aria-hidden="true" /> : null}
+            {isLoading ? <LoadingOverlay ariaHidden /> : null}
           </section>
         )}
       </div>
@@ -2562,7 +2618,11 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       {imageCropState ? (
         <ImageCropModal
           key={`${imageCropState.target}:${imageCropState.sourceUrl}:${imageCropState.target === 'background' ? profileBackgroundCropAspect : 1}`}
-          ariaLabel={imageCropState.target === 'background' ? '프로필 배경 자르기' : '프로필 사진 자르기'}
+          ariaLabel={
+            imageCropState.target === 'background'
+              ? text('PROFILE_IMAGE_CROP_BACKGROUND_TITLE', '프로필 배경 자르기')
+              : text('PROFILE_IMAGE_CROP_AVATAR_TITLE', '프로필 사진 자르기')
+          }
           imageSrc={imageCropState.sourceUrl}
           aspect={imageCropState.target === 'background' ? profileBackgroundCropAspect : 1}
           cropShape={imageCropState.target === 'background' ? 'rect' : 'round'}

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 
 export interface FavoriteTabSnapshotPayload {
   kind: string;
@@ -56,17 +57,13 @@ export async function fetchMyFavoriteTabs() {
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      return [] as FavoriteTabApiEntry[];
-    }
-
-    throw new Error('즐겨찾기 조회에 실패했습니다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('FAVORITES_LOAD_FAIL_MESSAGE', '즐겨찾기를 불러오지 못했습니다.'));
   }
 
   try {
     return normalizeFavoriteTabResponse((await response.json()) as FavoriteTabsResponse);
   } catch {
-    throw new Error('즐겨찾기 응답 형식이 올바르지 않습니다.');
+    throw new Error(getUiTextValue('FAVORITES_PARSE_FAIL_MESSAGE', '즐겨찾기 응답 형식이 올바르지 않습니다.'));
   }
 }
 
@@ -89,16 +86,12 @@ export async function updateMyFavoriteTabs(entries: FavoriteTabApiEntry[]) {
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      return [] as FavoriteTabApiEntry[];
-    }
-
-    throw new Error('즐겨찾기 저장에 실패했습니다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('FAVORITES_SAVE_FAIL_MESSAGE', '즐겨찾기를 저장하지 못했습니다.'));
   }
 
   try {
     return normalizeFavoriteTabResponse((await response.json()) as FavoriteTabsResponse);
   } catch {
-    throw new Error('즐겨찾기 응답 형식이 올바르지 않습니다.');
+    throw new Error(getUiTextValue('FAVORITES_PARSE_FAIL_MESSAGE', '즐겨찾기 응답 형식이 올바르지 않습니다.'));
   }
 }

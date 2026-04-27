@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchAdminAlarmRecipients, sendAdminAlarm } from '../lib/alarmAdminApi';
 import { showSessionToast } from '../lib/session';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 
 function CloseIcon() {
   return (
@@ -19,6 +20,7 @@ function CloseIcon() {
 
 export function AlarmSendContent() {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const { text } = useUiText();
   const [recipientQuery, setRecipientQuery] = useState('');
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [recipientOptions, setRecipientOptions] = useState<string[]>([]);
@@ -91,12 +93,12 @@ export function AlarmSendContent() {
 
   async function handleSubmit() {
     if (selectedRecipients.length === 0) {
-      setErrorMessage('수신자가 필요하다.');
+      setErrorMessage(getUiTextValue('ALARM_SEND_RECIPIENT_REQUIRED_MESSAGE', '수신자 선택은 필수입니다.'));
       return;
     }
 
     if (message.trim() === '') {
-      setErrorMessage('알람 내용이 필요하다.');
+      setErrorMessage(getUiTextValue('ALARM_SEND_CONTENT_REQUIRED_MESSAGE', '알림 내용 입력은 필수입니다.'));
       return;
     }
 
@@ -109,13 +111,13 @@ export function AlarmSendContent() {
         message,
       });
 
-      showSessionToast('알람 전송 완료.');
+      showSessionToast(getUiTextValue('ALARM_SEND_SUCCESS_TOAST', '알림을 전송했습니다.'));
       setSelectedRecipients([]);
       setRecipientQuery('');
       setRecipientOptions([]);
       setMessage('');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '알람 전송에 실패했다.');
+      setErrorMessage(error instanceof Error ? error.message : getUiTextValue('ALARM_SEND_FAIL_MESSAGE', '알림 전송에 실패했습니다.'));
     } finally {
       setIsSending(false);
     }
@@ -129,7 +131,7 @@ export function AlarmSendContent() {
 
       <div className="admin-alarm-send-form" ref={rootRef}>
         <label className="admin-alarm-send-field">
-          <span className="admin-auth-permission-label">수신자</span>
+          <span className="admin-auth-permission-label">{text('ALARM_SEND_RECIPIENT_LABEL', '수신자')}</span>
           <div className="admin-alarm-send-recipient-shell">
             <div className="admin-alarm-send-chip-list">
               {selectedRecipients.map((handle) => (
@@ -139,7 +141,7 @@ export function AlarmSendContent() {
                     type="button"
                     className="btn text admin-alarm-send-chip-remove"
                     onClick={() => handleRecipientRemove(handle)}
-                    aria-label={`${handle} 제거`}
+                    aria-label={text('ALARM_SEND_RECIPIENT_REMOVE_LABEL', { handle }, '{handle} 제거')}
                   >
                     <CloseIcon />
                   </button>
@@ -149,7 +151,7 @@ export function AlarmSendContent() {
               <input
                 type="text"
                 className="text-field admin-config-input admin-alarm-send-input"
-                placeholder="Handle 검색"
+                placeholder={text('ALARM_SEND_HANDLE_PLACEHOLDER', 'Handle 검색')}
                 value={recipientQuery}
                 onChange={(event) => {
                   setRecipientQuery(event.target.value);
@@ -167,7 +169,7 @@ export function AlarmSendContent() {
             {recipientQuery.trim() !== '' ? (
               <div className="admin-alarm-send-recipient-menu">
                 {isRecipientLoading ? (
-                  <span className="admin-alarm-send-recipient-empty">검색 중</span>
+                  <span className="admin-alarm-send-recipient-empty">{text('ALARM_SEND_SEARCHING_STATE', '검색 중')}</span>
                 ) : recipientOptions.length > 0 ? (
                   recipientOptions.map((handle) => (
                     <button
@@ -180,7 +182,7 @@ export function AlarmSendContent() {
                     </button>
                   ))
                 ) : (
-                  <span className="admin-alarm-send-recipient-empty">검색 결과가 없다.</span>
+                  <span className="admin-alarm-send-recipient-empty">{text('ALARM_SEND_EMPTY_SEARCH_RESULT', '검색 결과가 없습니다.')}</span>
                 )}
               </div>
             ) : null}
@@ -188,16 +190,16 @@ export function AlarmSendContent() {
         </label>
 
         <label className="admin-alarm-send-field">
-          <span className="admin-auth-permission-label">내용</span>
+          <span className="admin-auth-permission-label">{text('ALARM_SEND_CONTENT_LABEL', '내용')}</span>
           <textarea
             className="text-field admin-auth-permission-input admin-alarm-send-textarea"
             value={message}
             onChange={(event) => {
               setMessage(event.target.value);
               setErrorMessage(null);
-                }}
+            }}
             rows={6}
-            placeholder="보낼 알람 내용을 입력"
+            placeholder={text('ALARM_SEND_CONTENT_PLACEHOLDER', '보낼 알림 내용을 입력해 주세요.')}
           />
         </label>
 
@@ -210,7 +212,7 @@ export function AlarmSendContent() {
             }}
             disabled={isSending}
           >
-            {isSending ? '전송 중' : '보내기'}
+            {isSending ? text('COMMON_SENDING_LABEL', '전송 중') : text('ALARM_SEND_BUTTON', '보내기')}
           </button>
         </div>
       </div>

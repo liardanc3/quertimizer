@@ -14,6 +14,7 @@ import {
   type ProblemSetSummary,
 } from '../lib/problemApi';
 import { navigate } from '../lib/navigation';
+import { getUiText, getUiTextValue, useUiText } from '../lib/uiText';
 import './ProblemCreatePage.css';
 
 type ProblemSetMode = 'existing' | 'new';
@@ -118,11 +119,11 @@ function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
 }
 
 function getProblemSetLabel(problemSetId: string) {
-  return `테이블셋 ${problemSetId}`;
+  return getUiText('PROBLEM_CREATE_SET_LABEL', { problemSetId }, `테이블셋 ${problemSetId}`);
 }
 
 function getProblemLabel(problemId: string) {
-  return `문제 ${problemId}`;
+  return getUiText('PROBLEM_CREATE_PROBLEM_LABEL', { problemId }, `문제 ${problemId}`);
 }
 
 function getProblemNumberLabel(problemSetMode: ProblemSetMode, problemMode: ProblemMode, problemSetId: string | null, problemId: string | null) {
@@ -131,10 +132,10 @@ function getProblemNumberLabel(problemSetMode: ProblemSetMode, problemMode: Prob
   }
 
   if (problemSetMode === 'existing' && problemSetId) {
-    return `${problemSetId}-신규`;
+    return getUiText('PROBLEM_CREATE_NEW_SET_NUMBER_LABEL', { problemSetId }, `${problemSetId}-신규`);
   }
 
-  return '신규 문제';
+  return getUiTextValue('PROBLEM_CREATE_NEW_PROBLEM_LABEL', '신규 문제');
 }
 
 function resolveScopedDbms(value: string | null | undefined): DbmsType {
@@ -312,14 +313,14 @@ function buildMissingFields(values: {
 }) {
   const missingFields: MissingField[] = [];
 
-  if (values.title.trim() === '') missingFields.push({ key: 'title', label: '문제 제목' });
-  if (values.description.trim() === '') missingFields.push({ key: 'description', label: '설명' });
-  if (values.condition.trim() === '') missingFields.push({ key: 'condition', label: '조건' });
-  if (values.output.trim() === '') missingFields.push({ key: 'output', label: '출력 설명' });
-  if (values.ddl.trim() === '') missingFields.push({ key: 'ddl', label: '테이블 정보 DDL' });
-  if (values.actualData.trim() === '') missingFields.push({ key: 'actualData', label: '실제 채점 데이터' });
-  if (values.sampleData.trim() === '') missingFields.push({ key: 'sampleData', label: '예시 데이터' });
-  if (values.answerSql.trim() === '') missingFields.push({ key: 'answerSql', label: '정답 SQL' });
+  if (values.title.trim() === '') missingFields.push({ key: 'title', label: getUiTextValue('PROBLEM_CREATE_TITLE_LABEL', '문제 제목') });
+  if (values.description.trim() === '') missingFields.push({ key: 'description', label: getUiTextValue('PROBLEM_CREATE_DESCRIPTION_LABEL', '설명') });
+  if (values.condition.trim() === '') missingFields.push({ key: 'condition', label: getUiTextValue('PROBLEM_CREATE_CONDITION_LABEL', '조건') });
+  if (values.output.trim() === '') missingFields.push({ key: 'output', label: getUiTextValue('PROBLEM_CREATE_OUTPUT_LABEL', '출력 설명') });
+  if (values.ddl.trim() === '') missingFields.push({ key: 'ddl', label: getUiTextValue('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL') });
+  if (values.actualData.trim() === '') missingFields.push({ key: 'actualData', label: getUiTextValue('PROBLEM_CREATE_ACTUAL_DATA_LABEL', '실제 채점 데이터') });
+  if (values.sampleData.trim() === '') missingFields.push({ key: 'sampleData', label: getUiTextValue('PROBLEM_CREATE_SAMPLE_DATA_LABEL', '예시 데이터') });
+  if (values.answerSql.trim() === '') missingFields.push({ key: 'answerSql', label: getUiTextValue('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL') });
 
   return missingFields;
 }
@@ -385,11 +386,16 @@ function SelectChevronIcon() {
 function InlineEditActions({ isEditing, onEdit, onCancel, onConfirm }: { isEditing: boolean; onEdit: () => void; onCancel: () => void; onConfirm: () => void }) {
   return (
     <div className="problem-create-inline-toolbar">
-      <button type="button" className={`problem-create-inline-action ${isEditing ? 'is-active' : ''}`.trim()} aria-label={isEditing ? '수정 취소' : '수정'} onClick={isEditing ? onCancel : onEdit}>
+      <button
+        type="button"
+        className={`problem-create-inline-action ${isEditing ? 'is-active' : ''}`.trim()}
+        aria-label={isEditing ? getUiTextValue('COMMON_CANCEL_BUTTON', '취소') : getUiTextValue('COMMON_EDIT_BUTTON', '수정')}
+        onClick={isEditing ? onCancel : onEdit}
+      >
         {isEditing ? <CloseIcon /> : <EditIcon />}
       </button>
       {isEditing ? (
-        <button type="button" className="problem-create-inline-action problem-create-confirm-action" aria-label="수정 적용" onClick={onConfirm}>
+        <button type="button" className="problem-create-inline-action problem-create-confirm-action" aria-label={getUiTextValue('COMMON_APPLY_BUTTON', '적용')} onClick={onConfirm}>
           <CheckIcon />
         </button>
       ) : null}
@@ -509,7 +515,13 @@ function ProblemCreateSection({
   return (
     <section ref={sectionRef} className={`problem-create-section ${collapsed ? 'is-collapsed' : ''} ${isMissing ? 'is-missing' : ''}`.trim()}>
       <div className="problem-create-section-header">
-        <button type="button" className="problem-create-section-toggle" aria-label={collapsed ? '펼치기' : '접기'} aria-expanded={!collapsed} onClick={() => onToggle(sectionKey)}>
+        <button
+          type="button"
+          className="problem-create-section-toggle"
+          aria-label={collapsed ? getUiTextValue('COMMON_EXPAND_ACTION', '펼치기') : getUiTextValue('COMMON_COLLAPSE_ACTION', '접기')}
+          aria-expanded={!collapsed}
+          onClick={() => onToggle(sectionKey)}
+        >
           <ChevronIcon collapsed={collapsed} />
         </button>
         <h2 className="problem-create-section-title">{title}</h2>
@@ -523,12 +535,12 @@ function ProblemCreateSection({
 
 function ProblemCreatePreviewGrid({ previewData }: { previewData: ProblemOutputPreviewData }) {
   if (previewData.columns.length === 0) {
-    return <p className="problem-create-empty">출력 예시가 아직 없다.</p>;
+    return <p className="problem-create-empty">{getUiTextValue('PROBLEM_CREATE_OUTPUT_EMPTY_STATE', '출력 예시가 아직 없습니다.')}</p>;
   }
 
   return (
     <div className="problem-create-preview-grid-shell">
-      <div className="problem-create-preview-meta">행 {previewData.rowCount}개</div>
+      <div className="problem-create-preview-meta">{getUiText('PROBLEM_CREATE_PREVIEW_ROW_COUNT_LABEL', { count: previewData.rowCount }, `행 ${previewData.rowCount}개`)}</div>
       <div className="problem-create-preview-grid">
         <table>
           <thead>
@@ -554,6 +566,7 @@ function ProblemCreatePreviewGrid({ previewData }: { previewData: ProblemOutputP
 }
 
 export function ProblemCreateContent() {
+  const { text } = useUiText();
   const pageRef = useRef<HTMLDivElement | null>(null);
   const heroSectionRef = useRef<HTMLElement | null>(null);
   const sectionRefs = useRef<SectionRefs>({
@@ -680,11 +693,11 @@ export function ProblemCreateContent() {
         }
 
         setSelectedProblemSetId((current) => current ?? nextProblemSets[0].problemSetId);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setProblemSetMode('new');
           setSelectedProblemSetId(null);
-          setProblemSetErrorMessage('테이블셋 목록을 불러오지 못했다.');
+          setProblemSetErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
         }
       }
     }
@@ -735,13 +748,13 @@ export function ProblemCreateContent() {
 
         setProblemMode('existing');
         setSelectedProblemId((current) => (current != null && nextProblemOptions.includes(current) ? current : nextProblemOptions[0]));
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setLoadedProblemSetDetail(EMPTY_PROBLEM_SET_DETAIL);
           setProblemOptions([]);
           setProblemMode('new');
           setSelectedProblemId(null);
-          setProblemSetErrorMessage('테이블셋 정보를 불러오지 못했다.');
+          setProblemSetErrorMessage(error instanceof Error ? error.message : text('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));
         }
       } finally {
         if (!cancelled) {
@@ -782,10 +795,10 @@ export function ProblemCreateContent() {
         answerSqlState.replaceValue(nextProblemDetail.answerSql);
         setPreviewData(parseProblemOutputSample(nextProblemDetail.outputSample));
         setPreviewErrorMessage('');
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setLoadedProblemDetail(null);
-          setProblemErrorMessage('문제 정보를 불러오지 못했다.');
+          setProblemErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
         }
       } finally {
         if (!cancelled) {
@@ -950,7 +963,7 @@ export function ProblemCreateContent() {
       });
       setPreviewData(nextPreview);
     } catch (error) {
-      setPreviewErrorMessage(error instanceof Error ? error.message : '출력 예시 생성에 실패했다.');
+      setPreviewErrorMessage(error instanceof Error ? error.message : text('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
     } finally {
       setIsPreviewLoading(false);
     }
@@ -989,7 +1002,7 @@ export function ProblemCreateContent() {
       setPopupState({
         open: true,
         level: 2,
-        message: error instanceof Error ? error.message : '문제 저장에 실패했다.',
+        message: error instanceof Error ? error.message : text('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'),
       });
     } finally {
       setIsSaving(false);
@@ -1007,7 +1020,7 @@ export function ProblemCreateContent() {
                 value={selectedProblemSetValue}
                 className="problem-create-select"
                 options={[
-                  { value: NEW_PROBLEM_SET_OPTION_VALUE, label: '신규 테이블셋' },
+                  { value: NEW_PROBLEM_SET_OPTION_VALUE, label: text('PROBLEM_CREATE_NEW_SET_LABEL', '신규 테이블셋') },
                   ...problemSets.map((problemSet) => ({
                     value: problemSet.problemSetId,
                     label: getProblemSetLabel(problemSet.problemSetId),
@@ -1020,8 +1033,8 @@ export function ProblemCreateContent() {
                   value={selectedDbms}
                   className="problem-create-select problem-create-problem-select"
                   options={[
-                    { value: 'postgresql', label: 'PostgreSQL' },
-                    { value: 'oracle', label: 'Oracle' },
+                    { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                    { value: 'oracle', label: text('COMMON_ORACLE_LABEL', 'Oracle') },
                   ]}
                   onChange={(nextValue) => setSelectedDbms(nextValue as DbmsType)}
                 />
@@ -1030,7 +1043,7 @@ export function ProblemCreateContent() {
                   value={selectedProblemValue}
                   className="problem-create-select problem-create-problem-select"
                   options={[
-                    { value: NEW_PROBLEM_OPTION_VALUE, label: '신규 문제' },
+                    { value: NEW_PROBLEM_OPTION_VALUE, label: text('PROBLEM_CREATE_NEW_PROBLEM_LABEL', '신규 문제') },
                     ...problemOptions.map((problemId) => ({
                       value: problemId,
                       label: getProblemLabel(problemId),
@@ -1048,11 +1061,11 @@ export function ProblemCreateContent() {
                   className="problem-create-title-input"
                   value={heroState.draftValue.title}
                   onChange={(event) => heroState.setDraftValue((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="문제 제목"
+                  placeholder={text('PROBLEM_CREATE_TITLE_PLACEHOLDER', '문제 제목')}
                 />
               ) : (
                 <h1 className="solve-problem-title">
-                  {heroState.appliedValue.title.trim() !== '' ? heroState.appliedValue.title : <span className="problem-create-placeholder-text">문제 제목</span>}
+                  {heroState.appliedValue.title.trim() !== '' ? heroState.appliedValue.title : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_TITLE_LABEL', '문제 제목')}</span>}
                 </h1>
               )}
               <InlineEditActions isEditing={heroState.isEditing} onEdit={heroState.startEditing} onCancel={heroState.cancelEditing} onConfirm={heroState.confirmEditing} />
@@ -1063,26 +1076,26 @@ export function ProblemCreateContent() {
                 className="text-field problem-create-inline-textarea problem-create-description-editor"
                 value={heroState.draftValue.description}
                 onChange={(event) => heroState.setDraftValue((current) => ({ ...current, description: event.target.value }))}
-                placeholder="설명"
+                placeholder={text('PROBLEM_CREATE_DESCRIPTION_PLACEHOLDER', '설명')}
               />
             ) : (
               <p className="solve-problem-description">
-                {heroState.appliedValue.description.trim() !== '' ? heroState.appliedValue.description : <span className="problem-create-placeholder-text">설명</span>}
+                {heroState.appliedValue.description.trim() !== '' ? heroState.appliedValue.description : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DESCRIPTION_LABEL', '설명')}</span>}
               </p>
             )}
           </div>
         </section>
 
-        {problemSetMode === 'existing' && isProblemSetLoading ? <p className="problem-create-info">테이블셋 정보를 불러오는 중이다.</p> : null}
+        {problemSetMode === 'existing' && isProblemSetLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_SET_LOADING_LABEL', '테이블셋 정보를 불러오는 중입니다.')}</p> : null}
         {problemSetMode === 'existing' && problemSetErrorMessage ? <p className="problem-create-error">{problemSetErrorMessage}</p> : null}
-        {problemMode === 'existing' && isProblemLoading ? <p className="problem-create-info">문제 정보를 불러오는 중이다.</p> : null}
+        {problemMode === 'existing' && isProblemLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_PROBLEM_LOADING_LABEL', '문제 정보를 불러오는 중입니다.')}</p> : null}
         {problemMode === 'existing' && problemErrorMessage ? <p className="problem-create-error">{problemErrorMessage}</p> : null}
 
         {problemSetMode === 'existing' && availableTableNames.length > 0 ? (
           <section className="problem-create-table-selector-card">
             <div className="problem-create-table-selector-header">
-              <h2>테이블 범위</h2>
-              <p>기존 테이블셋에서 문제에 보여 줄 테이블 범위를 선택한다.</p>
+              <h2>{text('PROBLEM_CREATE_SET_SCOPE_TITLE', '테이블 범위')}</h2>
+              <p>{text('PROBLEM_CREATE_SET_SCOPE_DESC', '기존 테이블셋에서 문제에 보여 줄 테이블 범위를 선택합니다.')}</p>
             </div>
             <div className="problem-create-table-chip-row">
               {availableTableNames.map((tableName) => (
@@ -1105,7 +1118,7 @@ export function ProblemCreateContent() {
 
         <ProblemCreateSection
           sectionKey="condition"
-          title="조건"
+          title={text('PROBLEM_CREATE_CONDITION_LABEL', '조건')}
           collapsed={collapsedSections.condition}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'condition')}
@@ -1115,15 +1128,15 @@ export function ProblemCreateContent() {
           }}
         >
           {conditionState.isEditing ? (
-            <textarea className="text-field problem-create-inline-textarea" value={conditionState.draftValue} onChange={(event) => conditionState.setDraftValue(event.target.value)} placeholder="조건" />
+            <textarea className="text-field problem-create-inline-textarea" value={conditionState.draftValue} onChange={(event) => conditionState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_CONDITION_LABEL', '조건')} />
           ) : (
-            <pre className="problem-create-code-preview">{conditionState.appliedValue.trim() !== '' ? conditionState.appliedValue : <span className="problem-create-placeholder-text">조건</span>}</pre>
+            <pre className="problem-create-code-preview">{conditionState.appliedValue.trim() !== '' ? conditionState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_CONDITION_LABEL', '조건')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
         <ProblemCreateSection
           sectionKey="output"
-          title="출력 설명"
+          title={text('PROBLEM_CREATE_OUTPUT_LABEL', '출력 설명')}
           collapsed={collapsedSections.output}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'output')}
@@ -1133,15 +1146,15 @@ export function ProblemCreateContent() {
           }}
         >
           {outputState.isEditing ? (
-            <textarea className="text-field problem-create-inline-textarea" value={outputState.draftValue} onChange={(event) => outputState.setDraftValue(event.target.value)} placeholder="출력 설명" />
+            <textarea className="text-field problem-create-inline-textarea" value={outputState.draftValue} onChange={(event) => outputState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_OUTPUT_LABEL', '출력 설명')} />
           ) : (
-            <pre className="problem-create-code-preview">{outputState.appliedValue.trim() !== '' ? outputState.appliedValue : <span className="problem-create-placeholder-text">출력 설명</span>}</pre>
+            <pre className="problem-create-code-preview">{outputState.appliedValue.trim() !== '' ? outputState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_OUTPUT_LABEL', '출력 설명')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
         <ProblemCreateSection
           sectionKey="ddl"
-          title="테이블 정보 DDL"
+          title={text('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL')}
           collapsed={collapsedSections.ddl}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'ddl')}
@@ -1166,13 +1179,13 @@ export function ProblemCreateContent() {
               placeholder={currentDbms === 'oracle' ? 'Oracle DDL' : 'PostgreSQL DDL'}
             />
           ) : (
-            <pre className="problem-create-code-preview">{scopedProblemSetDdl.trim() !== '' ? scopedProblemSetDdl : <span className="problem-create-placeholder-text">테이블 정보 DDL</span>}</pre>
+            <pre className="problem-create-code-preview">{scopedProblemSetDdl.trim() !== '' ? scopedProblemSetDdl : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
         <ProblemCreateSection
           sectionKey="actualData"
-          title="실제 채점 데이터 INSERT"
+          title={text('PROBLEM_CREATE_ACTUAL_DATA_TITLE', '실제 채점 데이터 INSERT')}
           collapsed={collapsedSections.actualData}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'actualData')}
@@ -1194,16 +1207,16 @@ export function ProblemCreateContent() {
                   currentDbms === 'oracle' ? { ...current, oracle: event.target.value } : { ...current, postgresql: event.target.value },
                 )
               }
-              placeholder={currentDbms === 'oracle' ? 'Oracle 실제 채점 데이터 INSERT' : 'PostgreSQL 실제 채점 데이터 INSERT'}
+              placeholder={currentDbms === 'oracle' ? text('PROBLEM_CREATE_ACTUAL_DATA_ORACLE_PLACEHOLDER', 'Oracle 실제 채점 데이터 INSERT') : text('PROBLEM_CREATE_ACTUAL_DATA_POSTGRES_PLACEHOLDER', 'PostgreSQL 실제 채점 데이터 INSERT')}
             />
           ) : (
-            <pre className="problem-create-code-preview">{currentActualData.trim() !== '' ? currentActualData : <span className="problem-create-placeholder-text">실제 채점 데이터 INSERT</span>}</pre>
+            <pre className="problem-create-code-preview">{currentActualData.trim() !== '' ? currentActualData : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ACTUAL_DATA_TITLE', '실제 채점 데이터 INSERT')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
         <ProblemCreateSection
           sectionKey="sampleData"
-          title="예시 데이터 INSERT"
+          title={text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')}
           collapsed={collapsedSections.sampleData}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'sampleData')}
@@ -1213,21 +1226,21 @@ export function ProblemCreateContent() {
           }}
         >
           {sampleDataState.isEditing ? (
-            <textarea className="text-field problem-create-code-textarea" value={sampleDataState.draftValue} onChange={(event) => sampleDataState.setDraftValue(event.target.value)} placeholder="예시 데이터 INSERT" />
+            <textarea className="text-field problem-create-code-textarea" value={sampleDataState.draftValue} onChange={(event) => sampleDataState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')} />
           ) : (
-            <pre className="problem-create-code-preview">{sampleDataState.appliedValue.trim() !== '' ? sampleDataState.appliedValue : <span className="problem-create-placeholder-text">예시 데이터 INSERT</span>}</pre>
+            <pre className="problem-create-code-preview">{sampleDataState.appliedValue.trim() !== '' ? sampleDataState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
         <ProblemCreateSection
           sectionKey="outputPreview"
-          title="출력 예시"
+          title={text('PROBLEM_CREATE_OUTPUT_SAMPLE_TITLE', '출력 예시')}
           collapsed={collapsedSections.outputPreview}
           onToggle={toggleSection}
           actions={
             <button type="button" className="problem-create-preview-action" onClick={() => void handlePreviewOutput()} disabled={isPreviewLoading}>
               <RefreshIcon />
-              <span>{isPreviewLoading ? '생성 중' : '생성'}</span>
+              <span>{isPreviewLoading ? text('PROBLEM_CREATE_PREVIEW_GENERATING_LABEL', '생성 중') : text('PROBLEM_CREATE_PREVIEW_GENERATE_BUTTON', '생성')}</span>
             </button>
           }
         >
@@ -1237,7 +1250,7 @@ export function ProblemCreateContent() {
 
         <ProblemCreateSection
           sectionKey="answerSql"
-          title="정답 SQL"
+          title={text('PROBLEM_CREATE_ANSWER_SQL_TITLE', '정답 SQL')}
           collapsed={collapsedSections.answerSql}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'answerSql')}
@@ -1247,9 +1260,9 @@ export function ProblemCreateContent() {
           }}
         >
           {answerSqlState.isEditing ? (
-            <textarea className="text-field problem-create-code-textarea problem-create-answer-textarea" value={answerSqlState.draftValue} onChange={(event) => answerSqlState.setDraftValue(event.target.value)} placeholder="정답 SQL" />
+            <textarea className="text-field problem-create-code-textarea problem-create-answer-textarea" value={answerSqlState.draftValue} onChange={(event) => answerSqlState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL')} />
           ) : (
-            <pre className="problem-create-code-preview problem-create-answer-preview">{answerSqlState.appliedValue.trim() !== '' ? answerSqlState.appliedValue : <span className="problem-create-placeholder-text">정답 SQL</span>}</pre>
+            <pre className="problem-create-code-preview problem-create-answer-preview">{answerSqlState.appliedValue.trim() !== '' ? answerSqlState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL')}</span>}</pre>
           )}
         </ProblemCreateSection>
       </div>
@@ -1257,17 +1270,17 @@ export function ProblemCreateContent() {
       <div className="problem-create-sticky-bar">
         <div className="problem-create-sticky-status">
           {missingFields.length === 0 ? (
-            <p>필수 항목 {completedFieldCount}/8 완료</p>
+            <p>{text('PROBLEM_CREATE_COMPLETED_FIELDS_LABEL', { count: completedFieldCount }, `필수 항목 ${completedFieldCount}/8 완료`)}</p>
           ) : (
-            <p>필수 항목 누락: {missingFieldLabels.join(', ')}</p>
+            <p>{text('PROBLEM_CREATE_MISSING_FIELDS_LABEL', { fields: missingFieldLabels.join(', ') }, `필수 항목 누락: ${missingFieldLabels.join(', ')}`)}</p>
           )}
         </div>
         <div className="problem-create-sticky-actions">
           <button type="button" className="btn secondary" onClick={() => void handlePreviewOutput()} disabled={isPreviewLoading}>
-            {isPreviewLoading ? '예시 출력 생성 중' : '예시 출력 생성'}
+            {isPreviewLoading ? text('PROBLEM_CREATE_OUTPUT_GENERATING_LABEL', '예시 출력 생성 중') : text('PROBLEM_CREATE_OUTPUT_GENERATE_BUTTON', '예시 출력 생성')}
           </button>
           <button type="button" className="btn primary problem-create-submit-button" onClick={() => void handleCreateProblem()} disabled={isSaving}>
-            {isSaving ? '문제 저장 중' : '문제 생성'}
+            {isSaving ? text('PROBLEM_CREATE_SAVING_LABEL', '문제 저장 중') : text('PROBLEM_CREATE_CREATE_BUTTON', '문제 생성')}
           </button>
         </div>
       </div>

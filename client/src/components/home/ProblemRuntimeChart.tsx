@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useMockSession } from '../../lib/session';
+import { getUiText, getUiTextValue, useUiText } from '../../lib/uiText';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '../../types/domain';
 import './ProblemRuntimeChart.css';
 
@@ -70,6 +71,12 @@ interface BucketFilterDefinition {
   options: readonly BucketFilterValue[];
 }
 
+interface BucketFilterDefinitionSource {
+  key: RuntimeBucketFilterKey;
+  labelKey: string;
+  options: readonly BucketFilterValue[];
+}
+
 interface FloatingTooltipState {
   id: string;
   text: string;
@@ -79,36 +86,23 @@ interface FloatingTooltipState {
 
 type BucketIndexMap = Record<RuntimeBucketFilterKey, Partial<Record<BucketFilterValue, number[]>>>;
 
-const DBMS_OPTIONS: { key: DbmsType; label: string }[] = [
-  { key: 'postgresql', label: 'PostgreSQL' },
-  { key: 'oracle', label: 'Oracle' },
-];
+const HINT_FILTER_OPTIONS: HintFilterValue[] = ['UNUSED', 'USED'];
+const DEFAULT_HINT_FILTERS: HintFilterValue[] = [...HINT_FILTER_OPTIONS];
 
-const FILTER_MODE_OPTIONS: { key: FilterMatchMode; label: string }[] = [
-  { key: 'and', label: 'AND' },
-  { key: 'or', label: 'OR' },
-];
-
-const HINT_FILTER_OPTIONS: { key: HintFilterValue; label: string }[] = [
-  { key: 'UNUSED', label: '미사용' },
-  { key: 'USED', label: '사용' },
-];
-const DEFAULT_HINT_FILTERS: HintFilterValue[] = HINT_FILTER_OPTIONS.map((option) => option.key);
-
-const BUCKET_FILTERS_BY_DBMS: Record<DbmsType, BucketFilterDefinition[]> = {
+const BUCKET_FILTERS_BY_DBMS: Record<DbmsType, BucketFilterDefinitionSource[]> = {
   postgresql: [
-    { key: 'scanBucket', label: 'Scan', options: ['FULL_SCAN', 'INDEX_SCAN', 'BITMAP_SCAN', 'TID_SCAN', 'DERIVED_SCAN', 'OTHERS'] },
-    { key: 'joinBucket', label: 'Join', options: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'OTHERS'] },
-    { key: 'filterBucket', label: 'Filter', options: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
-    { key: 'sortBucket', label: 'Sort', options: ['PLAIN_SORT', 'INCREMENTAL_SORT', 'OTHERS'] },
-    { key: 'aggregateBucket', label: 'Aggregate', options: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'] },
+    { key: 'scanBucket', labelKey: 'RUNTIME_SCAN_LABEL', options: ['FULL_SCAN', 'INDEX_SCAN', 'BITMAP_SCAN', 'TID_SCAN', 'DERIVED_SCAN', 'OTHERS'] },
+    { key: 'joinBucket', labelKey: 'RUNTIME_JOIN_LABEL', options: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'OTHERS'] },
+    { key: 'filterBucket', labelKey: 'RUNTIME_FILTER_LABEL', options: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
+    { key: 'sortBucket', labelKey: 'RUNTIME_SORT_LABEL', options: ['PLAIN_SORT', 'INCREMENTAL_SORT', 'OTHERS'] },
+    { key: 'aggregateBucket', labelKey: 'RUNTIME_AGGREGATE_LABEL', options: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'MIXED_AGG', 'WINDOW_AGG', 'UNIQUE_AGG', 'SET_AGG', 'OTHERS'] },
   ],
   oracle: [
-    { key: 'scanBucket', label: 'Scan', options: ['FULL_SCAN', 'ROWID_ACCESS', 'INDEX_SCAN', 'BITMAP_SCAN', 'DERIVED_SCAN', 'REMOTE_SCAN', 'OTHERS'] },
-    { key: 'joinBucket', label: 'Join', options: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'] },
-    { key: 'filterBucket', label: 'Filter', options: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
-    { key: 'sortBucket', label: 'Sort', options: ['ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'] },
-    { key: 'aggregateBucket', label: 'Aggregate', options: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'WINDOW_AGG', 'OTHERS'] },
+    { key: 'scanBucket', labelKey: 'RUNTIME_SCAN_LABEL', options: ['FULL_SCAN', 'ROWID_ACCESS', 'INDEX_SCAN', 'BITMAP_SCAN', 'DERIVED_SCAN', 'REMOTE_SCAN', 'OTHERS'] },
+    { key: 'joinBucket', labelKey: 'RUNTIME_JOIN_LABEL', options: ['NESTED_LOOP', 'MERGE_JOIN', 'HASH_JOIN', 'CARTESIAN_JOIN', 'OTHERS'] },
+    { key: 'filterBucket', labelKey: 'RUNTIME_FILTER_LABEL', options: ['ACCESS_FILTER', 'POST_FILTER', 'JOIN_FILTER', 'OTHERS'] },
+    { key: 'sortBucket', labelKey: 'RUNTIME_SORT_LABEL', options: ['ORDER_SORT', 'GROUP_SORT', 'UNIQUE_SORT', 'WINDOW_SORT', 'OTHERS'] },
+    { key: 'aggregateBucket', labelKey: 'RUNTIME_AGGREGATE_LABEL', options: ['PLAIN_AGG', 'GROUP_AGG', 'HASH_AGG', 'WINDOW_AGG', 'OTHERS'] },
   ],
 };
 
@@ -191,48 +185,13 @@ function formatPercent(value: number) {
 }
 
 function formatBucketDisplayLabel(value: BucketFilterValue) {
-  if (value === 'NONE') {
-    return '없음';
-  }
-
-  const normalizedSource = value.toLowerCase().endsWith('_agg') ? value.toLowerCase().replace(/_agg$/, '') : value.toLowerCase();
-  const normalized = normalizedSource.replaceAll('_', ' ');
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return getUiTextValue(bucketValueToLabelKey(value), getBucketDisplayFallback(value));
 }
 
 function getBucketTooltipText(dbms: DbmsType, filterKey: RuntimeBucketFilterKey, value: BucketFilterValue) {
-  if (dbms === 'oracle') {
-    if (filterKey === 'scanBucket' && value === 'FULL_SCAN') return 'TABLE ACCESS FULL 계열의 전체 읽기를 묶습니다.';
-    if (filterKey === 'scanBucket' && value === 'ROWID_ACCESS') return 'ROWID를 따라 테이블 블록을 읽는 접근을 묶습니다.';
-    if (filterKey === 'scanBucket' && value === 'INDEX_SCAN') return '인덱스를 통해 필요한 범위만 읽는 접근을 묶습니다.';
-    if (filterKey === 'scanBucket' && value === 'BITMAP_SCAN') return '비트맵 기반 접근을 묶습니다.';
-    if (filterKey === 'scanBucket' && value === 'DERIVED_SCAN') return 'VIEW, WITH, MATERIALIZE 같은 파생 결과 접근을 묶습니다.';
-    if (filterKey === 'scanBucket' && value === 'REMOTE_SCAN') return '원격 객체를 읽는 접근을 묶습니다.';
-  }
-
-  if (filterKey === 'scanBucket' && value === 'FULL_SCAN') return '인덱스를 타지 않고 테이블 페이지를 순차적으로 읽는 경우를 묶습니다.';
-  if (filterKey === 'scanBucket' && value === 'INDEX_SCAN') return 'Index Scan, Index Only Scan 계열을 묶습니다.';
-  if (filterKey === 'scanBucket' && value === 'BITMAP_SCAN') return 'Bitmap Index Scan + Bitmap Heap Scan 계열을 묶습니다.';
-  if (filterKey === 'scanBucket' && value === 'TID_SCAN') return 'Tid Scan 계열을 묶습니다.';
-  if (filterKey === 'scanBucket' && value === 'DERIVED_SCAN') return 'Subquery, CTE, Function, Values 같은 파생 스캔을 묶습니다.';
-  if (filterKey === 'joinBucket' && value === 'NESTED_LOOP') return '바깥 결과를 기준으로 안쪽 경로를 반복 탐색하는 조인입니다.';
-  if (filterKey === 'joinBucket' && value === 'MERGE_JOIN') return '정렬된 두 입력을 병합하면서 조인하는 방식입니다.';
-  if (filterKey === 'joinBucket' && value === 'HASH_JOIN') return '한쪽 입력으로 해시 테이블을 만들고 다른 쪽을 probe 하는 방식입니다.';
-  if (filterKey === 'filterBucket' && value === 'ACCESS_FILTER') return '접근 단계에서 읽을 범위를 줄이는 조건을 묶습니다.';
-  if (filterKey === 'filterBucket' && value === 'POST_FILTER') return '읽은 뒤 추가로 행을 거르는 조건을 묶습니다.';
-  if (filterKey === 'filterBucket' && value === 'JOIN_FILTER') return '조인 과정에서 적용되는 조건을 묶습니다.';
-  if (filterKey === 'sortBucket' && value === 'PLAIN_SORT') return '일반 Sort 계열을 묶습니다.';
-  if (filterKey === 'sortBucket' && value === 'INCREMENTAL_SORT') return 'Incremental Sort 계열을 묶습니다.';
-  if (filterKey === 'aggregateBucket' && value === 'PLAIN_AGG') return '그룹 키 없이 바로 집계하는 단순 집계를 묶습니다.';
-  if (filterKey === 'aggregateBucket' && value === 'GROUP_AGG') return '정렬된 입력을 기준으로 그룹 집계를 수행하는 경우를 묶습니다.';
-  if (filterKey === 'aggregateBucket' && value === 'HASH_AGG') return '해시 기반 그룹 집계를 묶습니다.';
-  if (filterKey === 'aggregateBucket' && value === 'MIXED_AGG') return '해시와 정렬 전략이 섞인 집계 계열입니다.';
-  if (filterKey === 'aggregateBucket' && value === 'WINDOW_AGG') return '윈도 함수 계산과 연결된 집계를 묶습니다.';
-  if (filterKey === 'aggregateBucket' && value === 'UNIQUE_AGG') return '중복 제거 기반 집계를 묶습니다.';
-  if (filterKey === 'aggregateBucket' && value === 'SET_AGG') return 'UNION, INTERSECT, EXCEPT 같은 집합 연산 기반 처리를 묶습니다.';
-  if (value === 'NONE') return '해당 분류가 없는 실행 계획입니다.';
-  if (value === 'OTHERS') return '위 분류로 명확히 묶기 어려운 기타 연산입니다.';
-  return '실행 계획 설명입니다.';
+  const descriptionKey = bucketValueToDescriptionKey(filterKey, value);
+  const fallback = getBucketTooltipFallback(dbms, filterKey, value);
+  return getUiTextValue(descriptionKey, fallback);
 }
 
 function normalizeSelectedValues<T extends string>(selectedValues: T[], allOptions: readonly T[]) {
@@ -266,7 +225,222 @@ function calculatePercent<T>(items: T[], predicate: (item: T) => boolean) {
 }
 
 function buildAvailableBucketFilters(dbms: DbmsType) {
-  return BUCKET_FILTERS_BY_DBMS[dbms];
+  return BUCKET_FILTERS_BY_DBMS[dbms].map((filter) => ({
+    key: filter.key,
+    label: getBucketSectionLabel(filter.labelKey),
+    options: filter.options,
+  }));
+}
+
+function getBucketSectionLabel(labelKey: string) {
+  switch (labelKey) {
+    case 'RUNTIME_SCAN_LABEL':
+      return getUiTextValue(labelKey, 'Scan');
+    case 'RUNTIME_JOIN_LABEL':
+      return getUiTextValue(labelKey, 'Join');
+    case 'RUNTIME_FILTER_LABEL':
+      return getUiTextValue(labelKey, 'Filter');
+    case 'RUNTIME_SORT_LABEL':
+      return getUiTextValue(labelKey, 'Sort');
+    case 'RUNTIME_AGGREGATE_LABEL':
+      return getUiTextValue(labelKey, 'Aggregate');
+    default:
+      return labelKey;
+  }
+}
+
+function bucketValueToLabelKey(value: BucketFilterValue) {
+  switch (value) {
+    case 'NONE':
+      return 'COMMON_NONE_LABEL';
+    case 'FULL_SCAN':
+      return 'RUNTIME_FULL_SCAN_LABEL';
+    case 'ROWID_ACCESS':
+      return 'RUNTIME_ROWID_ACCESS_LABEL';
+    case 'INDEX_SCAN':
+      return 'RUNTIME_INDEX_SCAN_LABEL';
+    case 'BITMAP_SCAN':
+      return 'RUNTIME_BITMAP_SCAN_LABEL';
+    case 'TID_SCAN':
+      return 'RUNTIME_TID_SCAN_LABEL';
+    case 'DERIVED_SCAN':
+      return 'RUNTIME_DERIVED_SCAN_LABEL';
+    case 'REMOTE_SCAN':
+      return 'RUNTIME_REMOTE_SCAN_LABEL';
+    case 'NESTED_LOOP':
+      return 'RUNTIME_NESTED_LOOP_LABEL';
+    case 'MERGE_JOIN':
+      return 'RUNTIME_MERGE_JOIN_LABEL';
+    case 'HASH_JOIN':
+      return 'RUNTIME_HASH_JOIN_LABEL';
+    case 'CARTESIAN_JOIN':
+      return 'RUNTIME_CARTESIAN_JOIN_LABEL';
+    case 'ACCESS_FILTER':
+      return 'RUNTIME_ACCESS_FILTER_LABEL';
+    case 'POST_FILTER':
+      return 'RUNTIME_POST_FILTER_LABEL';
+    case 'JOIN_FILTER':
+      return 'RUNTIME_JOIN_FILTER_LABEL';
+    case 'PLAIN_SORT':
+      return 'RUNTIME_PLAIN_SORT_LABEL';
+    case 'INCREMENTAL_SORT':
+      return 'RUNTIME_INCREMENTAL_SORT_LABEL';
+    case 'ORDER_SORT':
+      return 'RUNTIME_ORDER_SORT_LABEL';
+    case 'GROUP_SORT':
+      return 'RUNTIME_GROUP_SORT_LABEL';
+    case 'UNIQUE_SORT':
+      return 'RUNTIME_UNIQUE_SORT_LABEL';
+    case 'WINDOW_SORT':
+      return 'RUNTIME_WINDOW_SORT_LABEL';
+    case 'PLAIN_AGG':
+      return 'RUNTIME_PLAIN_AGG_LABEL';
+    case 'GROUP_AGG':
+      return 'RUNTIME_GROUP_AGG_LABEL';
+    case 'HASH_AGG':
+      return 'RUNTIME_HASH_AGG_LABEL';
+    case 'MIXED_AGG':
+      return 'RUNTIME_MIXED_AGG_LABEL';
+    case 'WINDOW_AGG':
+      return 'RUNTIME_WINDOW_AGG_LABEL';
+    case 'UNIQUE_AGG':
+      return 'RUNTIME_UNIQUE_AGG_LABEL';
+    case 'SET_AGG':
+      return 'RUNTIME_SET_AGG_LABEL';
+    case 'OTHERS':
+      return 'RUNTIME_OTHERS_LABEL';
+    default:
+      return 'COMMON_NONE_LABEL';
+  }
+}
+
+function getBucketDisplayFallback(value: BucketFilterValue) {
+  if (value === 'NONE') {
+    return '없음';
+  }
+
+  const normalizedSource = value.toLowerCase().endsWith('_agg') ? value.toLowerCase().replace(/_agg$/, '') : value.toLowerCase();
+  const normalized = normalizedSource.replaceAll('_', ' ');
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function bucketValueToDescriptionKey(filterKey: RuntimeBucketFilterKey, value: BucketFilterValue) {
+  if (value === 'NONE') {
+    return 'RUNTIME_NONE_DESCRIPTION';
+  }
+
+  if (value === 'OTHERS') {
+    return 'RUNTIME_OTHERS_DESCRIPTION';
+  }
+
+  switch (filterKey) {
+    case 'scanBucket':
+      switch (value) {
+        case 'FULL_SCAN':
+          return 'RUNTIME_FULL_SCAN_DESCRIPTION';
+        case 'ROWID_ACCESS':
+          return 'RUNTIME_ROWID_ACCESS_DESCRIPTION';
+        case 'INDEX_SCAN':
+          return 'RUNTIME_INDEX_SCAN_DESCRIPTION';
+        case 'BITMAP_SCAN':
+          return 'RUNTIME_BITMAP_SCAN_DESCRIPTION';
+        case 'TID_SCAN':
+          return 'RUNTIME_TID_SCAN_DESCRIPTION';
+        case 'DERIVED_SCAN':
+          return 'RUNTIME_DERIVED_SCAN_DESCRIPTION';
+        case 'REMOTE_SCAN':
+          return 'RUNTIME_REMOTE_SCAN_DESCRIPTION';
+        default:
+          return 'RUNTIME_DEFAULT_DESCRIPTION';
+      }
+    case 'joinBucket':
+      switch (value) {
+        case 'NESTED_LOOP':
+          return 'RUNTIME_NESTED_LOOP_DESCRIPTION';
+        case 'MERGE_JOIN':
+          return 'RUNTIME_MERGE_JOIN_DESCRIPTION';
+        case 'HASH_JOIN':
+          return 'RUNTIME_HASH_JOIN_DESCRIPTION';
+        default:
+          return 'RUNTIME_DEFAULT_DESCRIPTION';
+      }
+    case 'filterBucket':
+      switch (value) {
+        case 'ACCESS_FILTER':
+          return 'RUNTIME_ACCESS_FILTER_DESCRIPTION';
+        case 'POST_FILTER':
+          return 'RUNTIME_POST_FILTER_DESCRIPTION';
+        case 'JOIN_FILTER':
+          return 'RUNTIME_JOIN_FILTER_DESCRIPTION';
+        default:
+          return 'RUNTIME_DEFAULT_DESCRIPTION';
+      }
+    case 'sortBucket':
+      switch (value) {
+        case 'PLAIN_SORT':
+          return 'RUNTIME_PLAIN_SORT_DESCRIPTION';
+        case 'INCREMENTAL_SORT':
+          return 'RUNTIME_INCREMENTAL_SORT_DESCRIPTION';
+        default:
+          return 'RUNTIME_DEFAULT_DESCRIPTION';
+      }
+    case 'aggregateBucket':
+      switch (value) {
+        case 'PLAIN_AGG':
+          return 'RUNTIME_PLAIN_AGG_DESCRIPTION';
+        case 'GROUP_AGG':
+          return 'RUNTIME_GROUP_AGG_DESCRIPTION';
+        case 'HASH_AGG':
+          return 'RUNTIME_HASH_AGG_DESCRIPTION';
+        case 'MIXED_AGG':
+          return 'RUNTIME_MIXED_AGG_DESCRIPTION';
+        case 'WINDOW_AGG':
+          return 'RUNTIME_WINDOW_AGG_DESCRIPTION';
+        case 'UNIQUE_AGG':
+          return 'RUNTIME_UNIQUE_AGG_DESCRIPTION';
+        case 'SET_AGG':
+          return 'RUNTIME_SET_AGG_DESCRIPTION';
+        default:
+          return 'RUNTIME_DEFAULT_DESCRIPTION';
+      }
+    default:
+      return 'RUNTIME_DEFAULT_DESCRIPTION';
+  }
+}
+
+function getBucketTooltipFallback(dbms: DbmsType, filterKey: RuntimeBucketFilterKey, value: BucketFilterValue) {
+  if (dbms === 'oracle') {
+    if (filterKey === 'scanBucket' && value === 'FULL_SCAN') return 'TABLE ACCESS FULL 계열의 전체 읽기를 묶습니다.';
+    if (filterKey === 'scanBucket' && value === 'ROWID_ACCESS') return 'ROWID를 따라 테이블 블록을 읽는 접근을 묶습니다.';
+    if (filterKey === 'scanBucket' && value === 'INDEX_SCAN') return '인덱스를 통해 필요한 범위만 읽는 접근을 묶습니다.';
+    if (filterKey === 'scanBucket' && value === 'BITMAP_SCAN') return '비트맵 기반 접근을 묶습니다.';
+    if (filterKey === 'scanBucket' && value === 'DERIVED_SCAN') return 'VIEW, WITH, MATERIALIZE 같은 파생 결과 접근을 묶습니다.';
+    if (filterKey === 'scanBucket' && value === 'REMOTE_SCAN') return '원격 객체를 읽는 접근을 묶습니다.';
+  }
+
+  if (filterKey === 'scanBucket' && value === 'FULL_SCAN') return '인덱스를 타지 않고 테이블 페이지를 순차적으로 읽는 경우를 묶습니다.';
+  if (filterKey === 'scanBucket' && value === 'INDEX_SCAN') return 'Index Scan, Index Only Scan 계열을 묶습니다.';
+  if (filterKey === 'scanBucket' && value === 'BITMAP_SCAN') return 'Bitmap Index Scan + Bitmap Heap Scan 계열을 묶습니다.';
+  if (filterKey === 'scanBucket' && value === 'TID_SCAN') return 'Tid Scan 계열을 묶습니다.';
+  if (filterKey === 'scanBucket' && value === 'DERIVED_SCAN') return 'Subquery, CTE, Function, Values 같은 파생 스캔을 묶습니다.';
+  if (filterKey === 'joinBucket' && value === 'NESTED_LOOP') return '바깥 결과를 기준으로 안쪽 경로를 반복 탐색하는 조인입니다.';
+  if (filterKey === 'joinBucket' && value === 'MERGE_JOIN') return '정렬된 두 입력을 병합하면서 조인하는 방식입니다.';
+  if (filterKey === 'joinBucket' && value === 'HASH_JOIN') return '한쪽 입력으로 해시 테이블을 만들고 다른 쪽을 probe 하는 방식입니다.';
+  if (filterKey === 'filterBucket' && value === 'ACCESS_FILTER') return '접근 단계에서 읽을 범위를 줄이는 조건을 묶습니다.';
+  if (filterKey === 'filterBucket' && value === 'POST_FILTER') return '읽은 뒤 추가로 행을 거르는 조건을 묶습니다.';
+  if (filterKey === 'filterBucket' && value === 'JOIN_FILTER') return '조인 과정에서 적용되는 조건을 묶습니다.';
+  if (filterKey === 'sortBucket' && value === 'PLAIN_SORT') return '일반 Sort 계열을 묶습니다.';
+  if (filterKey === 'sortBucket' && value === 'INCREMENTAL_SORT') return 'Incremental Sort 계열을 묶습니다.';
+  if (filterKey === 'aggregateBucket' && value === 'PLAIN_AGG') return '그룹 키 없이 바로 집계하는 단순 집계를 묶습니다.';
+  if (filterKey === 'aggregateBucket' && value === 'GROUP_AGG') return '정렬된 입력을 기준으로 그룹 집계를 수행하는 경우를 묶습니다.';
+  if (filterKey === 'aggregateBucket' && value === 'HASH_AGG') return '해시 기반 그룹 집계를 묶습니다.';
+  if (filterKey === 'aggregateBucket' && value === 'MIXED_AGG') return '해시와 정렬 전략이 섞인 집계 계열입니다.';
+  if (filterKey === 'aggregateBucket' && value === 'WINDOW_AGG') return '윈도 함수 계산과 연결된 집계를 묶습니다.';
+  if (filterKey === 'aggregateBucket' && value === 'UNIQUE_AGG') return '중복 제거 기반 집계를 묶습니다.';
+  if (filterKey === 'aggregateBucket' && value === 'SET_AGG') return 'UNION, INTERSECT, EXCEPT 같은 집합 연산 기반 처리를 묶습니다.';
+  if (value === 'NONE') return '해당 분류가 없는 실행 계획입니다.';
+  if (value === 'OTHERS') return '위 분류로 명확히 묶기 어려운 기타 연산입니다.';
+  return '실행 계획 설명입니다.';
 }
 
 function getSectionKnownIndexes(dbms: DbmsType, filterKey: RuntimeBucketFilterKey) {
@@ -409,11 +583,23 @@ function buildMarkers(samples: RuntimeSample[]) {
   }
 
   const sortedSamples = [...samples].sort((left, right) => left.timeMs - right.timeMs || left.handle.localeCompare(right.handle));
-  const markers: RuntimeMarker[] = [{ key: 'fastest', label: '1st', value: sortedSamples[0].timeMs, tone: 'fastest', handle: sortedSamples[0].handle }];
+  const markers: RuntimeMarker[] = [{
+    key: 'fastest',
+    label: getUiTextValue('RUNTIME_FASTEST_LABEL', '1st'),
+    value: sortedSamples[0].timeMs,
+    tone: 'fastest',
+    handle: sortedSamples[0].handle,
+  }];
   const mySample = sortedSamples.find((sample) => sample.isMine);
 
   if (mySample) {
-    markers.push({ key: 'mine', label: '내 기록', value: mySample.timeMs, tone: 'mine', handle: mySample.handle });
+    markers.push({
+      key: 'mine',
+      label: getUiTextValue('RUNTIME_MY_RECORD_LABEL', '내 기록'),
+      value: mySample.timeMs,
+      tone: 'mine',
+      handle: mySample.handle,
+    });
   }
 
   return markers.sort((left, right) => left.value - right.value || (left.key === 'fastest' ? -1 : 1));
@@ -455,7 +641,7 @@ function buildPlanSectionRatioItems(args: {
 
     return {
       id: filter.key,
-      label: `${filter.label} 발생 비율`,
+      label: getUiText('RUNTIME_RATIO_SUFFIX_LABEL', { label: filter.label }, `${filter.label} 발생 비율`),
       value: formatPercent(ratio),
     };
   });
@@ -464,21 +650,40 @@ function buildPlanSectionRatioItems(args: {
 
   return [
     ...bucketItems,
-    { id: 'hint', label: 'Hint 사용 비율', value: formatPercent(hintRatio) },
+    { id: 'hint', label: getUiTextValue('RUNTIME_HINT_RATIO_LABEL', 'Hint 사용 비율'), value: formatPercent(hintRatio) },
   ];
 }
 
 export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelect }: ProblemRuntimeChartProps) {
+  const { text } = useUiText();
   const { handle, defaultDbms } = useMockSession();
   const samples = useMemo(() => toSamples(problem, handle), [problem, handle]);
+  const runtimeDbmsOptions = useMemo(
+    () => [
+      { key: 'postgresql' as const, label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+      { key: 'oracle' as const, label: text('COMMON_ORACLE_LABEL', 'Oracle') },
+    ],
+    [text],
+  );
+  const runtimeFilterModeOptions = useMemo(
+    () => [
+      { key: 'and' as const, label: text('COMMON_AND_LABEL', 'AND') },
+      { key: 'or' as const, label: text('COMMON_OR_LABEL', 'OR') },
+    ],
+    [text],
+  );
+  const runtimeHintFilterOptions = useMemo(
+    () => HINT_FILTER_OPTIONS.map((option) => ({ key: option, label: option === 'USED' ? text('RUNTIME_USED_LABEL', '사용') : text('RUNTIME_UNUSED_LABEL', '미사용') })),
+    [text],
+  );
   const availableDbms = useMemo(() => {
     if (forcedDbms) {
-      return DBMS_OPTIONS.filter((option) => option.key === forcedDbms);
+      return runtimeDbmsOptions.filter((option) => option.key === forcedDbms);
     }
 
-    const sampleDbms = DBMS_OPTIONS.filter((option) => samples.some((sample) => sample.dbms === option.key));
-    return sampleDbms.length > 0 ? sampleDbms : DBMS_OPTIONS;
-  }, [forcedDbms, samples]);
+    const sampleDbms = runtimeDbmsOptions.filter((option) => samples.some((sample) => sample.dbms === option.key));
+    return sampleDbms.length > 0 ? sampleDbms : runtimeDbmsOptions;
+  }, [forcedDbms, runtimeDbmsOptions, samples]);
   const selectedDbms = useMemo(() => {
     if (forcedDbms) {
       return forcedDbms;
@@ -605,10 +810,10 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     [activeSamples, availableBucketFilters, selectedBucketFilters, selectedDbms]
   );
   const costMetricItems = [
-    { id: 'sample-count', label: '집계 수', value: numberFormatter.format(filteredSamples.length) },
-    { id: 'avg', label: '평균 Cost', value: timeSummary ? formatCostValue(timeSummary.average) : '-' },
-    { id: 'min', label: '최소 Cost', value: timeSummary ? formatCostValue(timeSummary.min) : '-' },
-    { id: 'median', label: 'Cost 중앙값', value: timeSummary ? formatCostValue(timeSummary.median) : '-' },
+    { id: 'sample-count', label: text('RUNTIME_SAMPLE_COUNT_LABEL', '집계 수'), value: numberFormatter.format(filteredSamples.length) },
+    { id: 'avg', label: text('RUNTIME_AVERAGE_COST_LABEL', '평균 Cost'), value: timeSummary ? formatCostValue(timeSummary.average) : '-' },
+    { id: 'min', label: text('RUNTIME_MINIMUM_COST_LABEL', '최소 Cost'), value: timeSummary ? formatCostValue(timeSummary.min) : '-' },
+    { id: 'median', label: text('RUNTIME_MEDIAN_COST_LABEL', 'Cost 중앙값'), value: timeSummary ? formatCostValue(timeSummary.median) : '-' },
   ];
   const firstAxisLabel = bucketModel ? formatCostValue(bucketModel.axisMin) : '';
   const lastAxisLabel = bucketModel ? formatCostValue(bucketModel.axisMax) : '';
@@ -689,7 +894,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
         <button
           type="button"
           className={`runtime-filter-launch ${hasActivePlanFilter ? 'is-active' : ''} ${!hasSeenFilterPopover && !isFilterPopoverOpen ? 'is-hinting' : ''}`.trim()}
-          aria-label="실행 계획 요소 열기"
+          aria-label={text('RUNTIME_FILTER_OPEN_LABEL', '실행 계획 요소 열기')}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -704,7 +909,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
 
       <div className={`runtime-content ${isFilterPopoverOpen ? 'is-filter-blurred' : ''}`.trim()}>
         {bucketModel ? (
-          <section className="runtime-summary-panel" aria-label="통계 개요">
+          <section className="runtime-summary-panel" aria-label={text('RUNTIME_SUMMARY_PANEL_LABEL', '통계 개요')}>
             <div className="runtime-metric-grid">
               <div className="runtime-metric-row is-cost">
                 {costMetricItems.map((item) => (
@@ -726,7 +931,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
           </section>
         ) : null}
 
-        <section className="runtime-chart-panel" aria-label="Cost 분포">
+        <section className="runtime-chart-panel" aria-label={text('RUNTIME_COST_DISTRIBUTION_LABEL', 'Cost 분포')}>
           {bucketModel ? (
             <div className="runtime-plot-shell">
               <div className="runtime-marker-column" style={{ gridTemplateRows: 'repeat(2, minmax(0.92rem, 1fr))' }}>
@@ -790,7 +995,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                         {bucket ? (
                           <span className="ui-tooltip runtime-bar-tooltip">
                             <span className="ui-tooltip-title">{`${formatCostValue(bucket.startValue)} - ${formatCostValue(bucket.endValue)}`}</span>
-                            <span className="ui-tooltip-caption">{`${bucket.count}명`}</span>
+                            <span className="ui-tooltip-caption">{text('RUNTIME_BUCKET_COUNT_LABEL', { count: bucket.count }, `${bucket.count}명`)}</span>
                           </span>
                         ) : null}
                       </div>
@@ -809,7 +1014,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                 </div>
               </div>
             </div>
-          ) : <div className="runtime-empty-state">선택한 조건에 맞는 제출이 없습니다</div>}
+          ) : <div className="runtime-empty-state">{text('RUNTIME_EMPTY_STATE', '선택한 조건에 맞는 제출이 없습니다.')}</div>}
         </section>
       </div>
 
@@ -822,13 +1027,13 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
             className="runtime-filter-popover"
             role="dialog"
             aria-modal="true"
-            aria-label="실행 계획 요소"
+            aria-label={text('RUNTIME_FILTER_TITLE', '실행 계획 요소')}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="runtime-filter-popover-head">
-              <strong>실행 계획 요소</strong>
-              <div className="runtime-mode-toggle" role="group" aria-label="필터 조합 방식">
-                {FILTER_MODE_OPTIONS.map((option, index) => (
+              <strong>{text('RUNTIME_FILTER_TITLE', '실행 계획 요소')}</strong>
+              <div className="runtime-mode-toggle" role="group" aria-label={text('RUNTIME_FILTER_MATCH_MODE_LABEL', '필터 조합 방식')}>
+                {runtimeFilterModeOptions.map((option, index) => (
                   <Fragment key={option.key}>
                     {index > 0 ? <span className="runtime-mode-divider" aria-hidden="true">/</span> : null}
                     <button
@@ -850,7 +1055,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                 <button
                   type="button"
                   className="runtime-filter-icon-button is-cancel"
-                  aria-label="실행 계획 요소 필터 취소"
+                  aria-label={text('RUNTIME_FILTER_CANCEL_LABEL', '실행 계획 요소 필터 취소')}
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -862,7 +1067,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                 <button
                   type="button"
                   className="runtime-filter-icon-button is-apply"
-                  aria-label="실행 계획 요소 필터 적용"
+                  aria-label={text('RUNTIME_FILTER_APPLY_LABEL', '실행 계획 요소 필터 적용')}
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -874,7 +1079,11 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
               </div>
             </div>
 
-            <div className="runtime-subfilter-board runtime-plan-shell-panel" role="group" aria-label="실행 계획 요소 세부 선택">
+            <div
+              className="runtime-subfilter-board runtime-plan-shell-panel"
+              role="group"
+              aria-label={text('RUNTIME_FILTER_DETAIL_GROUP_LABEL', '실행 계획 요소 세부 선택')}
+            >
               {availableBucketFilters.map((filter) => {
                 const selectedValues = getVisibleSelectedValues(draftBucketFilters[filter.key], filter.options);
                 const isAllSelected = areAllOptionsSelected(selectedValues, filter.options);
@@ -894,7 +1103,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                         }}
                       >
                         <SelectionCheckbox checked={isAllSelected} />
-                        <span className="runtime-check-label">전체</span>
+                        <span className="runtime-check-label">{text('RUNTIME_ALL_LABEL', '전체')}</span>
                       </button>
 
                       <div className="runtime-subfilter-chip-grid">
@@ -940,10 +1149,10 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
               })}
 
               <div className="runtime-subfilter-row">
-                <span className="runtime-subfilter-label">Hint</span>
+                <span className="runtime-subfilter-label">{text('COMMON_HINT_LABEL', 'Hint')}</span>
                 <div className="runtime-subfilter-options is-bucket">
                   <div className="runtime-subfilter-chip-grid">
-                    {HINT_FILTER_OPTIONS.map((option) => {
+                    {runtimeHintFilterOptions.map((option) => {
                       const isSelected = draftHintFilters.includes(option.key);
 
                       return (

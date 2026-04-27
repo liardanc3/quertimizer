@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 
 interface AlarmRecipientResponse {
   handle?: string;
@@ -26,7 +27,7 @@ async function requestAdminAlarm<T>(path: string, init: RequestInit, fallbackMes
   }
 
   if (!response.ok) {
-    throw new Error(fallbackMessage);
+    throw await createApiErrorFromResponse(response, fallbackMessage);
   }
 
   try {
@@ -40,7 +41,11 @@ async function requestAdminAlarm<T>(path: string, init: RequestInit, fallbackMes
 export function fetchAdminAlarmRecipients(keyword: string): Promise<string[]> {
   const params = new URLSearchParams({ keyword });
 
-  return requestAdminAlarm(`/admin/alarms/recipients?${params.toString()}`, { method: 'GET' }, '수신자 목록을 불러오지 못했다.', (data) =>
+  return requestAdminAlarm(
+    `/admin/alarms/recipients?${params.toString()}`,
+    { method: 'GET' },
+    getUiTextValue('ALARM_SEND_RECIPIENT_LOAD_FAIL_MESSAGE', '수신자 목록을 불러오지 못했습니다.'),
+    (data) =>
     Array.isArray(data)
       ? data
           .map((item) => ((item as AlarmRecipientResponse).handle ?? '').trim())
@@ -56,5 +61,5 @@ export function sendAdminAlarm(payload: AdminAlarmSendPayload): Promise<number> 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
-  }, '알람 전송에 실패했다.', (data) => ((data as AdminAlarmSendResponse | null)?.sentCount ?? 0));
+  }, getUiTextValue('ALARM_SEND_FAIL_MESSAGE', '알림 전송에 실패했습니다.'), (data) => ((data as AdminAlarmSendResponse | null)?.sentCount ?? 0));
 }

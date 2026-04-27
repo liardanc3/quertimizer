@@ -1,3 +1,5 @@
+import { getUiTextValue } from './uiText';
+
 export interface ImageCropAreaPixels {
   x: number;
   y: number;
@@ -33,7 +35,7 @@ export async function createCroppedImageFile(options: CreateCroppedImageFileOpti
 
     const context = canvas.getContext('2d');
     if (!context) {
-      throw new Error('이미지 편집용 캔버스를 생성할 수 없다.');
+      throw new Error(getUiTextValue('IMAGE_CROP_CANVAS_FAIL_MESSAGE', '이미지 편집용 캔버스를 생성할 수 없습니다.'));
     }
 
     context.imageSmoothingEnabled = true;
@@ -67,7 +69,7 @@ export async function createCroppedImageFile(options: CreateCroppedImageFileOpti
 
     const pngBlob = await canvasToBlob(canvas, 'image/png', 0.96);
     if (!pngBlob) {
-      throw new Error('이미지 변환에 실패했다.');
+      throw new Error(getUiTextValue('IMAGE_CROP_CONVERT_FAIL_MESSAGE', '이미지를 변환하지 못했습니다.'));
     }
 
     return new File([pngBlob], `${options.fileName}.png`, {
@@ -97,7 +99,7 @@ async function loadCropSource(file: File): Promise<LoadedCropSource> {
 
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error('이미지를 불러오지 못했다.'));
+    image.onerror = () => reject(new Error(getUiTextValue('IMAGE_CROP_LOAD_FAIL_MESSAGE', '이미지를 불러오지 못했습니다.')));
   });
 
   return {

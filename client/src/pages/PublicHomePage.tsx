@@ -23,18 +23,11 @@ import {
   LANDING_SIGNUP_PATH,
   navigate,
 } from '../lib/navigation';
-import { useHomeSiteTitle } from '../lib/uiText';
+import { getUiTextValue, useHomeSiteTitle, useUiText } from '../lib/uiText';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VERIFICATION_CODE_PATTERN = /^[A-Z0-9]{6}$/;
-
-const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.';
-const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 중복을 확인하고 있습니다.';
-const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
-const SIGNUP_CODE_HINT = '이메일로 받은 인증코드 6자를 입력해 주세요.';
-const SIGNUP_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
-const SIGNUP_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.';
-const DUPLICATED_EMAIL_REASON = '이미 사용 중인 이메일입니다.';
+const DUPLICATED_EMAIL_REASON = getUiTextValue('AUTH_EMAIL_DUPLICATED_MESSAGE', '이미 사용 중인 이메일입니다.');
 
 type DuplicateCheckStatus = 'idle' | 'checking' | 'available' | 'duplicated';
 type SocialProvider = 'google' | 'github' | 'kakao' | 'oauth2';
@@ -66,13 +59,13 @@ function getSocialLoginErrorMessage(provider: string | null) {
 
   switch (normalizedProvider) {
     case 'google':
-      return 'Google 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_GOOGLE_LOGIN_FAIL_MESSAGE', 'Google 로그인에 실패했습니다.');
     case 'github':
-      return 'Github 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_GITHUB_LOGIN_FAIL_MESSAGE', 'Github 로그인에 실패했습니다.');
     case 'kakao':
-      return 'Kakao 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_KAKAO_LOGIN_FAIL_MESSAGE', 'Kakao 로그인에 실패했습니다.');
     default:
-      return '소셜 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_SOCIAL_LOGIN_FAIL_MESSAGE', '소셜 로그인에 실패했습니다.');
   }
 }
 
@@ -168,11 +161,14 @@ function EmailMarkIcon() {
 }
 
 export default function PublicHomePage() {
+  const { text } = useUiText();
   const hash = useSyncExternalStore(subscribe, getSnapshot, () => '');
   const isSignupOpen = hash === '#signup';
   const isResetPasswordOpen = hash === '#reset-password';
   const isOverlayOpen = isSignupOpen || isResetPasswordOpen;
-  const overlayPageTitle = isSignupOpen ? '회원가입' : isResetPasswordOpen ? '비밀번호 찾기' : null;
+  const signupTitle = text('PUBLIC_HOME_SIGNUP_TITLE', '회원가입');
+  const resetTitle = text('AUTH_RESET_TITLE', '비밀번호 찾기');
+  const overlayPageTitle = isSignupOpen ? signupTitle : isResetPasswordOpen ? resetTitle : null;
 
   useHomeSiteTitle(overlayPageTitle);
 
@@ -214,6 +210,14 @@ export default function PublicHomePage() {
   const isSignupPasswordConfirmValid = signupPasswordConfirm !== '' && signupPassword === signupPasswordConfirm;
   const isSignupEmailValid = EMAIL_PATTERN.test(normalizedEmail);
   const isSignupCodeValid = VERIFICATION_CODE_PATTERN.test(normalizedSignupCode);
+  const signupEmailHint = text('AUTH_EMAIL_HINT', '올바른 이메일 형식으로 입력해 주세요.');
+  const signupEmailCheckingMessage = text('PUBLIC_HOME_SIGNUP_CHECKING_MESSAGE', '이메일 중복을 확인하고 있습니다.');
+  const signupEmailAvailableMessage = text('AUTH_EMAIL_AVAILABLE_MESSAGE', '사용 가능한 이메일입니다.');
+  const signupCodeHint = text('AUTH_CODE_HINT', '이메일로 받은 인증코드 6자를 입력해 주세요.');
+  const signupCodeSentMessage = text('AUTH_CODE_SENT_MESSAGE', '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+  const signupCodeVerifiedMessage = text('AUTH_CODE_VERIFIED_MESSAGE', '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.');
+  const signupPasswordValidationMessage = text('AUTH_PASSWORD_VALIDATION_MESSAGE', '비밀번호는 특수문자를 포함해 8자 이상이어야 합니다.');
+  const signupPasswordConfirmMessage = text('AUTH_PASSWORD_CONFIRM_MATCH_MESSAGE', '비밀번호 확인은 비밀번호와 동일하게 입력해 주세요.');
 
   const isEmailSignupReady =
     isSignupPasswordValid &&
@@ -222,21 +226,21 @@ export default function PublicHomePage() {
     isSignupCodeVerified &&
     signupEmailCheckStatus !== 'checking';
 
-  const signupCodeSentStatusMessage = signupStatusMessage === SIGNUP_CODE_SENT_MESSAGE ? signupStatusMessage : null;
-  const signupCodeVerifiedStatusMessage = signupStatusMessage === SIGNUP_CODE_VERIFIED_MESSAGE ? signupStatusMessage : null;
+  const signupCodeSentStatusMessage = signupStatusMessage === signupCodeSentMessage ? signupStatusMessage : null;
+  const signupCodeVerifiedStatusMessage = signupStatusMessage === signupCodeVerifiedMessage ? signupStatusMessage : null;
   const signupEmailHintMessage =
     signupCodeSentStatusMessage ??
     (normalizedEmail === ''
-      ? SIGNUP_EMAIL_HINT
+      ? signupEmailHint
       : !isSignupEmailValid
-        ? SIGNUP_EMAIL_HINT
+        ? signupEmailHint
         : signupEmailCheckStatus === 'checking'
-          ? SIGNUP_EMAIL_CHECKING_MESSAGE
+          ? signupEmailCheckingMessage
           : signupEmailLastCheckedValue === normalizedEmail && signupEmailCheckStatus === 'duplicated' && signupEmailCheckReason
             ? signupEmailCheckReason
             : signupEmailLastCheckedValue === normalizedEmail && signupEmailCheckStatus === 'available'
-              ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
-              : SIGNUP_EMAIL_HINT);
+              ? signupEmailAvailableMessage
+              : signupEmailHint);
 
   const hasSignupEmailError =
     normalizedEmail !== '' &&
@@ -428,7 +432,7 @@ export default function PublicHomePage() {
       }
 
       setSignupEmailCheckStatus('idle');
-      setSignupErrorReasons([error instanceof Error ? error.message : '이메일 중복 확인 중 오류가 발생했습니다.']);
+      setSignupErrorReasons([error instanceof Error ? error.message : text('AUTH_EMAIL_DUPLICATE_CHECK_FAIL_MESSAGE', '이메일 중복 확인 중 오류가 발생했습니다.')]);
       return false;
     }
   }
@@ -465,7 +469,7 @@ export default function PublicHomePage() {
         return;
       }
 
-      setLoginErrorReasons([error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.']);
+      setLoginErrorReasons([error instanceof Error ? error.message : text('AUTH_LOGIN_ERROR_MESSAGE', '로그인 중 오류가 발생했습니다.')]);
     } finally {
       setIsLoginSubmitting(false);
     }
@@ -490,7 +494,7 @@ export default function PublicHomePage() {
       setSignupCode('');
       setIsSignupCodeSent(true);
       setIsSignupCodeVerified(false);
-      setSignupStatusMessage(SIGNUP_CODE_SENT_MESSAGE);
+      setSignupStatusMessage(signupCodeSentMessage);
       return true;
     } catch (error) {
       if (error instanceof SignupApiError) {
@@ -498,7 +502,7 @@ export default function PublicHomePage() {
         return false;
       }
 
-      setSignupErrorReasons([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      setSignupErrorReasons([error instanceof Error ? error.message : text('AUTH_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSendingSignupCode(false);
@@ -520,7 +524,7 @@ export default function PublicHomePage() {
         code: normalizedSignupCode,
       });
       setIsSignupCodeVerified(true);
-      setSignupStatusMessage(SIGNUP_CODE_VERIFIED_MESSAGE);
+      setSignupStatusMessage(signupCodeVerifiedMessage);
       return true;
     } catch (error) {
       setIsSignupCodeVerified(false);
@@ -529,7 +533,7 @@ export default function PublicHomePage() {
         return false;
       }
 
-      setSignupErrorReasons([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      setSignupErrorReasons([error instanceof Error ? error.message : text('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsVerifyingSignupCode(false);
@@ -565,7 +569,7 @@ export default function PublicHomePage() {
         return false;
       }
 
-      setSignupErrorReasons([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+      setSignupErrorReasons([error instanceof Error ? error.message : text('AUTH_SIGNUP_ERROR_MESSAGE', '회원가입 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSignupSubmitting(false);
@@ -616,7 +620,7 @@ export default function PublicHomePage() {
               type="button"
               className="signup-close-button"
               onClick={closeOverlay}
-              aria-label={`${overlayPageTitle ?? '창'} 닫기`}
+              aria-label={`${overlayPageTitle ?? text('COMMON_STATUS_DIALOG_LABEL', '상태 안내')} ${text('COMMON_CLOSE_BUTTON', '닫기')}`}
             >
               X
             </button>
@@ -625,13 +629,13 @@ export default function PublicHomePage() {
           <section className="signup-split-layout">
             <section className="signup-card">
               <div className="signup-card-header">
-                <h1 className="signup-form-title">회원가입</h1>
+                <h1 className="signup-form-title">{signupTitle}</h1>
               </div>
 
               <>
                   <div className="field-stack">
                     <label className="field-label" htmlFor="signup-email">
-                      이메일
+                      {text('AUTH_EMAIL_LABEL', '이메일')}
                     </label>
                     <div className="inline-field-row">
                       <input
@@ -661,13 +665,13 @@ export default function PublicHomePage() {
                         onBlur={() => {
                           void checkSignupEmailDuplication();
                         }}
-                        placeholder="이메일을 입력하세요"
+                        placeholder={text('AUTH_EMAIL_PLACEHOLDER_POLITE', '이메일을 입력해 주세요.')}
                         autoComplete="email"
                         inputMode="email"
                         aria-invalid={hasSignupEmailError}
                       />
                       <button type="button" className="btn secondary fixed-action" onClick={handleSendSignupCode} disabled={!isSignupEmailValid || isSendingSignupCode}>
-                        {isSendingSignupCode ? '전송 중' : '코드 전송'}
+                        {isSendingSignupCode ? text('COMMON_SENDING_LABEL', '전송 중') : text('AUTH_CODE_SEND_BUTTON', '코드 전송')}
                       </button>
                     </div>
                     <p className={`hint-text signup-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
@@ -677,7 +681,7 @@ export default function PublicHomePage() {
 
                   <div className="field-stack">
                     <label className="field-label" htmlFor="signup-code">
-                      인증 코드
+                      {text('AUTH_CODE_LABEL', '인증 코드')}
                     </label>
                     <div className="inline-field-row">
                       <input
@@ -705,7 +709,7 @@ export default function PublicHomePage() {
                             }
                           })();
                         }}
-                        placeholder="인증코드 6자를 입력하세요"
+                        placeholder={text('PUBLIC_HOME_SIGNUP_CODE_PLACEHOLDER', '인증코드 6자를 입력하세요')}
                         inputMode="text"
                         autoComplete="one-time-code"
                         maxLength={6}
@@ -717,16 +721,16 @@ export default function PublicHomePage() {
                         onClick={handleVerifySignupCode}
                         disabled={!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode}
                       >
-                        {isVerifyingSignupCode ? '확인 중' : '코드 확인'}
+                        {isVerifyingSignupCode ? text('COMMON_VERIFYING_LABEL', '확인 중') : text('AUTH_CODE_VERIFY_BUTTON', '코드 확인')}
                       </button>
                     </div>
                     {signupCodeVerifiedStatusMessage ? <p className="hint-text signup-field-hint is-success">{signupCodeVerifiedStatusMessage}</p> : null}
-                    {!signupCodeVerifiedStatusMessage ? <p className="hint-text signup-field-hint">{SIGNUP_CODE_HINT}</p> : null}
+                    {!signupCodeVerifiedStatusMessage ? <p className="hint-text signup-field-hint">{signupCodeHint}</p> : null}
                   </div>
 
                   <div className="field-stack">
                     <label className="field-label" htmlFor="signup-password">
-                      비밀번호
+                      {text('AUTH_PASSWORD_LABEL', '비밀번호')}
                     </label>
                     <input
                       id="signup-password"
@@ -746,7 +750,7 @@ export default function PublicHomePage() {
                         event.preventDefault();
                         focusNextInput(signupPasswordConfirmInputRef);
                       }}
-                      placeholder="비밀번호를 입력하세요"
+                      placeholder={text('AUTH_PASSWORD_PLACEHOLDER_POLITE', '비밀번호를 입력해 주세요.')}
                       autoComplete="new-password"
                       aria-invalid={signupPassword.length > 0 && !isSignupPasswordValid}
                     />
@@ -755,13 +759,13 @@ export default function PublicHomePage() {
                         signupPassword.length > 0 && !isSignupPasswordValid ? 'is-error' : hasSignupPasswordSuccess ? 'is-success' : ''
                       }`}
                     >
-                      비밀번호는 특수문자를 포함해 8자 이상이어야 합니다.
+                      {signupPasswordValidationMessage}
                     </p>
                   </div>
 
                   <div className="field-stack">
                     <label className="field-label" htmlFor="signup-password-confirm">
-                      비밀번호 확인
+                      {text('AUTH_PASSWORD_CONFIRM_LABEL', '비밀번호 확인')}
                     </label>
                     <input
                       id="signup-password-confirm"
@@ -781,7 +785,7 @@ export default function PublicHomePage() {
                         event.preventDefault();
                         void handleSignup();
                       }}
-                      placeholder="비밀번호를 다시 입력하세요"
+                      placeholder={text('AUTH_PASSWORD_CONFIRM_PLACEHOLDER', '비밀번호를 다시 입력해 주세요.')}
                       autoComplete="new-password"
                       aria-invalid={signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid}
                     />
@@ -794,7 +798,7 @@ export default function PublicHomePage() {
                             : ''
                       }`}
                     >
-                      비밀번호 확인은 비밀번호와 동일하게 입력해 주세요.
+                      {signupPasswordConfirmMessage}
                     </p>
                   </div>
               </>
@@ -815,7 +819,7 @@ export default function PublicHomePage() {
                 onClick={() => void handleSignup()}
                 disabled={!isEmailSignupReady || isSignupSubmitting}
               >
-                {isSignupSubmitting ? '처리 중...' : '가입하기'}
+                {isSignupSubmitting ? text('PUBLIC_HOME_SIGNUP_PROGRESS_LABEL', '처리 중...') : text('AUTH_SIGNUP_BUTTON', '가입하기')}
               </button>
             </section>
           </section>
@@ -827,16 +831,16 @@ export default function PublicHomePage() {
           <img className="mobile-landing-logo" src={logoImage} alt="quertimizer" />
 
           <h1 className="landing-title-block">
-            <span className="landing-title-primary">정답과 성능을 함께 평가하는</span>
-            <span className="landing-title-secondary">SQL 문제 학습 플랫폼</span>
+            <span className="landing-title-primary">{text('PUBLIC_HOME_TITLE_PRIMARY', '정답과 성능을 함께 평가하는')}</span>
+            <span className="landing-title-secondary">{text('PUBLIC_HOME_TITLE_SECONDARY', 'SQL 문제 학습 플랫폼')}</span>
           </h1>
 
           <div className="minimal-auth-form">
             <div className="landing-auth-layout">
-              <section className="landing-login-panel" aria-label="로그인 입력">
+              <section className="landing-login-panel" aria-label={text('AUTH_LOGIN_FORM_LABEL', '로그인 입력')}>
                 <div className="field-stack">
                   <label className="field-label" htmlFor="login-email">
-                    이메일
+                    {text('AUTH_EMAIL_LABEL', '이메일')}
                   </label>
                   <input
                     id="login-email"
@@ -847,7 +851,7 @@ export default function PublicHomePage() {
                       setLoginEmail(event.target.value);
                       setLoginErrorReasons([]);
                     }}
-                    placeholder="이메일을 입력하세요"
+                    placeholder={text('AUTH_LOGIN_EMAIL_PLACEHOLDER', '이메일을 입력하세요')}
                     autoComplete="email"
                     inputMode="email"
                   />
@@ -855,7 +859,7 @@ export default function PublicHomePage() {
 
                 <div className="field-stack">
                   <label className="field-label" htmlFor="user-password">
-                    비밀번호
+                    {text('AUTH_PASSWORD_LABEL', '비밀번호')}
                   </label>
                   <input
                     id="user-password"
@@ -874,7 +878,7 @@ export default function PublicHomePage() {
                       event.preventDefault();
                       void handleLogin();
                     }}
-                    placeholder="비밀번호를 입력하세요"
+                    placeholder={text('AUTH_LOGIN_PASSWORD_PLACEHOLDER', '비밀번호를 입력하세요')}
                     autoComplete="current-password"
                   />
                 </div>
@@ -896,12 +900,12 @@ export default function PublicHomePage() {
                     onClick={() => void handleLogin()}
                     disabled={!isLoginReady || isLoginSubmitting}
                   >
-                    {isLoginSubmitting ? '로그인 중...' : '로그인'}
+                    {isLoginSubmitting ? text('AUTH_LOGIN_IN_PROGRESS_ELLIPSIS', '로그인 중...') : text('AUTH_LOGIN_TITLE', '로그인')}
                   </button>
                 </div>
 
                 <button type="button" className="btn text landing-password-reset-link" onClick={openResetPassword}>
-                  비밀번호를 잊으셨나요?
+                  {text('AUTH_FORGOT_PASSWORD_LINK', '비밀번호를 잊으셨나요?')}
                 </button>
               </section>
 
@@ -911,27 +915,27 @@ export default function PublicHomePage() {
                 <span className="landing-auth-divider-line" />
               </div>
 
-              <aside className="landing-access-panel" aria-label="계정 지원">
+              <aside className="landing-access-panel" aria-label={text('AUTH_ACCOUNT_SUPPORT_LABEL', '계정 지원')}>
                 <div className="landing-access-group landing-access-group-social">
                   <button type="button" className="landing-access-card is-social" onClick={handleGoogleLogin}>
                     <span className="landing-access-card-icon" aria-hidden="true">
                       <GoogleMarkIcon />
                     </span>
-                    <span className="landing-access-card-title">Google로 계속하기</span>
+                    <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GOOGLE', 'Google로 계속하기')}</span>
                   </button>
 
                   <button type="button" className="landing-access-card is-social" onClick={handleGithubLogin}>
                     <span className="landing-access-card-icon" aria-hidden="true">
                       <GithubMarkIcon />
                     </span>
-                    <span className="landing-access-card-title">Github로 계속하기</span>
+                    <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GITHUB', 'Github로 계속하기')}</span>
                   </button>
 
                   <button type="button" className="landing-access-card is-social" onClick={handleKakaoLogin}>
                     <span className="landing-access-card-icon" aria-hidden="true">
                       <KakaoMarkIcon />
                     </span>
-                    <span className="landing-access-card-title">Kakao로 계속하기</span>
+                    <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_KAKAO', 'Kakao로 계속하기')}</span>
                   </button>
                 </div>
 
@@ -940,7 +944,7 @@ export default function PublicHomePage() {
                     <span className="landing-access-card-icon" aria-hidden="true">
                       <EmailMarkIcon />
                     </span>
-                    <span className="landing-access-card-title">이메일로 계속하기</span>
+                    <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_EMAIL', '이메일로 계속하기')}</span>
                   </button>
                 </div>
               </aside>

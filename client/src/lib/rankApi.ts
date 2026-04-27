@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 import type { DbmsType, RankingEntry, RankingMetricKey } from '../types/domain';
 
 interface RankMonthlyDeltaResponse {
@@ -39,6 +40,8 @@ export interface RankPage {
   ranks: RankingEntry[];
 }
 
+const rankGetRequestPromises = new Map<string, Promise<unknown>>();
+
 function toRankingEntry(rank: RankListItemResponse) {
   return {
     handle: rank.handle!,
@@ -53,9 +56,22 @@ function toRankingEntry(rank: RankListItemResponse) {
   } satisfies RankingEntry;
 }
 
-export async function fetchRanks(params: FetchRanksParams): Promise<RankPage> {
-  let response: Response;
+function requestRankGet<T>(path: string, execute: () => Promise<T>): Promise<T> {
+  const requestKey = `GET:${path}`;
+  const inFlightRequest = rankGetRequestPromises.get(requestKey);
+  if (inFlightRequest != null) {
+    return inFlightRequest as Promise<T>;
+  }
 
+  const nextRequest = execute().finally(() => {
+    rankGetRequestPromises.delete(requestKey);
+  });
+
+  rankGetRequestPromises.set(requestKey, nextRequest);
+  return nextRequest;
+}
+
+export async function fetchRanks(params: FetchRanksParams): Promise<RankPage> {
   const searchParams = new URLSearchParams({
     page: String(params.page),
     pageSize: String(params.pageSize),
@@ -67,48 +83,54 @@ export async function fetchRanks(params: FetchRanksParams): Promise<RankPage> {
     searchParams.set('query', params.query.trim());
   }
 
-  try {
-    response = await fetch(`${getApiBaseUrl()}/ranks?${searchParams.toString()}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-  } catch {
-    throw new Error('랭킹 조회에 실패했다.');
-  }
+  const requestPath = `/ranks?${searchParams.toString()}`;
 
-  if (!response.ok) {
-    throw new Error('랭킹 조회에 실패했다.');
-  }
+  return requestRankGet(requestPath, async () => {
+    let response: Response;
 
-  try {
-    const data = (await response.json()) as RankPageResponse;
-    if (
-      typeof data.currentPage !== 'number' ||
-      typeof data.pageSize !== 'number' ||
-      typeof data.totalCount !== 'number' ||
-      typeof data.totalPages !== 'number' ||
-      !Array.isArray(data.ranks)
-    ) {
-      throw new Error();
+    try {
+      response = await fetch(`${getApiBaseUrl()}${requestPath}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+    } catch {
+      throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
     }
 
-    return {
-      currentPage: data.currentPage,
-      pageSize: data.pageSize,
-      totalCount: data.totalCount,
-      totalPages: data.totalPages,
-      ranks: data.ranks
-        .filter(
-          (rank): rank is Required<Pick<RankListItemResponse, 'handle' | 'solvedCount' | 'avgExecutionPercentile' | 'totalSubmitCount' | 'successSubmitCount'>> & RankListItemResponse =>
-            typeof rank.handle === 'string' &&
-            typeof rank.solvedCount === 'number' &&
-            typeof rank.avgExecutionPercentile === 'number' &&
-            typeof rank.totalSubmitCount === 'number' &&
-            typeof rank.successSubmitCount === 'number',
-        )
-        .map(toRankingEntry),
-    };
-  } catch {
-    throw new Error('랭킹 조회에 실패했다.');
-  }
+    if (!response.ok) {
+      throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+    }
+
+    try {
+      const data = (await response.json()) as RankPageResponse;
+      if (
+        typeof data.currentPage !== 'number' ||
+        typeof data.pageSize !== 'number' ||
+        typeof data.totalCount !== 'number' ||
+        typeof data.totalPages !== 'number' ||
+        !Array.isArray(data.ranks)
+      ) {
+        throw new Error();
+      }
+
+      return {
+        currentPage: data.currentPage,
+        pageSize: data.pageSize,
+        totalCount: data.totalCount,
+        totalPages: data.totalPages,
+        ranks: data.ranks
+          .filter(
+            (rank): rank is Required<Pick<RankListItemResponse, 'handle' | 'solvedCount' | 'avgExecutionPercentile' | 'totalSubmitCount' | 'successSubmitCount'>> & RankListItemResponse =>
+              typeof rank.handle === 'string' &&
+              typeof rank.solvedCount === 'number' &&
+              typeof rank.avgExecutionPercentile === 'number' &&
+              typeof rank.totalSubmitCount === 'number' &&
+              typeof rank.successSubmitCount === 'number',
+          )
+          .map(toRankingEntry),
+      };
+    } catch {
+      throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+    }
+  });
 }

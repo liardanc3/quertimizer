@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import HandleSetupGate from '../components/home/HandleSetupGate';
+import HttpErrorState from '../components/common/HttpErrorState';
 import ProblemList from '../components/home/ProblemList';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { getLocationSearchSnapshot, PROBLEMS_PATH, subscribeLocation } from '../lib/navigation';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
 import { useMockSession } from '../lib/session';
-import { useHomeSiteTitle } from '../lib/uiText';
+import { useHomeSiteTitle, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './HomePage.css';
 
@@ -31,10 +33,7 @@ interface HomePageFavoriteSnapshot {
 }
 const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
 const PROBLEM_PAGE_SIZE = 10;
-const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
-  { value: 'postgresql', label: 'PostgreSQL' },
-  { value: 'oracle', label: 'Oracle' },
-];
+const dbmsOptions: DbmsType[] = ['postgresql', 'oracle'];
 
 function readProblemsDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
@@ -120,6 +119,7 @@ function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: bool
 
 export default function HomePage() {
   useHomeSiteTitle();
+  const { text } = useUiText();
   const { isAuthenticated, isReady, handle } = useMockSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<HomePageFavoriteSnapshot>('home'), []);
@@ -137,6 +137,8 @@ export default function HomePage() {
   const [problemPage, setProblemPage] = useState<ProblemPage>(createEmptyProblemPage());
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [selectedSpreadRateRange, setSelectedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.selectedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
   const [committedSpreadRateRange, setCommittedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.committedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
 
@@ -194,6 +196,8 @@ export default function HomePage() {
     async function loadProblems() {
       setIsLoading(true);
       setLoadFailed(false);
+      setLoadErrorMessage(null);
+      setLoadErrorStatus(null);
 
       try {
         const fetchedProblemPage = await fetchProblems({
@@ -217,12 +221,15 @@ export default function HomePage() {
         if (fetchedProblemPage.currentPage !== requestedPage) {
           setRequestedPage(fetchedProblemPage.currentPage);
         }
-      } catch {
+      } catch (error) {
         if (cancelled) {
           return;
         }
 
         setLoadFailed(true);
+        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -347,31 +354,36 @@ export default function HomePage() {
     <div className="page-stack home-page">
       <section className="panel-card compact problem-toolbar-card">
         <div className="problem-toolbar home-problem-toolbar-stack">
-          <div className="solve-dbms-tab-row home-problem-dbms-tab-row" role="tablist" aria-label="문제 목록 DBMS 선택">
-            {dbmsOptions.map((option) => {
-              const isSelected = option.value === selectedDbms;
+          <div className="solve-dbms-tab-row home-problem-dbms-tab-row" role="tablist" aria-label={text('HOME_DBMS_TABLIST_LABEL', '문제 목록 DBMS 선택')}>
+            {dbmsOptions.map((dbmsOption) => {
+              const isSelected = dbmsOption === selectedDbms;
+              const dbmsLabel = dbmsOption === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
 
               return (
                 <button
-                  key={option.value}
+                  key={dbmsOption}
                   type="button"
                   className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
                   role="tab"
                   aria-selected={isSelected}
                   onClick={() => {
                     if (!isSelected) {
-                      setSelectedDbms(option.value);
+                      setSelectedDbms(dbmsOption);
                       setRequestedPage(1);
                     }
                   }}
                 >
-                  {option.label}
+                  {dbmsLabel}
                 </button>
               );
             })}
             <FavoriteTabButton
               className="favorite-tab-toggle-end"
-              label={`문제 / ${selectedDbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}`}
+              label={text(
+                'HOME_FAVORITE_LABEL',
+                { dbms: selectedDbms === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                '문제 / {dbms}',
+              )}
               path={buildProblemsPath(selectedDbms)}
               snapshot={{
                 kind: 'home',
@@ -408,16 +420,16 @@ export default function HomePage() {
                 value={draftSearchValue}
                 onChange={(event) => setDraftSearchValue(event.target.value)}
                 className="text-field problem-search-input home-problem-search-input"
-                placeholder="문제 번호, 제목 검색"
-                aria-label="문제 검색"
+                placeholder={text('HOME_PROBLEM_SEARCH_PLACEHOLDER', '문제 번호, 제목 검색')}
+                aria-label={text('HOME_PROBLEM_SEARCH_LABEL', '문제 검색')}
               />
 
               <button
                 type="submit"
                 className="btn secondary problem-search-button home-problem-search-button"
-                aria-label="검색"
+                aria-label={text('COMMON_SEARCH_BUTTON', '검색')}
               >
-                검색
+                {text('COMMON_SEARCH_BUTTON', '검색')}
               </button>
             </label>
           </form>
@@ -427,7 +439,7 @@ export default function HomePage() {
       <section className="panel-card problem-board">
         {loadFailed ? (
           <section className="problem-list is-empty">
-            <PageLoadFailureState className="problem-empty-state" />
+            {loadErrorStatus != null ? <HttpErrorState status={loadErrorStatus} message={loadErrorMessage} /> : <PageLoadFailureState message={loadErrorMessage} />}
           </section>
         ) : (
           <ProblemList
@@ -462,14 +474,14 @@ export default function HomePage() {
         )}
 
         {!loadFailed && problemPage.totalCount > 0 ? (
-          <div className="problem-pagination" role="navigation" aria-label="문제 페이지">
+          <div className="problem-pagination" role="navigation" aria-label={text('HOME_PAGE_NAV_LABEL', '문제 페이지')}>
             <button
               type="button"
               className="mini-toggle problem-page-button"
               onClick={() => requestProblemPage(problemPage.currentPage - 1)}
               disabled={problemPage.currentPage === 1}
             >
-              이전
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isPageJumpEditing ? (
@@ -477,7 +489,7 @@ export default function HomePage() {
                 type="text"
                 inputMode="numeric"
                 className="problem-pagination-meta-input"
-                aria-label="이동할 페이지 입력"
+                aria-label={text('HOME_PAGE_INPUT_LABEL', '이동할 페이지 입력')}
                 value={pageJumpDraft}
                 onChange={(event) => {
                   const nextValue = event.target.value.replace(/\D+/g, '');
@@ -502,7 +514,7 @@ export default function HomePage() {
               <button
                 type="button"
                 className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label="이동할 페이지 입력 열기"
+                aria-label={text('HOME_PAGE_INPUT_OPEN_LABEL', '이동할 페이지 입력 열기')}
                 onClick={() => {
                   setPageJumpDraft(String(problemPage.currentPage));
                   setIsPageJumpEditing(true);
@@ -518,7 +530,7 @@ export default function HomePage() {
               onClick={() => requestProblemPage(problemPage.currentPage + 1)}
               disabled={problemPage.currentPage === problemPage.totalPages}
             >
-              다음
+              {text('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}
@@ -528,12 +540,12 @@ export default function HomePage() {
         <section className="panel-card disabled-panel">
           <div className="panel-heading-row responsive">
             <div>
-              <p className="panel-meta">준비 중인 영역</p>
-              <h2 className="panel-title">NoSQL 트랙</h2>
+              <p className="panel-meta">{text('HOME_NOSQL_META', '준비 중인 영역')}</p>
+              <h2 className="panel-title">{text('HOME_NOSQL_TITLE', 'NoSQL 트랙')}</h2>
             </div>
-            <span className="section-badge is-disabled">Coming Soon</span>
+            <span className="section-badge is-disabled">{text('HOME_NOSQL_BADGE', 'Coming Soon')}</span>
           </div>
-          <p className="content-text">문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개될 예정입니다.</p>
+          <p className="content-text">{text('HOME_NOSQL_DESC', '문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개될 예정입니다.')}</p>
         </section>
       </div>
 

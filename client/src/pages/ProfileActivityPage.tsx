@@ -9,9 +9,15 @@ import {
   type ProfileCommunityComment,
   type ProfileCommunityPost,
 } from '../lib/communityApi';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
+import PageStatePanel from '../components/common/PageStatePanel';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { openLoginOverlay } from '../lib/authOverlay';
 import { useMockSession } from '../lib/session';
+import { useUiText } from '../lib/uiText';
 
 interface ProfileActivityPageProps {
   handle?: string;
@@ -40,6 +46,7 @@ function readActiveTab(): ActivityTab {
 }
 
 export default function ProfileActivityPage({ handle: profileHandle }: ProfileActivityPageProps) {
+  const { text } = useUiText();
   const { handle: currentHandle } = useMockSession();
   const resolvedHandle = profileHandle ?? currentHandle;
   const [activeTab, setActiveTab] = useState<ActivityTab>(readActiveTab());
@@ -48,6 +55,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
   const [comments, setComments] = useState<ProfileCommunityComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
 
   useEffect(() => {
     if (!resolvedHandle) {
@@ -55,12 +63,14 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
       setLikedPosts([]);
       setComments([]);
       setIsLoading(false);
+      setErrorStatus(null);
       return;
     }
 
     let cancelled = false;
     setIsLoading(true);
     setErrorMessage(null);
+    setErrorStatus(null);
 
     const loadPosts = profileHandle ? fetchCommunityPostsByUser(resolvedHandle) : fetchMyCommunityPosts();
     const loadLikedPosts = profileHandle ? fetchLikedPostsByUser(resolvedHandle) : fetchMyLikedPosts();
@@ -81,7 +91,9 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
           return;
         }
 
-        setErrorMessage(error instanceof Error ? error.message : '활동 기록 조회에 실패했다.');
+        setErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -104,13 +116,22 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
   }, [activeTab]);
 
   const tabs: Array<{ id: ActivityTab; label: string; count: number }> = useMemo(() => [
-    { id: 'posts', label: '작성한 글', count: posts.length },
-    { id: 'comments', label: '작성한 댓글', count: comments.length },
-    { id: 'likes', label: '좋아요한 글', count: likedPosts.length },
-  ], [comments.length, likedPosts.length, posts.length]);
+    { id: 'posts', label: text('PROFILE_ACTIVITY_TAB_POSTS_LABEL', '작성한 글'), count: posts.length },
+    { id: 'comments', label: text('PROFILE_ACTIVITY_TAB_COMMENTS_LABEL', '작성한 댓글'), count: comments.length },
+    { id: 'likes', label: text('PROFILE_ACTIVITY_TAB_LIKES_LABEL', '좋아요한 글'), count: likedPosts.length },
+  ], [comments.length, likedPosts.length, posts.length, text]);
 
   if (!resolvedHandle) {
-    return null;
+    return (
+      <PageStatePanel
+        fullPage
+        label={text('PROFILE_ACTIVITY_PAGE_LABEL', '활동 기록')}
+        title={text('PROFILE_ACTIVITY_NOT_FOUND_TITLE', '조회할 활동 기록이 없습니다.')}
+        description={text('PROFILE_ACTIVITY_NOT_FOUND_DESC', '로그인 후 내 활동 기록을 열거나 Handle 경로로 접근해 주세요.')}
+        actionLabel={text('AUTH_LOGIN_TITLE', '로그인')}
+        onAction={() => openLoginOverlay(text('PROFILE_ACTIVITY_LOGIN_MOVE_MESSAGE', '로그인 후 내 활동 기록 화면으로 이동할 수 있습니다.'))}
+      />
+    );
   }
 
   return (
@@ -118,15 +139,15 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
       <section className="panel-card community-activity-hero">
         <div className="community-detail-topbar">
           <button type="button" className="btn ghost community-back-button" onClick={() => navigate(getProfilePath(profileHandle))}>
-            뒤로가기
+            {text('PROFILE_ACTIVITY_BACK_BUTTON', '뒤로가기')}
           </button>
-          <span className="subtle-chip">활동</span>
+          <span className="subtle-chip">{text('PROFILE_ACTIVITY_BADGE', '활동')}</span>
         </div>
 
         <div className="community-activity-header">
-          <p className="panel-meta">활동 기록</p>
-          <h1 className="page-title">커뮤니티 활동</h1>
-          <p className="muted-text">작성한 글, 댓글, 좋아요한 글을 한곳에서 본다.</p>
+          <p className="panel-meta">{text('PROFILE_ACTIVITY_PAGE_LABEL', '활동 기록')}</p>
+          <h1 className="page-title">{text('PROFILE_ACTIVITY_TITLE', '커뮤니티 활동')}</h1>
+          <p className="muted-text">{text('PROFILE_ACTIVITY_DESC', '작성한 글, 댓글, 좋아요한 글을 한곳에서 볼 수 있습니다.')}</p>
         </div>
 
         <div className="community-activity-summary">
@@ -174,10 +195,14 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
               ))}
             </div>
 
-            <div className="submit-history-loading-overlay" aria-hidden="true" />
+            <LoadingOverlay ariaHidden />
           </div>
         ) : null}
-        {!isLoading && errorMessage ? <PageLoadFailureState className="community-activity-empty" /> : null}
+        {!isLoading && errorMessage
+          ? errorStatus != null
+            ? <HttpErrorState status={errorStatus} className="community-activity-empty" message={errorMessage} />
+            : <PageLoadFailureState className="community-activity-empty" message={errorMessage} />
+          : null}
 
         {!isLoading && !errorMessage && activeTab === 'posts' ? (
           posts.length > 0 ? (
@@ -195,14 +220,14 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
-                    <span>좋아요 {numberFormatter.format(post.likeCount)}</span>
-                    <span>댓글 {numberFormatter.format(post.commentCount)}</span>
+                    <span>{text('PROFILE_ACTIVITY_LIKES_COUNT_LABEL', { count: numberFormatter.format(post.likeCount) }, `좋아요 ${numberFormatter.format(post.likeCount)}`)}</span>
+                    <span>{text('PROFILE_ACTIVITY_COMMENTS_COUNT_LABEL', { count: numberFormatter.format(post.commentCount) }, `댓글 ${numberFormatter.format(post.commentCount)}`)}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="community-activity-empty">아직 작성한 글이 없다.</div>
+            <div className="community-activity-empty">{text('PROFILE_ACTIVITY_EMPTY_POSTS', '아직 작성한 글이 없습니다.')}</div>
           )
         ) : null}
 
@@ -222,13 +247,13 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                   </div>
                   <p>{comment.content}</p>
                   <div className="community-activity-item-meta">
-                    <span>{comment.reply ? '대댓글' : '댓글'}</span>
+                    <span>{comment.reply ? text('PROFILE_ACTIVITY_REPLY_LABEL', '대댓글') : text('PROFILE_ACTIVITY_COMMENT_LABEL', '댓글')}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="community-activity-empty">아직 작성한 댓글이 없다.</div>
+            <div className="community-activity-empty">{text('PROFILE_ACTIVITY_EMPTY_COMMENTS', '아직 작성한 댓글이 없습니다.')}</div>
           )
         ) : null}
 
@@ -248,14 +273,14 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
-                    <span>좋아요 {numberFormatter.format(post.likeCount)}</span>
-                    <span>댓글 {numberFormatter.format(post.commentCount)}</span>
+                    <span>{text('PROFILE_ACTIVITY_LIKES_COUNT_LABEL', { count: numberFormatter.format(post.likeCount) }, `좋아요 ${numberFormatter.format(post.likeCount)}`)}</span>
+                    <span>{text('PROFILE_ACTIVITY_COMMENTS_COUNT_LABEL', { count: numberFormatter.format(post.commentCount) }, `댓글 ${numberFormatter.format(post.commentCount)}`)}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="community-activity-empty">좋아요한 글이 아직 없다.</div>
+            <div className="community-activity-empty">{text('PROFILE_ACTIVITY_EMPTY_LIKES', '좋아요한 글이 아직 없습니다.')}</div>
           )
         ) : null}
       </section>

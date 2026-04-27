@@ -1,6 +1,7 @@
 package com.quertimizer.ui.presentation.controller;
 
 import com.quertimizer.ui.presentation.dto.request.UiTextSaveReq;
+import com.quertimizer.ui.presentation.dto.response.UiTextPageRes;
 import com.quertimizer.ui.presentation.dto.response.UiTextRes;
 import com.quertimizer.ui.application.usecase.CreateUiText;
 import com.quertimizer.ui.application.usecase.DeleteUiText;
@@ -49,11 +50,11 @@ public class UiTextController {
     }
 
     @GetMapping("/admin/ui-texts")
-    public ResponseEntity<List<UiTextRes>> getAdminUiTexts() {
+    public ResponseEntity<UiTextPageRes> getAdminUiTexts(@RequestParam(defaultValue = "1") int page,
+                                                         @RequestParam(required = false) Integer pageSize,
+                                                         @RequestParam(required = false) String query) {
         // UI 텍스트 목록 조회
-        return ResponseEntity.ok(getAdminUiTexts.execute().stream()
-                .map(UiTextRes::from)
-                .toList());
+        return ResponseEntity.ok(UiTextPageRes.from(getAdminUiTexts.execute(page, pageSize, query)));
     }
 
     @PostMapping("/admin/ui-texts")

@@ -1,15 +1,21 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { getApiBaseUrl } from './authApi';
+import { getApiBaseUrl } from './apiBaseUrl';
+import { resolveHttpErrorMessage, resolveHttpErrorReasons, toApiError } from './apiError';
+import { defaultUiTexts, defaultUiTextMap } from './defaultUiTexts';
 
 interface UiTextResponse {
   key?: string;
-  value?: string;
+  value?: string | null;
   language?: string;
   description?: string;
 }
 
-interface ExceptionResponse {
-  reasons?: string[];
+interface UiTextPageResponse {
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  totalPages?: number;
+  uiTexts?: UiTextResponse[];
 }
 
 export interface UiTextData {
@@ -19,26 +25,55 @@ export interface UiTextData {
   description: string;
 }
 
+export interface UiTextAdminPageData {
+  currentPage: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  uiTexts: UiTextData[];
+}
+
+interface UiTextRuntimeData {
+  key: string;
+  value?: string;
+  language: string;
+  description: string;
+}
+
 interface UiTextSnapshot {
   language: string;
   isReady: boolean;
-  items: Record<string, UiTextData>;
+  fetchedAt: number | null;
+  items: Record<string, UiTextRuntimeData>;
 }
 
-export const DEFAULT_SITE_TITLE = 'Quertimizer';
-export const DEFAULT_NOTIFICATION_TEXT = 'Check out the latest updates from Quertimizer.';
+interface CachedUiTextSnapshot {
+  language: string;
+  fetchedAt: number;
+  items: UiTextRuntimeData[];
+}
+
+export type UiTextParams = Record<string, string | number | boolean | null | undefined>;
+
 export const TITLE_UI_TEXT_KEY = 'TITLE';
 export const NOTIFICATION_UI_TEXT_KEY = 'NOTIFICATION';
+export const DEFAULT_SITE_TITLE = defaultUiTextMap[TITLE_UI_TEXT_KEY]?.value ?? 'Quertimizer';
+export const DEFAULT_NOTIFICATION_TEXT =
+  defaultUiTextMap[NOTIFICATION_UI_TEXT_KEY]?.value ?? 'Check out the latest updates from Quertimizer.';
 
 const DEFAULT_LANGUAGE = 'default';
 const UI_TEXT_CHANGE_EVENT = 'quertimizer:ui-text-change';
+const UI_TEXT_CACHE_TTL_MS = 10 * 60 * 1000;
+const UI_TEXT_CACHE_KEY_PREFIX = 'quertimizer.ui-text-cache:';
 
 let uiTextSnapshot: UiTextSnapshot = {
   language: DEFAULT_LANGUAGE,
   isReady: false,
+  fetchedAt: null,
   items: {},
 };
-let preloadUiTextsPromise: Promise<void> | null = null;
+const preloadUiTextsPromises = new Map<string, Promise<void>>();
+const forcedCommonHttpUiTextLookupKeys = new Set<string>();
 
 function isKoreanLocale(value: string) {
   const normalizedValue = value.toLowerCase().replace(/_/g, '-');
@@ -53,6 +88,19 @@ function isKoreanTimeZone() {
 
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return typeof timeZone === 'string' && timeZone.toLowerCase() === 'asia/seoul';
+}
+
+function toUiTextRuntimeData(data: UiTextResponse): UiTextRuntimeData {
+  if (typeof data.key !== 'string' || typeof data.language !== 'string' || typeof data.description !== 'string') {
+    throw new Error('Failed to parse UI text.');
+  }
+
+  return {
+    key: data.key,
+    value: typeof data.value === 'string' ? data.value : undefined,
+    language: data.language,
+    description: data.description,
+  };
 }
 
 function toUiTextData(data: UiTextResponse): UiTextData {
@@ -73,6 +121,26 @@ function toUiTextData(data: UiTextResponse): UiTextData {
   };
 }
 
+function toUiTextAdminPageData(data: UiTextPageResponse): UiTextAdminPageData {
+  if (
+    typeof data.currentPage !== 'number' ||
+    typeof data.pageSize !== 'number' ||
+    typeof data.totalCount !== 'number' ||
+    typeof data.totalPages !== 'number' ||
+    !Array.isArray(data.uiTexts)
+  ) {
+    throw new Error('Failed to parse admin UI text page.');
+  }
+
+  return {
+    currentPage: data.currentPage,
+    pageSize: data.pageSize,
+    totalCount: data.totalCount,
+    totalPages: data.totalPages,
+    uiTexts: data.uiTexts.map(toUiTextData),
+  };
+}
+
 function emitUiTextChange() {
   if (typeof window === 'undefined') {
     return;
@@ -86,8 +154,8 @@ function updateUiTextSnapshot(nextSnapshot: UiTextSnapshot) {
   emitUiTextChange();
 }
 
-function createUiTextMap(uiTexts: UiTextData[]) {
-  return uiTexts.reduce<Record<string, UiTextData>>((nextItems, uiText) => {
+function createUiTextMap(uiTexts: UiTextRuntimeData[]) {
+  return uiTexts.reduce<Record<string, UiTextRuntimeData>>((nextItems, uiText) => {
     nextItems[uiText.key] = uiText;
     return nextItems;
   }, {});
@@ -113,25 +181,160 @@ function getServerUiTextSnapshot(): UiTextSnapshot {
   return {
     language: DEFAULT_LANGUAGE,
     isReady: false,
+    fetchedAt: null,
     items: {},
   };
 }
 
-async function getErrorMessage(response: Response, fallbackMessage: string) {
-  try {
-    const data = (await response.json()) as ExceptionResponse;
-
-    if (Array.isArray(data.reasons) && typeof data.reasons[0] === 'string' && data.reasons[0].trim() !== '') {
-      return data.reasons[0];
-    }
-  } catch {
-  }
-
-  return fallbackMessage;
-}
-
 function normalizeUiTextLanguage(language: string) {
   return language.trim() !== '' ? language : DEFAULT_LANGUAGE;
+}
+
+function getUiTextCacheKey(language: string) {
+  return `${UI_TEXT_CACHE_KEY_PREFIX}${language}`;
+}
+
+function isUiTextSnapshotFresh(fetchedAt: number | null) {
+  return typeof fetchedAt === 'number' && Date.now() - fetchedAt < UI_TEXT_CACHE_TTL_MS;
+}
+
+function readCachedUiTexts(language: string, allowExpired = false): CachedUiTextSnapshot | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const cachedValue = window.localStorage.getItem(getUiTextCacheKey(language));
+    if (cachedValue == null) {
+      return null;
+    }
+
+    const parsed = JSON.parse(cachedValue) as CachedUiTextSnapshot;
+    if (
+      typeof parsed.language !== 'string' ||
+      parsed.language !== language ||
+      typeof parsed.fetchedAt !== 'number' ||
+      !Array.isArray(parsed.items)
+    ) {
+      return null;
+    }
+
+    const items = parsed.items.map(toUiTextRuntimeData);
+    if (!allowExpired && !isUiTextSnapshotFresh(parsed.fetchedAt)) {
+      return null;
+    }
+
+    return {
+      language,
+      fetchedAt: parsed.fetchedAt,
+      items,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUiTexts(language: string, uiTexts: UiTextRuntimeData[], fetchedAt: number) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getUiTextCacheKey(language),
+      JSON.stringify({
+        language,
+        fetchedAt,
+        items: uiTexts,
+      } satisfies CachedUiTextSnapshot),
+    );
+  } catch {
+    // localStorage 쓰기 실패 시 캐시 없이 계속 진행
+  }
+}
+
+function createSnapshotFromUiTexts(language: string, uiTexts: UiTextRuntimeData[], fetchedAt: number): UiTextSnapshot {
+  return {
+    language,
+    isReady: true,
+    fetchedAt,
+    items: createUiTextMap(uiTexts),
+  };
+}
+
+function isUiTextParams(value?: UiTextParams | string): value is UiTextParams {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveUiTextArguments(paramsOrFallback?: UiTextParams | string, fallbackValue?: string) {
+  if (isUiTextParams(paramsOrFallback)) {
+    return {
+      params: paramsOrFallback,
+      fallbackValue,
+    };
+  }
+
+  return {
+    params: undefined,
+    fallbackValue: paramsOrFallback ?? fallbackValue,
+  };
+}
+
+function formatUiTextTemplate(template: string, params?: UiTextParams) {
+  if (params == null) {
+    return template;
+  }
+
+  return template.replace(/\{([^{}]+)\}/g, (placeholder, rawKey) => {
+    const key = rawKey.trim();
+
+    if (!Object.prototype.hasOwnProperty.call(params, key) || params[key] == null) {
+      return placeholder;
+    }
+
+    return String(params[key]);
+  });
+}
+
+function resolveUiTextBaseValue(key: string, fallbackValue?: string) {
+  const serverUiText = uiTextSnapshot.items[key];
+  if (typeof serverUiText?.value === 'string') {
+    return serverUiText.value;
+  }
+
+  const defaultUiText = defaultUiTextMap[key];
+  if (defaultUiText != null) {
+    return defaultUiText.value;
+  }
+
+  if (fallbackValue !== undefined) {
+    return fallbackValue;
+  }
+
+  return key;
+}
+
+function hasLoadedUiTextValue(key: string, language: string) {
+  return uiTextSnapshot.language === language && typeof uiTextSnapshot.items[key]?.value === 'string';
+}
+
+async function resolveCommonHttpUiTextMessage(key: string, fallbackMessage: string, shouldLoadUiTexts: boolean) {
+  const language = resolveUiTextLanguage();
+
+  if (shouldLoadUiTexts && !hasLoadedUiTextValue(key, language)) {
+    const lookupKey = `${language}:${key}`;
+    const shouldForceRefresh = uiTextSnapshot.isReady && uiTextSnapshot.language === language;
+
+    if (!shouldForceRefresh || !forcedCommonHttpUiTextLookupKeys.has(lookupKey)) {
+      if (shouldForceRefresh) {
+        forcedCommonHttpUiTextLookupKeys.add(lookupKey);
+      }
+
+      await preloadUiTexts(language, shouldForceRefresh);
+    }
+  }
+
+  return getUiTextValue(key, fallbackMessage);
 }
 
 export function resolveUiTextLanguage() {
@@ -150,8 +353,37 @@ export function resolveUiTextLanguage() {
   return localeCandidates.some(isKoreanLocale) || isKoreanTimeZone() ? 'kr' : DEFAULT_LANGUAGE;
 }
 
-export async function fetchUiTexts(language: string): Promise<UiTextData[]> {
+export async function resolveApiHttpErrorReasons(
+  response: Response,
+  fallbackMessage: string,
+  { loadUiTexts = true }: { loadUiTexts?: boolean } = {},
+) {
+  return resolveHttpErrorReasons(response, fallbackMessage, {
+    resolveCommonMessage: (key, commonFallbackMessage) => resolveCommonHttpUiTextMessage(key, commonFallbackMessage, loadUiTexts),
+  });
+}
+
+export async function resolveApiHttpErrorMessage(
+  response: Response,
+  fallbackMessage: string,
+  { loadUiTexts = true }: { loadUiTexts?: boolean } = {},
+) {
+  return resolveHttpErrorMessage(response, fallbackMessage, {
+    resolveCommonMessage: (key, commonFallbackMessage) => resolveCommonHttpUiTextMessage(key, commonFallbackMessage, loadUiTexts),
+  });
+}
+
+export async function createApiErrorFromResponse(
+  response: Response,
+  fallbackMessage: string,
+  { loadUiTexts = true }: { loadUiTexts?: boolean } = {},
+) {
+  return toApiError(response.status, await resolveApiHttpErrorMessage(response, fallbackMessage, { loadUiTexts }));
+}
+
+export async function fetchUiTexts(language: string): Promise<UiTextRuntimeData[]> {
   let response: Response;
+  const fallbackMessage = 'Failed to fetch UI texts.';
 
   const searchParams = new URLSearchParams({ language });
 
@@ -161,11 +393,11 @@ export async function fetchUiTexts(language: string): Promise<UiTextData[]> {
       credentials: 'include',
     });
   } catch {
-    throw new Error('Failed to fetch UI texts.');
+    throw new Error(fallbackMessage);
   }
 
   if (!response.ok) {
-    throw new Error('Failed to fetch UI texts.');
+    throw await createApiErrorFromResponse(response, fallbackMessage, { loadUiTexts: false });
   }
 
   try {
@@ -174,7 +406,7 @@ export async function fetchUiTexts(language: string): Promise<UiTextData[]> {
       throw new Error();
     }
 
-    return data.map(toUiTextData);
+    return data.map(toUiTextRuntimeData);
   } catch {
     throw new Error('Failed to parse UI texts.');
   }
@@ -182,6 +414,7 @@ export async function fetchUiTexts(language: string): Promise<UiTextData[]> {
 
 export async function fetchUiText(key: string, language: string): Promise<UiTextData> {
   let response: Response;
+  const fallbackMessage = 'Failed to fetch UI text.';
 
   const searchParams = new URLSearchParams({ language });
 
@@ -191,11 +424,11 @@ export async function fetchUiText(key: string, language: string): Promise<UiText
       credentials: 'include',
     });
   } catch {
-    throw new Error('Failed to fetch UI text.');
+    throw new Error(fallbackMessage);
   }
 
   if (!response.ok) {
-    throw new Error('Failed to fetch UI text.');
+    throw await createApiErrorFromResponse(response, fallbackMessage, { loadUiTexts: false });
   }
 
   try {
@@ -207,67 +440,100 @@ export async function fetchUiText(key: string, language: string): Promise<UiText
 
 export async function preloadUiTexts(language = resolveUiTextLanguage(), force = false) {
   const requestedLanguage = normalizeUiTextLanguage(language);
-  const currentItems = uiTextSnapshot.items;
+  const currentSnapshot = uiTextSnapshot.language === requestedLanguage
+    ? uiTextSnapshot
+    : {
+        language: requestedLanguage,
+        isReady: false,
+        fetchedAt: null,
+        items: {},
+      };
+  const freshCachedSnapshot = !force ? readCachedUiTexts(requestedLanguage) : null;
+  const staleCachedSnapshot = readCachedUiTexts(requestedLanguage, true);
 
-  if (!force && uiTextSnapshot.isReady && uiTextSnapshot.language === requestedLanguage) {
+  if (!force && currentSnapshot.isReady && isUiTextSnapshotFresh(currentSnapshot.fetchedAt)) {
     return;
   }
 
-  if (!force && preloadUiTextsPromise != null && uiTextSnapshot.language === requestedLanguage) {
-    return preloadUiTextsPromise;
+  if (freshCachedSnapshot != null) {
+    if (!currentSnapshot.isReady || currentSnapshot.fetchedAt !== freshCachedSnapshot.fetchedAt) {
+      updateUiTextSnapshot(createSnapshotFromUiTexts(requestedLanguage, freshCachedSnapshot.items, freshCachedSnapshot.fetchedAt));
+    }
+
+    return;
   }
 
-  preloadUiTextsPromise = (async () => {
+  const existingPromise = preloadUiTextsPromises.get(requestedLanguage);
+  if (existingPromise != null) {
+    return existingPromise;
+  }
+
+  const preloadPromise = (async () => {
     try {
       const uiTexts = await fetchUiTexts(requestedLanguage);
-      updateUiTextSnapshot({
-        language: requestedLanguage,
-        isReady: true,
-        items: createUiTextMap(uiTexts),
-      });
+      const fetchedAt = Date.now();
+      writeCachedUiTexts(requestedLanguage, uiTexts, fetchedAt);
+      updateUiTextSnapshot(createSnapshotFromUiTexts(requestedLanguage, uiTexts, fetchedAt));
     } catch {
-      updateUiTextSnapshot({
-        language: requestedLanguage,
-        isReady: true,
-        items: force ? currentItems : {},
-      });
+      const fallbackSnapshot = staleCachedSnapshot != null
+        ? createSnapshotFromUiTexts(requestedLanguage, staleCachedSnapshot.items, staleCachedSnapshot.fetchedAt)
+        : {
+            ...currentSnapshot,
+            isReady: true,
+          };
+      updateUiTextSnapshot(fallbackSnapshot);
     } finally {
-      preloadUiTextsPromise = null;
+      preloadUiTextsPromises.delete(requestedLanguage);
     }
   })();
 
-  return preloadUiTextsPromise;
+  preloadUiTextsPromises.set(requestedLanguage, preloadPromise);
+  return preloadPromise;
 }
 
-export async function refreshCachedUiTexts(language = uiTextSnapshot.isReady ? uiTextSnapshot.language : resolveUiTextLanguage()) {
-  await preloadUiTexts(language, true);
+export async function refreshCachedUiTexts(
+  language = uiTextSnapshot.isReady ? uiTextSnapshot.language : resolveUiTextLanguage(),
+  force = false,
+) {
+  await preloadUiTexts(language, force);
 }
 
-export async function fetchAdminUiTexts(): Promise<UiTextData[]> {
+export async function fetchAdminUiTexts({
+  page = 1,
+  pageSize = 10,
+  query,
+}: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+} = {}): Promise<UiTextAdminPageData> {
   let response: Response;
+  const searchParams = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  if (query != null && query.trim() !== '') {
+    searchParams.set('query', query.trim());
+  }
 
   try {
-    response = await fetch(`${getApiBaseUrl()}/admin/ui-texts`, {
+    response = await fetch(`${getApiBaseUrl()}/admin/ui-texts?${searchParams.toString()}`, {
       method: 'GET',
       credentials: 'include',
     });
   } catch {
-    throw new Error('Failed to fetch admin UI texts.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to fetch admin UI texts.'));
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   try {
-    const data = (await response.json()) as UiTextResponse[];
-    if (!Array.isArray(data)) {
-      throw new Error();
-    }
-
-    return data.map(toUiTextData);
+    return toUiTextAdminPageData((await response.json()) as UiTextPageResponse);
   } catch {
-    throw new Error('Failed to parse admin UI texts.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 }
 
@@ -284,19 +550,19 @@ export async function createUiText(payload: UiTextData): Promise<UiTextData> {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error('Failed to create UI text.');
+    throw new Error(getUiTextValue('GLOBAL_CONFIG_CREATE_FAIL_MESSAGE', 'UI 텍스트를 생성하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to create UI text.'));
+    throw await createApiErrorFromResponse(response, getUiTextValue('GLOBAL_CONFIG_CREATE_FAIL_MESSAGE', 'UI 텍스트를 생성하지 못했습니다.'));
   }
 
   try {
     const nextUiText = toUiTextData((await response.json()) as UiTextResponse);
-    void refreshCachedUiTexts();
+    void refreshCachedUiTexts(undefined, true);
     return nextUiText;
   } catch {
-    throw new Error('Failed to parse created UI text.');
+    throw new Error(getUiTextValue('GLOBAL_CONFIG_CREATE_FAIL_MESSAGE', 'UI 텍스트를 생성하지 못했습니다.'));
   }
 }
 
@@ -313,19 +579,19 @@ export async function updateUiText(originalKey: string, originalLanguage: string
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error('Failed to update UI text.');
+    throw new Error(getUiTextValue('GLOBAL_CONFIG_UPDATE_FAIL_MESSAGE', 'UI 텍스트를 수정하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to update UI text.'));
+    throw await createApiErrorFromResponse(response, getUiTextValue('GLOBAL_CONFIG_UPDATE_FAIL_MESSAGE', 'UI 텍스트를 수정하지 못했습니다.'));
   }
 
   try {
     const nextUiText = toUiTextData((await response.json()) as UiTextResponse);
-    void refreshCachedUiTexts();
+    void refreshCachedUiTexts(undefined, true);
     return nextUiText;
   } catch {
-    throw new Error('Failed to parse updated UI text.');
+    throw new Error(getUiTextValue('GLOBAL_CONFIG_UPDATE_FAIL_MESSAGE', 'UI 텍스트를 수정하지 못했습니다.'));
   }
 }
 
@@ -338,25 +604,67 @@ export async function deleteUiText(key: string, language: string): Promise<void>
       credentials: 'include',
     });
   } catch {
-    throw new Error('Failed to delete UI text.');
+    throw new Error(getUiTextValue('GLOBAL_CONFIG_DELETE_FAIL_MESSAGE', 'UI 텍스트를 삭제하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to delete UI text.'));
+    throw await createApiErrorFromResponse(response, getUiTextValue('GLOBAL_CONFIG_DELETE_FAIL_MESSAGE', 'UI 텍스트를 삭제하지 못했습니다.'));
   }
 
-  void refreshCachedUiTexts();
+  void refreshCachedUiTexts(undefined, true);
 }
 
-export function useUiTextValue(key: string, fallbackValue: string) {
+export function getUiTextValue(key: string, fallbackValue?: string) {
+  return resolveUiTextBaseValue(key, fallbackValue);
+}
+
+export function getUiText(key: string, paramsOrFallback?: UiTextParams | string, fallbackValue?: string) {
+  const { params, fallbackValue: resolvedFallbackValue } = resolveUiTextArguments(paramsOrFallback, fallbackValue);
+  return formatUiTextTemplate(resolveUiTextBaseValue(key, resolvedFallbackValue), params);
+}
+
+export function getResolvedUiTextEntries() {
+  const mergedEntries = new Map<string, UiTextData>();
+
+  defaultUiTexts.forEach((uiText) => {
+    mergedEntries.set(uiText.key, {
+      key: uiText.key,
+      value: uiText.value,
+      language: DEFAULT_LANGUAGE,
+      description: uiText.description,
+    });
+  });
+
+  Object.values(uiTextSnapshot.items).forEach((uiText) => {
+    mergedEntries.set(uiText.key, {
+      key: uiText.key,
+      value: uiText.value ?? '',
+      language: uiText.language,
+      description: uiText.description,
+    });
+  });
+
+  return Array.from(mergedEntries.values());
+}
+
+export function useUiText() {
   const snapshot = useSyncExternalStore(subscribeUiTexts, getUiTextSnapshot, getServerUiTextSnapshot);
 
   useEffect(() => {
     void preloadUiTexts();
   }, []);
 
-  const uiText = snapshot.items[key];
-  return typeof uiText?.value === 'string' && uiText.value.trim() !== '' ? uiText.value : fallbackValue;
+  return {
+    isReady: snapshot.isReady,
+    language: snapshot.language,
+    text: getUiText,
+    value: getUiTextValue,
+  };
+}
+
+export function useUiTextValue(key: string, fallbackValue: string) {
+  const { text } = useUiText();
+  return text(key, fallbackValue);
 }
 
 export function useHomeSiteTitle(overrideTitle?: string | null) {

@@ -622,39 +622,6 @@
   overflow-x: auto;
 }
 
-.submit-history-table-shell.is-loading .submit-history-table {
-  filter: blur(1.75px);
-}
-
-.submit-history-loading-overlay {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 4;
-}
-
-.submit-history-loading-overlay::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -24%;
-  width: 24%;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
-  animation: submit-history-loading-wave 1.8s ease-in-out infinite;
-}
-
-.submit-history-loading-badge {
-  display: none;
-}
-
-@keyframes submit-history-loading-wave {
-  to {
-    transform: translateX(520%);
-  }
-}
-
 .submit-history-table {
   display: grid;
   gap: 0;
@@ -1498,9 +1465,6 @@
     background: rgba(2, 6, 23, 0.64);
   }
 
-  .submit-history-loading-overlay::before {
-    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
-  }
 }
 
 .submit-history-status-text {

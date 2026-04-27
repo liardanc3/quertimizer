@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { connectSessionSocket, disconnectSessionSocket, isSessionSocketOpen } from './sessionSocket';
 import type { SessionMeResult } from './authApi';
-import { applyAuthenticatedSession, logoutMock, syncSession, useMockSession } from './session';
+import { applyAuthenticatedSession, logoutMock, useMockSession } from './session';
 
 export async function completeAuthentication(session: SessionMeResult) {
   if (!session.authenticated) {
@@ -21,10 +21,6 @@ export function useAuthenticationSocket() {
   const { isAuthenticated, isReady } = useMockSession();
 
   useEffect(() => {
-    void syncSession();
-  }, []);
-
-  useEffect(() => {
     if (!isReady) {
       return;
     }
@@ -37,8 +33,7 @@ export function useAuthenticationSocket() {
     let isDisposed = false;
 
     async function ensureConnection() {
-      const isSessionAuthenticated = await syncSession();
-      if (isDisposed || !isSessionAuthenticated) {
+      if (isDisposed || isSessionSocketOpen()) {
         return;
       }
 

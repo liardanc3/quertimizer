@@ -7,6 +7,7 @@ import {
   type CommunityEditorSnapshot,
   type CommunityUploadedImage,
 } from '../../lib/communityTiptap';
+import { useUiText } from '../../lib/uiText';
 
 interface CommunityTiptapEditorProps {
   initialContentJson?: string;
@@ -128,6 +129,7 @@ export default function CommunityTiptapEditor({
   onUploadImage,
   onFeedback,
 }: CommunityTiptapEditorProps) {
+  const { text } = useUiText();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const lastInitialContentJsonRef = useRef(initialContentJson);
 
@@ -158,7 +160,7 @@ export default function CommunityTiptapEditor({
     }
 
     if (!file.type.startsWith('image/')) {
-      onFeedback?.('이미지 파일만 첨부할 수 있다.');
+      onFeedback?.(text('COMMUNITY_EDITOR_IMAGE_ONLY_MESSAGE', '이미지 파일만 첨부할 수 있습니다.'));
       return;
     }
 
@@ -168,13 +170,13 @@ export default function CommunityTiptapEditor({
         type: 'image',
         attrs: {
           src: uploadedImage.imageUrl,
-          alt: file.name || '첨부 이미지',
+          alt: file.name || text('COMMUNITY_EDITOR_ATTACHED_IMAGE_ALT', '첨부 이미지'),
           imageId: uploadedImage.imageId,
         },
       }).run();
       onFeedback?.(null);
     } catch (error) {
-      onFeedback?.(error instanceof Error ? error.message : '이미지 업로드에 실패했다.');
+      onFeedback?.(error instanceof Error ? error.message : text('COMMUNITY_EDITOR_IMAGE_UPLOAD_FAIL_MESSAGE', '이미지 업로드에 실패했습니다.'));
     }
   }
 
@@ -182,7 +184,7 @@ export default function CommunityTiptapEditor({
     const imageFiles = files.filter((file) => file.type.startsWith('image/'));
 
     if (files.length > 0 && imageFiles.length === 0) {
-      onFeedback?.('이미지 파일만 첨부할 수 있다.');
+      onFeedback?.(text('COMMUNITY_EDITOR_IMAGE_ONLY_MESSAGE', '이미지 파일만 첨부할 수 있습니다.'));
       return;
     }
 
@@ -236,97 +238,105 @@ export default function CommunityTiptapEditor({
       />
 
       <div className="community-editor-toolbar community-detail-editor-toolbar">
-        <div className="community-editor-tool-group" aria-label="텍스트 서식">
+        <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_TEXT_FORMAT_GROUP_LABEL', '텍스트 서식')}>
           <ToolbarButton
             icon="bold"
-            title="굵게"
+            title={text('COMMUNITY_EDITOR_BOLD_TITLE', '굵게')}
             active={editor?.isActive('bold')}
             onClick={() => editor?.chain().focus().toggleBold().run()}
           />
           <ToolbarButton
             icon="italic"
-            title="기울임"
+            title={text('COMMUNITY_EDITOR_ITALIC_TITLE', '기울임')}
             active={editor?.isActive('italic')}
             onClick={() => editor?.chain().focus().toggleItalic().run()}
           />
           <ToolbarButton
             icon="strike"
-            title="취소선"
+            title={text('COMMUNITY_EDITOR_STRIKE_TITLE', '취소선')}
             active={editor?.isActive('strike')}
             onClick={() => editor?.chain().focus().toggleStrike().run()}
           />
           <ToolbarButton
             icon="underline"
-            title="밑줄"
+            title={text('COMMUNITY_EDITOR_UNDERLINE_TITLE', '밑줄')}
             active={editor?.isActive('underline')}
             onClick={() => editor?.chain().focus().toggleUnderline().run()}
           />
           <ToolbarButton
-            label="형광"
-            title="하이라이트"
+            label={text('COMMUNITY_EDITOR_HIGHLIGHT_LABEL', '형광')}
+            title={text('COMMUNITY_EDITOR_HIGHLIGHT_TITLE', '하이라이트')}
             active={editor?.isActive('highlight')}
             onClick={() => editor?.chain().focus().toggleHighlight().run()}
           />
         </div>
 
-        <div className="community-editor-tool-group" aria-label="코드">
+        <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_CODE_GROUP_LABEL', '코드')}>
           <ToolbarButton
             icon="inlineCode"
-            title="인라인 코드"
+            title={text('COMMUNITY_EDITOR_INLINE_CODE_TITLE', '인라인 코드')}
             active={editor?.isActive('code')}
             onClick={() => editor?.chain().focus().toggleCode().run()}
           />
           <ToolbarButton
             icon="codeBlock"
-            title="코드블럭"
+            title={text('COMMUNITY_EDITOR_CODE_BLOCK_TITLE', '코드블럭')}
             active={editor?.isActive('codeBlock')}
             onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
           />
         </div>
 
-        <div className="community-editor-tool-group" aria-label="블록">
+        <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_BLOCK_GROUP_LABEL', '블록')}>
           <ToolbarButton
-            label="제목"
-            title="제목"
+            label={text('COMMUNITY_EDITOR_HEADING_LABEL', '제목')}
+            title={text('COMMUNITY_EDITOR_HEADING_LABEL', '제목')}
             active={editor?.isActive('heading', { level: 2 })}
             onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
           />
           <ToolbarButton
-            label="인용"
-            title="인용"
+            label={text('COMMUNITY_EDITOR_QUOTE_LABEL', '인용')}
+            title={text('COMMUNITY_EDITOR_QUOTE_LABEL', '인용')}
             active={editor?.isActive('blockquote')}
             onClick={() => editor?.chain().focus().toggleBlockquote().run()}
           />
         </div>
 
-        <div className="community-editor-tool-group" aria-label="목록">
+        <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_LIST_GROUP_LABEL', '목록')}>
           <ToolbarButton
-            label="글머리"
-            title="글머리 목록"
+            label={text('COMMUNITY_EDITOR_BULLET_LIST_LABEL', '글머리')}
+            title={text('COMMUNITY_EDITOR_BULLET_LIST_TITLE', '글머리 목록')}
             active={editor?.isActive('bulletList')}
             onClick={() => editor?.chain().focus().toggleBulletList().run()}
           />
           <ToolbarButton
-            label="번호"
-            title="번호 목록"
+            label={text('COMMUNITY_EDITOR_ORDERED_LIST_LABEL', '번호')}
+            title={text('COMMUNITY_EDITOR_ORDERED_LIST_TITLE', '번호 목록')}
             active={editor?.isActive('orderedList')}
             onClick={() => editor?.chain().focus().toggleOrderedList().run()}
           />
         </div>
 
-        <div className="community-editor-tool-group" aria-label="삽입">
-          <ToolbarButton label="줄바꿈" title="줄바꿈" onClick={() => editor?.chain().focus().setHardBreak().run()} />
-          <ToolbarButton label="구분선" title="구분선" onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
+        <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_INSERT_GROUP_LABEL', '삽입')}>
+          <ToolbarButton
+            label={text('COMMUNITY_EDITOR_HARD_BREAK_LABEL', '줄바꿈')}
+            title={text('COMMUNITY_EDITOR_HARD_BREAK_LABEL', '줄바꿈')}
+            onClick={() => editor?.chain().focus().setHardBreak().run()}
+          />
+          <ToolbarButton
+            label={text('COMMUNITY_EDITOR_DIVIDER_LABEL', '구분선')}
+            title={text('COMMUNITY_EDITOR_DIVIDER_LABEL', '구분선')}
+            onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+          />
           <ToolbarButton
             icon="image"
-            title="이미지"
+            title={text('COMMON_IMAGE_LABEL', '이미지')}
             onClick={() => imageInputRef.current?.click()}
           />
         </div>
 
-        <div className="community-editor-tool-group" aria-label="히스토리">
-          <ToolbarButton icon="undo" title="실행취소" onClick={() => editor?.chain().focus().undo().run()} />
-          <ToolbarButton icon="redo" title="다시실행" onClick={() => editor?.chain().focus().redo().run()} />
+        <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_HISTORY_GROUP_LABEL', '히스토리')}>
+          <ToolbarButton icon="undo" title={text('COMMUNITY_EDITOR_UNDO_TITLE', '실행취소')} onClick={() => editor?.chain().focus().undo().run()} />
+          <ToolbarButton icon="redo" title={text('COMMUNITY_EDITOR_REDO_TITLE', '다시실행')} onClick={() => editor?.chain().focus().redo().run()} />
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 
 interface AlarmBindingResponse {
   text?: string;
@@ -60,6 +61,8 @@ export interface AlarmPageData {
 
 export type AlarmSortDirection = 'asc' | 'desc';
 
+const alarmGetRequestPromises = new Map<string, Promise<unknown>>();
+
 function normalizeBinding(binding: AlarmBindingResponse): AlarmBinding {
   return {
     text: binding.text ?? '',
@@ -101,7 +104,7 @@ function normalizeAlarmPage(data: AlarmPageResponse): AlarmPageData {
   };
 }
 
-async function requestAlarm<T>(path: string, init: RequestInit, fallbackMessage: string, normalize: (data: unknown) => T): Promise<T> {
+async function executeAlarmRequest<T>(path: string, init: RequestInit, fallbackMessage: string, normalize: (data: unknown) => T): Promise<T> {
   let response: Response;
 
   try {
@@ -114,7 +117,7 @@ async function requestAlarm<T>(path: string, init: RequestInit, fallbackMessage:
   }
 
   if (!response.ok) {
-    throw new Error(fallbackMessage);
+    throw await createApiErrorFromResponse(response, fallbackMessage);
   }
 
   if (response.status === 204) {
@@ -129,6 +132,27 @@ async function requestAlarm<T>(path: string, init: RequestInit, fallbackMessage:
   }
 }
 
+function requestAlarm<T>(path: string, init: RequestInit, fallbackMessage: string, normalize: (data: unknown) => T): Promise<T> {
+  const requestMethod = (init.method ?? 'GET').toUpperCase();
+
+  if (requestMethod !== 'GET') {
+    return executeAlarmRequest(path, init, fallbackMessage, normalize);
+  }
+
+  const requestKey = `${requestMethod}:${path}`;
+  const inFlightRequest = alarmGetRequestPromises.get(requestKey);
+  if (inFlightRequest != null) {
+    return inFlightRequest as Promise<T>;
+  }
+
+  const nextRequest = executeAlarmRequest(path, init, fallbackMessage, normalize).finally(() => {
+    alarmGetRequestPromises.delete(requestKey);
+  });
+
+  alarmGetRequestPromises.set(requestKey, nextRequest);
+  return nextRequest;
+}
+
 export function fetchAlarms(page: number, pageSize?: number, createdAtSort: AlarmSortDirection = 'desc'): Promise<AlarmPageData> {
   const params = new URLSearchParams({
     page: String(page),
@@ -139,15 +163,28 @@ export function fetchAlarms(page: number, pageSize?: number, createdAtSort: Alar
     params.set('pageSize', String(pageSize));
   }
 
-  return requestAlarm(`/alarms?${params.toString()}`, { method: 'GET' }, '알람 목록을 불러오지 못했다.', (data) =>
-    normalizeAlarmPage((data ?? {}) as AlarmPageResponse),
+  return requestAlarm(
+    `/alarms?${params.toString()}`,
+    { method: 'GET' },
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+    (data) => normalizeAlarmPage((data ?? {}) as AlarmPageResponse),
   );
 }
 
 export function markAlarmRead(alarmId: number): Promise<void> {
-  return requestAlarm(`/alarms/${alarmId}/read`, { method: 'POST' }, '알람 읽음 처리에 실패했다.', () => undefined);
+  return requestAlarm(
+    `/alarms/${alarmId}/read`,
+    { method: 'POST' },
+    getUiTextValue('ALARM_READ_FAIL_MESSAGE', '알림 읽음 처리에 실패했습니다.'),
+    () => undefined,
+  );
 }
 
 export function markAllAlarmsRead(): Promise<void> {
-  return requestAlarm('/alarms/read-all', { method: 'POST' }, '알람 읽음 처리에 실패했다.', () => undefined);
+  return requestAlarm(
+    '/alarms/read-all',
+    { method: 'POST' },
+    getUiTextValue('ALARM_READ_FAIL_MESSAGE', '알림 읽음 처리에 실패했습니다.'),
+    () => undefined,
+  );
 }

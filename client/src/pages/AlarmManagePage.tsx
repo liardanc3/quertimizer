@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { fetchAdminAlarmTemplates, updateAlarmTemplate, type AlarmTemplateData } from '../lib/alarmTemplateApi';
+import { useUiText } from '../lib/uiText';
 
 interface EditableAlarmTemplateRow extends AlarmTemplateData {
   originalSentence: string;
@@ -97,10 +101,12 @@ function buildColumnTemplate(columnWidths: number[]) {
 }
 
 export function AlarmManageContent() {
+  const { text } = useUiText();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [alarmRows, setAlarmRows] = useState<EditableAlarmTemplateRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>([]);
   const [resizeState, setResizeState] = useState<ColumnResizeState | null>(null);
 
@@ -110,6 +116,7 @@ export function AlarmManageContent() {
     async function loadAlarmTemplates() {
       setIsLoading(true);
       setLoadErrorMessage(null);
+      setLoadErrorStatus(null);
 
       try {
         const loadedAlarmTemplates = await fetchAdminAlarmTemplates();
@@ -123,7 +130,9 @@ export function AlarmManageContent() {
           return;
         }
 
-        setLoadErrorMessage(error instanceof Error ? error.message : '알람 템플릿 목록을 불러오지 못했다.');
+        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -213,7 +222,7 @@ export function AlarmManageContent() {
       <button
         type="button"
         className="admin-config-column-resizer"
-        aria-label={`${label} 너비 조절`}
+        aria-label={text('COMMON_COLUMN_RESIZE_LABEL', { label }, `${label} 너비 조절`)}
         onMouseDown={(event) => {
           event.preventDefault();
           setResizeState({
@@ -309,7 +318,7 @@ export function AlarmManageContent() {
             ? {
                 ...row,
                 isSaving: false,
-                errorMessage: error instanceof Error ? error.message : '알람 템플릿 수정에 실패했다.',
+                errorMessage: error instanceof Error ? error.message : text('ALARM_TEMPLATE_UPDATE_FAIL_MESSAGE', '알람 템플릿을 수정하지 못했습니다.'),
               }
             : row,
         ),
@@ -322,7 +331,7 @@ export function AlarmManageContent() {
       <section className="admin-config-panel">
         <div className="admin-config-toolbar" aria-hidden="true" />
 
-        <div className="admin-page-loading-shell admin-config-loading-shell is-loading" aria-live="polite" aria-label="로딩 중">
+        <div className="admin-page-loading-shell admin-config-loading-shell is-loading" aria-live="polite" aria-label={text('COMMON_LOADING_STATUS', '로딩 중')}>
           <div className="admin-page-loading-body" aria-hidden="true">
             <div className="admin-page-loading-row is-wide" />
             <div className="admin-page-loading-row" />
@@ -330,9 +339,7 @@ export function AlarmManageContent() {
             <div className="admin-page-loading-row is-narrow" />
           </div>
 
-          <div className="submit-history-loading-overlay" aria-hidden="true">
-            <span className="page-loading-spinner submit-history-loading-badge" />
-          </div>
+          <LoadingOverlay ariaHidden />
         </div>
       </section>
     );
@@ -341,23 +348,27 @@ export function AlarmManageContent() {
   return (
     <section className="admin-config-panel">
       <div className="admin-config-toolbar" aria-hidden="true" />
-      {loadErrorMessage ? <PageLoadFailureState className="admin-config-empty" /> : null}
+      {loadErrorMessage
+        ? loadErrorStatus != null
+          ? <HttpErrorState status={loadErrorStatus} className="admin-config-empty" message={loadErrorMessage} />
+          : <PageLoadFailureState className="admin-config-empty" message={loadErrorMessage} />
+        : null}
 
       {loadErrorMessage ? null : alarmRows.length === 0 ? (
-        <div className="admin-config-empty">등록된 알람 템플릿이 없다.</div>
+        <div className="admin-config-empty">{text('ALARM_TEMPLATE_EMPTY_STATE', '등록된 알람 템플릿이 없습니다.')}</div>
       ) : (
-        <div className="admin-config-table" ref={gridRef} role="table" aria-label="알람 템플릿 목록">
+        <div className="admin-config-table" ref={gridRef} role="table" aria-label={text('ALARM_TEMPLATE_TABLE_LABEL', '알람 템플릿 목록')}>
           <div className="admin-config-header" role="row" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
             <div className="admin-config-header-cell">
-              <span>type</span>
-              {renderResizer(0, 'type')}
+              <span>{text('COMMON_TYPE_LABEL', 'type')}</span>
+              {renderResizer(0, text('COMMON_TYPE_LABEL', 'type'))}
             </div>
             <div className="admin-config-header-cell">
-              <span>sentence</span>
-              {renderResizer(1, 'sentence')}
+              <span>{text('ALARM_TEMPLATE_SENTENCE_COLUMN_LABEL', 'sentence')}</span>
+              {renderResizer(1, text('ALARM_TEMPLATE_SENTENCE_COLUMN_LABEL', 'sentence'))}
             </div>
             <div className="admin-config-header-cell">
-              <span>description</span>
+              <span>{text('COMMON_DESCRIPTION_LABEL', 'description')}</span>
             </div>
             <div className="admin-config-header-cell admin-config-header-cell-actions" aria-hidden="true" />
           </div>
@@ -366,13 +377,13 @@ export function AlarmManageContent() {
             <div key={row.type} className="admin-config-row" role="row">
               <div className="admin-config-row-grid" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
                 <div className="admin-config-field">
-                  <span className="admin-config-field-label">type</span>
+                  <span className="admin-config-field-label">{text('COMMON_TYPE_LABEL', 'type')}</span>
                   <div className="admin-config-display">{row.type}</div>
-                  {renderResizer(0, 'type')}
+                  {renderResizer(0, text('COMMON_TYPE_LABEL', 'type'))}
                 </div>
 
                 <div className="admin-config-field">
-                  <span className="admin-config-field-label">sentence</span>
+                  <span className="admin-config-field-label">{text('ALARM_TEMPLATE_SENTENCE_COLUMN_LABEL', 'sentence')}</span>
                   {row.isEditing ? (
                     <textarea
                       className="text-field admin-config-textarea"
@@ -382,11 +393,11 @@ export function AlarmManageContent() {
                   ) : (
                     <div className="admin-config-display admin-config-display-multiline">{row.sentence}</div>
                   )}
-                  {renderResizer(1, 'sentence')}
+                  {renderResizer(1, text('ALARM_TEMPLATE_SENTENCE_COLUMN_LABEL', 'sentence'))}
                 </div>
 
                 <div className="admin-config-field">
-                  <span className="admin-config-field-label">description</span>
+                  <span className="admin-config-field-label">{text('COMMON_DESCRIPTION_LABEL', 'description')}</span>
                   {row.isEditing ? (
                     <input
                       type="text"
@@ -407,7 +418,7 @@ export function AlarmManageContent() {
                         className="btn text admin-config-icon-button"
                         onClick={() => void handleSave(row.type)}
                         disabled={row.isSaving}
-                        aria-label={`${row.type} 저장`}
+                        aria-label={text('ALARM_TEMPLATE_SAVE_LABEL', { type: row.type }, `${row.type} 저장`)}
                       >
                         <CheckIcon />
                       </button>
@@ -416,7 +427,7 @@ export function AlarmManageContent() {
                         className="btn text admin-config-icon-button"
                         onClick={() => handleCancelEditing(row.type)}
                         disabled={row.isSaving}
-                        aria-label={`${row.type} 수정 취소`}
+                        aria-label={text('ALARM_TEMPLATE_EDIT_CANCEL_LABEL', { type: row.type }, `${row.type} 수정 취소`)}
                       >
                         <CloseIcon />
                       </button>
@@ -426,7 +437,7 @@ export function AlarmManageContent() {
                       type="button"
                       className="btn text admin-config-icon-button"
                       onClick={() => handleStartEditing(row.type)}
-                      aria-label={`${row.type} 수정`}
+                      aria-label={text('ALARM_TEMPLATE_EDIT_LABEL', { type: row.type }, `${row.type} 수정`)}
                     >
                       <EditIcon />
                     </button>

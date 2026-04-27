@@ -1,10 +1,14 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { getLocationSearchSnapshot, getProfilePath, RANKING_PATH, subscribeLocation, navigate } from '../lib/navigation';
 import { fetchRanks, type RankPage } from '../lib/rankApi';
+import { useUiText } from '../lib/uiText';
 import type { DbmsType, RankingMetricKey } from '../types/domain';
 import './HomePage.css';
 import './SubmitHistoryPage.css';
@@ -13,10 +17,7 @@ import './RankingPage.css';
 const PAGE_SIZE = 10;
 const rankingLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 
-const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
-  { value: 'postgresql', label: 'PostgreSQL' },
-  { value: 'oracle', label: 'Oracle' },
-];
+const dbmsOptions: DbmsType[] = ['postgresql', 'oracle'];
 
 function readRankingDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
@@ -89,6 +90,7 @@ function formatPercentile(value: number) {
 }
 
 export default function RankingPage() {
+  const { text } = useUiText();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<RankingPageFavoriteSnapshot>('ranking'), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readRankingDbmsFromSearch(window.location.search));
@@ -101,6 +103,8 @@ export default function RankingPage() {
   const [rankPage, setRankPage] = useState<RankPage>(createEmptyRankPage());
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
   const linkMenuRef = useRef<HTMLButtonElement | null>(null);
 
@@ -146,6 +150,8 @@ export default function RankingPage() {
     async function loadRanks() {
       setIsLoading(true);
       setLoadFailed(false);
+      setLoadErrorMessage(null);
+      setLoadErrorStatus(null);
 
       try {
         const fetchedRankPage = await fetchRanks({
@@ -164,12 +170,15 @@ export default function RankingPage() {
         if (fetchedRankPage.currentPage !== requestedPage) {
           setRequestedPage(fetchedRankPage.currentPage);
         }
-      } catch {
+      } catch (error) {
         if (cancelled) {
           return;
         }
 
         setLoadFailed(true);
+        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -266,9 +275,9 @@ export default function RankingPage() {
     const nextLeft = Math.max(12, Math.min(rect.left, maxLeft));
 
     setLinkMenuState({
-      label: `${handle} 프로필로 이동`,
+      label: text('RANKING_PROFILE_MOVE_LABEL', { handle }, '{handle} 프로필로 이동'),
       path: getProfilePath(handle),
-      ariaLabel: `${handle} 프로필 이동`,
+      ariaLabel: text('RANKING_PROFILE_MOVE_MENU_LABEL', { handle }, '{handle} 프로필 이동'),
       left: nextLeft,
       top: rect.bottom + 8,
     });
@@ -299,13 +308,14 @@ export default function RankingPage() {
     <div className="page-stack ranking-page submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card ranking-toolbar-card">
         <div className="problem-toolbar home-problem-toolbar-stack submit-history-toolbar-stack ranking-toolbar-stack">
-          <div className="solve-dbms-tab-row ranking-dbms-tab-row" role="tablist" aria-label="랭킹 DBMS 선택">
-            {dbmsOptions.map((option) => {
-              const isSelected = option.value === selectedDbms;
+          <div className="solve-dbms-tab-row ranking-dbms-tab-row" role="tablist" aria-label={text('RANKING_DBMS_TABLIST_LABEL', '랭킹 DBMS 선택')}>
+            {dbmsOptions.map((dbmsOption) => {
+              const isSelected = dbmsOption === selectedDbms;
+              const dbmsLabel = dbmsOption === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
 
               return (
                 <button
-                  key={option.value}
+                  key={dbmsOption}
                   type="button"
                   className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
                   role="tab"
@@ -313,18 +323,22 @@ export default function RankingPage() {
                   onClick={() => {
                     if (!isSelected) {
                       setIsLoading(true);
-                      setSelectedDbms(option.value);
+                      setSelectedDbms(dbmsOption);
                       setRequestedPage(1);
                     }
                   }}
                 >
-                  {option.label}
+                  {dbmsLabel}
                 </button>
               );
             })}
             <FavoriteTabButton
               className="favorite-tab-toggle-end"
-              label={`랭킹 / ${selectedDbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}`}
+              label={text(
+                'RANKING_FAVORITE_LABEL',
+                { dbms: selectedDbms === 'oracle' ? text('COMMON_ORACLE_LABEL', 'Oracle') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                '랭킹 / {dbms}',
+              )}
               path={buildRankingPath(selectedDbms)}
               snapshot={{
                 kind: 'ranking',
@@ -352,11 +366,11 @@ export default function RankingPage() {
                 value={draftQuery}
                 onChange={(event) => setDraftQuery(event.target.value)}
                 className="text-field problem-search-input home-problem-search-input ranking-search-input"
-                placeholder="Handle 검색"
-                aria-label="Handle 검색"
+                placeholder={text('RANKING_HANDLE_SEARCH_PLACEHOLDER', 'Handle 검색')}
+                aria-label={text('RANKING_HANDLE_SEARCH_LABEL', 'Handle 검색')}
               />
-              <button type="submit" className="problem-search-button home-problem-search-button" aria-label="Handle 검색 실행">
-                검색
+              <button type="submit" className="problem-search-button home-problem-search-button" aria-label={text('RANKING_HANDLE_SEARCH_SUBMIT_LABEL', 'Handle 검색 실행')}>
+                {text('COMMON_SEARCH_BUTTON', '검색')}
               </button>
             </label>
           </form>
@@ -365,18 +379,20 @@ export default function RankingPage() {
 
       <section className="panel-card problem-board submit-history-board ranking-board">
         {loadFailed ? (
-          <PageLoadFailureState className="submit-history-empty-state" />
+          loadErrorStatus != null
+            ? <HttpErrorState status={loadErrorStatus} message={loadErrorMessage} />
+            : <PageLoadFailureState message={loadErrorMessage} />
         ) : (
-          <div className={`submit-history-table ranking-table ${isLoading ? 'is-loading' : ''}`} role="table" aria-label="랭킹 목록">
+          <div className={`submit-history-table ranking-table ${isLoading ? 'is-loading' : ''}`} role="table" aria-label={text('RANKING_TABLE_LABEL', '랭킹 목록')}>
             <div className="submit-history-row submit-history-head ranking-head" role="row">
-              <div role="columnheader" className="submit-history-head-cell">순위</div>
-              <div role="columnheader" className="submit-history-head-cell ranking-head-handle-cell">Handle</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('RANKING_RANK_COLUMN_LABEL', '순위')}</div>
+              <div role="columnheader" className="submit-history-head-cell ranking-head-handle-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
               <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                <span>해결한 문제</span>
+                <span>{text('RANKING_SOLVED_COLUMN_LABEL', '해결한 문제')}</span>
                 <button
                   type="button"
                   className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'solvedCount' ? 'is-active' : ''}`}
-                  aria-label="해결한 문제 내림차순 정렬"
+                  aria-label={text('RANKING_SOLVED_SORT_DESC_LABEL', '해결한 문제 내림차순 정렬')}
                   onClick={() => {
                     if (sortKey !== 'solvedCount') {
                       setIsLoading(true);
@@ -389,11 +405,11 @@ export default function RankingPage() {
                 </button>
               </div>
               <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                <span>평균 Cost 백분위</span>
+                <span>{text('RANKING_COST_PERCENTILE_COLUMN_LABEL', '평균 Cost 백분위')}</span>
                 <button
                   type="button"
                   className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${sortKey === 'avgExecutionPercentile' ? 'is-active' : ''}`}
-                  aria-label="평균 Cost 백분위 오름차순 정렬"
+                  aria-label={text('RANKING_COST_PERCENTILE_SORT_ASC_LABEL', '평균 Cost 백분위 오름차순 정렬')}
                   onClick={() => {
                     if (sortKey !== 'avgExecutionPercentile') {
                       setIsLoading(true);
@@ -405,8 +421,8 @@ export default function RankingPage() {
                   {sortKey === 'avgExecutionPercentile' ? <SortAscendingIcon /> : <SortNeutralIcon />}
                 </button>
               </div>
-              <div role="columnheader" className="submit-history-head-cell">전체 제출 수</div>
-              <div role="columnheader" className="submit-history-head-cell">정답 제출 수</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('RANKING_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출 수')}</div>
+              <div role="columnheader" className="submit-history-head-cell">{text('RANKING_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출 수')}</div>
             </div>
 
             {isLoading && rankedEntries.length === 0 ? (
@@ -423,58 +439,54 @@ export default function RankingPage() {
             ) : rankedEntries.length === 0 ? (
               <div className="submit-history-row submit-history-empty-row" role="row">
                 <span className="submit-history-empty-cell" role="cell">
-                  조건에 맞는 랭킹이 없습니다.
+                  {text('RANKING_EMPTY_STATE', '조건에 맞는 랭킹이 없습니다.')}
                 </span>
               </div>
             ) : (
               rankedEntries.map((entry) => (
                 <article key={`${selectedDbms}-${entry.handle}`} className="submit-history-row submit-history-body ranking-body" role="row">
-                  <span className="submit-history-cell" role="cell" data-label="순위">
+                  <span className="submit-history-cell" role="cell" data-label={text('RANKING_RANK_COLUMN_LABEL', '순위')}>
                     {entry.rank}
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="Handle">
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
                     <button
                       type="button"
                       className="submit-history-link-button"
                       onClick={(event) => openHandleMenu(entry.handle, event.currentTarget)}
-                      aria-label={`${entry.handle} Handle 메뉴 열기`}
+                      aria-label={text('RANKING_HANDLE_MENU_OPEN_LABEL', { handle: entry.handle }, '{handle} Handle 메뉴 열기')}
                     >
                       {entry.handle}
                     </button>
                   </span>
-                  <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label="해결한 문제">
+                  <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label={text('RANKING_SOLVED_COLUMN_LABEL', '해결한 문제')}>
                     {entry.solvedCount}
                   </span>
-                  <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label="평균 Cost 백분위">
+                  <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label={text('RANKING_COST_PERCENTILE_COLUMN_LABEL', '평균 Cost 백분위')}>
                     {formatPercentile(entry.avgExecutionPercentile)}
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="전체 제출 수">
+                  <span className="submit-history-cell" role="cell" data-label={text('RANKING_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출 수')}>
                     {entry.totalSubmitCount}
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label="정답 제출 수">
+                  <span className="submit-history-cell" role="cell" data-label={text('RANKING_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출 수')}>
                     {entry.successSubmitCount}
                   </span>
                 </article>
               ))
             )}
 
-            {isLoading ? (
-              <div className="ranking-table-loading-overlay" aria-live="polite" aria-label="로딩 중">
-                <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-              </div>
-            ) : null}
+            {isLoading ? <LoadingOverlay className="ranking-table-loading-overlay" /> : null}
           </div>
         )}
 
         {!loadFailed && rankPage.totalCount > 0 ? (
-          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="랭킹 페이지">
+          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('RANKING_PAGE_LABEL', '랭킹 페이지')}>
             <button
               type="button"
               className="mini-toggle problem-page-button"
               onClick={() => requestRankPage(rankPage.currentPage - 1)}
               disabled={rankPage.currentPage === 1}
             >
-              이전
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isPageJumpEditing ? (
@@ -482,7 +494,7 @@ export default function RankingPage() {
                 type="text"
                 inputMode="numeric"
                 className="problem-pagination-meta-input"
-                aria-label="이동할 랭킹 페이지 입력"
+                aria-label={text('RANKING_PAGE_INPUT_LABEL', '이동할 랭킹 페이지 입력')}
                 value={pageJumpDraft}
                 onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
                 onBlur={applyPageJump}
@@ -504,7 +516,7 @@ export default function RankingPage() {
               <button
                 type="button"
                 className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label="이동할 랭킹 페이지 입력 열기"
+                aria-label={text('RANKING_PAGE_INPUT_OPEN_LABEL', '이동할 랭킹 페이지 입력 열기')}
                 onClick={() => {
                   setPageJumpDraft(String(rankPage.currentPage));
                   setIsPageJumpEditing(true);
@@ -520,7 +532,7 @@ export default function RankingPage() {
               onClick={() => requestRankPage(rankPage.currentPage + 1)}
               disabled={rankPage.currentPage >= rankPage.totalPages}
             >
-              다음
+              {text('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}

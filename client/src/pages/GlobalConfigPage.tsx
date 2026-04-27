@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
-import { createUiText, deleteUiText, fetchAdminUiTexts, updateUiText, type UiTextData } from '../lib/uiText';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
+import { createUiText, deleteUiText, fetchAdminUiTexts, getUiTextValue, updateUiText, useUiText, type UiTextData } from '../lib/uiText';
+import { defaultUiTextMap } from '../lib/defaultUiTexts';
 
 interface EditableUiTextRow extends UiTextData {
   rowId: string;
@@ -22,11 +26,13 @@ interface ColumnResizeState {
   startWidths: number[];
 }
 
-const ADMIN_CONFIG_COLUMN_WEIGHTS = [0.95, 3.7, 0.85, 3.3];
-const ADMIN_CONFIG_MINIMUM_WEIGHTS = [0.78, 2, 0.72, 1.85];
+const ADMIN_CONFIG_PAGE_SIZE = 10;
+const ADMIN_CONFIG_COLUMN_WEIGHTS = [4, 4, 1, 2];
+const ADMIN_CONFIG_MINIMUM_WEIGHTS = [2.2, 2.2, 0.72, 1.3];
 const ADMIN_CONFIG_ACTIONS_WIDTH = 68;
 const ADMIN_CONFIG_COLUMN_GAP = 6;
 const NOTIFICATION_UI_TEXT_KEY = 'NOTIFICATION';
+const ADMIN_CONFIG_AVAILABLE_KEYS = Object.keys(defaultUiTextMap).sort((left, right) => left.localeCompare(right));
 
 function toEditableRow(uiText: UiTextData): EditableUiTextRow {
   return {
@@ -189,46 +195,73 @@ function resolveColumnWidths(containerWidth: number, initialWeights: number[]) {
 
 export function GlobalConfigContent() {
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const { text } = useUiText();
   const [uiTextRows, setUiTextRows] = useState<EditableUiTextRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>([]);
   const [resizeState, setResizeState] = useState<ColumnResizeState | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
+  const [pageJumpDraft, setPageJumpDraft] = useState('1');
+  const loadSequenceRef = useRef(0);
+  const keyLabel = text('COMMON_KEY_LABEL', 'key');
+  const valueLabel = text('COMMON_VALUE_LABEL', 'value');
+  const languageLabel = text('COMMON_LANGUAGE_LABEL', 'language');
+  const descriptionLabel = text('COMMON_DESCRIPTION_LABEL', 'description');
+  const hasActiveSearchQuery = searchQuery.trim() !== '';
+  const availableKeys = useMemo(() => ADMIN_CONFIG_AVAILABLE_KEYS, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  async function loadUiTexts(page: number, query: string) {
+    const loadSequence = loadSequenceRef.current + 1;
+    loadSequenceRef.current = loadSequence;
+    setIsLoading(true);
+    setLoadErrorMessage(null);
+    setLoadErrorStatus(null);
 
-    async function loadUiTexts() {
-      setIsLoading(true);
-      setLoadErrorMessage(null);
+    try {
+      const loadedPage = await fetchAdminUiTexts({
+        page,
+        pageSize: ADMIN_CONFIG_PAGE_SIZE,
+        query,
+      });
 
-      try {
-        const loadedUiTexts = await fetchAdminUiTexts();
+      if (loadSequence !== loadSequenceRef.current) {
+        return;
+      }
 
-        if (cancelled) {
-          return;
-        }
+      setUiTextRows(sortUiTextRows(loadedPage.uiTexts.map(toEditableRow)));
+      setTotalPages(loadedPage.totalPages);
 
-        setUiTextRows(sortUiTextRows(loadedUiTexts.map(toEditableRow)));
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
+      if (loadedPage.currentPage !== page) {
+        setCurrentPage(loadedPage.currentPage);
+      }
 
-        setLoadErrorMessage(error instanceof Error ? error.message : 'UI 텍스트 목록을 불러오지 못했다.');
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+      if (!isPageJumpEditing) {
+        setPageJumpDraft(String(loadedPage.currentPage));
+      }
+    } catch (error) {
+      if (loadSequence !== loadSequenceRef.current) {
+        return;
+      }
+
+      setLoadErrorMessage(error instanceof Error ? error.message : getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+      const status = getApiErrorStatus(error);
+      setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
+    } finally {
+      if (loadSequence === loadSequenceRef.current) {
+        setIsLoading(false);
       }
     }
+  }
 
-    void loadUiTexts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useEffect(() => {
+    void loadUiTexts(currentPage, searchQuery);
+  }, [currentPage, searchQuery]);
 
   useEffect(() => {
     const animationFrameId = window.requestAnimationFrame(() => {
@@ -313,15 +346,11 @@ export function GlobalConfigContent() {
         return currentRows;
       }
 
-      const existingKeys = Array.from(
-        new Set(currentRows.filter((row) => !row.isNew).map((row) => row.key)),
-      ).sort((left, right) => left.localeCompare(right));
-
-      if (existingKeys.length === 0) {
+      if (availableKeys.length === 0) {
         return currentRows;
       }
 
-      return sortUiTextRows([createNewRow(existingKeys), ...currentRows]);
+      return sortUiTextRows([createNewRow(availableKeys), ...currentRows]);
     });
   }
 
@@ -387,27 +416,23 @@ export function GlobalConfigContent() {
     );
 
     try {
-      const nextUiText = targetRow.isNew
-        ? await createUiText({
-            key: targetRow.key,
-            value: targetRow.value,
-            language: targetRow.language,
-            description: targetRow.description,
-          })
-        : await updateUiText(targetRow.originalKey, targetRow.originalLanguage, {
+      if (targetRow.isNew) {
+        await createUiText({
             key: targetRow.key,
             value: targetRow.value,
             language: targetRow.language,
             description: targetRow.description,
           });
+      } else {
+        await updateUiText(targetRow.originalKey, targetRow.originalLanguage, {
+            key: targetRow.key,
+            value: targetRow.value,
+            language: targetRow.language,
+            description: targetRow.description,
+          });
+      }
 
-      setUiTextRows((currentRows) =>
-        sortUiTextRows(
-          currentRows.map((row) =>
-            isSameRow(row, rowId) ? toEditableRow(nextUiText) : row,
-          ),
-        ),
-      );
+      await loadUiTexts(currentPage, searchQuery);
     } catch (error) {
       setUiTextRows((currentRows) =>
         currentRows.map((row) =>
@@ -416,7 +441,13 @@ export function GlobalConfigContent() {
                 ...row,
                 isEditing: true,
                 isSaving: false,
-                errorMessage: error instanceof Error ? error.message : 'UI 텍스트를 수정하지 못했다.',
+                errorMessage:
+                  error instanceof Error
+                    ? error.message
+                    : getUiTextValue(
+                        targetRow.isNew ? 'GLOBAL_CONFIG_CREATE_FAIL_MESSAGE' : 'GLOBAL_CONFIG_UPDATE_FAIL_MESSAGE',
+                        targetRow.isNew ? 'UI 텍스트를 생성하지 못했습니다.' : 'UI 텍스트를 수정하지 못했습니다.',
+                      ),
               }
             : row,
         ),
@@ -444,10 +475,7 @@ export function GlobalConfigContent() {
 
     try {
       await deleteUiText(targetRow.originalKey, targetRow.originalLanguage);
-
-      setUiTextRows((currentRows) =>
-        currentRows.filter((row) => !isSameRow(row, rowId)),
-      );
+      await loadUiTexts(currentPage, searchQuery);
     } catch (error) {
       setUiTextRows((currentRows) =>
         currentRows.map((row) =>
@@ -455,7 +483,7 @@ export function GlobalConfigContent() {
             ? {
                 ...row,
                 isSaving: false,
-                errorMessage: error instanceof Error ? error.message : 'UI 텍스트를 삭제하지 못했다.',
+                errorMessage: error instanceof Error ? error.message : getUiTextValue('GLOBAL_CONFIG_DELETE_FAIL_MESSAGE', 'UI 텍스트를 삭제하지 못했습니다.'),
               }
             : row,
         ),
@@ -463,13 +491,47 @@ export function GlobalConfigContent() {
     }
   }
 
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextQuery = searchDraft.trim();
+
+    setSearchQuery(nextQuery);
+    setCurrentPage(1);
+    setIsPageJumpEditing(false);
+    setPageJumpDraft('1');
+  }
+
+  function handleResetSearch() {
+    setSearchDraft('');
+    setSearchQuery('');
+    setCurrentPage(1);
+    setIsPageJumpEditing(false);
+    setPageJumpDraft('1');
+  }
+
+  function applyPageJump() {
+    const parsedPage = Number.parseInt(pageJumpDraft, 10);
+    const nextPage = Number.isNaN(parsedPage)
+      ? currentPage
+      : Math.min(totalPages, Math.max(1, parsedPage));
+
+    setPageJumpDraft(String(nextPage));
+    setIsPageJumpEditing(false);
+
+    if (nextPage !== currentPage) {
+      setCurrentPage(nextPage);
+    }
+  }
+
+  function cancelPageJump() {
+    setPageJumpDraft(String(currentPage));
+    setIsPageJumpEditing(false);
+  }
+
   const resolvedColumnWidths =
     columnWidths.length === ADMIN_CONFIG_COLUMN_WEIGHTS.length
       ? columnWidths
       : resolveColumnWidths(0, ADMIN_CONFIG_COLUMN_WEIGHTS);
-  const availableKeys = Array.from(
-    new Set(uiTextRows.filter((row) => !row.isNew).map((row) => row.key)),
-  ).sort((left, right) => left.localeCompare(right));
   const hasPendingNewRow = uiTextRows.some((row) => row.isNew);
   const columnTemplate = buildColumnTemplate(resolvedColumnWidths);
   const rowTemplate = `${columnTemplate} ${ADMIN_CONFIG_ACTIONS_WIDTH}px`;
@@ -489,7 +551,7 @@ export function GlobalConfigContent() {
       <button
         type="button"
         className="admin-config-column-resizer"
-        aria-label={`${label} 너비 조절`}
+        aria-label={text('GLOBAL_CONFIG_COLUMN_RESIZE_LABEL', { label }, '{label} 너비 조절')}
         onMouseDown={(event) => {
           event.preventDefault();
           setResizeState({
@@ -503,24 +565,55 @@ export function GlobalConfigContent() {
   }
 
   return (
-    <section className="admin-config-panel">
-      <div className="admin-config-toolbar">
-        <button
-          type="button"
-          className="btn text admin-config-icon-button admin-config-add-button"
-          onClick={handleAddUiText}
-          disabled={isLoading || hasPendingNewRow || availableKeys.length === 0}
-          aria-label="추가"
-          title="추가"
-        >
-          <PlusIcon />
-        </button>
-      </div>
+    <section className="admin-config-panel is-global-config-panel">
+      <form className="admin-config-toolbar admin-config-toolbar-form admin-config-search-form" onSubmit={handleSearchSubmit}>
+        <label className="problem-search-field admin-config-search-field">
+          <input
+            type="search"
+            className="text-field problem-search-input home-problem-search-input submit-history-search-input admin-config-search-input"
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.target.value)}
+            placeholder={text('GLOBAL_CONFIG_SEARCH_PLACEHOLDER', 'key, value, description 검색')}
+            aria-label={text('GLOBAL_CONFIG_SEARCH_LABEL', 'UI 텍스트 검색')}
+          />
+          <button
+            type="submit"
+            className="btn secondary problem-search-button admin-config-search-button"
+            aria-label={text('COMMON_SEARCH_BUTTON', '검색')}
+          />
+        </label>
 
-      {loadErrorMessage && !isLoading ? <PageLoadFailureState className="admin-config-empty" /> : null}
+        <div className="admin-config-toolbar-actions">
+          {hasActiveSearchQuery || searchDraft.trim() !== '' ? (
+            <button type="button" className="btn text admin-config-toolbar-button" onClick={handleResetSearch}>
+              {text('COMMON_CANCEL_BUTTON', '취소')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn text admin-config-icon-button admin-config-add-button"
+            onClick={handleAddUiText}
+            disabled={isLoading || hasPendingNewRow || availableKeys.length === 0}
+            aria-label={text('COMMON_ADD_BUTTON', '추가')}
+            title={text('COMMON_ADD_BUTTON', '추가')}
+          >
+            <PlusIcon />
+          </button>
+        </div>
+      </form>
+
+      {loadErrorMessage && !isLoading
+        ? loadErrorStatus != null
+          ? <HttpErrorState status={loadErrorStatus} className="admin-config-empty" message={loadErrorMessage} />
+          : <PageLoadFailureState className="admin-config-empty" message={loadErrorMessage} />
+        : null}
 
       {isLoading ? (
-        <div className="admin-page-loading-shell admin-config-loading-shell is-loading" aria-live="polite" aria-label="로딩 중">
+        <div
+          className="admin-page-loading-shell admin-config-loading-shell is-loading"
+          aria-live="polite"
+          aria-label={text('COMMON_LOADING_STATUS', '로딩 중')}
+        >
           <div className="admin-page-loading-body" aria-hidden="true">
             <div className="admin-page-loading-row is-wide" />
             <div className="admin-page-loading-row" />
@@ -529,162 +622,223 @@ export function GlobalConfigContent() {
             <div className="admin-page-loading-row is-narrow" />
           </div>
 
-          <div className="submit-history-loading-overlay" aria-hidden="true">
-            <span className="page-loading-spinner submit-history-loading-badge" />
-          </div>
+          <LoadingOverlay ariaHidden />
         </div>
       ) : loadErrorMessage ? null : uiTextRows.length === 0 ? (
-        <div className="admin-config-empty">등록된 UI 텍스트가 없다.</div>
+        <div className="admin-config-empty">
+          {hasActiveSearchQuery
+            ? text('GLOBAL_CONFIG_SEARCH_EMPTY_STATE', '검색 결과가 없습니다.')
+            : text('GLOBAL_CONFIG_EMPTY_STATE', '등록된 UI 텍스트가 없습니다.')}
+        </div>
       ) : (
-        <div className="admin-config-table" ref={gridRef} role="table" aria-label="UI 텍스트 목록">
-          <div className="admin-config-header" role="row" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
-            <div className="admin-config-header-cell">
-              <span>key</span>
-              {renderResizer(0, 'key')}
+        <>
+          <div className="admin-config-table" ref={gridRef} role="table" aria-label={text('GLOBAL_CONFIG_TABLE_LABEL', 'UI 텍스트 목록')}>
+            <div className="admin-config-header" role="row" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
+              <div className="admin-config-header-cell">
+                <span>{keyLabel}</span>
+                {renderResizer(0, keyLabel)}
+              </div>
+              <div className="admin-config-header-cell">
+                <span>{valueLabel}</span>
+                {renderResizer(1, valueLabel)}
+              </div>
+              <div className="admin-config-header-cell">
+                <span>{languageLabel}</span>
+                {renderResizer(2, languageLabel)}
+              </div>
+              <div className="admin-config-header-cell">
+                <span>{descriptionLabel}</span>
+              </div>
+              <div className="admin-config-header-cell admin-config-header-cell-actions" aria-hidden="true" />
             </div>
-            <div className="admin-config-header-cell">
-              <span>value</span>
-              {renderResizer(1, 'value')}
-            </div>
-            <div className="admin-config-header-cell">
-              <span>language</span>
-              {renderResizer(2, 'language')}
-            </div>
-            <div className="admin-config-header-cell">
-              <span>description</span>
-            </div>
-            <div className="admin-config-header-cell admin-config-header-cell-actions" aria-hidden="true" />
-          </div>
 
-          {uiTextRows.map((row) => (
-            <div key={row.rowId} className="admin-config-row" role="row">
-              <div className="admin-config-row-grid" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
-                <div className="admin-config-field">
-                  <span className="admin-config-field-label">key</span>
-                  {row.isNew ? (
-                    <select
-                      className="text-field admin-config-input admin-config-select"
-                      value={row.key}
-                      onChange={(event) => handleRowChange(row.rowId, 'key', event.target.value)}
-                      disabled={row.isSaving}
-                    >
-                      {availableKeys.map((keyOption) => (
-                        <option key={keyOption} value={keyOption}>
-                          {keyOption}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="admin-config-display">{row.key}</div>
-                  )}
-                  {renderResizer(0, 'key')}
-                </div>
-
-                <div className="admin-config-field">
-                  <span className="admin-config-field-label">value</span>
-                  {row.isEditing ? (
-                    <textarea
-                      className="text-field admin-config-textarea"
-                      rows={1}
-                      value={row.value}
-                      onChange={(event) => {
-                        resizeTextareaHeight(event.currentTarget);
-                        handleRowChange(row.rowId, 'value', event.currentTarget.value);
-                      }}
-                      disabled={row.isSaving}
-                    />
-                  ) : (
-                    <div className="admin-config-display admin-config-display-multiline">{row.value}</div>
-                  )}
-                  {renderResizer(1, 'value')}
-                </div>
-
-                <div className="admin-config-field">
-                  <span className="admin-config-field-label">language</span>
-                  {row.isEditing ? (
-                    <input
-                      className="text-field admin-config-input"
-                      value={row.language}
-                      onChange={(event) => handleRowChange(row.rowId, 'language', event.target.value)}
-                      disabled={row.isSaving}
-                    />
-                  ) : (
-                    <div className="admin-config-display">{row.language}</div>
-                  )}
-                  {renderResizer(2, 'language')}
-                </div>
-
-                <div className="admin-config-field">
-                  <span className="admin-config-field-label">description</span>
-                  {row.isEditing ? (
-                    <input
-                      className="text-field admin-config-input"
-                      value={row.description}
-                      onChange={(event) => handleRowChange(row.rowId, 'description', event.target.value)}
-                      disabled={row.isSaving}
-                    />
-                  ) : (
-                    <div className="admin-config-display admin-config-display-multiline">{row.description}</div>
-                  )}
-                </div>
-
-                <div className="admin-config-actions">
-                  {row.isEditing ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn text admin-config-icon-button"
-                        onClick={() => void handleSaveUiText(row.rowId)}
+            {uiTextRows.map((row) => (
+              <div key={row.rowId} className="admin-config-row" role="row">
+                <div className="admin-config-row-grid" style={{ gridTemplateColumns: rowTemplate, columnGap: rowGap, width: rowWidth }}>
+                  <div className="admin-config-field">
+                    <span className="admin-config-field-label">{keyLabel}</span>
+                    {row.isNew ? (
+                      <select
+                        className="text-field admin-config-input admin-config-select"
+                        value={row.key}
+                        onChange={(event) => handleRowChange(row.rowId, 'key', event.target.value)}
                         disabled={row.isSaving}
-                        aria-label="저장"
-                        title="저장"
                       >
-                        <CheckIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn text admin-config-icon-button"
-                        onClick={() => handleCancelEditing(row.rowId)}
+                        {availableKeys.map((keyOption) => (
+                          <option key={keyOption} value={keyOption}>
+                            {keyOption}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="admin-config-display">{row.key}</div>
+                    )}
+                    {renderResizer(0, keyLabel)}
+                  </div>
+
+                  <div className="admin-config-field">
+                    <span className="admin-config-field-label">{valueLabel}</span>
+                    {row.isEditing ? (
+                      <textarea
+                        className="text-field admin-config-textarea"
+                        rows={1}
+                        value={row.value}
+                        onChange={(event) => {
+                          resizeTextareaHeight(event.currentTarget);
+                          handleRowChange(row.rowId, 'value', event.currentTarget.value);
+                        }}
                         disabled={row.isSaving}
-                        aria-label="취소"
-                        title="취소"
-                      >
-                        <CloseIcon />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="btn text admin-config-icon-button"
-                        onClick={() => handleStartEditing(row.rowId)}
+                      />
+                    ) : (
+                      <div className="admin-config-display admin-config-display-multiline">{row.value}</div>
+                    )}
+                    {renderResizer(1, valueLabel)}
+                  </div>
+
+                  <div className="admin-config-field">
+                    <span className="admin-config-field-label">{languageLabel}</span>
+                    {row.isEditing ? (
+                      <input
+                        className="text-field admin-config-input"
+                        value={row.language}
+                        onChange={(event) => handleRowChange(row.rowId, 'language', event.target.value)}
                         disabled={row.isSaving}
-                        aria-label="수정"
-                        title="수정"
-                      >
-                        <EditIcon />
-                      </button>
-                      {isDeletableLanguage(row.originalLanguage) ? (
+                      />
+                    ) : (
+                      <div className="admin-config-display">{row.language}</div>
+                    )}
+                    {renderResizer(2, languageLabel)}
+                  </div>
+
+                  <div className="admin-config-field">
+                    <span className="admin-config-field-label">{descriptionLabel}</span>
+                    {row.isEditing ? (
+                      <input
+                        className="text-field admin-config-input"
+                        value={row.description}
+                        onChange={(event) => handleRowChange(row.rowId, 'description', event.target.value)}
+                        disabled={row.isSaving}
+                      />
+                    ) : (
+                      <div className="admin-config-display admin-config-display-multiline">{row.description}</div>
+                    )}
+                  </div>
+
+                  <div className="admin-config-actions">
+                    {row.isEditing ? (
+                      <>
                         <button
                           type="button"
-                          className="btn text admin-config-icon-button admin-config-delete-button"
-                          onClick={() => void handleDeleteUiText(row.rowId)}
+                          className="btn text admin-config-icon-button"
+                          onClick={() => void handleSaveUiText(row.rowId)}
                           disabled={row.isSaving}
-                          aria-label="삭제"
-                          title="삭제"
+                          aria-label={text('COMMON_SAVE_BUTTON', '저장')}
+                          title={text('COMMON_SAVE_BUTTON', '저장')}
                         >
-                          <DeleteIcon />
+                          <CheckIcon />
                         </button>
-                      ) : null}
-                    </>
-                  )}
+                        <button
+                          type="button"
+                          className="btn text admin-config-icon-button"
+                          onClick={() => handleCancelEditing(row.rowId)}
+                          disabled={row.isSaving}
+                          aria-label={text('COMMON_CANCEL_BUTTON', '취소')}
+                          title={text('COMMON_CANCEL_BUTTON', '취소')}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn text admin-config-icon-button"
+                          onClick={() => handleStartEditing(row.rowId)}
+                          disabled={row.isSaving}
+                          aria-label={text('COMMON_EDIT_BUTTON', '수정')}
+                          title={text('COMMON_EDIT_BUTTON', '수정')}
+                        >
+                          <EditIcon />
+                        </button>
+                        {isDeletableLanguage(row.originalLanguage) ? (
+                          <button
+                            type="button"
+                            className="btn text admin-config-icon-button admin-config-delete-button"
+                            onClick={() => void handleDeleteUiText(row.rowId)}
+                            disabled={row.isSaving}
+                            aria-label={text('COMMON_DELETE_BUTTON', '삭제')}
+                            title={text('COMMON_DELETE_BUTTON', '삭제')}
+                          >
+                            <DeleteIcon />
+                          </button>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {row.errorMessage ? <p className="admin-config-feedback is-error">{row.errorMessage}</p> : null}
-            </div>
-          ))}
-        </div>
+                {row.errorMessage ? <p className="admin-config-feedback is-error">{row.errorMessage}</p> : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="admin-config-pagination" role="navigation" aria-label={text('GLOBAL_CONFIG_PAGE_LABEL', 'UI 텍스트 페이지')}>
+            <button
+              type="button"
+              className="mini-toggle problem-page-button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage <= 1}
+            >
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
+            </button>
+
+            {isPageJumpEditing ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                className="problem-pagination-meta-input admin-config-pagination-input"
+                value={pageJumpDraft}
+                onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
+                onBlur={applyPageJump}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyPageJump();
+                    return;
+                  }
+
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelPageJump();
+                  }
+                }}
+                aria-label={text('GLOBAL_CONFIG_PAGE_INPUT_LABEL', '이동할 UI 텍스트 페이지 입력')}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                className="problem-pagination-meta problem-pagination-meta-button admin-config-pagination-meta"
+                aria-label={text('GLOBAL_CONFIG_PAGE_INPUT_OPEN_LABEL', '이동할 UI 텍스트 페이지 입력 열기')}
+                onClick={() => {
+                  setPageJumpDraft(String(currentPage));
+                  setIsPageJumpEditing(true);
+                }}
+              >
+                {`${currentPage} / ${totalPages}`}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="mini-toggle problem-page-button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              {text('COMMON_NEXT_BUTTON', '다음')}
+            </button>
+          </div>
+        </>
       )}
     </section>
   );

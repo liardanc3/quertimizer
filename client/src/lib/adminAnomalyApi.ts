@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 
 export type AdminAnomalyRange = '10m' | '1h' | '24h' | 'all' | 'custom';
 
@@ -150,7 +151,7 @@ async function requestAdminAnomaly<T>(path: string, init: RequestInit, fallbackM
   }
 
   if (!response.ok) {
-    throw new Error(fallbackMessage);
+    throw await createApiErrorFromResponse(response, fallbackMessage);
   }
 
   if (response.status === 204) {
@@ -177,7 +178,11 @@ export function fetchAdminAnomalyTrends(range: AdminAnomalyRange, page: number, 
     params.set('endedAt', endedAt);
   }
 
-  return requestAdminAnomaly(`/admin/anomaly-accounts/trends?${params.toString()}`, { method: 'GET' }, '이상계정 추이를 불러오지 못했다.', (data) =>
+  return requestAdminAnomaly(
+    `/admin/anomaly-accounts/trends?${params.toString()}`,
+    { method: 'GET' },
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+    (data) =>
     normalizeTrendPage((data ?? {}) as AdminAnomalyTrendPageResponse),
   );
 }
@@ -188,7 +193,11 @@ export function fetchAdminBlockedUsers(page: number, pageSize = 10): Promise<Adm
     pageSize: String(pageSize),
   });
 
-  return requestAdminAnomaly(`/admin/anomaly-accounts/blocked-users?${params.toString()}`, { method: 'GET' }, '차단 계정 목록을 불러오지 못했다.', (data) =>
+  return requestAdminAnomaly(
+    `/admin/anomaly-accounts/blocked-users?${params.toString()}`,
+    { method: 'GET' },
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+    (data) =>
     normalizeBlockedUserPage((data ?? {}) as AdminBlockedUserPageResponse),
   );
 }
@@ -199,19 +208,38 @@ export function fetchAdminBlockedIps(page: number, pageSize = 10): Promise<Admin
     pageSize: String(pageSize),
   });
 
-  return requestAdminAnomaly(`/admin/anomaly-accounts/blocked-ips?${params.toString()}`, { method: 'GET' }, '차단 IP 목록을 불러오지 못했다.', (data) =>
+  return requestAdminAnomaly(
+    `/admin/anomaly-accounts/blocked-ips?${params.toString()}`,
+    { method: 'GET' },
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+    (data) =>
     normalizeBlockedIpPage((data ?? {}) as AdminBlockedIpPageResponse),
   );
 }
 
 export function blockAdminUser(handle: string): Promise<void> {
-  return requestAdminAnomaly(`/admin/anomaly-accounts/users/${encodeURIComponent(handle)}/block`, { method: 'POST' }, '계정을 차단하지 못했다.', () => undefined);
+  return requestAdminAnomaly(
+    `/admin/anomaly-accounts/users/${encodeURIComponent(handle)}/block`,
+    { method: 'POST' },
+    getUiTextValue('ANOMALY_BLOCK_USER_FAIL_MESSAGE', '계정을 차단하지 못했습니다.'),
+    () => undefined,
+  );
 }
 
 export function unblockAdminUser(handle: string): Promise<void> {
-  return requestAdminAnomaly(`/admin/anomaly-accounts/users/${encodeURIComponent(handle)}/block`, { method: 'DELETE' }, '계정 차단을 해제하지 못했다.', () => undefined);
+  return requestAdminAnomaly(
+    `/admin/anomaly-accounts/users/${encodeURIComponent(handle)}/block`,
+    { method: 'DELETE' },
+    getUiTextValue('ANOMALY_UNBLOCK_USER_FAIL_MESSAGE', '계정 차단을 해제하지 못했습니다.'),
+    () => undefined,
+  );
 }
 
 export function unblockAdminIp(ipAddress: string): Promise<void> {
-  return requestAdminAnomaly(`/admin/anomaly-accounts/ips/${encodeURIComponent(ipAddress)}/block`, { method: 'DELETE' }, 'IP 차단을 해제하지 못했다.', () => undefined);
+  return requestAdminAnomaly(
+    `/admin/anomaly-accounts/ips/${encodeURIComponent(ipAddress)}/block`,
+    { method: 'DELETE' },
+    getUiTextValue('ANOMALY_UNBLOCK_IP_FAIL_MESSAGE', 'IP 차단을 해제하지 못했습니다.'),
+    () => undefined,
+  );
 }

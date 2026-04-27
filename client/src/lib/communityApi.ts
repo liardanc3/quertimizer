@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 import type { CommunityComment, CommunityPostSummary } from '../types/domain';
 
 interface CommunityCommentResponse {
@@ -95,6 +96,8 @@ interface UserProfileCommunityActivitiesResponse {
   totalPages?: number;
   activities?: UserProfileCommunityActivityResponse[];
 }
+
+const communityGetRequestPromises = new Map<string, Promise<unknown>>();
 
 export interface FetchCommunityPostsParams {
   page: number;
@@ -265,7 +268,12 @@ function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPost
   };
 }
 
-async function requestCommunity<T>(path: string, init: RequestInit, fallbackMessage: string, normalize: (data: unknown) => T): Promise<T> {
+async function executeCommunityRequest<T>(
+  path: string,
+  init: RequestInit,
+  fallbackMessage: string,
+  normalize: (data: unknown) => T,
+): Promise<T> {
   let response: Response;
 
   try {
@@ -278,7 +286,7 @@ async function requestCommunity<T>(path: string, init: RequestInit, fallbackMess
   }
 
   if (!response.ok) {
-    throw new Error(fallbackMessage);
+    throw await createApiErrorFromResponse(response, fallbackMessage);
   }
 
   try {
@@ -287,6 +295,32 @@ async function requestCommunity<T>(path: string, init: RequestInit, fallbackMess
   } catch {
     throw new Error(fallbackMessage);
   }
+}
+
+function requestCommunity<T>(
+  path: string,
+  init: RequestInit,
+  fallbackMessage: string,
+  normalize: (data: unknown) => T,
+): Promise<T> {
+  const requestMethod = (init.method ?? 'GET').toUpperCase();
+
+  if (requestMethod !== 'GET') {
+    return executeCommunityRequest(path, init, fallbackMessage, normalize);
+  }
+
+  const requestKey = `${requestMethod}:${path}`;
+  const inFlightRequest = communityGetRequestPromises.get(requestKey);
+  if (inFlightRequest != null) {
+    return inFlightRequest as Promise<T>;
+  }
+
+  const nextRequest = executeCommunityRequest(path, init, fallbackMessage, normalize).finally(() => {
+    communityGetRequestPromises.delete(requestKey);
+  });
+
+  communityGetRequestPromises.set(requestKey, nextRequest);
+  return nextRequest;
 }
 
 export async function fetchCommunityPosts(params: FetchCommunityPostsParams): Promise<CommunityPostPage> {
@@ -310,7 +344,7 @@ export async function fetchCommunityPosts(params: FetchCommunityPostsParams): Pr
   return requestCommunity(
     `/community/posts?${searchParams.toString()}`,
     { method: 'GET' },
-    '커뮤니티 게시글 조회에 실패했다.',
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
     (data) => {
       const page = data as CommunityPostPageResponse;
       if (
@@ -346,7 +380,7 @@ export async function fetchCommunityPostDetail(postId: string): Promise<Communit
   return requestCommunity(
     `/community/posts/${encodeURIComponent(postId)}`,
     { method: 'GET' },
-    '커뮤니티 게시글 상세 조회에 실패했다.',
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
     (data) => {
       const post = data as CommunityPostDetailResponse;
       if (
@@ -403,7 +437,7 @@ export async function createCommunityPost(payload: SaveCommunityPostPayload) {
   });
 
   if (!response.ok) {
-    throw new Error('게시글 저장에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMUNITY_POST_SAVE_FAIL_MESSAGE', '게시글을 저장하지 못했습니다.'));
   }
 
   const location = response.headers.get('Location');
@@ -421,7 +455,7 @@ export async function updateCommunityPost(postId: string, payload: SaveCommunity
   });
 
   if (!response.ok) {
-    throw new Error('게시글 수정에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMUNITY_EDIT_FAIL_MESSAGE', '게시글을 수정하지 못했습니다.'));
   }
 }
 
@@ -436,12 +470,12 @@ export async function uploadCommunityImage(file: File): Promise<CommunityUploade
   });
 
   if (!response.ok) {
-    throw new Error('이미지 업로드에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMUNITY_EDITOR_IMAGE_UPLOAD_FAIL_MESSAGE', '이미지 업로드에 실패했습니다.'));
   }
 
   const uploadedImage = (await response.json()) as CommunityUploadedImageResponse;
   if (typeof uploadedImage.imageId !== 'string' || typeof uploadedImage.imageUrl !== 'string') {
-    throw new Error('이미지 업로드 응답이 올바르지 않다.');
+    throw new Error(getUiTextValue('COMMUNITY_EDITOR_IMAGE_UPLOAD_PARSE_FAIL_MESSAGE', '이미지 업로드 응답 형식이 올바르지 않습니다.'));
   }
 
   return {
@@ -459,7 +493,7 @@ export async function deleteCommunityPost(postId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('게시글 삭제에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMUNITY_DELETE_FAIL_MESSAGE', '게시글을 삭제하지 못했습니다.'));
   }
 }
 
@@ -467,7 +501,7 @@ export async function toggleCommunityPostLike(postId: string): Promise<Community
   return requestCommunity(
     `/community/posts/${encodeURIComponent(postId)}/likes`,
     { method: 'POST' },
-    '게시글 좋아요 처리에 실패했다.',
+    getUiTextValue('COMMUNITY_POST_LIKE_FAIL_MESSAGE', '좋아요 처리에 실패했습니다.'),
     (data) => {
       const reaction = data as CommunityReactionResponse;
       if (typeof reaction.liked !== 'boolean' || typeof reaction.likeCount !== 'number') {
@@ -492,7 +526,7 @@ export async function addCommunityComment(postId: string, payload: AddCommunityC
       },
       body: JSON.stringify(payload),
     },
-    '댓글 등록에 실패했다.',
+    getUiTextValue('COMMUNITY_COMMENT_SAVE_FAIL_MESSAGE', '댓글을 등록하지 못했습니다.'),
     (data) => {
       const comment = data as CommunityCommentResponse;
       if (
@@ -514,7 +548,7 @@ export async function toggleCommunityCommentLike(commentId: string): Promise<Com
   return requestCommunity(
     `/community/comments/${encodeURIComponent(commentId)}/likes`,
     { method: 'POST' },
-    '댓글 좋아요 처리에 실패했다.',
+    getUiTextValue('COMMUNITY_COMMENT_LIKE_FAIL_MESSAGE', '댓글 좋아요 처리에 실패했습니다.'),
     (data) => {
       const reaction = data as CommunityReactionResponse;
       if (typeof reaction.liked !== 'boolean' || typeof reaction.likeCount !== 'number') {
@@ -538,7 +572,7 @@ export async function fetchCommunityTagSuggestions(query: string): Promise<Commu
   return requestCommunity(
     `/community/tags/suggestions?${searchParams.toString()}`,
     { method: 'GET' },
-    '태그 자동완성 조회에 실패했다.',
+    getUiTextValue('COMMUNITY_TAG_AUTOCOMPLETE_LOAD_FAIL_MESSAGE', '태그 자동완성을 불러오지 못했습니다.'),
     (data) => {
       if (!Array.isArray(data)) {
         throw new Error();
@@ -562,7 +596,7 @@ async function fetchProfileCommunityPosts(path: string): Promise<ProfileCommunit
   return requestCommunity(
     path,
     { method: 'GET' },
-    '프로필 커뮤니티 게시글 조회에 실패했다.',
+    getUiTextValue('PROFILE_COMMUNITY_POSTS_LOAD_FAIL_MESSAGE', '프로필 커뮤니티 게시글을 불러오지 못했습니다.'),
     (data) => {
       const response = data as UserProfileCommunityPostsResponse;
       if (!Array.isArray(response.posts)) {
@@ -594,7 +628,7 @@ async function fetchProfileCommunityComments(path: string): Promise<ProfileCommu
   return requestCommunity(
     path,
     { method: 'GET' },
-    '프로필 커뮤니티 댓글 조회에 실패했다.',
+    getUiTextValue('PROFILE_COMMUNITY_COMMENTS_LOAD_FAIL_MESSAGE', '프로필 커뮤니티 댓글을 불러오지 못했습니다.'),
     (data) => {
       const response = data as UserProfileCommunityCommentsResponse;
       if (!Array.isArray(response.comments)) {
@@ -632,7 +666,7 @@ async function fetchProfileCommunityActivities(path: string, page: number, pageS
   return requestCommunity(
     `${path}?${params.toString()}`,
     { method: 'GET' },
-    '프로필 커뮤니티 활동 조회에 실패했다.',
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
     (data) => {
       const response = data as UserProfileCommunityActivitiesResponse;
       if (!Array.isArray(response.activities)) {

@@ -15,10 +15,14 @@ import {
   type PlanSectionKey,
 } from '../lib/executionPlanFilters';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { fetchSubmitHistories } from '../lib/submitHistoryApi';
 import { getLocationSearchSnapshot, getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, subscribeLocation, navigate } from '../lib/navigation';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 import type {
   DbmsType,
   SubmitHistoryEntry,
@@ -113,11 +117,6 @@ interface SubmitHistoryFavoriteSnapshot {
 const submitHistoryLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 
-const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
-  { value: 'postgresql', label: 'PostgreSQL' },
-  { value: 'oracle', label: 'Oracle' },
-];
-
 function readSubmitHistoryDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
   return dbms === 'oracle' ? 'oracle' : 'postgresql';
@@ -131,10 +130,7 @@ function buildSubmitHistoryPath(dbms: DbmsType) {
   return `${SUBMIT_HISTORY_PATH}?dbms=${encodeURIComponent(dbms)}`;
 }
 
-const judgeOptions: Array<{ value: JudgeSelectionValue; label: string }> = [
-  { value: 'success', label: '정답' },
-  { value: 'fail', label: '오답' },
-];
+const judgeOptions: JudgeSelectionValue[] = ['success', 'fail'];
 
 const hintFilterDisplayOptions: SubmitHistoryPlanFilters['hintFilters'][number][] = ['UNUSED', 'USED'];
 const DEFAULT_PLAN_SECTION_KEYS: PlanSectionKey[] = [
@@ -299,13 +295,11 @@ function resolveSubmitHistoryJudgeFilterValue(judgeSelections: JudgeSelectionVal
 function toggleRequiredJudgeSelection(currentSelections: JudgeSelectionValue[], nextValue: JudgeSelectionValue) {
   if (currentSelections.includes(nextValue)) {
     return currentSelections.length === 1
-      ? judgeOptions.map((option) => option.value).filter((value) => value !== nextValue)
+      ? judgeOptions.filter((value) => value !== nextValue)
       : currentSelections.filter((value) => value !== nextValue);
   }
 
-  return judgeOptions
-    .map((option) => option.value)
-    .filter((value) => value === nextValue || currentSelections.includes(value));
+  return judgeOptions.filter((value) => value === nextValue || currentSelections.includes(value));
 }
 
 function applySelectedPlanSectionsToFilters(
@@ -529,7 +523,7 @@ function buildSubmitHistoryPlanSections(history: SubmitHistoryEntry) {
     })),
     {
       sectionKey: 'hint' as const,
-      sectionLabel: 'Hint',
+      sectionLabel: getUiTextValue('COMMON_HINT_LABEL', 'Hint'),
       labels: labelGroupsBySection.get('hint') ?? [],
     },
   ];
@@ -540,6 +534,7 @@ function hasExecutionPlanDetails(history: SubmitHistoryEntry) {
 }
 
 export default function SubmitHistoryPage() {
+  const { text } = useUiText();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<SubmitHistoryFavoriteSnapshot>('submitHistory'), []);
   const initialDbms = favoriteRestoreSnapshot?.draftFilters.dbmsSelections[0] ?? readSubmitHistoryDbmsFromSearch(window.location.search);
@@ -551,6 +546,8 @@ export default function SubmitHistoryPage() {
   const [historyPage, setHistoryPage] = useState<SubmitHistoryPageData>(createEmptySubmitHistoryPage());
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [headerFilterMenuState, setHeaderFilterMenuState] = useState<HeaderFilterMenuState>(null);
   const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(() => favoriteRestoreSnapshot?.selectedPlanSections ?? DEFAULT_PLAN_SECTION_KEYS);
   const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.activePlanDetailDbms ?? 'postgresql');
@@ -574,12 +571,29 @@ export default function SubmitHistoryPage() {
     () => buildAvailableBucketFilters(activePlanDetailDbms),
     [activePlanDetailDbms],
   );
+  const submitHistoryDbmsOptions = useMemo(
+    () => [
+      { value: 'postgresql' as const, label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+      { value: 'oracle' as const, label: text('COMMON_ORACLE_LABEL', 'Oracle') },
+    ],
+    [text],
+  );
+  const submitHistoryJudgeOptions = useMemo(
+    () => [
+      { value: 'success' as const, label: text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답') },
+      { value: 'fail' as const, label: text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답') },
+    ],
+    [text],
+  );
+  const selectedDbmsLabel = selectedDbms === 'oracle'
+    ? text('COMMON_ORACLE_LABEL', 'Oracle')
+    : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
   const availablePlanSections = useMemo(
     () => [
       ...availableBucketFilters.map((filter) => ({ key: filter.key as PlanSectionKey, label: filter.label })),
-      { key: 'hint' as const, label: 'Hint' },
+      { key: 'hint' as const, label: text('COMMON_HINT_LABEL', 'Hint') },
     ],
-    [availableBucketFilters],
+    [availableBucketFilters, text],
   );
   const normalizedSelectedPlanSections = useMemo(
     () => DEFAULT_PLAN_SECTION_KEYS.filter((sectionKey) => selectedPlanSections.includes(sectionKey)),
@@ -659,6 +673,8 @@ export default function SubmitHistoryPage() {
     async function loadSubmitHistories() {
       setIsLoading(true);
       setLoadFailed(false);
+      setLoadErrorMessage(null);
+      setLoadErrorStatus(null);
 
       try {
         const fetchedPage = await fetchSubmitHistories({
@@ -680,12 +696,15 @@ export default function SubmitHistoryPage() {
         if (fetchedPage.currentPage !== requestedPage) {
           setRequestedPage(fetchedPage.currentPage);
         }
-      } catch {
+      } catch (error) {
         if (cancelled) {
           return;
         }
 
         setLoadFailed(true);
+        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+        const status = getApiErrorStatus(error);
+        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -964,19 +983,26 @@ export default function SubmitHistoryPage() {
             }}
           >
             {modalState.type === 'sql' ? (
-              <div className="submit-history-modal" role="dialog" aria-modal="true" aria-label="제출 SQL 보기">
+              <div
+                className="submit-history-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label={text('SUBMIT_HISTORY_SQL_MODAL_LABEL', '제출 SQL 보기')}
+              >
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
                     <div className="submit-history-modal-title-row">
-                      <strong>제출 결과</strong>
+                      <strong>{text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}</strong>
                       <span className={`submit-history-modal-title-status ${modalState.history.success ? 'is-success' : 'is-fail'}`}>
-                        {modalState.history.success ? '정답' : '오답'}
+                        {modalState.history.success
+                          ? text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답')
+                          : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                       </span>
                       <button
                         type="button"
                         className="submit-history-modal-plan-action"
-                        aria-label="실행계획 요소 자세히 보기"
-                        title="실행계획 요소 자세히 보기"
+                        aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행계획 요소 자세히 보기')}
+                        title={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행계획 요소 자세히 보기')}
                         disabled={!sqlModalHasExecutionPlanDetails}
                         onClick={() => setModalState({ type: 'plan', history: modalState.history })}
                       >
@@ -984,13 +1010,21 @@ export default function SubmitHistoryPage() {
                       </button>
                     </div>
                   </div>
-                  <button type="button" className="submit-history-modal-close" aria-label="제출 결과 닫기" onClick={() => setModalState(null)}>
-                    닫기
+                  <button
+                    type="button"
+                    className="submit-history-modal-close"
+                    aria-label={text('SUBMIT_HISTORY_MODAL_CLOSE_LABEL', '제출 결과 닫기')}
+                    onClick={() => setModalState(null)}
+                  >
+                    {text('COMMON_CLOSE_BUTTON', '닫기')}
                   </button>
                 </div>
 
                 <div className="submit-history-modal-body submit-history-sql-modal-body">
-                  <pre className="submit-history-sql-viewer submit-history-sql-highlight" aria-label="제출 SQL">
+                  <pre
+                    className="submit-history-sql-viewer submit-history-sql-highlight"
+                    aria-label={text('SUBMIT_HISTORY_SQL_VIEWER_LABEL', '제출 SQL')}
+                  >
                     {highlightedModalSql}
                   </pre>
                 </div>
@@ -1000,14 +1034,19 @@ export default function SubmitHistoryPage() {
                 className="submit-history-modal submit-history-plan-modal"
                 role="dialog"
                 aria-modal="true"
-                aria-label="실행계획 요소 보기"
+                aria-label={text('SUBMIT_HISTORY_PLAN_MODAL_LABEL', '실행계획 요소 보기')}
               >
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
-                    <strong>실행 계획 요소</strong>
+                    <strong>{text('SUBMIT_HISTORY_PLAN_TITLE', '실행 계획 요소')}</strong>
                   </div>
-                  <button type="button" className="submit-history-modal-close" aria-label="실행 계획 요소 닫기" onClick={() => setModalState(null)}>
-                    닫기
+                  <button
+                    type="button"
+                    className="submit-history-modal-close"
+                    aria-label={text('SUBMIT_HISTORY_PLAN_MODAL_CLOSE_LABEL', '실행 계획 요소 닫기')}
+                    onClick={() => setModalState(null)}
+                  >
+                    {text('COMMON_CLOSE_BUTTON', '닫기')}
                   </button>
                 </div>
 
@@ -1018,7 +1057,7 @@ export default function SubmitHistoryPage() {
                         <span className="runtime-subfilter-label">{group.sectionLabel}</span>
                         <div className="runtime-subfilter-options submit-history-plan-detail-options">
                           <div className="runtime-subfilter-chip-grid submit-history-plan-detail-grid">
-                            {(group.labels.length > 0 ? group.labels : ['없음']).map((label) => {
+                            {(group.labels.length > 0 ? group.labels : [text('COMMON_NONE_LABEL', '없음')]).map((label) => {
                               const isEmpty = group.labels.length === 0;
 
                               return (
@@ -1049,7 +1088,11 @@ export default function SubmitHistoryPage() {
             ref={headerFilterMenuRef}
             className={`submit-history-header-filter-menu ${headerFilterMenuState.key === 'plan' ? 'is-plan' : ''}`}
             role="menu"
-            aria-label={headerFilterMenuState.key === 'judge' ? '제출 결과 필터 옵션' : '실행계획 요소 필터 옵션'}
+            aria-label={
+              headerFilterMenuState.key === 'judge'
+                ? text('SUBMIT_HISTORY_RESULT_FILTER_MENU_LABEL', '제출 결과 필터 옵션')
+                : text('SUBMIT_HISTORY_PLAN_FILTER_MENU_LABEL', '실행계획 요소 필터 옵션')
+            }
             style={{
               top: `${headerFilterMenuState.top}px`,
               left: `${headerFilterMenuState.left}px`,
@@ -1057,9 +1100,13 @@ export default function SubmitHistoryPage() {
             }}
           >
             {headerFilterMenuState.key === 'judge' ? (
-              <div className="submit-history-header-filter-menu-section" role="group" aria-label="제출 결과 선택">
+              <div
+                className="submit-history-header-filter-menu-section"
+                role="group"
+                aria-label={text('SUBMIT_HISTORY_RESULT_FILTER_GROUP_LABEL', '제출 결과 선택')}
+              >
                 <div className="submit-history-header-filter-checks">
-                  {judgeOptions.map((option) => {
+                  {submitHistoryJudgeOptions.map((option) => {
                     const isSelected = draftFilters.judgeSelections.includes(option.value);
 
                     return (
@@ -1085,8 +1132,16 @@ export default function SubmitHistoryPage() {
               </div>
             ) : (
               <div className="submit-history-plan-popover submit-history-header-plan-popover">
-                <div className="submit-history-plan-filter-bar submit-history-plan-filter-menu-bar" role="group" aria-label="실행계획 요소 선택">
-                  <div className="problem-status-checks submit-history-plan-mode-checks" role="group" aria-label="실행계획 요소 검색 방식">
+                <div
+                  className="submit-history-plan-filter-bar submit-history-plan-filter-menu-bar"
+                  role="group"
+                  aria-label={text('SUBMIT_HISTORY_PLAN_FILTER_GROUP_LABEL', '실행계획 요소 선택')}
+                >
+                  <div
+                    className="problem-status-checks submit-history-plan-mode-checks"
+                    role="group"
+                    aria-label={text('SUBMIT_HISTORY_PLAN_MATCH_MODE_LABEL', '실행계획 요소 검색 방식')}
+                  >
                     {FILTER_MODE_OPTIONS.map((option) => {
                       const isSelected = activePlanFilters.matchMode === option.key;
 
@@ -1110,16 +1165,20 @@ export default function SubmitHistoryPage() {
                       );
                     })}
                   </div>
-                  <div className="problem-status-checks submit-history-plan-option-checks" role="group" aria-label="실행계획 요소 선택">
+                  <div
+                    className="problem-status-checks submit-history-plan-option-checks"
+                    role="group"
+                    aria-label={text('SUBMIT_HISTORY_PLAN_SECTION_GROUP_LABEL', '실행계획 요소 선택')}
+                  >
                     <label className="problem-status-check submit-history-plan-option-check is-all">
                       <input
                         type="checkbox"
                         checked={allPlanSectionsSelected}
                         onChange={toggleAllDraftPlanSections}
                         className="problem-status-check-input"
-                        aria-label="전체"
+                        aria-label={text('RUNTIME_ALL_LABEL', '전체')}
                       />
-                      <span className="problem-status-check-text">전체</span>
+                      <span className="problem-status-check-text">{text('RUNTIME_ALL_LABEL', '전체')}</span>
                       <span className="problem-status-check-ui" aria-hidden="true" />
                     </label>
 
@@ -1147,7 +1206,7 @@ export default function SubmitHistoryPage() {
                   <div
                     className="runtime-subfilter-board runtime-plan-shell-panel submit-history-plan-board submit-history-head-plan-board"
                     role="group"
-                    aria-label="실행계획 요소 상세 선택"
+                    aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_GROUP_LABEL', '실행계획 요소 상세 선택')}
                   >
                     {visibleBucketFilters.map((filter) => {
                       const filterFieldKey = toPlanFilterFieldKey(filter.key);
@@ -1177,7 +1236,7 @@ export default function SubmitHistoryPage() {
                               }
                             >
                               <SelectionCheckbox checked={isAllSelected} />
-                              <span className="runtime-check-label">전체</span>
+                              <span className="runtime-check-label">{text('RUNTIME_ALL_LABEL', '전체')}</span>
                             </button>
 
                             <div className="runtime-subfilter-chip-grid">
@@ -1206,7 +1265,7 @@ export default function SubmitHistoryPage() {
 
                     {normalizedSelectedPlanSections.includes('hint') ? (
                       <div className="runtime-subfilter-row">
-                        <span className="runtime-subfilter-label">Hint</span>
+                        <span className="runtime-subfilter-label">{text('COMMON_HINT_LABEL', 'Hint')}</span>
                         <div className="runtime-subfilter-options is-bucket">
                           <button
                             type="button"
@@ -1230,7 +1289,7 @@ export default function SubmitHistoryPage() {
                             <SelectionCheckbox
                               checked={HINT_FILTER_OPTIONS.every((value) => activePlanFilters.hintFilters.includes(value))}
                             />
-                            <span className="runtime-check-label">전체</span>
+                            <span className="runtime-check-label">{text('RUNTIME_ALL_LABEL', '전체')}</span>
                           </button>
 
                           <div className="runtime-subfilter-chip-grid">
@@ -1257,7 +1316,7 @@ export default function SubmitHistoryPage() {
                     ) : null}
                   </div>
                 ) : (
-                  <div className="submit-history-header-filter-empty">선택한 실행계획 요소가 없습니다.</div>
+                  <div className="submit-history-header-filter-empty">{text('SUBMIT_HISTORY_PLAN_EMPTY_STATE', '선택한 실행계획 요소가 없습니다.')}</div>
                 )}
               </div>
             )}
@@ -1269,8 +1328,12 @@ export default function SubmitHistoryPage() {
     <div className="page-stack submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card">
         <div className="problem-toolbar submit-history-toolbar-stack">
-          <div className="solve-dbms-tab-row submit-history-dbms-tab-row" role="tablist" aria-label="제출 목록 DBMS 선택">
-            {dbmsOptions.map((option) => {
+          <div
+            className="solve-dbms-tab-row submit-history-dbms-tab-row"
+            role="tablist"
+            aria-label={text('SUBMIT_HISTORY_DBMS_TABLIST_LABEL', '제출 목록 DBMS 선택')}
+          >
+            {submitHistoryDbmsOptions.map((option) => {
               const isSelected = option.value === selectedDbms;
 
               return (
@@ -1288,7 +1351,7 @@ export default function SubmitHistoryPage() {
             })}
             <FavoriteTabButton
               className="favorite-tab-toggle-end"
-              label={`제출 목록 / ${selectedDbms === 'oracle' ? 'Oracle' : 'PostgreSQL'}`}
+              label={text('SUBMIT_HISTORY_FAVORITE_LABEL', { dbms: selectedDbmsLabel }, `제출 목록 / ${selectedDbmsLabel}`)}
               path={buildSubmitHistoryPath(selectedDbms)}
               snapshot={{
                 kind: 'submitHistory',
@@ -1323,8 +1386,8 @@ export default function SubmitHistoryPage() {
                     }))
                   }
                   className="text-field problem-search-input home-problem-search-input submit-history-search-input submit-history-search-input-plain"
-                  placeholder="제출번호"
-                  aria-label="제출번호 검색"
+                  placeholder={text('SUBMIT_HISTORY_SUBMIT_ID_PLACEHOLDER', '제출번호')}
+                  aria-label={text('SUBMIT_HISTORY_SUBMIT_ID_SEARCH_LABEL', '제출번호 검색')}
                 />
               </label>
 
@@ -1336,8 +1399,8 @@ export default function SubmitHistoryPage() {
                     setDraftFilters((currentFilters) => ({ ...currentFilters, query: event.target.value }))
                   }
                   className="text-field problem-search-input home-problem-search-input submit-history-search-input submit-history-search-input-plain"
-                  placeholder="Handle 검색"
-                  aria-label="Handle 검색"
+                  placeholder={text('ALARM_SEND_HANDLE_PLACEHOLDER', 'Handle 검색')}
+                  aria-label={text('SUBMIT_HISTORY_HANDLE_SEARCH_LABEL', 'Handle 검색')}
                 />
               </label>
 
@@ -1349,13 +1412,13 @@ export default function SubmitHistoryPage() {
                     setDraftFilters((currentFilters) => ({ ...currentFilters, problemId: event.target.value }))
                   }
                   className="text-field problem-search-input home-problem-search-input submit-history-search-input submit-history-search-input-plain"
-                  placeholder="문제번호"
-                  aria-label="문제번호 검색"
+                  placeholder={text('SUBMIT_HISTORY_PROBLEM_ID_PLACEHOLDER', '문제번호')}
+                  aria-label={text('SUBMIT_HISTORY_PROBLEM_ID_SEARCH_LABEL', '문제번호 검색')}
                 />
               </label>
 
-              <button type="submit" className="submit-history-toolbar-submit" aria-label="검색">
-                검색
+              <button type="submit" className="submit-history-toolbar-submit" aria-label={text('COMMON_SEARCH_BUTTON', '검색')}>
+                {text('COMMON_SEARCH_BUTTON', '검색')}
               </button>
             </div>
           </form>
@@ -1364,21 +1427,23 @@ export default function SubmitHistoryPage() {
 
       <section className="panel-card problem-board submit-history-board">
         {loadFailed ? (
-          <PageLoadFailureState className="submit-history-empty-state" />
+          loadErrorStatus != null
+            ? <HttpErrorState status={loadErrorStatus} message={loadErrorMessage} />
+            : <PageLoadFailureState message={loadErrorMessage} />
         ) : (
           <div className={`submit-history-table-shell ${isLoading ? 'is-loading' : ''}`}>
-            <div className="submit-history-table" role="table" aria-label="제출 이력 목록">
+            <div className="submit-history-table" role="table" aria-label={text('SUBMIT_HISTORY_TABLE_LABEL', '제출 이력 목록')}>
               <div className="submit-history-row submit-history-head" role="row">
-                <div role="columnheader" className="submit-history-head-cell">제출번호</div>
-                <div role="columnheader" className="submit-history-head-cell">Handle</div>
-                <div role="columnheader" className="submit-history-head-cell">문제 번호</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제 번호')}</div>
                 <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>제출 결과</span>
+                  <span>{text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}</span>
                   <button
                     type="button"
                     data-submit-history-filter-trigger="true"
-                    className={`submit-history-head-filter-trigger ${headerFilterMenuState?.key === 'judge' ? 'is-open' : ''} ${draftFilters.judgeSelections.length !== judgeOptions.length ? 'is-active' : ''}`}
-                    aria-label="제출 결과 필터 열기"
+                    className={`submit-history-head-filter-trigger ${headerFilterMenuState?.key === 'judge' ? 'is-open' : ''} ${draftFilters.judgeSelections.length !== submitHistoryJudgeOptions.length ? 'is-active' : ''}`}
+                    aria-label={text('SUBMIT_HISTORY_RESULT_FILTER_BUTTON_LABEL', '제출 결과 필터 열기')}
                     onClick={(event) => toggleHeaderFilterMenu('judge', event.currentTarget)}
                   >
                     ▾
@@ -1389,20 +1454,26 @@ export default function SubmitHistoryPage() {
                   <button
                     type="button"
                     className={`submit-history-head-filter-trigger submit-history-head-sort-trigger ${draftFilters.costSort !== 'none' ? 'is-active' : ''}`}
-                    aria-label={draftFilters.costSort === 'asc' ? 'Cost 오름차순 정렬' : draftFilters.costSort === 'desc' ? 'Cost 내림차순 정렬' : 'Cost 정렬 없음'}
+                    aria-label={
+                      draftFilters.costSort === 'asc'
+                        ? text('SUBMIT_HISTORY_COST_SORT_ASC_LABEL', 'Cost 오름차순 정렬')
+                        : draftFilters.costSort === 'desc'
+                          ? text('SUBMIT_HISTORY_COST_SORT_DESC_LABEL', 'Cost 내림차순 정렬')
+                          : text('SUBMIT_HISTORY_COST_SORT_NONE_LABEL', 'Cost 정렬 없음')
+                    }
                     onClick={toggleCostSortOrder}
                   >
                     {draftFilters.costSort === 'asc' ? <SortAscendingIcon /> : draftFilters.costSort === 'desc' ? <SortDescendingIcon /> : <SortNeutralIcon />}
                   </button>
                 </div>
-                <div role="columnheader" className="submit-history-head-cell">제출 시각</div>
+                <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
                 <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
-                  <span>실행계획요소</span>
+                  <span>{text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}</span>
                   <button
                     type="button"
                     data-submit-history-filter-trigger="true"
                     className={`submit-history-head-filter-trigger ${headerFilterMenuState?.key === 'plan' ? 'is-open' : ''}`}
-                    aria-label="실행계획요소 필터 열기"
+                    aria-label={text('SUBMIT_HISTORY_PLAN_FILTER_BUTTON_LABEL', '실행계획요소 필터 열기')}
                     onClick={(event) => toggleHeaderFilterMenu('plan', event.currentTarget)}
                   >
                     ▾
@@ -1425,13 +1496,13 @@ export default function SubmitHistoryPage() {
               ) : historyPage.histories.length === 0 ? (
                 <div className="submit-history-row submit-history-empty-row" role="row">
                   <span className="submit-history-empty-cell" role="cell">
-                    조건에 맞는 제출 이력이 없습니다.
+                    {text('SUBMIT_HISTORY_EMPTY_STATE', '조건에 맞는 제출 이력이 없습니다.')}
                   </span>
                 </div>
               ) : (
                 historyPage.histories.map((history) => (
                   <article key={history.submitId} className="submit-history-row submit-history-body" role="row">
-                    <span className="submit-history-cell" role="cell" data-label="제출번호">
+                    <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}>
                       {history.submitId}
                     </span>
                     <span className="submit-history-cell" role="cell" data-label="Handle">
@@ -1439,42 +1510,48 @@ export default function SubmitHistoryPage() {
                         type="button"
                         className="submit-history-link-button"
                         onClick={() => navigate(getProfilePath(history.handle))}
-                        aria-label={`${history.handle} 프로필 이동`}
+                        aria-label={text('SUBMIT_HISTORY_HANDLE_PROFILE_MOVE_LABEL', { handle: history.handle }, `${history.handle} 프로필 이동`)}
                       >
                         {history.handle}
                       </button>
                     </span>
-                    <span className="submit-history-cell" role="cell" data-label="문제 번호">
+                    <span className="submit-history-cell" role="cell" data-label={text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제 번호')}>
                       <button
                         type="button"
                         className="submit-history-link-button"
                         onClick={() => navigate(`${PROBLEMS_PATH}/${encodeURIComponent(history.problemId)}`)}
-                        aria-label={`문제 ${history.problemId} 이동`}
+                        aria-label={text('SUBMIT_HISTORY_PROBLEM_MOVE_LABEL', { problemId: history.problemId }, `문제 ${history.problemId} 이동`)}
                       >
                         {history.problemId}
                       </button>
                     </span>
-                    <span className="submit-history-cell" role="cell" data-label="제출 결과">
+                    <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}>
                       <button
                         type="button"
                         className={`submit-history-status-text ${history.success ? 'is-success' : 'is-fail'}`}
                         onClick={() => setModalState({ type: 'sql', history })}
                       >
-                        {history.success ? '정답' : '오답'}
+                        {history.success
+                          ? text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답')
+                          : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                       </button>
                     </span>
                     <span className="submit-history-cell" role="cell" data-label="Cost">
                       {history.success || history.cost > 0 ? formatCost(history.cost) : '-'}
                     </span>
-                    <span className="submit-history-cell" role="cell" data-label="제출 시각">
+                    <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
                       {formatSubmittedAt(history.submittedAt)}
                     </span>
-                    <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label="실행계획요소">
+                    <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label={text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}>
                       {hasExecutionPlanDetails(history) ? (
                         <button
                           type="button"
                           className="submit-history-detail-button"
-                          aria-label={`${getPlanElementButtonLabel(history.dbms, history.executionPlanElement)} 자세히 보기`}
+                          aria-label={text(
+                            'SUBMIT_HISTORY_PLAN_DETAIL_MOVE_LABEL',
+                            { label: getPlanElementButtonLabel(history.dbms, history.executionPlanElement) },
+                            `${getPlanElementButtonLabel(history.dbms, history.executionPlanElement)} 자세히 보기`,
+                          )}
                           title={getPlanElementButtonLabel(history.dbms, history.executionPlanElement)}
                           onClick={() => setModalState({ type: 'plan', history })}
                         >
@@ -1488,23 +1565,19 @@ export default function SubmitHistoryPage() {
                 ))
               )}
             </div>
-            {isLoading ? (
-              <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-                <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-              </div>
-            ) : null}
+            {isLoading ? <LoadingOverlay /> : null}
           </div>
         )}
 
         {!loadFailed && historyPage.totalCount > 0 ? (
-          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="제출 이력 페이지">
+          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('SUBMIT_HISTORY_PAGE_NAV_LABEL', '제출 이력 페이지')}>
             <button
               type="button"
               className="mini-toggle problem-page-button"
               onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
               disabled={historyPage.currentPage === 1}
             >
-              이전
+              {text('COMMON_PREVIOUS_BUTTON', '이전')}
             </button>
 
             {isPageJumpEditing ? (
@@ -1512,7 +1585,7 @@ export default function SubmitHistoryPage() {
                 type="text"
                 inputMode="numeric"
                 className="problem-pagination-meta-input"
-                aria-label="이동할 제출 이력 페이지 입력"
+                aria-label={text('SUBMIT_HISTORY_PAGE_INPUT_LABEL', '이동할 제출 이력 페이지 입력')}
                 value={pageJumpDraft}
                 onChange={(event) => {
                   const nextValue = event.target.value.replace(/\D+/g, '');
@@ -1537,7 +1610,7 @@ export default function SubmitHistoryPage() {
               <button
                 type="button"
                 className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label="이동할 제출 이력 페이지 입력 열기"
+                aria-label={text('SUBMIT_HISTORY_PAGE_INPUT_BUTTON_LABEL', '이동할 제출 이력 페이지 입력 열기')}
                 onClick={() => {
                   setPageJumpDraft(String(historyPage.currentPage));
                   setIsPageJumpEditing(true);
@@ -1553,7 +1626,7 @@ export default function SubmitHistoryPage() {
               onClick={() => setRequestedPage((page) => Math.min(historyPage.totalPages, page + 1))}
               disabled={historyPage.currentPage >= historyPage.totalPages}
             >
-              다음
+              {text('COMMON_NEXT_BUTTON', '다음')}
             </button>
           </div>
         ) : null}

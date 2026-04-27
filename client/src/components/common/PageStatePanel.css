@@ -1,0 +1,40 @@
+.page-state-layout {
+  gap: 0.82rem;
+}
+
+.page-state-panel {
+  display: grid;
+  gap: 1rem;
+  align-content: center;
+  justify-items: start;
+  min-height: clamp(14rem, 36vh, 20rem);
+  padding: 1.12rem 1.18rem;
+}
+
+.page-state-copy {
+  display: grid;
+  gap: 0.42rem;
+  max-width: 42rem;
+}
+
+.page-state-copy .page-title,
+.page-state-copy .muted-text {
+  margin: 0;
+}
+
+.page-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.52rem;
+}
+
+@media (max-width: 720px) {
+  .page-state-panel {
+    min-height: 13rem;
+    padding: 1rem;
+  }
+
+  .page-state-actions {
+    width: 100%;
+  }
+}

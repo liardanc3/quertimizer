@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react';
 import { fetchSessionMe, type SessionMeResult } from './authApi';
-import { handleFavoriteTabsSessionState } from './favoriteTabs';
+import { handleFavoriteTabsSessionState, prepareFavoriteTabsLogoutReload } from './favoriteTabs';
 import { disconnectSessionSocket } from './sessionSocket';
 
 const REMEMBER_AUTH_STORAGE_KEY = 'quertimizer.remember-authenticated';
+const SESSION_SNAPSHOT_STORAGE_KEY = 'quertimizer.session-snapshot';
 const AUTH_CHANGE_EVENT = 'quertimizer:auth-change';
 const SESSION_ALERT_CHANGE_EVENT = 'quertimizer:session-alert-change';
 
@@ -25,14 +26,14 @@ interface SessionSnapshot {
   handleSetupRequired: boolean;
 }
 
-let sessionSnapshot: SessionSnapshot = {
-  isAuthenticated: readPersistedAuthentication(),
-  isReady: false,
-  handle: null,
-  defaultDbms: null,
-  role: null,
-  handleSetupRequired: false,
-};
+interface PersistedSessionSnapshot {
+  handle: string | null;
+  defaultDbms: 'postgresql' | 'oracle' | null;
+  role: 'user' | 'admin' | 'problemGenerator' | null;
+  handleSetupRequired: boolean;
+}
+
+let sessionSnapshot: SessionSnapshot = readPersistedSessionSnapshot();
 let sessionAlert: SessionAlert | null = null;
 let syncSessionPromise: Promise<boolean> | null = null;
 
@@ -45,11 +46,18 @@ function emitAuthChange() {
 }
 
 function updateSessionSnapshot(nextSnapshot: SessionSnapshot) {
+  const shouldSyncFavoriteTabs =
+    sessionSnapshot.isReady !== nextSnapshot.isReady
+    || sessionSnapshot.isAuthenticated !== nextSnapshot.isAuthenticated;
+
+  persistSessionSnapshot(nextSnapshot);
   sessionSnapshot = nextSnapshot;
-  void handleFavoriteTabsSessionState({
-    isReady: nextSnapshot.isReady,
-    isAuthenticated: nextSnapshot.isAuthenticated,
-  });
+  if (shouldSyncFavoriteTabs) {
+    void handleFavoriteTabsSessionState({
+      isReady: nextSnapshot.isReady,
+      isAuthenticated: nextSnapshot.isAuthenticated,
+    });
+  }
   emitAuthChange();
 }
 
@@ -76,16 +84,7 @@ function subscribe(callback: () => void) {
   }
 
   function handleStorageChange() {
-    const isAuthenticated = readPersistedAuthentication();
-
-    sessionSnapshot = {
-      isAuthenticated,
-      isReady: sessionSnapshot.isReady,
-      handle: isAuthenticated ? sessionSnapshot.handle : null,
-      defaultDbms: isAuthenticated ? sessionSnapshot.defaultDbms : null,
-      role: isAuthenticated ? sessionSnapshot.role : null,
-      handleSetupRequired: isAuthenticated ? sessionSnapshot.handleSetupRequired : false,
-    };
+    sessionSnapshot = readPersistedSessionSnapshot();
     callback();
   }
 
@@ -129,6 +128,7 @@ function persistAuthentication() {
 
 function clearPersistedAuthentication() {
   window.localStorage.removeItem(REMEMBER_AUTH_STORAGE_KEY);
+  window.localStorage.removeItem(SESSION_SNAPSHOT_STORAGE_KEY);
 }
 
 function readPersistedAuthentication() {
@@ -137,6 +137,83 @@ function readPersistedAuthentication() {
   }
 
   return hasRememberedAuth();
+}
+
+function persistSessionSnapshot(snapshot: SessionSnapshot) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!snapshot.isAuthenticated) {
+    window.localStorage.removeItem(SESSION_SNAPSHOT_STORAGE_KEY);
+    return;
+  }
+
+  const persistedSnapshot: PersistedSessionSnapshot = {
+    handle: snapshot.handle,
+    defaultDbms: snapshot.defaultDbms,
+    role: snapshot.role,
+    handleSetupRequired: snapshot.handleSetupRequired,
+  };
+
+  window.localStorage.setItem(SESSION_SNAPSHOT_STORAGE_KEY, JSON.stringify(persistedSnapshot));
+}
+
+function readPersistedSessionSnapshot(): SessionSnapshot {
+  const isAuthenticated = readPersistedAuthentication();
+
+  if (typeof window === 'undefined' || !isAuthenticated) {
+    return {
+      isAuthenticated: false,
+      isReady: true,
+      handle: null,
+      defaultDbms: null,
+      role: null,
+      handleSetupRequired: false,
+    };
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(SESSION_SNAPSHOT_STORAGE_KEY);
+    if (rawValue == null) {
+      return {
+        isAuthenticated: true,
+        isReady: true,
+        handle: null,
+        defaultDbms: null,
+        role: null,
+        handleSetupRequired: false,
+      };
+    }
+
+    const parsedValue = JSON.parse(rawValue) as PersistedSessionSnapshot;
+    const handle = typeof parsedValue.handle === 'string' && parsedValue.handle.trim() !== '' ? parsedValue.handle : null;
+    const defaultDbms = parsedValue.defaultDbms === 'oracle' || parsedValue.defaultDbms === 'postgresql' ? parsedValue.defaultDbms : null;
+    const role =
+      parsedValue.role === 'admin'
+        || parsedValue.role === 'user'
+        || parsedValue.role === 'problemGenerator'
+        ? parsedValue.role
+        : null;
+
+    return {
+      isAuthenticated: true,
+      isReady: true,
+      handle,
+      defaultDbms,
+      role,
+      handleSetupRequired: parsedValue.handleSetupRequired === true,
+    };
+  } catch {
+    return {
+      isAuthenticated: true,
+      isReady: true,
+      handle: null,
+      defaultDbms: null,
+      role: null,
+      handleSetupRequired: false,
+    };
+  }
 }
 
 export function loginMock() {
@@ -170,6 +247,20 @@ export function applyAuthenticatedSession(session: SessionMeResult) {
     defaultDbms: session.defaultDbms,
     role: session.role,
     handleSetupRequired: session.handleSetupRequired,
+  });
+}
+
+export function patchSessionSnapshot(
+  patch: Partial<Pick<SessionSnapshot, 'handle' | 'defaultDbms' | 'role' | 'handleSetupRequired'>>
+) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  updateSessionSnapshot({
+    ...sessionSnapshot,
+    ...patch,
+    isReady: true,
   });
 }
 
@@ -242,6 +333,18 @@ export function logoutMock() {
     role: null,
     handleSetupRequired: false,
   });
+}
+
+export function prepareLogoutReload() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  disconnectSessionSocket();
+  clearPersistedAuthentication();
+  prepareFavoriteTabsLogoutReload();
+  sessionAlert = null;
+  syncSessionPromise = null;
 }
 
 export function useMockSession() {

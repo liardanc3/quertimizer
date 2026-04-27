@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 
 interface AlarmTemplateResponse {
   type?: string;
@@ -33,7 +34,7 @@ async function requestAlarmTemplate<T>(path: string, init: RequestInit, fallback
   }
 
   if (!response.ok) {
-    throw new Error(fallbackMessage);
+    throw await createApiErrorFromResponse(response, fallbackMessage);
   }
 
   try {
@@ -45,17 +46,25 @@ async function requestAlarmTemplate<T>(path: string, init: RequestInit, fallback
 }
 
 export function fetchAdminAlarmTemplates(): Promise<AlarmTemplateData[]> {
-  return requestAlarmTemplate('/admin/alarm-templates', { method: 'GET' }, '알람 템플릿 목록을 불러오지 못했다.', (data) =>
-    Array.isArray(data) ? data.map((item) => normalizeAlarmTemplate(item as AlarmTemplateResponse)) : [],
+  return requestAlarmTemplate(
+    '/admin/alarm-templates',
+    { method: 'GET' },
+    getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+    (data) => Array.isArray(data) ? data.map((item) => normalizeAlarmTemplate(item as AlarmTemplateResponse)) : [],
   );
 }
 
 export function updateAlarmTemplate(type: string, payload: Omit<AlarmTemplateData, 'type'>): Promise<AlarmTemplateData> {
-  return requestAlarmTemplate(`/admin/alarm-templates/${encodeURIComponent(type)}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
+  return requestAlarmTemplate(
+    `/admin/alarm-templates/${encodeURIComponent(type)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  }, '알람 템플릿 수정에 실패했다.', (data) => normalizeAlarmTemplate((data ?? {}) as AlarmTemplateResponse));
+    getUiTextValue('ALARM_TEMPLATE_UPDATE_FAIL_MESSAGE', '알람 템플릿을 수정하지 못했습니다.'),
+    (data) => normalizeAlarmTemplate((data ?? {}) as AlarmTemplateResponse),
+  );
 }

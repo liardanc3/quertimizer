@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 import type { DbmsType, ProblemSubmittedHistory, ProblemSummary } from '../types/domain';
 
 export type { DbmsType };
@@ -161,6 +162,7 @@ export interface ProblemPage {
 }
 
 const DEFAULT_PROBLEM_DIFFICULTY = '중급' as ProblemSummary['difficulty'];
+const problemGetRequestPromises = new Map<string, Promise<unknown>>();
 
 function toDbmsType(value?: string) {
   return value === 'oracle' ? 'oracle' : 'postgresql';
@@ -228,11 +230,11 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       credentials: 'include',
     });
   } catch {
-    throw new Error('문제 상세 조회에 실패했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   if (!response.ok) {
-    throw new Error('문제 상세 조회에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   try {
@@ -252,7 +254,7 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       typeof data.answerSql !== 'string' ||
       typeof data.answerHash !== 'string'
     ) {
-      throw new Error();
+      throw new Error(getUiTextValue('PROBLEM_DETAIL_PARSE_FAIL_MESSAGE', '문제 정보 응답 형식이 올바르지 않습니다.'));
     }
 
     return {
@@ -272,13 +274,26 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       dbms: toDbmsType(data.dbms),
     };
   } catch {
-    throw new Error('문제 상세 조회에 실패했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 }
 
-export async function fetchProblems(params: FetchProblemsParams): Promise<ProblemPage> {
-  let response: Response;
+function requestProblemGet<T>(path: string, execute: () => Promise<T>): Promise<T> {
+  const requestKey = `GET:${path}`;
+  const inFlightRequest = problemGetRequestPromises.get(requestKey);
+  if (inFlightRequest != null) {
+    return inFlightRequest as Promise<T>;
+  }
 
+  const nextRequest = execute().finally(() => {
+    problemGetRequestPromises.delete(requestKey);
+  });
+
+  problemGetRequestPromises.set(requestKey, nextRequest);
+  return nextRequest;
+}
+
+export async function fetchProblems(params: FetchProblemsParams): Promise<ProblemPage> {
   const searchParams = new URLSearchParams({
     page: String(params.page),
     dbms: params.dbms,
@@ -316,52 +331,58 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
     searchParams.set('spreadRateMax', String(params.spreadRateMax));
   }
 
-  try {
-    response = await fetch(`${getApiBaseUrl()}/problems?${searchParams.toString()}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-  } catch {
-    throw new Error('문제 목록 조회에 실패했다.');
-  }
+  const requestPath = `/problems?${searchParams.toString()}`;
 
-  if (!response.ok) {
-    throw new Error('문제 목록 조회에 실패했다.');
-  }
+  return requestProblemGet(requestPath, async () => {
+    let response: Response;
 
-  try {
-    const data = (await response.json()) as ProblemPageResponse;
-    if (
-      typeof data.currentPage !== 'number' ||
-      typeof data.pageSize !== 'number' ||
-      typeof data.totalCount !== 'number' ||
-      typeof data.totalPages !== 'number' ||
-      !Array.isArray(data.problems)
-    ) {
-      throw new Error();
+    try {
+      response = await fetch(`${getApiBaseUrl()}${requestPath}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+    } catch {
+      throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
     }
 
-    return {
-      currentPage: data.currentPage,
-      pageSize: data.pageSize,
-      totalCount: data.totalCount,
-      totalPages: data.totalPages,
-      spreadRateRange: {
-        min: typeof data.spreadRateMin === 'number' ? data.spreadRateMin : 0,
-        max: typeof data.spreadRateMax === 'number' ? data.spreadRateMax : 0,
-      },
-      problems: data.problems
-        .filter(
-          (problem): problem is Required<Pick<ProblemListItemResponse, 'problemId' | 'title' | 'description'>> & ProblemListItemResponse =>
-            typeof problem.problemId === 'string' &&
-            typeof problem.title === 'string' &&
-            typeof problem.description === 'string',
-        )
-        .map(toProblemSummary),
-    };
-  } catch {
-    throw new Error('문제 목록 조회에 실패했다.');
-  }
+    if (!response.ok) {
+      throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+    }
+
+    try {
+      const data = (await response.json()) as ProblemPageResponse;
+      if (
+        typeof data.currentPage !== 'number' ||
+        typeof data.pageSize !== 'number' ||
+        typeof data.totalCount !== 'number' ||
+        typeof data.totalPages !== 'number' ||
+        !Array.isArray(data.problems)
+      ) {
+        throw new Error();
+      }
+
+      return {
+        currentPage: data.currentPage,
+        pageSize: data.pageSize,
+        totalCount: data.totalCount,
+        totalPages: data.totalPages,
+        spreadRateRange: {
+          min: typeof data.spreadRateMin === 'number' ? data.spreadRateMin : 0,
+          max: typeof data.spreadRateMax === 'number' ? data.spreadRateMax : 0,
+        },
+        problems: data.problems
+          .filter(
+            (problem): problem is Required<Pick<ProblemListItemResponse, 'problemId' | 'title' | 'description'>> & ProblemListItemResponse =>
+              typeof problem.problemId === 'string' &&
+              typeof problem.title === 'string' &&
+              typeof problem.description === 'string',
+          )
+          .map(toProblemSummary),
+      };
+    } catch {
+      throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+    }
+  });
 }
 
 export async function fetchProblemSets(): Promise<ProblemSetSummary[]> {
@@ -373,11 +394,11 @@ export async function fetchProblemSets(): Promise<ProblemSetSummary[]> {
       credentials: 'include',
     });
   } catch {
-    throw new Error('테이블셋 목록 조회에 실패했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   if (!response.ok) {
-    throw new Error('테이블셋 목록 조회에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   try {
@@ -389,7 +410,7 @@ export async function fetchProblemSets(): Promise<ProblemSetSummary[]> {
           .map((item) => ({ problemSetId: item.problemSetId }))
       : [];
   } catch {
-    throw new Error('테이블셋 목록 조회에 실패했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 }
 
@@ -402,11 +423,11 @@ export async function fetchProblemSetDetail(problemSetId: string): Promise<Probl
       credentials: 'include',
     });
   } catch {
-    throw new Error('테이블셋 상세 조회에 실패했다.');
+    throw new Error(getUiTextValue('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error('테이블셋 상세 조회에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));
   }
 
   try {
@@ -429,7 +450,7 @@ export async function fetchProblemSetDetail(problemSetId: string): Promise<Probl
       dataOracle: data.dataOracle,
     };
   } catch {
-    throw new Error('테이블셋 상세 조회에 실패했다.');
+    throw new Error(getUiTextValue('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));
   }
 }
 
@@ -442,11 +463,11 @@ export async function fetchAdminProblemOptions(problemSetId: string): Promise<st
       credentials: 'include',
     });
   } catch {
-    throw new Error('문제 목록 조회에 실패했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   if (!response.ok) {
-    throw new Error('문제 목록 조회에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   try {
@@ -458,7 +479,7 @@ export async function fetchAdminProblemOptions(problemSetId: string): Promise<st
           .map((item) => item.problemId)
       : [];
   } catch {
-    throw new Error('문제 목록 조회에 실패했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 }
 
@@ -475,11 +496,11 @@ export async function createProblem(payload: CreateProblemPayload): Promise<stri
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error('문제 생성에 실패했다.');
+    throw new Error(getUiTextValue('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error('문제 생성에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'));
   }
 
   try {
@@ -490,7 +511,7 @@ export async function createProblem(payload: CreateProblemPayload): Promise<stri
 
     return data.problemId;
   } catch {
-    throw new Error('문제 생성에 실패했다.');
+    throw new Error(getUiTextValue('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'));
   }
 }
 
@@ -530,11 +551,11 @@ export async function previewProblemOutput(payload: {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error('출력 예시 생성에 실패했다.');
+    throw new Error(getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error('출력 예시 생성에 실패했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
   }
 
   try {
@@ -549,6 +570,6 @@ export async function previewProblemOutput(payload: {
       rowCount: data.rowCount,
     };
   } catch {
-    throw new Error('출력 예시 생성에 실패했다.');
+    throw new Error(getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
   }
 }

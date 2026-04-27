@@ -1,5 +1,6 @@
 import { type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { getProfilePath, navigate } from '../../lib/navigation';
+import { useUiText } from '../../lib/uiText';
 import type { CommunityComment } from '../../types/domain';
 
 interface CommunityCommentThreadProps {
@@ -51,6 +52,7 @@ export default function CommunityCommentThread({
   onSubmitReply,
   onToggleLike,
 }: CommunityCommentThreadProps) {
+  const { text } = useUiText();
   const isReplyComposerOpen = activeReplyId === comment.id;
   const canReply = depth < 3;
 
@@ -86,7 +88,7 @@ export default function CommunityCommentThread({
             type="button"
             className={`community-comment-like-button ${comment.likedByCurrentUser ? 'is-liked' : ''}`.trim()}
             onClick={() => onToggleLike(comment.id)}
-            aria-label={comment.likedByCurrentUser ? '댓글 좋아요 취소' : '댓글 좋아요'}
+            aria-label={comment.likedByCurrentUser ? text('COMMUNITY_COMMENT_UNLIKE_LABEL', '댓글 좋아요 취소') : text('COMMUNITY_COMMENT_LIKE_LABEL', '댓글 좋아요')}
           >
             <LikeIcon />
             <span>{comment.likes}</span>
@@ -103,7 +105,7 @@ export default function CommunityCommentThread({
             className="community-comment-inline-reply"
             onClick={() => onToggleReply(comment.id)}
           >
-            {isReplyComposerOpen ? '닫기' : '댓글 달기'}
+            {isReplyComposerOpen ? text('COMMON_CLOSE_BUTTON', '닫기') : text('COMMUNITY_REPLY_TOGGLE_BUTTON', '댓글 달기')}
           </button>
         </div>
       ) : null}
@@ -118,13 +120,13 @@ export default function CommunityCommentThread({
                   value={replyDrafts[comment.id] ?? ''}
                   onChange={(event) => onChangeReplyDraft(comment.id, event.target.value)}
                   onKeyDown={handleReplyDraftKeyDown}
-                  placeholder="댓글 추가"
+                  placeholder={text('COMMUNITY_COMMENT_PLACEHOLDER', '댓글 추가')}
                 />
                 <button
                   type="button"
                   className="community-comment-submit-icon community-reply-submit-icon"
                   onClick={() => onSubmitReply(comment.id)}
-                  aria-label="대댓글 등록"
+                  aria-label={text('COMMUNITY_REPLY_SUBMIT_BUTTON', '대댓글 등록')}
                 >
                   <SendIcon />
                 </button>

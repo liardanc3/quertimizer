@@ -1,6 +1,9 @@
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import CommunityTiptapEditor from '../components/community/CommunityTiptapEditor';
+import HttpErrorState from '../components/common/HttpErrorState';
+import ContentLoading from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import {
   clearCommunityEditorDraft,
   getCommunityEditorDraft,
@@ -20,6 +23,7 @@ import { type CommunityEditorSnapshot } from '../lib/communityTiptap';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
 import { showSessionToast, useMockSession } from '../lib/session';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 import type { CommunityPostCategory } from '../types/domain';
 import './CommunityPage.css';
 
@@ -40,7 +44,7 @@ interface CommunityWriteFavoriteSnapshot extends EditorValues {
   postId?: string;
 }
 
-const POST_DRAFT_LOGIN_DESCRIPTION = '작성 중인 게시글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.';
+const POST_DRAFT_LOGIN_DESCRIPTION = getUiTextValue('COMMUNITY_WRITE_LOGIN_DRAFT_MESSAGE', '작성 중인 게시글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.');
 const contentByteFormatter = new Intl.NumberFormat('ko-KR');
 type EditableCommunityCategory = Extract<CommunityPostCategory, 'discussion' | 'question' | 'notice'>;
 
@@ -79,14 +83,14 @@ function CategoryArrowIcon() {
 
 function getCategoryLabel(category: EditableCommunityCategory) {
   if (category === 'notice') {
-    return '공지';
+    return getUiTextValue('COMMUNITY_CATEGORY_NOTICE_LABEL', '공지');
   }
 
   if (category === 'question') {
-    return '질문';
+    return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
   }
 
-  return '자유';
+  return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
 function normalizeEditableCategory(category?: string): EditableCommunityCategory {
@@ -122,6 +126,7 @@ function createEmptyValues(category: EditableCommunityCategory): EditorValues {
 }
 
 export default function CommunityWritePage({ postId, embedded = false }: CommunityWritePageProps) {
+  const { text } = useUiText();
   const { isAuthenticated, isAdmin, isReady } = useMockSession();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityWriteFavoriteSnapshot>('communityWrite'), []);
   const draftKey = postId ? `community-edit-${postId}` : 'community-write';
@@ -137,7 +142,8 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
   const [feedback, setFeedback] = useState<string | null>(null);
   const [tagSuggestions, setTagSuggestions] = useState<CommunityTagSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(Boolean(postId));
-  const [notFound, setNotFound] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -201,6 +207,9 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
 
     let cancelled = false;
     setIsLoading(true);
+    setLoadFailed(false);
+    setFeedback(null);
+    setLoadErrorStatus(null);
 
     fetchCommunityPostDetail(postId)
       .then((post) => {
@@ -243,11 +252,15 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
         setSelectedTags(nextValues.selectedTags);
         setInitialContentJson(nextValues.contentJson);
         setIsHydrated(true);
-        setNotFound(false);
+        setLoadFailed(false);
+        setLoadErrorStatus(null);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
-          setNotFound(true);
+          setLoadFailed(true);
+          setFeedback(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+          const status = getApiErrorStatus(error);
+          setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
         }
       })
       .finally(() => {
@@ -327,7 +340,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
     }
 
     if (selectedTags.length >= 7) {
-      setFeedback('태그는 최대 7개까지 추가할 수 있다.');
+      setFeedback(text('COMMUNITY_TAG_LIMIT_MESSAGE', '태그는 최대 7개까지 추가할 수 있습니다.'));
       return;
     }
 
@@ -363,7 +376,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
           onClick={() => setIsCategoryMenuOpen((currentValue) => !currentValue)}
           aria-haspopup="menu"
           aria-expanded={isCategoryMenuOpen}
-          aria-label="게시글 구분 선택"
+          aria-label={text('COMMUNITY_CATEGORY_SELECT_LABEL', '게시글 구분 선택')}
         >
           <span>{getCategoryLabel(category)}</span>
           <CategoryArrowIcon />
@@ -406,13 +419,19 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
     }
 
     if (!title.trim() || editorSnapshot.empty) {
-      setFeedback('제목과 본문은 반드시 입력해야 한다.');
+      setFeedback(!title.trim() ? text('COMMUNITY_TITLE_REQUIRED_MESSAGE', '제목 입력은 필수입니다.') : text('COMMUNITY_BODY_REQUIRED_MESSAGE', '본문 입력은 필수입니다.'));
       return;
     }
 
     if (editorSnapshot.contentByteLength > COMMUNITY_POST_CONTENT_MAX_BYTES) {
-      setFeedback(`본문은 최대 ${contentByteFormatter.format(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte까지 입력할 수 있다.`);
-      showSessionToast('업로드가 실패하였습니다.');
+      setFeedback(
+        text(
+          'COMMUNITY_CONTENT_MAX_BYTES_MESSAGE',
+          { maxBytes: contentByteFormatter.format(COMMUNITY_POST_CONTENT_MAX_BYTES) },
+          `본문은 최대 ${contentByteFormatter.format(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte까지 입력할 수 있습니다.`,
+        ),
+      );
+      showSessionToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
       return;
     }
 
@@ -434,15 +453,15 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
       }
 
       clearCommunityEditorDraft(draftKey);
-      showSessionToast('업로드가 성공하였습니다.');
+      showSessionToast(text('COMMUNITY_UPLOAD_SUCCESS_TOAST', '업로드했습니다.'));
       navigate(getCommunityPostPath(savedPostId), {
         state: {
           from: window.history.state?.from ?? COMMUNITY_PATH,
         },
       });
     } catch (error) {
-      showSessionToast('업로드가 실패하였습니다.');
-      setFeedback(error instanceof Error ? error.message : '게시글 저장에 실패했다.');
+      showSessionToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
+      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_POST_SAVE_FAIL_MESSAGE', '게시글을 저장하지 못했습니다.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -472,7 +491,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
                 }}
                 onFocus={() => setIsCategoryMenuOpen(false)}
                 className="text-field community-detail-title-input"
-                placeholder="제목"
+                placeholder={text('COMMUNITY_TITLE_PLACEHOLDER', '제목')}
               />
             </div>
 
@@ -499,7 +518,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
                 }}
                 onKeyDown={handleTagKeyDown}
                 className="text-field community-detail-edit-tag-input"
-                placeholder={selectedTags.length >= 7 ? '태그는 최대 7개' : '태그 추가'}
+                placeholder={selectedTags.length >= 7 ? text('COMMUNITY_TAG_LIMIT_PLACEHOLDER', '태그는 최대 7개') : text('COMMUNITY_TAG_PLACEHOLDER', '태그 추가')}
               />
 
               {draftTag.trim() && selectedTags.length < 7 && suggestedTags.length > 0 ? (
@@ -531,7 +550,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
 
               <div className="community-write-text-actions">
                 <button type="button" className="community-write-text-action is-cancel" onClick={handleCancel}>
-                  취소
+                  {text('COMMON_CANCEL_BUTTON', '취소')}
                 </button>
                 <button
                   type="button"
@@ -539,7 +558,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
                   onClick={() => void handleSubmit()}
                   disabled={isSubmitting}
                 >
-                  업로드
+                  {isSubmitting ? text('COMMUNITY_UPLOADING_BUTTON', '업로드 중') : text('COMMUNITY_UPLOAD_BUTTON', '업로드')}
                 </button>
               </div>
             </div>
@@ -557,25 +576,8 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
 
   if (isLoading) {
     const loadingPanel = (
-      <section className="panel-card community-detail-card community-detail-loading-card community-write-page">
-        <div className="community-detail-loading-shell is-loading">
-          <div className="community-detail-header community-detail-loading-body" aria-hidden="true">
-            <span className="community-loading-placeholder is-long" />
-            <div className="community-detail-tags">
-              <span className="community-loading-placeholder is-short" />
-              <span className="community-loading-placeholder is-short" />
-            </div>
-            <div className="community-content-body">
-              <span className="community-loading-placeholder is-long" />
-              <span className="community-loading-placeholder is-long" />
-              <span className="community-loading-placeholder is-medium" />
-            </div>
-          </div>
-
-          <div className="submit-history-loading-overlay" aria-live="polite" aria-label="로딩 중">
-            <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-          </div>
-        </div>
+      <section className="panel-card community-detail-card community-write-page">
+        <ContentLoading className="community-write-loading" />
       </section>
     );
 
@@ -586,11 +588,11 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
     );
   }
 
-  if (postId && notFound) {
+  if (postId && loadFailed) {
     const notFoundPanel = (
       <section className="panel-card community-detail-card community-write-page">
         <div className="community-detail-header">
-          <PageLoadFailureState />
+          {loadErrorStatus != null ? <HttpErrorState status={loadErrorStatus} message={feedback} /> : <PageLoadFailureState message={feedback} />}
         </div>
       </section>
     );

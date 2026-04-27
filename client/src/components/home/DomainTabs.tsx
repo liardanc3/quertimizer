@@ -1,3 +1,4 @@
+import { getUiTextValue } from '../../lib/uiText';
 import type { DomainType } from '../../types/domain';
 
 interface DomainTabsProps {
@@ -8,11 +9,11 @@ interface DomainTabsProps {
 export default function DomainTabs({ selectedDomain, onChange }: DomainTabsProps) {
   const tabs = [
     { id: 'rdbms' as const, label: 'RDBMS', disabled: false },
-    { id: 'nosql' as const, label: 'NoSQL', disabled: true },
+    { id: 'nosql' as const, label: 'NoSQL', disabled: true, disabledLabel: getUiTextValue('COMMON_PREPARING_LABEL', '준비 중') },
   ];
 
   return (
-    <div aria-label="문제 분류 선택" role="tablist" className="tabs-list problem-domain-tabs">
+    <div aria-label={getUiTextValue('HOME_DOMAIN_TABLIST_LABEL', '문제 분류 선택')} role="tablist" className="tabs-list problem-domain-tabs">
       {tabs.map((tab) => {
         const isSelected = selectedDomain === tab.id;
 
@@ -30,7 +31,7 @@ export default function DomainTabs({ selectedDomain, onChange }: DomainTabsProps
             className={`tab-button ${isSelected ? 'is-selected' : ''}`}
           >
             {tab.label}
-            {tab.disabled && <span className="tab-meta">준비중</span>}
+            {tab.disabled && <span className="tab-meta">{tab.disabledLabel}</span>}
           </button>
         );
       })}

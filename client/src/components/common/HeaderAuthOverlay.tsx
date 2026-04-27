@@ -15,6 +15,7 @@ import {
   verifySignupVerificationCode,
 } from '../../lib/authApi';
 import { completeAuthentication } from '../../lib/authSession';
+import { getUiTextValue, useUiText } from '../../lib/uiText';
 import logoImage from '../../assets/logo.png';
 import './HeaderAuthOverlay.css';
 
@@ -26,22 +27,13 @@ interface HeaderAuthOverlayProps {
   description?: string | null;
   onClose: () => void;
   onAuthenticated: () => void;
+  disableBackdropBlur?: boolean;
+  hideModalBorder?: boolean;
+  hideCloseButton?: boolean;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_RESET_CODE_PATTERN = /^[A-Z0-9]{6}$/;
-const SIGNUP_EMAIL_HINT = '올바른 이메일 형식으로 입력해 주세요.';
-const SIGNUP_EMAIL_CHECKING_MESSAGE = '이메일 사용 가능 여부를 확인하는 중입니다.';
-const SIGNUP_EMAIL_AVAILABLE_MESSAGE = '사용 가능한 이메일입니다.';
-const SIGNUP_EMAIL_DUPLICATED_MESSAGE = '이미 사용 중인 이메일입니다.';
-const SIGNUP_CODE_HINT = '이메일로 받은 인증코드 6자를 입력해 주세요.';
-const SIGNUP_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
-const SIGNUP_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.';
-const SIGNUP_PASSWORD_HINT = '특수문자를 포함해 8자 이상 입력해 주세요.';
-const SIGNUP_PASSWORD_CONFIRM_HINT = '비밀번호를 다시 입력해 주세요.';
-const RESET_CODE_SENT_MESSAGE = '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.';
-const RESET_CODE_VERIFIED_MESSAGE = '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.';
-const RESET_PASSWORD_CHANGED_MESSAGE = '비밀번호가 변경되었습니다. 다시 로그인해 주세요.';
 
 function hasRequiredPasswordFormat(value: string) {
   return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
@@ -54,13 +46,13 @@ function sanitizeVerificationCode(value: string) {
 function getHeaderAuthSocialLoginErrorMessage(provider: string | null) {
   switch (provider?.toLowerCase()) {
     case 'google':
-      return 'Google 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_GOOGLE_LOGIN_FAIL_MESSAGE', 'Google 로그인에 실패했습니다.');
     case 'github':
-      return 'Github 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_GITHUB_LOGIN_FAIL_MESSAGE', 'Github 로그인에 실패했습니다.');
     case 'kakao':
-      return 'Kakao 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_KAKAO_LOGIN_FAIL_MESSAGE', 'Kakao 로그인에 실패했습니다.');
     default:
-      return '소셜 로그인에 실패했습니다.';
+      return getUiTextValue('AUTH_SOCIAL_LOGIN_FAIL_MESSAGE', '소셜 로그인에 실패했습니다.');
   }
 }
 
@@ -140,7 +132,15 @@ function EmailMarkIcon() {
   );
 }
 
-export default function HeaderAuthOverlay({ description = null, onClose, onAuthenticated }: HeaderAuthOverlayProps) {
+export default function HeaderAuthOverlay({
+  description = null,
+  onClose,
+  onAuthenticated,
+  disableBackdropBlur = false,
+  hideModalBorder = false,
+  hideCloseButton = false,
+}: HeaderAuthOverlayProps) {
+  const { text } = useUiText();
   const [mode, setMode] = useState<HeaderAuthOverlayMode>('login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -202,24 +202,35 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
   const isResetCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedResetCode);
   const isResetPasswordValid = hasRequiredPasswordFormat(newPassword);
   const isResetPasswordConfirmValid = newPasswordConfirm !== '' && newPasswordConfirm === newPassword;
-  const resetCodeSentStatusMessage = resetStatusMessage === RESET_CODE_SENT_MESSAGE ? resetStatusMessage : null;
-  const resetCodeVerifiedStatusMessage = resetStatusMessage === RESET_CODE_VERIFIED_MESSAGE ? resetStatusMessage : null;
-  const resetPasswordChangedStatusMessage = resetStatusMessage === RESET_PASSWORD_CHANGED_MESSAGE ? resetStatusMessage : null;
-  const signupCodeSentStatusMessage = signupStatusMessage === SIGNUP_CODE_SENT_MESSAGE ? signupStatusMessage : null;
-  const signupCodeVerifiedStatusMessage = signupStatusMessage === SIGNUP_CODE_VERIFIED_MESSAGE ? signupStatusMessage : null;
+  const authEmailHint = text('AUTH_EMAIL_HINT', '올바른 이메일 형식으로 입력해 주세요.');
+  const authEmailCheckingMessage = text('AUTH_EMAIL_CHECKING_MESSAGE', '이메일 사용 가능 여부를 확인하는 중입니다.');
+  const authEmailAvailableMessage = text('AUTH_EMAIL_AVAILABLE_MESSAGE', '사용 가능한 이메일입니다.');
+  const authEmailDuplicatedMessage = text('AUTH_EMAIL_DUPLICATED_MESSAGE', '이미 사용 중인 이메일입니다.');
+  const authCodeHint = text('AUTH_CODE_HINT', '이메일로 받은 인증코드 6자를 입력해 주세요.');
+  const authCodeSentMessage = text('AUTH_CODE_SENT_MESSAGE', '인증 코드를 전송했습니다. 5분 이내에 입력해 주세요.');
+  const authCodeVerifiedMessage = text('AUTH_CODE_VERIFIED_MESSAGE', '인증 코드가 확인되었습니다. 비밀번호를 입력해 주세요.');
+  const authPasswordHint = text('AUTH_PASSWORD_HINT', '특수문자를 포함해 8자 이상 입력해 주세요.');
+  const authPasswordConfirmHint = text('AUTH_PASSWORD_CONFIRM_HINT', '비밀번호를 다시 입력해 주세요.');
+  const authResetCodeVerifiedMessage = text('AUTH_RESET_CODE_VERIFIED_MESSAGE', '인증 코드가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+  const authResetPasswordChangedMessage = text('AUTH_RESET_PASSWORD_CHANGED_MESSAGE', '비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
+  const resetCodeSentStatusMessage = resetStatusMessage === authCodeSentMessage ? resetStatusMessage : null;
+  const resetCodeVerifiedStatusMessage = resetStatusMessage === authResetCodeVerifiedMessage ? resetStatusMessage : null;
+  const resetPasswordChangedStatusMessage = resetStatusMessage === authResetPasswordChangedMessage ? resetStatusMessage : null;
+  const signupCodeSentStatusMessage = signupStatusMessage === authCodeSentMessage ? signupStatusMessage : null;
+  const signupCodeVerifiedStatusMessage = signupStatusMessage === authCodeVerifiedMessage ? signupStatusMessage : null;
   const signupEmailHintMessage =
     signupCodeSentStatusMessage ??
     (normalizedSignupEmail === ''
-      ? SIGNUP_EMAIL_HINT
+      ? authEmailHint
       : !isSignupEmailValid
-        ? SIGNUP_EMAIL_HINT
+        ? authEmailHint
         : signupEmailCheckStatus === 'checking'
-          ? SIGNUP_EMAIL_CHECKING_MESSAGE
+          ? authEmailCheckingMessage
           : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'
-            ? (signupEmailCheckReason ?? SIGNUP_EMAIL_DUPLICATED_MESSAGE)
+            ? (signupEmailCheckReason ?? authEmailDuplicatedMessage)
             : signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'available'
-              ? SIGNUP_EMAIL_AVAILABLE_MESSAGE
-              : SIGNUP_EMAIL_HINT);
+              ? authEmailAvailableMessage
+              : authEmailHint);
   const hasSignupEmailError =
     normalizedSignupEmail !== '' &&
     (!isSignupEmailValid || (signupEmailLastCheckedValue === normalizedSignupEmail && signupEmailCheckStatus === 'duplicated'));
@@ -275,7 +286,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
     if (!popup) {
       setIsSocialLoginSubmitting(false);
-      setLoginErrors(['팝업이 차단되어 소셜 로그인을 진행할 수 없습니다.']);
+      setLoginErrors([text('AUTH_POPUP_BLOCKED_MESSAGE', '팝업이 차단되어 소셜 로그인을 진행할 수 없습니다.')]);
       return;
     }
 
@@ -458,7 +469,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '이메일 중복 확인 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_EMAIL_DUPLICATE_CHECK_FAIL_MESSAGE', '이메일 중복 확인 중 오류가 발생했습니다.')]);
       return false;
     }
   };
@@ -481,7 +492,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
       await completeAuthentication(session);
       if (!session.authenticated) {
-        setLoginErrors(['로그인에 실패했습니다.']);
+        setLoginErrors([text('AUTH_LOGIN_FAIL_MESSAGE', '로그인에 실패했습니다.')]);
         return;
       }
 
@@ -492,7 +503,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return;
       }
 
-      setLoginErrors([error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.']);
+      setLoginErrors([error instanceof Error ? error.message : text('AUTH_LOGIN_ERROR_MESSAGE', '로그인 중 오류가 발생했습니다.')]);
     } finally {
       setIsLoginSubmitting(false);
     }
@@ -517,7 +528,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
       setSignupCode('');
       setIsSignupCodeSent(true);
       setIsSignupCodeVerified(false);
-      setSignupStatusMessage(SIGNUP_CODE_SENT_MESSAGE);
+      setSignupStatusMessage(authCodeSentMessage);
       return true;
     } catch (error) {
       if (error instanceof SignupApiError) {
@@ -525,7 +536,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSendingSignupCode(false);
@@ -547,7 +558,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         code: normalizedSignupCode,
       });
       setIsSignupCodeVerified(true);
-      setSignupStatusMessage(SIGNUP_CODE_VERIFIED_MESSAGE);
+      setSignupStatusMessage(authCodeVerifiedMessage);
       return true;
     } catch (error) {
       setIsSignupCodeVerified(false);
@@ -556,7 +567,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsVerifyingSignupCode(false);
@@ -589,7 +600,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
       await completeAuthentication(session);
 
       if (!session.authenticated) {
-        setSignupErrors(['회원가입 후 세션을 확인하지 못했습니다.']);
+        setSignupErrors([text('AUTH_SIGNUP_SESSION_FAIL_MESSAGE', '회원가입 후 세션을 확인하지 못했습니다.')]);
         return false;
       }
 
@@ -601,7 +612,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setSignupErrors([error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.']);
+      setSignupErrors([error instanceof Error ? error.message : text('AUTH_SIGNUP_ERROR_MESSAGE', '회원가입 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSignupSubmitting(false);
@@ -623,7 +634,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
       setIsResetCodeVerified(false);
       setNewPassword('');
       setNewPasswordConfirm('');
-      setResetStatusMessage(RESET_CODE_SENT_MESSAGE);
+      setResetStatusMessage(authCodeSentMessage);
       return true;
     } catch (error) {
       if (error instanceof RecoveryApiError) {
@@ -631,7 +642,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setResetErrors([error instanceof Error ? error.message : '인증 코드 전송 중 오류가 발생했습니다.']);
+      setResetErrors([error instanceof Error ? error.message : text('AUTH_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsSendingResetCode(false);
@@ -652,7 +663,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         code: normalizedResetCode,
       });
       setIsResetCodeVerified(true);
-      setResetStatusMessage(RESET_CODE_VERIFIED_MESSAGE);
+      setResetStatusMessage(authResetCodeVerifiedMessage);
       return true;
     } catch (error) {
       setIsResetCodeVerified(false);
@@ -661,7 +672,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setResetErrors([error instanceof Error ? error.message : '인증 코드 확인 중 오류가 발생했습니다.']);
+      setResetErrors([error instanceof Error ? error.message : text('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsVerifyingResetCode(false);
@@ -683,7 +694,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         email: normalizedResetEmail,
         password: newPassword,
       });
-      setResetStatusMessage(RESET_PASSWORD_CHANGED_MESSAGE);
+      setResetStatusMessage(authResetPasswordChangedMessage);
       setNewPassword('');
       setNewPasswordConfirm('');
       returnToLoginTimeoutRef.current = window.setTimeout(() => {
@@ -697,29 +708,41 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
         return false;
       }
 
-      setResetErrors([error instanceof Error ? error.message : '비밀번호 변경 중 오류가 발생했습니다.']);
+      setResetErrors([error instanceof Error ? error.message : text('AUTH_PASSWORD_CHANGE_FAIL_MESSAGE', '비밀번호 변경 중 오류가 발생했습니다.')]);
       return false;
     } finally {
       setIsResettingPassword(false);
     }
   };
 
-  const overlayTitle = mode === 'signup' ? '이메일로 가입하기' : mode === 'reset-password' ? '비밀번호 찾기' : '로그인';
+  const overlayTitle =
+    mode === 'signup'
+      ? text('AUTH_SIGNUP_TITLE', '이메일로 가입하기')
+      : mode === 'reset-password'
+        ? text('AUTH_RESET_TITLE', '비밀번호 찾기')
+        : text('AUTH_LOGIN_TITLE', '로그인');
   const signupDescription = description?.trim().replace('로그인 후', '가입 후') ?? '';
   const overlayDescription =
     mode === 'signup'
       ? signupDescription
       : mode === 'reset-password'
-        ? '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.'
+        ? text('AUTH_RESET_DESCRIPTION', '인증 코드를 확인한 뒤 새 비밀번호를 설정합니다.')
         : description?.trim() ?? '';
 
   return (
     <div className="header-auth-overlay" role="presentation">
-      <div className="header-auth-overlay-backdrop" />
-      <section className="header-auth-modal" role="dialog" aria-modal="true" aria-label={overlayTitle}>
-        <button type="button" className="header-auth-modal-close" aria-label="로그인 팝업 닫기" onClick={onClose}>
-          <CloseIcon />
-        </button>
+      <div className={`header-auth-overlay-backdrop ${disableBackdropBlur ? 'is-without-blur' : ''}`.trim()} />
+      <section className={`header-auth-modal ${hideModalBorder ? 'is-borderless' : ''}`.trim()} role="dialog" aria-modal="true" aria-label={overlayTitle}>
+        {!hideCloseButton ? (
+          <button
+            type="button"
+            className="header-auth-modal-close"
+            aria-label={text('AUTH_LOGIN_MODAL_CLOSE_LABEL', '로그인 팝업 닫기')}
+            onClick={onClose}
+          >
+            <CloseIcon />
+          </button>
+        ) : null}
 
         <div className="header-auth-modal-header">
           <div className="header-auth-modal-copy">
@@ -732,10 +755,14 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
           <div className="header-auth-landing-body">
             <div className="minimal-auth-form header-auth-minimal-form">
               <div className="landing-auth-layout">
-                <form className="landing-login-panel" aria-label="로그인 입력" onSubmit={(event) => void handleLoginSubmit(event)}>
+                <form
+                  className="landing-login-panel"
+                  aria-label={text('AUTH_LOGIN_FORM_LABEL', '로그인 입력')}
+                  onSubmit={(event) => void handleLoginSubmit(event)}
+                >
                   <div className="field-stack">
                     <label className="field-label" htmlFor="header-auth-email">
-                      이메일
+                      {text('AUTH_EMAIL_LABEL', '이메일')}
                     </label>
                     <input
                       id="header-auth-email"
@@ -747,14 +774,14 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                         setLoginEmail(event.target.value);
                         setLoginErrors([]);
                       }}
-                      placeholder="이메일을 입력하세요"
+                      placeholder={text('AUTH_LOGIN_EMAIL_PLACEHOLDER', '이메일을 입력하세요')}
                       inputMode="email"
                     />
                   </div>
 
                   <div className="field-stack">
                     <label className="field-label" htmlFor="header-auth-password">
-                      비밀번호
+                      {text('AUTH_PASSWORD_LABEL', '비밀번호')}
                     </label>
                     <input
                       id="header-auth-password"
@@ -774,7 +801,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                         event.preventDefault();
                         void handleLoginSubmit();
                       }}
-                      placeholder="비밀번호를 입력하세요"
+                      placeholder={text('AUTH_LOGIN_PASSWORD_PLACEHOLDER', '비밀번호를 입력하세요')}
                     />
                   </div>
 
@@ -794,12 +821,12 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                       className="btn primary landing-login-submit"
                       disabled={!isLoginReady || isLoginSubmitting}
                     >
-                      {isLoginSubmitting ? '로그인 중...' : '로그인'}
+                      {isLoginSubmitting ? text('AUTH_LOGIN_IN_PROGRESS_ELLIPSIS', '로그인 중...') : text('AUTH_LOGIN_TITLE', '로그인')}
                     </button>
                   </div>
 
                   <button type="button" className="btn text landing-password-reset-link" onClick={() => setMode('reset-password')}>
-                    비밀번호를 잊으셨나요?
+                    {text('AUTH_FORGOT_PASSWORD_LINK', '비밀번호를 잊으셨나요?')}
                   </button>
                 </form>
 
@@ -809,27 +836,27 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   <span className="landing-auth-divider-line" />
                 </div>
 
-                <aside className="landing-access-panel" aria-label="계정 지원">
+                <aside className="landing-access-panel" aria-label={text('AUTH_ACCOUNT_SUPPORT_LABEL', '계정 지원')}>
                   <div className="landing-access-group landing-access-group-social">
                     <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <GoogleMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">Google로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GOOGLE', 'Google로 계속하기')}</span>
                     </button>
 
                     <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <GithubMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">Github로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GITHUB', 'Github로 계속하기')}</span>
                     </button>
 
                     <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <KakaoMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">Kakao로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_KAKAO', 'Kakao로 계속하기')}</span>
                     </button>
                   </div>
 
@@ -838,7 +865,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                       <span className="landing-access-card-icon" aria-hidden="true">
                         <EmailMarkIcon />
                       </span>
-                      <span className="landing-access-card-title">이메일로 계속하기</span>
+                      <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_EMAIL', '이메일로 계속하기')}</span>
                     </button>
                   </div>
                 </aside>
@@ -849,7 +876,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
           <form className="header-auth-signup-form" onSubmit={(event) => void handleSignupSubmit(event)}>
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-signup-email">
-                이메일
+                {text('AUTH_EMAIL_LABEL', '이메일')}
               </label>
               <div className="header-auth-inline-row">
                 <input
@@ -880,11 +907,11 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   onBlur={() => {
                     void checkSignupEmailDuplication();
                   }}
-                  placeholder="이메일을 입력해 주세요."
+                  placeholder={text('AUTH_EMAIL_PLACEHOLDER_POLITE', '이메일을 입력해 주세요.')}
                   aria-invalid={hasSignupEmailError}
                 />
                 <button type="button" className="btn secondary" onClick={handleSendSignupCode} disabled={!isSignupEmailValid || isSendingSignupCode}>
-                  {isSendingSignupCode ? '전송 중' : '코드 전송'}
+                  {isSendingSignupCode ? text('COMMON_SENDING_LABEL', '전송 중') : text('AUTH_CODE_SEND_BUTTON', '코드 전송')}
                 </button>
               </div>
               <p className={`header-auth-field-hint ${hasSignupEmailError ? 'is-error' : hasSignupEmailSuccess ? 'is-success' : ''}`}>
@@ -894,7 +921,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-signup-code">
-                인증 코드
+                {text('AUTH_CODE_LABEL', '인증 코드')}
               </label>
               <div className="header-auth-inline-row">
                 <input
@@ -922,7 +949,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                       }
                     })();
                   }}
-                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                  placeholder={text('AUTH_CODE_PLACEHOLDER_POLITE', '이메일로 받은 6자리 코드를 입력해 주세요.')}
                   disabled={!isSignupCodeSent}
                 />
                 <button
@@ -931,16 +958,16 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   onClick={handleVerifySignupCode}
                   disabled={!isSignupCodeSent || !isSignupCodeValid || isVerifyingSignupCode}
                 >
-                  {isVerifyingSignupCode ? '확인 중' : '코드 확인'}
+                  {isVerifyingSignupCode ? text('COMMON_VERIFYING_LABEL', '확인 중') : text('AUTH_CODE_VERIFY_BUTTON', '코드 확인')}
                 </button>
               </div>
               {signupCodeVerifiedStatusMessage ? <p className="header-auth-field-hint is-success">{signupCodeVerifiedStatusMessage}</p> : null}
-              {!signupCodeVerifiedStatusMessage ? <p className="header-auth-field-hint">{SIGNUP_CODE_HINT}</p> : null}
+              {!signupCodeVerifiedStatusMessage ? <p className="header-auth-field-hint">{authCodeHint}</p> : null}
             </div>
 
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-signup-password">
-                비밀번호
+                {text('AUTH_PASSWORD_LABEL', '비밀번호')}
               </label>
               <input
                 id="header-signup-password"
@@ -961,17 +988,17 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   event.preventDefault();
                   focusNextInput(signupPasswordConfirmInputRef);
                 }}
-                placeholder="비밀번호를 입력해 주세요."
+                placeholder={text('AUTH_PASSWORD_PLACEHOLDER_POLITE', '비밀번호를 입력해 주세요.')}
                 aria-invalid={signupPassword.length > 0 && !isSignupPasswordValid}
               />
               <p className={`header-auth-field-hint ${signupPassword.length > 0 && !isSignupPasswordValid ? 'is-error' : signupPassword.length > 0 ? 'is-success' : ''}`}>
-                {SIGNUP_PASSWORD_HINT}
+                {authPasswordHint}
               </p>
             </div>
 
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-signup-password-confirm">
-                비밀번호 확인
+                {text('AUTH_PASSWORD_CONFIRM_LABEL', '비밀번호 확인')}
               </label>
               <input
                 id="header-signup-password-confirm"
@@ -992,11 +1019,11 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   event.preventDefault();
                   void handleSignupSubmit();
                 }}
-                placeholder="비밀번호를 다시 입력해 주세요."
+                placeholder={text('AUTH_PASSWORD_CONFIRM_PLACEHOLDER', '비밀번호를 다시 입력해 주세요.')}
                 aria-invalid={signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid}
               />
               <p className={`header-auth-field-hint ${signupPasswordConfirm.length > 0 && !isSignupPasswordConfirmValid ? 'is-error' : signupPasswordConfirm.length > 0 ? 'is-success' : ''}`}>
-                {SIGNUP_PASSWORD_CONFIRM_HINT}
+                {authPasswordConfirmHint}
               </p>
             </div>
 
@@ -1010,10 +1037,10 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
             <div className="header-auth-signup-actions">
               <button type="submit" className="btn primary" disabled={!isSignupReady || isSignupSubmitting}>
-                {isSignupSubmitting ? '가입 중' : '가입하기'}
+                {isSignupSubmitting ? text('AUTH_SIGNUP_PROGRESS_LABEL', '가입 중') : text('AUTH_SIGNUP_BUTTON', '가입하기')}
               </button>
               <button type="button" className="header-auth-reset-link" onClick={() => setMode('login')}>
-                로그인으로 돌아가기
+                {text('AUTH_BACK_TO_LOGIN_BUTTON', '로그인으로 돌아가기')}
               </button>
             </div>
           </form>
@@ -1021,7 +1048,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
           <form className="header-auth-reset-form" onSubmit={(event) => void handleResetPassword(event)}>
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-reset-email">
-                이메일
+                {text('AUTH_EMAIL_LABEL', '이메일')}
               </label>
               <div className="header-auth-inline-row">
                 <input
@@ -1048,10 +1075,10 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                     setResetErrors([]);
                     setResetStatusMessage(null);
                   }}
-                  placeholder="가입한 이메일을 입력해 주세요."
+                  placeholder={text('AUTH_RESET_EMAIL_PLACEHOLDER', '가입한 이메일을 입력해 주세요.')}
                 />
                 <button type="button" className="btn secondary" onClick={handleSendResetCode} disabled={!isResetEmailValid || isSendingResetCode}>
-                  {isSendingResetCode ? '전송 중' : '코드 전송'}
+                  {isSendingResetCode ? text('COMMON_SENDING_LABEL', '전송 중') : text('AUTH_CODE_SEND_BUTTON', '코드 전송')}
                 </button>
               </div>
               {resetCodeSentStatusMessage ? <p className="header-auth-field-hint is-success">{resetCodeSentStatusMessage}</p> : null}
@@ -1059,7 +1086,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-reset-code">
-                인증 코드
+                {text('AUTH_CODE_LABEL', '인증 코드')}
               </label>
               <div className="header-auth-inline-row">
                 <input
@@ -1086,7 +1113,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                       }
                     })();
                   }}
-                  placeholder="이메일로 받은 6자리 코드를 입력해 주세요."
+                  placeholder={text('AUTH_CODE_PLACEHOLDER_POLITE', '이메일로 받은 6자리 코드를 입력해 주세요.')}
                 />
                 <button
                   type="button"
@@ -1094,7 +1121,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   onClick={handleVerifyResetCode}
                   disabled={!isResetCodeSent || !isResetCodeValid || isVerifyingResetCode}
                 >
-                  {isVerifyingResetCode ? '확인 중' : '코드 확인'}
+                  {isVerifyingResetCode ? text('COMMON_VERIFYING_LABEL', '확인 중') : text('AUTH_CODE_VERIFY_BUTTON', '코드 확인')}
                 </button>
               </div>
               {resetCodeVerifiedStatusMessage ? <p className="header-auth-field-hint is-success">{resetCodeVerifiedStatusMessage}</p> : null}
@@ -1102,7 +1129,7 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
 
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-reset-password">
-                새 비밀번호
+                {text('AUTH_NEW_PASSWORD_LABEL', '새 비밀번호')}
               </label>
               <input
                 id="header-reset-password"
@@ -1122,17 +1149,17 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   event.preventDefault();
                   focusNextInput(resetPasswordConfirmInputRef);
                 }}
-                placeholder="특수문자를 포함해 8자 이상 입력해 주세요."
+                placeholder={text('AUTH_NEW_PASSWORD_PLACEHOLDER', '특수문자를 포함해 8자 이상 입력해 주세요.')}
                 disabled={!isResetCodeVerified}
               />
               <p className={`header-auth-field-hint ${newPassword.length > 0 && !isResetPasswordValid ? 'is-error' : newPassword.length > 0 ? 'is-success' : ''}`}>
-                비밀번호는 특수문자를 포함해 8자 이상이어야 합니다.
+                {text('AUTH_PASSWORD_VALIDATION_MESSAGE', '비밀번호는 특수문자를 포함해 8자 이상이어야 합니다.')}
               </p>
             </div>
 
             <div className="field-stack header-auth-field-stack">
               <label className="field-label" htmlFor="header-reset-password-confirm">
-                새 비밀번호 확인
+                {text('AUTH_NEW_PASSWORD_CONFIRM_LABEL', '새 비밀번호 확인')}
               </label>
               <input
                 id="header-reset-password-confirm"
@@ -1152,11 +1179,11 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                   event.preventDefault();
                   void handleResetPassword();
                 }}
-                placeholder="비밀번호를 다시 입력해 주세요."
+                placeholder={text('AUTH_PASSWORD_CONFIRM_PLACEHOLDER', '비밀번호를 다시 입력해 주세요.')}
                 disabled={!isResetCodeVerified}
               />
               <p className={`header-auth-field-hint ${newPasswordConfirm.length > 0 && !isResetPasswordConfirmValid ? 'is-error' : newPasswordConfirm.length > 0 ? 'is-success' : ''}`}>
-                비밀번호 확인은 비밀번호와 동일해야 합니다.
+                {text('AUTH_PASSWORD_CONFIRM_VALIDATION_MESSAGE', '비밀번호 확인은 비밀번호와 동일해야 합니다.')}
               </p>
               {resetPasswordChangedStatusMessage ? <p className="header-auth-field-hint is-success">{resetPasswordChangedStatusMessage}</p> : null}
             </div>
@@ -1175,10 +1202,10 @@ export default function HeaderAuthOverlay({ description = null, onClose, onAuthe
                 className="btn primary"
                 disabled={!isResetCodeVerified || !isResetPasswordValid || !isResetPasswordConfirmValid || isResettingPassword}
               >
-                {isResettingPassword ? '변경 중' : '비밀번호 변경'}
+                {isResettingPassword ? text('AUTH_PASSWORD_CHANGING_LABEL', '변경 중') : text('AUTH_PASSWORD_CHANGE_BUTTON', '비밀번호 변경')}
               </button>
               <button type="button" className="header-auth-reset-link" onClick={() => setMode('login')}>
-                로그인으로 돌아가기
+                {text('AUTH_BACK_TO_LOGIN_BUTTON', '로그인으로 돌아가기')}
               </button>
             </div>
           </form>

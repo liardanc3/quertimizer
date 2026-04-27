@@ -1,18 +1,5 @@
-function isLoopbackHostname(hostname: string) {
-  return hostname === 'localhost' || hostname === '127.0.0.1';
-}
-
-function normalizeApiBaseUrl(value: string) {
-  return value.replace(/\/+$/, '');
-}
-
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const API_BASE_URL =
-  configuredApiBaseUrl && configuredApiBaseUrl.length > 0
-    ? normalizeApiBaseUrl(configuredApiBaseUrl)
-    : typeof window !== 'undefined'
-      ? normalizeApiBaseUrl(window.location.origin)
-      : '';
+import { getUiTextValue, resolveApiHttpErrorReasons } from './uiText';
+import { getApiBaseUrl } from './apiBaseUrl';
 
 export interface LoginPayload {
   email: string;
@@ -43,10 +30,6 @@ export interface ResetPasswordPayload {
   password: string;
 }
 
-interface ExceptionResponse {
-  reasons?: string[];
-}
-
 interface SessionMeResponse {
   authenticated?: boolean;
   handle?: string | null;
@@ -60,7 +43,7 @@ export class SignupApiError extends Error {
   readonly reasons: string[];
 
   constructor(status: number, reasons: string[]) {
-    super(reasons[0] ?? '회원가입 요청에 실패했습니다.');
+    super(reasons[0] ?? getUiTextValue('AUTH_SIGNUP_ERROR_MESSAGE', '회원가입 중 오류가 발생했습니다.'));
     this.name = 'SignupApiError';
     this.status = status;
     this.reasons = reasons;
@@ -103,24 +86,11 @@ export interface SessionMeResult {
   role: 'user' | 'admin' | 'problemGenerator' | null;
   handleSetupRequired: boolean;
 }
-
-export function getApiBaseUrl() {
-  if (typeof window === 'undefined' || API_BASE_URL === '') {
-    return API_BASE_URL;
-  }
-
-  const url = new URL(API_BASE_URL);
-
-  if (isLoopbackHostname(url.hostname) && isLoopbackHostname(window.location.hostname)) {
-    url.hostname = window.location.hostname;
-  }
-
-  return normalizeApiBaseUrl(url.toString());
-}
+export { getApiBaseUrl } from './apiBaseUrl';
 
 async function sha512Hex(value: string) {
   if (!globalThis.crypto?.subtle) {
-    throw new Error('브라우저 암호화 기능을 사용할 수 없습니다.');
+    throw new Error(getUiTextValue('AUTH_BROWSER_ENCRYPTION_UNAVAILABLE_MESSAGE', '브라우저 암호화 기능을 사용할 수 없습니다.'));
   }
 
   const encodedValue = new TextEncoder().encode(value);
@@ -132,19 +102,7 @@ async function sha512Hex(value: string) {
 }
 
 async function getErrorReasons(response: Response, fallbackMessage: string) {
-  let reasons = [fallbackMessage];
-
-  try {
-    const data = (await response.json()) as ExceptionResponse;
-
-    if (Array.isArray(data.reasons) && data.reasons.length > 0) {
-      reasons = data.reasons;
-    }
-  } catch {
-    // Ignore invalid JSON responses and keep the fallback message.
-  }
-
-  return reasons;
+  return resolveApiHttpErrorReasons(response, fallbackMessage);
 }
 
 async function requestAuth(path: '/signup' | '/login', payload: LoginPayload | SignupPayload, fallbackMessage: string) {
@@ -285,7 +243,7 @@ async function requestSignupVerification(path: '/signup/send-code' | '/signup/ve
 
 export async function signup(payload: SignupPayload) {
   try {
-    await requestAuth('/signup', payload, '회원가입 요청에 실패했습니다.');
+    await requestAuth('/signup', payload, getUiTextValue('AUTH_SIGNUP_ERROR_MESSAGE', '회원가입 중 오류가 발생했습니다.'));
   } catch (error) {
     if (error instanceof AuthApiError) {
       throw new SignupApiError(error.status, error.reasons);
@@ -296,11 +254,11 @@ export async function signup(payload: SignupPayload) {
 }
 
 export async function sendSignupVerificationCode(payload: AccountRecoveryEmailPayload) {
-  await requestSignupVerification('/signup/send-code', payload, '이메일 가입 인증코드 발송에 실패했습니다.');
+  await requestSignupVerification('/signup/send-code', payload, getUiTextValue('AUTH_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.'));
 }
 
 export async function verifySignupVerificationCode(payload: AccountRecoveryCodePayload) {
-  await requestSignupVerification('/signup/verify-code', payload, '이메일 가입 인증코드 확인에 실패했습니다.');
+  await requestSignupVerification('/signup/verify-code', payload, getUiTextValue('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.'));
 }
 
 export async function setupHandle(payload: SetupHandlePayload) {
@@ -316,11 +274,11 @@ export async function setupHandle(payload: SetupHandlePayload) {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new SignupApiError(0, ['Handle 설정 요청에 실패했습니다.']);
+    throw new SignupApiError(0, [getUiTextValue('HANDLE_SETUP_FAIL_MESSAGE', 'Handle 설정 중 오류가 발생했습니다.')]);
   }
 
   if (!response.ok) {
-    const reasons = await getErrorReasons(response, 'Handle 설정 요청에 실패했습니다.');
+    const reasons = await getErrorReasons(response, getUiTextValue('HANDLE_SETUP_FAIL_MESSAGE', 'Handle 설정 중 오류가 발생했습니다.'));
     throw new SignupApiError(response.status, reasons);
   }
 
@@ -328,18 +286,22 @@ export async function setupHandle(payload: SetupHandlePayload) {
     const data = (await response.json()) as SessionMeResponse;
     return parseSessionMeResult(data);
   } catch {
-    throw new SignupApiError(response.status, ['Handle 설정 응답 처리에 실패했습니다.']);
+    throw new SignupApiError(response.status, [getUiTextValue('HANDLE_SETUP_PARSE_FAIL_MESSAGE', 'Handle 설정 응답 형식이 올바르지 않습니다.')]);
   }
 }
 
 export async function login(payload: LoginPayload) {
-  const response = await requestAuth('/login', payload, '로그인 요청에 실패했습니다.');
+  const response = await requestAuth('/login', payload, getUiTextValue('AUTH_LOGIN_FAIL_MESSAGE', '로그인에 실패했습니다.'));
 
   try {
     const data = (await response.json()) as SessionMeResponse;
     return parseSessionMeResult(data);
   } catch {
-    throw new AuthApiError(response.status, ['로그인 응답 처리에 실패했습니다.'], '로그인 응답 처리에 실패했습니다.');
+    throw new AuthApiError(
+      response.status,
+      [getUiTextValue('AUTH_LOGIN_PARSE_FAIL_MESSAGE', '로그인 응답 형식이 올바르지 않습니다.')],
+      getUiTextValue('AUTH_LOGIN_PARSE_FAIL_MESSAGE', '로그인 응답 형식이 올바르지 않습니다.'),
+    );
   }
 }
 
@@ -376,19 +338,24 @@ export async function logout() {
       credentials: 'include',
     });
   } catch {
-    throw new AuthApiError(0, ['로그아웃 요청에 실패했습니다.'], '로그아웃 요청에 실패했습니다.');
+    throw new AuthApiError(
+      0,
+      [getUiTextValue('AUTH_LOGOUT_FAIL_MESSAGE', '로그아웃에 실패했습니다.')],
+      getUiTextValue('AUTH_LOGOUT_FAIL_MESSAGE', '로그아웃에 실패했습니다.'),
+    );
   }
 
   if (response.ok) {
     return;
   }
 
-  const reasons = await getErrorReasons(response, '로그아웃 요청에 실패했습니다.');
-  throw new AuthApiError(response.status, reasons, '로그아웃 요청에 실패했습니다.');
+  const reasons = await getErrorReasons(response, getUiTextValue('AUTH_LOGOUT_FAIL_MESSAGE', '로그아웃에 실패했습니다.'));
+  throw new AuthApiError(response.status, reasons, getUiTextValue('AUTH_LOGOUT_FAIL_MESSAGE', '로그아웃에 실패했습니다.'));
 }
 
 export async function fetchSessionMe() {
   let response: Response;
+  const fallbackMessage = getUiTextValue('AUTH_SESSION_RESTORE_FAIL_MESSAGE', '세션 복원 확인에 실패했습니다.');
 
   try {
     response = await fetch(`${getApiBaseUrl()}/session/me`, {
@@ -396,40 +363,41 @@ export async function fetchSessionMe() {
       credentials: 'include',
     });
   } catch {
-    throw new Error('세션 복원 확인에 실패했습니다.');
+    throw new AuthApiError(0, [fallbackMessage], fallbackMessage);
   }
 
   if (!response.ok) {
-    throw new Error('세션 복원 확인에 실패했습니다.');
+    const reasons = await getErrorReasons(response, fallbackMessage);
+    throw new AuthApiError(response.status, reasons, fallbackMessage);
   }
 
   try {
     const data = (await response.json()) as SessionMeResponse;
     return parseSessionMeResult(data);
   } catch {
-    throw new Error('세션 복원 확인에 실패했습니다.');
+    throw new Error(fallbackMessage);
   }
 }
 
 export async function checkDuplicateHandle(handle: string) {
-  return requestDuplicateCheck('/duplicate-check/handle', 'handle', handle, 'Handle 중복확인 요청에 실패했습니다.');
+  return requestDuplicateCheck('/duplicate-check/handle', 'handle', handle, getUiTextValue('HANDLE_DUPLICATE_CHECK_FAIL_MESSAGE', 'Handle 중복 확인 중 오류가 발생했습니다.'));
 }
 
 export async function checkDuplicateEmail(email: string) {
-  return requestDuplicateCheck('/duplicate-check/email', 'email', email, '이메일 중복확인 요청에 실패했습니다.');
+  return requestDuplicateCheck('/duplicate-check/email', 'email', email, getUiTextValue('AUTH_EMAIL_DUPLICATE_CHECK_FAIL_MESSAGE', '이메일 중복 확인 중 오류가 발생했습니다.'));
 }
 
 export async function sendPasswordResetCode(payload: AccountRecoveryEmailPayload) {
-  await requestRecovery('/find-password/send-code', payload, '비밀번호 찾기 인증코드 발송에 실패했습니다.');
+  await requestRecovery('/find-password/send-code', payload, getUiTextValue('RECOVERY_CODE_SEND_FAIL_MESSAGE', '인증 코드 전송 중 오류가 발생했습니다.'));
 }
 
 export async function verifyPasswordResetCode(payload: AccountRecoveryCodePayload) {
-  await requestRecovery('/find-password/verify-code', payload, '인증코드 확인에 실패했습니다.');
+  await requestRecovery('/find-password/verify-code', payload, getUiTextValue('AUTH_CODE_VERIFY_FAIL_MESSAGE', '인증 코드 확인 중 오류가 발생했습니다.'));
 }
 
 export async function resetPassword(payload: ResetPasswordPayload) {
   await requestRecovery('/find-password/reset', {
     email: payload.email,
     password: await sha512Hex(payload.password),
-  }, '비밀번호 재설정에 실패했습니다.');
+  }, getUiTextValue('AUTH_PASSWORD_CHANGE_FAIL_MESSAGE', '비밀번호 변경 중 오류가 발생했습니다.'));
 }

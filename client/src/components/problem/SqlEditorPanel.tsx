@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { useUiText } from '../../lib/uiText';
 import type { DbmsType } from '../../types/domain';
 
 interface SqlEditorPanelProps {
@@ -26,26 +27,27 @@ export default function SqlEditorPanel({
   onRun,
   onSubmit,
 }: SqlEditorPanelProps) {
+  const { text } = useUiText();
   const isDirty = sql !== initialSql;
   const isEmpty = sql.trim().length === 0;
   const lineCount = sql.split('\n').length;
   const characterCount = sql.length;
   const statusCards = [
     {
-      label: '작업 상태',
-      value: isDirty ? '수정됨' : '초기 코드',
+      label: text('SQL_EDITOR_STATUS_LABEL', '작업 상태'),
+      value: isDirty ? text('SQL_EDITOR_DIRTY_VALUE', '수정됨') : text('SQL_EDITOR_INITIAL_VALUE', '초기 코드'),
     },
     {
-      label: '쿼리 길이',
-      value: `${lineCount}줄 / ${characterCount}자`,
+      label: text('SQL_EDITOR_QUERY_LENGTH_LABEL', '쿼리 길이'),
+      value: text('SQL_EDITOR_QUERY_LENGTH_VALUE', { lineCount, characterCount }, `${lineCount}줄 / ${characterCount}자`),
     },
     {
-      label: '실행 환경',
+      label: text('SQL_EDITOR_EXECUTION_ENV_LABEL', '실행 환경'),
       value: getDbmsLabel(selectedDbms),
     },
     {
-      label: '최근 액션',
-      value: lastActionAt ? `${actionLabel} · ${lastActionAt}` : '아직 실행 전',
+      label: text('SQL_EDITOR_LAST_ACTION_LABEL', '최근 액션'),
+      value: lastActionAt ? `${actionLabel} · ${lastActionAt}` : text('SQL_EDITOR_NO_ACTION_VALUE', '아직 실행 전'),
     },
   ];
 
@@ -53,18 +55,18 @@ export default function SqlEditorPanel({
     <section className="panel-card">
       <div className="panel-heading-row responsive">
         <div>
-          <p className="panel-meta">SQL 작업 공간</p>
-          <h2 className="panel-title">제출 에디터</h2>
+          <p className="panel-meta">{text('SQL_EDITOR_META_LABEL', 'SQL 작업 공간')}</p>
+          <h2 className="panel-title">{text('SQL_EDITOR_TITLE', '제출 에디터')}</h2>
         </div>
         <div className="editor-actions">
           <button type="button" className="btn ghost" onClick={() => setSql(initialSql)} disabled={!isDirty}>
-            초기화
+            {text('SQL_EDITOR_RESET_BUTTON', '초기화')}
           </button>
           <button type="button" className="btn secondary" onClick={onRun} disabled={isEmpty}>
-            실행
+            {text('SQL_EDITOR_RUN_BUTTON', '실행')}
           </button>
           <button type="button" className="btn primary" onClick={onSubmit} disabled={isEmpty}>
-            제출
+            {text('SQL_EDITOR_SUBMIT_BUTTON', '제출')}
           </button>
         </div>
       </div>
@@ -84,25 +86,23 @@ export default function SqlEditorPanel({
             <span className="editor-file-name">main.sql</span>
             <span className="subtle-chip inverted">{getDbmsLabel(selectedDbms)}</span>
           </div>
-          <span className="subtle-chip inverted">모의 채점</span>
+          <span className="subtle-chip inverted">{text('SQL_EDITOR_MOCK_JUDGE_LABEL', '모의 채점')}</span>
         </div>
         <textarea
           className="sql-editor"
           value={sql}
           onChange={(event) => setSql(event.target.value)}
           spellCheck={false}
-          aria-label="SQL 에디터"
+          aria-label={text('SQL_EDITOR_ARIA_LABEL', 'SQL 에디터')}
         />
       </div>
 
       <div className="editor-helper-grid">
         <p className="inline-note">
-          실행은 결과 미리보기와 성능 지표를 빠르게 확인하는 용도이고, 제출은 정답 여부와 성능 조건을 함께 보는 흐름으로
-          설계했습니다.
+          {text('SQL_EDITOR_HELP_PRIMARY', '실행은 결과 미리보기와 성능 지표를 빠르게 확인하는 용도이고, 제출은 정답 여부와 성능 조건을 함께 보는 흐름으로 설계했습니다.')}
         </p>
         <p className="inline-note">
-          현재는 목데이터 기반 화면이므로 이후 API를 연결할 때 제출 대기, 히스토리, 실패 로그, 자동 저장 상태를 바로
-          확장할 수 있습니다.
+          {text('SQL_EDITOR_HELP_SECONDARY', '현재는 목데이터 기반 화면이므로 이후 API를 연결할 때 제출 대기, 히스토리, 실패 로그, 자동 저장 상태를 바로 확장할 수 있습니다.')}
         </p>
       </div>
     </section>

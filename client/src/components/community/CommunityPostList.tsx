@@ -1,3 +1,4 @@
+import { useUiText } from '../../lib/uiText';
 import type { CommunityPostSummary } from '../../types/domain';
 import CommunityPostCard from './CommunityPostCard';
 
@@ -18,6 +19,8 @@ export default function CommunityPostList({
   onSelectTag,
   onResetFilters,
 }: CommunityPostListProps) {
+  const { text } = useUiText();
+
   if (posts.length === 0) {
     return (
       <section className="community-board-table is-empty">
@@ -26,11 +29,11 @@ export default function CommunityPostList({
             ⌁
           </div>
           <div className="community-empty-state-copy">
-            <strong>조건에 맞는 게시글이 아직 없다.</strong>
-            <p>검색어를 바꾸거나 필터를 해제해서 다시 찾아봐.</p>
+            <strong>{text('COMMUNITY_EMPTY_STATE', '조건에 맞는 게시글이 없습니다.')}</strong>
+            <p>{text('COMMUNITY_EMPTY_GUIDE_MESSAGE', '검색어를 바꾸거나 필터를 해제해서 다시 찾아보세요.')}</p>
           </div>
           <button type="button" className="btn secondary" onClick={onResetFilters}>
-            검색 초기화
+            {text('COMMUNITY_SEARCH_RESET_BUTTON', '검색 초기화')}
           </button>
         </div>
       </section>
@@ -38,14 +41,14 @@ export default function CommunityPostList({
   }
 
   return (
-    <section className="community-board-table" role="table" aria-label="커뮤니티 게시글 목록">
+    <section className="community-board-table" role="table" aria-label={text('COMMUNITY_TABLE_LABEL', '커뮤니티 게시글 목록')}>
       <div className="community-board-head" role="row">
-        <span role="columnheader">제목</span>
-        <span role="columnheader">Handle</span>
-        <span role="columnheader">작성일</span>
-        <span role="columnheader">조회수</span>
-        <span role="columnheader">좋아요</span>
-        <span role="columnheader">댓글수</span>
+        <span role="columnheader">{text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}</span>
+        <span role="columnheader">{text('COMMON_HANDLE_LABEL', 'Handle')}</span>
+        <span role="columnheader">{text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}</span>
+        <span role="columnheader">{text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}</span>
+        <span role="columnheader">{text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}</span>
+        <span role="columnheader">{text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}</span>
       </div>
 
       {posts.map((post) => (

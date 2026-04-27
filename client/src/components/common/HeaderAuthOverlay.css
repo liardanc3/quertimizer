@@ -18,6 +18,10 @@ body.header-auth-locked {
   backdrop-filter: blur(2px);
 }
 
+.header-auth-overlay-backdrop.is-without-blur {
+  backdrop-filter: none;
+}
+
 .header-auth-modal {
   position: relative;
   width: min(100%, 54rem);
@@ -28,6 +32,11 @@ body.header-auth-locked {
   border-radius: 0;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+}
+
+.header-auth-modal.is-borderless {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .header-auth-modal-header {

@@ -5,9 +5,12 @@ import {
   DASHBOARD_PATH,
   FAVORITES_PATH,
   GUIDE_PATH,
+  PROFILE_ACTIVITY_PATH,
+  PROFILE_PATH,
   PROBLEMS_PATH,
   RANKING_PATH,
   SUBMIT_HISTORY_PATH,
+  getProfileActivityPath,
   getProfilePath,
   navigate,
 } from '../../lib/navigation';
@@ -15,12 +18,13 @@ import { logout as requestLogout } from '../../lib/authApi';
 import { fetchAlarms, markAlarmRead, markAllAlarmsRead, type AlarmEntry, type AlarmPageData } from '../../lib/alarmApi';
 import { subscribeSessionSocketMessages, type SessionSocketMessage } from '../../lib/sessionSocket';
 import logoImage from '../../assets/logo.png';
-import { useMockSession } from '../../lib/session';
+import { prepareLogoutReload, useMockSession } from '../../lib/session';
 import { getLoginOverlayDescription, OPEN_LOGIN_OVERLAY_EVENT, type OpenLoginOverlayEventDetail } from '../../lib/authOverlay';
 import {
   DEFAULT_NOTIFICATION_TEXT,
   NOTIFICATION_UI_TEXT_KEY,
-  refreshCachedUiTexts,
+  TITLE_UI_TEXT_KEY,
+  useUiText,
   useUiTextValue,
 } from '../../lib/uiText';
 import { FavoriteStarIcon } from './FavoriteTabButton';
@@ -97,8 +101,51 @@ function AlarmListIcon() {
   );
 }
 
+function MenuIcon({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      {open ? (
+        <>
+          <path d="M5 5 15 15" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M15 5 5 15" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+        </>
+      ) : (
+        <>
+          <path d="M4.25 5.6h11.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M4.25 10h11.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M4.25 14.4h11.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+interface HeaderNavItem {
+  key: string;
+  label: string;
+  path: string;
+  isActive: boolean;
+}
+
+function resolveLogoutRedirectPath(pathname: string, search: string, currentHandle: string | null) {
+  if (currentHandle == null) {
+    return `${pathname}${search}`;
+  }
+
+  if (pathname === PROFILE_PATH) {
+    return getProfilePath(currentHandle);
+  }
+
+  if (pathname === PROFILE_ACTIVITY_PATH) {
+    return `${getProfileActivityPath(currentHandle)}${search}`;
+  }
+
+  return `${pathname}${search}`;
+}
+
 export default function Header() {
-  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, logout } = useMockSession();
+  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handle: currentHandle } = useMockSession();
+  const { text } = useUiText();
   const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
   const [isAlarmOpen, setIsAlarmOpen] = useState(false);
   const [isHeaderAuthOverlayOpen, setIsHeaderAuthOverlayOpen] = useState(false);
@@ -114,6 +161,7 @@ export default function Header() {
   const [favoritePage, setFavoritePage] = useState(1);
   const [isFavoritePageJumpEditing, setIsFavoritePageJumpEditing] = useState(false);
   const [favoritePageJumpDraft, setFavoritePageJumpDraft] = useState('1');
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const marqueeMessage = useUiTextValue(NOTIFICATION_UI_TEXT_KEY, DEFAULT_NOTIFICATION_TEXT);
   const [marqueeMetrics, setMarqueeMetrics] = useState<{
     startOffset: number;
@@ -125,6 +173,8 @@ export default function Header() {
   const marqueeShellRef = useRef<HTMLDivElement | null>(null);
   const marqueeCopyRef = useRef<HTMLSpanElement | null>(null);
   const floatingHeaderRef = useRef<HTMLDivElement | null>(null);
+  const mobileNavButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileNavPanelRef = useRef<HTMLDivElement | null>(null);
 
   const activeNav = pathname.startsWith(RANKING_PATH)
     ? 'ranking'
@@ -141,6 +191,13 @@ export default function Header() {
               : pathname.startsWith(PROBLEMS_PATH)
                 ? 'problems'
                 : null;
+  const headerNavItems: HeaderNavItem[] = [
+    { key: 'problems', label: text('HEADER_MENU_PROBLEMS', '문제'), path: PROBLEMS_PATH, isActive: activeNav === 'problems' },
+    { key: 'submitHistory', label: text('HEADER_MENU_SUBMISSIONS', '제출 목록'), path: SUBMIT_HISTORY_PATH, isActive: activeNav === 'submitHistory' },
+    { key: 'ranking', label: text('HEADER_MENU_RANKING', '랭킹'), path: RANKING_PATH, isActive: activeNav === 'ranking' },
+    { key: 'community', label: text('HEADER_MENU_COMMUNITY', '커뮤니티'), path: COMMUNITY_PATH, isActive: activeNav === 'community' },
+    { key: 'guide', label: text('HEADER_MENU_GUIDE', '가이드'), path: GUIDE_PATH, isActive: activeNav === 'guide' },
+  ];
 
   const favoriteTotalPages = Math.max(1, Math.ceil(favoriteTabs.length / FAVORITE_PANEL_PAGE_SIZE));
   const favoriteVisibleTabs = useMemo(() => {
@@ -148,12 +205,22 @@ export default function Header() {
     return favoriteTabs.slice(startIndex, startIndex + FAVORITE_PANEL_PAGE_SIZE);
   }, [favoritePage, favoriteTabs]);
   const isFloatingHeaderVisible = true;
+  const adminNavItem = isAuthenticated && (isAdmin || isProblemGenerator)
+    ? {
+        key: 'admin',
+        label: isAdmin ? text('HEADER_MENU_ADMIN', '관리자') : text('HEADER_MENU_PROBLEM_MANAGEMENT', '문제 관리'),
+        path: isAdmin ? ADMIN_PATH : `${ADMIN_PATH}?tab=problemCreate`,
+        isActive: activeNav === 'admin',
+      }
+    : null;
+  const visibleHeaderNavItems = adminNavItem ? [...headerNavItems, adminNavItem] : headerNavItems;
 
   useEffect(() => {
     setIsAlarmOpen(false);
     setIsFavoriteOpen(false);
     setIsHeaderAuthOverlayOpen(false);
     setHeaderAuthOverlayDescription(null);
+    setIsMobileNavOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -350,16 +417,42 @@ export default function Header() {
   }, [isFavoriteOpen]);
 
   useEffect(() => {
-    void refreshCachedUiTexts();
+    if (!isMobileNavOpen) {
+      return;
+    }
 
-    const intervalId = window.setInterval(() => {
-      void refreshCachedUiTexts();
-    }, 30_000);
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+
+      if (mobileNavPanelRef.current?.contains(target) || mobileNavButtonRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsMobileNavOpen(false);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsMobileNavOpen(false);
+      }
+    }
+
+    function handleResize() {
+      if (window.innerWidth >= 640) {
+        setIsMobileNavOpen(false);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', handleResize);
 
     return () => {
-      window.clearInterval(intervalId);
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [isMobileNavOpen]);
 
   useEffect(() => {
     const marqueeShell = marqueeShellRef.current;
@@ -554,13 +647,31 @@ export default function Header() {
     setIsFavoritePageJumpEditing(false);
   }
 
+  function closeMobileNav() {
+    setIsMobileNavOpen(false);
+  }
+
+  function handleMobileNavigate(path: string) {
+    closeMobileNav();
+    navigate(path);
+  }
+
   async function handleLogout() {
+    const nextPath = resolveLogoutRedirectPath(window.location.pathname, window.location.search, currentHandle);
+
     try {
       await requestLogout();
     } catch {
     }
 
-    logout();
+    prepareLogoutReload();
+
+    if (`${window.location.pathname}${window.location.search}` === nextPath) {
+      window.location.reload();
+      return;
+    }
+
+    window.location.replace(nextPath);
   }
 
   const marqueeTrackStyle =
@@ -574,7 +685,7 @@ export default function Header() {
 
   return (
     <header className="header">
-      <div ref={marqueeShellRef} className="header-marquee-shell" aria-label="긴급 공지">
+      <div ref={marqueeShellRef} className="header-marquee-shell" aria-label={text('HEADER_NOTICE_LABEL', '긴급 공지')}>
         <div className="header-marquee-track" style={marqueeTrackStyle}>
           <span ref={marqueeCopyRef} className="header-marquee-copy">
             {marqueeMessage}
@@ -592,57 +703,23 @@ export default function Header() {
               type="button"
               className="brand-button"
               onClick={() => navigate(DASHBOARD_PATH)}
-              aria-label="Quertimizer 홈으로 이동"
+              aria-label={text('HEADER_HOME_LINK_LABEL', 'Quertimizer 홈으로 이동')}
             >
-              <img className="brand-logo" src={logoImage} alt="quertimizer" />
+              <img className="brand-logo" src={logoImage} alt={text(TITLE_UI_TEXT_KEY, 'Quertimizer')} />
             </button>
           </div>
 
-          <nav className="header-nav" aria-label="주요 메뉴">
-            <button
-              type="button"
-              className={`nav-pill ${activeNav === 'problems' ? 'is-active' : ''}`}
-              onClick={() => navigate(PROBLEMS_PATH)}
-            >
-              문제
-            </button>
-            <button
-              type="button"
-              className={`nav-pill ${activeNav === 'submitHistory' ? 'is-active' : ''}`}
-              onClick={() => navigate(SUBMIT_HISTORY_PATH)}
-            >
-              제출 목록
-            </button>
-            <button
-              type="button"
-              className={`nav-pill ${activeNav === 'ranking' ? 'is-active' : ''}`}
-              onClick={() => navigate(RANKING_PATH)}
-            >
-              랭킹
-            </button>
-            <button
-              type="button"
-              className={`nav-pill ${activeNav === 'community' ? 'is-active' : ''}`}
-              onClick={() => navigate(COMMUNITY_PATH)}
-            >
-              커뮤니티
-            </button>
-            <button
-              type="button"
-              className={`nav-pill ${activeNav === 'guide' ? 'is-active' : ''}`}
-              onClick={() => navigate(GUIDE_PATH)}
-            >
-              가이드
-            </button>
-            {isAuthenticated && (isAdmin || isProblemGenerator) ? (
+          <nav className="header-nav" aria-label={text('HEADER_NAV_LABEL', '주요 메뉴')}>
+            {visibleHeaderNavItems.map((item) => (
               <button
                 type="button"
-                className={`nav-pill ${activeNav === 'admin' ? 'is-active' : ''}`}
-                onClick={() => navigate(isAdmin ? ADMIN_PATH : `${ADMIN_PATH}?tab=problemCreate`)}
+                key={item.key}
+                className={`nav-pill ${item.isActive ? 'is-active' : ''}`}
+                onClick={() => navigate(item.path)}
               >
-                {isAdmin ? '관리자' : '문제 관리'}
+                {item.label}
               </button>
-            ) : null}
+            ))}
           </nav>
 
           <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>
@@ -653,10 +730,15 @@ export default function Header() {
                     type="button"
                     className={`header-notification-button ${isAlarmOpen ? 'is-open' : ''}`}
                     onClick={() => {
+                      setIsMobileNavOpen(false);
                       setIsAlarmOpen((currentState) => !currentState);
                       setIncomingAlarm(null);
                     }}
-                    aria-label={alarmPage.unreadCount > 0 ? `알람 열기 (읽지 않음 ${alarmPage.unreadCount}개)` : '알람 열기'}
+                    aria-label={
+                      alarmPage.unreadCount > 0
+                        ? text('HEADER_ALARM_OPEN_WITH_UNREAD_LABEL', { count: alarmPage.unreadCount }, '알림 열기 (읽지 않음 {count}개)')
+                        : text('HEADER_ALARM_OPEN_LABEL', '알림 열기')
+                    }
                     aria-haspopup="dialog"
                     aria-expanded={isAlarmOpen}
                   >
@@ -703,13 +785,13 @@ export default function Header() {
                   ) : null}
 
                   {isAlarmOpen ? (
-                    <div className="header-notification-panel" role="dialog" aria-label="알람">
+                    <div className="header-notification-panel" role="dialog" aria-label={text('HEADER_ALARM_DIALOG_LABEL', '알림')}>
                       <div className="header-notification-panel-header">
                         <button
                           type="button"
                           className="btn text header-notification-route-button"
-                          aria-label="알림 목록으로 이동"
-                          title="알림 목록"
+                          aria-label={text('HEADER_ALARM_LIST_MOVE_LABEL', '알림 목록으로 이동')}
+                          title={text('HEADER_ALARM_LIST_TITLE', '알림 목록')}
                           onClick={() => {
                             setIncomingAlarm(null);
                             setIsAlarmOpen(false);
@@ -727,7 +809,7 @@ export default function Header() {
                           }}
                           disabled={alarmPage.unreadCount === 0}
                         >
-                          모두 읽음
+                          {text('HEADER_ALARM_MARK_ALL_READ_BUTTON', '모두 읽음')}
                         </button>
                       </div>
 
@@ -754,19 +836,19 @@ export default function Header() {
                             </div>
                           ))
                         ) : (
-                          <p className="header-notification-empty">알람이 없습니다.</p>
+                          <p className="header-notification-empty">{text('HEADER_ALARM_EMPTY_STATE', '알림이 없습니다.')}</p>
                         )}
                       </div>
 
                       {alarmPage.totalPages > 1 ? (
-                        <div className="problem-pagination header-alarm-pagination" role="navigation" aria-label="알람 페이지">
+                        <div className="problem-pagination header-alarm-pagination" role="navigation" aria-label={text('HEADER_ALARM_PAGE_LABEL', '알림 페이지')}>
                           <button
                             type="button"
                             className="mini-toggle problem-page-button"
                             onClick={() => setRequestedAlarmPage((currentPage) => Math.max(1, currentPage - 1))}
                             disabled={alarmPage.currentPage === 1}
                           >
-                            이전
+                            {text('COMMON_PREVIOUS_BUTTON', '이전')}
                           </button>
 
                           {isAlarmPageJumpEditing ? (
@@ -774,7 +856,7 @@ export default function Header() {
                               type="text"
                               inputMode="numeric"
                               className="problem-pagination-meta-input"
-                              aria-label="이동할 알람 페이지 입력"
+                              aria-label={text('HEADER_ALARM_PAGE_INPUT_LABEL', '이동할 알림 페이지 입력')}
                               value={alarmPageJumpDraft}
                               onChange={(event) => {
                                 const nextValue = event.target.value.replace(/\D+/g, '');
@@ -799,7 +881,7 @@ export default function Header() {
                             <button
                               type="button"
                               className="problem-pagination-meta problem-pagination-meta-button"
-                              aria-label="이동할 알람 페이지 입력 열기"
+                              aria-label={text('HEADER_ALARM_PAGE_INPUT_OPEN_LABEL', '이동할 알림 페이지 입력 열기')}
                               onClick={() => {
                                 setAlarmPageJumpDraft(String(alarmPage.currentPage));
                                 setIsAlarmPageJumpEditing(true);
@@ -815,7 +897,7 @@ export default function Header() {
                             onClick={() => setRequestedAlarmPage((currentPage) => Math.min(alarmPage.totalPages, currentPage + 1))}
                             disabled={alarmPage.currentPage >= alarmPage.totalPages}
                           >
-                            다음
+                            {text('COMMON_NEXT_BUTTON', '다음')}
                           </button>
                         </div>
                       ) : null}
@@ -827,8 +909,11 @@ export default function Header() {
                   <button
                     type="button"
                     className={`header-link-button favorite-link-button ${(activeNav === 'favorites' || isFavoriteOpen) ? 'is-active' : ''}`.trim()}
-                    onClick={() => setIsFavoriteOpen((currentState) => !currentState)}
-                    aria-label="즐겨찾기"
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      setIsFavoriteOpen((currentState) => !currentState);
+                    }}
+                    aria-label={text('HEADER_FAVORITES_BUTTON_LABEL', '즐겨찾기')}
                     aria-haspopup="dialog"
                     aria-expanded={isFavoriteOpen}
                   >
@@ -836,7 +921,7 @@ export default function Header() {
                   </button>
 
                   {isFavoriteOpen ? (
-                    <div className="header-favorite-panel" role="dialog" aria-label="즐겨찾기">
+                    <div className="header-favorite-panel" role="dialog" aria-label={text('HEADER_FAVORITES_DIALOG_LABEL', '즐겨찾기')}>
                       {favoriteTabs.length > 0 ? (
                         <>
                           <div className="header-favorite-list">
@@ -856,14 +941,14 @@ export default function Header() {
                             ))}
                           </div>
 
-                          <div className="problem-pagination header-favorite-pagination" role="navigation" aria-label="즐겨찾기 페이지">
+                          <div className="problem-pagination header-favorite-pagination" role="navigation" aria-label={text('HEADER_FAVORITES_PAGE_LABEL', '즐겨찾기 페이지')}>
                             <button
                               type="button"
                               className="mini-toggle problem-page-button"
                               onClick={() => setFavoritePage((currentPage) => Math.max(1, currentPage - 1))}
                               disabled={favoritePage === 1}
                             >
-                              이전
+                              {text('COMMON_PREVIOUS_BUTTON', '이전')}
                             </button>
 
                             {isFavoritePageJumpEditing ? (
@@ -871,7 +956,7 @@ export default function Header() {
                                 type="text"
                                 inputMode="numeric"
                                 className="problem-pagination-meta-input"
-                                aria-label="이동할 즐겨찾기 페이지 입력"
+                                aria-label={text('HEADER_FAVORITES_PAGE_INPUT_LABEL', '이동할 즐겨찾기 페이지 입력')}
                                 value={favoritePageJumpDraft}
                                 onChange={(event) => {
                                   const nextValue = event.target.value.replace(/\D+/g, '');
@@ -896,7 +981,7 @@ export default function Header() {
                               <button
                                 type="button"
                                 className="problem-pagination-meta problem-pagination-meta-button"
-                                aria-label="이동할 즐겨찾기 페이지 입력 열기"
+                                aria-label={text('HEADER_FAVORITES_PAGE_INPUT_OPEN_LABEL', '이동할 즐겨찾기 페이지 입력 열기')}
                                 onClick={() => {
                                   setFavoritePageJumpDraft(String(favoritePage));
                                   setIsFavoritePageJumpEditing(true);
@@ -912,12 +997,12 @@ export default function Header() {
                               onClick={() => setFavoritePage((currentPage) => Math.min(favoriteTotalPages, currentPage + 1))}
                               disabled={favoritePage >= favoriteTotalPages}
                             >
-                              다음
+                              {text('COMMON_NEXT_BUTTON', '다음')}
                             </button>
                           </div>
                         </>
                       ) : (
-                        <p className="header-favorite-empty">즐겨찾기 된 페이지가 없습니다.</p>
+                        <p className="header-favorite-empty">{text('HEADER_FAVORITES_EMPTY_STATE', '즐겨찾기한 페이지가 없습니다.')}</p>
                       )}
                     </div>
                   ) : null}
@@ -926,18 +1011,22 @@ export default function Header() {
                 <button
                   type="button"
                   className="header-link-button profile-link-button"
-                  onClick={() => navigate(getProfilePath())}
+                  onClick={() => {
+                    closeMobileNav();
+                    navigate(getProfilePath());
+                  }}
                 >
-                  프로필
+                  {text('HEADER_PROFILE_BUTTON', '프로필')}
                 </button>
                 <button
                   type="button"
-                  className="header-link-button"
+                  className="header-link-button is-logout"
                   onClick={() => {
+                    closeMobileNav();
                     void handleLogout();
                   }}
                 >
-                  로그아웃
+                  {text('HEADER_LOGOUT_BUTTON', '로그아웃')}
                 </button>
               </>
             ) : (
@@ -945,16 +1034,132 @@ export default function Header() {
                 type="button"
                 className="header-link-button"
                 onClick={() => {
+                  closeMobileNav();
                   setHeaderAuthOverlayDescription(getLoginOverlayDescription());
                   setIsHeaderAuthOverlayOpen(true);
                 }}
               >
-                로그인
+                {text('HEADER_LOGIN_BUTTON', '로그인')}
               </button>
             )}
+
+            <button
+              ref={mobileNavButtonRef}
+              type="button"
+              className={`header-mobile-menu-button ${isMobileNavOpen ? 'is-open' : ''}`.trim()}
+              aria-label={isMobileNavOpen ? text('HEADER_MOBILE_MENU_CLOSE_LABEL', '모바일 메뉴 닫기') : text('HEADER_MOBILE_MENU_OPEN_LABEL', '모바일 메뉴 열기')}
+              aria-haspopup="dialog"
+              aria-expanded={isMobileNavOpen}
+              aria-controls="header-mobile-nav-panel"
+              onClick={() => {
+                setIsAlarmOpen(false);
+                setIsFavoriteOpen(false);
+                setIsMobileNavOpen((currentState) => !currentState);
+              }}
+            >
+              <MenuIcon open={isMobileNavOpen} />
+            </button>
           </div>
         </div>
       </div>
+
+      {isMobileNavOpen ? (
+        <div className="header-mobile-nav-layer">
+          <div
+            ref={mobileNavPanelRef}
+            id="header-mobile-nav-panel"
+            className="header-mobile-nav-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={text('HEADER_MOBILE_MENU_DIALOG_LABEL', '모바일 메뉴')}
+          >
+            <div className="header-mobile-nav-header">
+              <div className="header-mobile-nav-copy">
+                <p className="header-mobile-nav-eyebrow">{text('HEADER_MOBILE_QUICK_NAV_LABEL', '빠른 이동')}</p>
+                <h2 className="header-mobile-nav-title">{text('HEADER_MOBILE_MENU_TITLE', '메뉴')}</h2>
+              </div>
+              <button
+                type="button"
+                className="header-mobile-nav-close"
+                onClick={closeMobileNav}
+                aria-label={text('HEADER_MOBILE_MENU_CLOSE_LABEL', '모바일 메뉴 닫기')}
+              >
+                <MenuIcon open={true} />
+              </button>
+            </div>
+
+            <div className="header-mobile-nav-group">
+              {visibleHeaderNavItems.map((item) => (
+                <button
+                  key={`mobile-${item.key}`}
+                  type="button"
+                  className={`header-mobile-nav-item ${item.isActive ? 'is-active' : ''}`.trim()}
+                  onClick={() => handleMobileNavigate(item.path)}
+                >
+                  <span>{item.label}</span>
+                  <span className="header-mobile-nav-item-meta">
+                    {item.isActive ? text('HEADER_MOBILE_CURRENT_LABEL', '현재') : text('HEADER_MOBILE_MOVE_LABEL', '이동')}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="header-mobile-nav-group is-secondary">
+              {isAuthenticated ? (
+                <>
+                  <button
+                    type="button"
+                    className="header-mobile-nav-item"
+                    onClick={() => handleMobileNavigate(`${getProfilePath()}?tab=alarms`)}
+                  >
+                    <span>{text('HEADER_ALARM_LIST_TITLE', '알림 목록')}</span>
+                    <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_MY_INFO_LABEL', '내 정보')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="header-mobile-nav-item"
+                    onClick={() => handleMobileNavigate(FAVORITES_PATH)}
+                  >
+                    <span>{text('HEADER_FAVORITES_BUTTON_LABEL', '즐겨찾기')}</span>
+                    <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_SAVED_TABS_LABEL', '저장된 탭')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="header-mobile-nav-item"
+                    onClick={() => handleMobileNavigate(getProfilePath())}
+                  >
+                    <span>{text('HEADER_PROFILE_BUTTON', '프로필')}</span>
+                    <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_MY_PAGE_LABEL', '내 페이지')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="header-mobile-nav-item is-danger"
+                    onClick={() => {
+                      closeMobileNav();
+                      void handleLogout();
+                    }}
+                  >
+                    <span>{text('HEADER_LOGOUT_BUTTON', '로그아웃')}</span>
+                    <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_SESSION_END_LABEL', '세션 종료')}</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="header-mobile-nav-primary"
+                  onClick={() => {
+                    closeMobileNav();
+                    setHeaderAuthOverlayDescription(getLoginOverlayDescription());
+                    setIsHeaderAuthOverlayOpen(true);
+                  }}
+                >
+                  {text('HEADER_LOGIN_BUTTON', '로그인')}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {(!isAuthenticated && isHeaderAuthOverlayOpen) ? (
         <HeaderAuthOverlay
           description={headerAuthOverlayDescription}

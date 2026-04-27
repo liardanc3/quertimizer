@@ -1,6 +1,7 @@
 package com.quertimizer.ui.application.service;
 
 import com.quertimizer.ui.application.input.UiTextInput;
+import com.quertimizer.ui.application.output.UiTextPageOutput;
 import com.quertimizer.ui.application.output.UiTextOutput;
 import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.entity.UiTextId;
@@ -32,6 +33,9 @@ import static com.quertimizer.ui.domain.model.UiTextFailReason.VALUE_REQUIRED;
 @Transactional(readOnly = true)
 public class UiTextService {
 
+    private static final int ADMIN_UI_TEXT_PAGE_SIZE = 10;
+    private static final int ADMIN_UI_TEXT_MAX_PAGE_SIZE = 50;
+
     private final UiTextRepository uiTextRepository;
 
     public List<UiTextOutput> getUiTexts(String language) {
@@ -56,15 +60,31 @@ public class UiTextService {
                 .toList();
     }
 
-    public List<UiTextOutput> getAdminUiTexts() {
+    public UiTextPageOutput getAdminUiTexts(int requestedPage, Integer requestedPageSize, String query) {
         // 관리자용 UI 텍스트 목록을 조회
-        return uiTextRepository.findAllByOrderByIdKeyAscIdLanguageAsc().stream()
+        int pageSize = resolveAdminUiTextPageSize(requestedPageSize);
+        String normalizedQuery = normalizeSearchQuery(query);
+        List<UiTextOutput> filteredUiTexts = uiTextRepository.findAllByOrderByIdKeyAscIdLanguageAsc().stream()
                 .sorted(Comparator
                         .comparing((UiText uiText) -> !UiTextKey.NOTIFICATION.getValue().equals(uiText.getKey()))
                         .thenComparing(UiText::getKey)
                         .thenComparing(UiText::getLanguage))
+                .filter(uiText -> matchesAdminUiTextQuery(uiText, normalizedQuery))
                 .map(this::toUiTextOutput)
                 .toList();
+        int totalCount = filteredUiTexts.size();
+        int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) pageSize));
+        int currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
+        int fromIndex = Math.min((currentPage - 1) * pageSize, totalCount);
+        int toIndex = Math.min(fromIndex + pageSize, totalCount);
+
+        return new UiTextPageOutput(
+                currentPage,
+                pageSize,
+                totalCount,
+                totalPages,
+                filteredUiTexts.subList(fromIndex, toIndex)
+        );
     }
 
     public Optional<UiTextOutput> getUiText(String key, String language) {
@@ -188,6 +208,36 @@ public class UiTextService {
         return language != null && !language.isBlank()
                 ? language.trim().toLowerCase(Locale.ROOT)
                 : UiTextLanguage.DEFAULT.getValue();
+    }
+
+    private boolean matchesAdminUiTextQuery(UiText uiText, String normalizedQuery) {
+        // 관리자 UI 텍스트 검색어와 일치하는지 확인
+        if (normalizedQuery.isBlank()) {
+            return true;
+        }
+
+        return containsIgnoreCase(uiText.getKey(), normalizedQuery)
+                || containsIgnoreCase(uiText.getValue(), normalizedQuery)
+                || containsIgnoreCase(uiText.getDescription(), normalizedQuery);
+    }
+
+    private int resolveAdminUiTextPageSize(Integer requestedPageSize) {
+        // 관리자 UI 텍스트 페이지 크기를 결정
+        if (requestedPageSize == null || requestedPageSize < 1) {
+            return ADMIN_UI_TEXT_PAGE_SIZE;
+        }
+
+        return Math.min(requestedPageSize, ADMIN_UI_TEXT_MAX_PAGE_SIZE);
+    }
+
+    private String normalizeSearchQuery(String query) {
+        // 검색어를 정규화
+        return query != null ? query.trim().toLowerCase(Locale.ROOT) : "";
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedQuery) {
+        // 대소문자 구분 없이 검색어 포함 여부를 확인
+        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedQuery);
     }
 
     private String requireText(String value, String message) {

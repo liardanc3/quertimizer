@@ -1,8 +1,5 @@
 import { getApiBaseUrl } from './authApi';
-
-interface ExceptionResponse {
-  reasons?: string[];
-}
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 
 interface AuthManageUserRowResponse {
   handle?: string;
@@ -54,18 +51,6 @@ function parseAuthManageUsers(data: AuthManageUserRowResponse[] | undefined): Au
     }));
 }
 
-async function getErrorMessage(response: Response, fallbackMessage: string) {
-  try {
-    const data = (await response.json()) as ExceptionResponse;
-    if (Array.isArray(data.reasons) && typeof data.reasons[0] === 'string' && data.reasons[0].trim() !== '') {
-      return data.reasons[0];
-    }
-  } catch {
-  }
-
-  return fallbackMessage;
-}
-
 export async function fetchAuthManage(): Promise<AuthManageData> {
   let response: Response;
 
@@ -75,11 +60,11 @@ export async function fetchAuthManage(): Promise<AuthManageData> {
       credentials: 'include',
     });
   } catch {
-    throw new Error('권한 목록을 불러오지 못했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   if (!response.ok) {
-    throw new Error('권한 목록을 불러오지 못했다.');
+    throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 
   try {
@@ -88,7 +73,7 @@ export async function fetchAuthManage(): Promise<AuthManageData> {
       users: parseAuthManageUsers(data.users),
     };
   } catch {
-    throw new Error('권한 목록을 불러오지 못했다.');
+    throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
   }
 }
 
@@ -105,11 +90,11 @@ export async function updateUserRole(handle: string, role: AuthManageRoleValue) 
       body: JSON.stringify({ role }),
     });
   } catch {
-    throw new Error('역할을 저장하지 못했다.');
+    throw new Error(getUiTextValue('AUTH_MANAGE_ROLE_SAVE_FAIL_MESSAGE', '역할을 저장하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, '역할을 저장하지 못했다.'));
+    throw await createApiErrorFromResponse(response, getUiTextValue('AUTH_MANAGE_ROLE_SAVE_FAIL_MESSAGE', '역할을 저장하지 못했습니다.'));
   }
 }
 
@@ -126,10 +111,10 @@ export async function updateProblemGeneratorPermissions(handle: string, permissi
       body: JSON.stringify({ permissionKeys }),
     });
   } catch {
-    throw new Error('문제 권한을 저장하지 못했다.');
+    throw new Error(getUiTextValue('AUTH_MANAGE_PERMISSION_SAVE_FAIL_MESSAGE', '문제 권한을 저장하지 못했습니다.'));
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, '문제 권한을 저장하지 못했다.'));
+    throw await createApiErrorFromResponse(response, getUiTextValue('AUTH_MANAGE_PERMISSION_SAVE_FAIL_MESSAGE', '문제 권한을 저장하지 못했습니다.'));
   }
 }

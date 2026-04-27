@@ -665,8 +665,6 @@
 .solve-page .solve-result-table-grid-shell.is-loading .solve-result-table-grid-content,
 .solve-floating-pane-shell .solve-result-table-grid-shell.is-loading .solve-result-table-grid-content,
 .solve-external-window-root-inner .solve-result-table-grid-shell.is-loading .solve-result-table-grid-content {
-  filter: blur(2px);
-  opacity: 0.46;
   pointer-events: none;
   user-select: none;
 }
@@ -678,8 +676,6 @@
   inset: 0;
   overflow: hidden;
   border-radius: inherit;
-  background: rgba(248, 250, 252, 0.6);
-  backdrop-filter: blur(1.4px);
   z-index: 2;
   pointer-events: none;
 }
@@ -687,32 +683,26 @@
 .solve-page .solve-result-table-grid-overlay::before,
 .solve-floating-pane-shell .solve-result-table-grid-overlay::before,
 .solve-external-window-root-inner .solve-result-table-grid-overlay::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -24%;
-  width: 24%;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 52%, transparent 100%);
-  animation: solve-result-grid-loading-wave 1.8s ease-in-out infinite;
+  content: none;
 }
 
 .solve-page .solve-result-table-grid-spinner,
 .solve-floating-pane-shell .solve-result-table-grid-spinner,
 .solve-external-window-root-inner .solve-result-table-grid-spinner {
-  display: none;
-}
-
-.solve-page .solve-result-table-grid-overlay-label,
-.solve-floating-pane-shell .solve-result-table-grid-overlay-label,
-.solve-external-window-root-inner .solve-result-table-grid-overlay-label {
-  display: none;
-}
-
-@keyframes solve-result-grid-loading-wave {
-  to {
-    transform: translateX(520%);
-  }
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: 3.3rem;
+  height: 3.3rem;
+  margin-top: -1.65rem;
+  margin-left: -1.65rem;
+  border: 3.4px solid var(--loading-spinner-track);
+  border-top-color: var(--loading-spinner-accent);
+  border-right-color: rgba(37, 99, 235, 0.58);
+  border-radius: 999px;
+  box-shadow: var(--loading-spinner-shadow);
+  animation: common-loading-spinner-rotate 0.9s linear infinite;
 }
 
 .solve-page .solve-editor-inline-result-group.is-success .solve-detail-table-block,
@@ -1776,13 +1766,13 @@ body.handle-setup-locked {
   .solve-page .solve-result-table-grid-overlay,
   .solve-floating-pane-shell .solve-result-table-grid-overlay,
   .solve-external-window-root-inner .solve-result-table-grid-overlay {
-    background: rgba(15, 23, 42, 0.58);
+    background: transparent;
   }
 
   .solve-page .solve-result-table-grid-overlay::before,
   .solve-floating-pane-shell .solve-result-table-grid-overlay::before,
   .solve-external-window-root-inner .solve-result-table-grid-overlay::before {
-    background: linear-gradient(90deg, transparent 0%, rgba(226, 232, 240, 0.12) 52%, transparent 100%);
+    content: none;
   }
 
   .solve-page .solve-result-table-grid-overlay-label,

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 import type {
   DbmsType,
   SubmitHistoryEntry,
@@ -42,6 +43,8 @@ export interface FetchSubmitHistoriesParams {
   planFiltersByDbms: SubmitHistoryPlanFiltersByDbms;
 }
 
+const submitHistoryGetRequestPromises = new Map<string, Promise<unknown>>();
+
 function toDbmsType(value?: string) {
   return value === 'oracle' ? 'oracle' : 'postgresql';
 }
@@ -67,9 +70,22 @@ function appendCsv(searchParams: URLSearchParams, key: string, values: string[])
   }
 }
 
-export async function fetchSubmitHistories(params: FetchSubmitHistoriesParams): Promise<SubmitHistoryPageData> {
-  let response: Response;
+function requestSubmitHistoryGet<T>(path: string, execute: () => Promise<T>): Promise<T> {
+  const requestKey = `GET:${path}`;
+  const inFlightRequest = submitHistoryGetRequestPromises.get(requestKey);
+  if (inFlightRequest != null) {
+    return inFlightRequest as Promise<T>;
+  }
 
+  const nextRequest = execute().finally(() => {
+    submitHistoryGetRequestPromises.delete(requestKey);
+  });
+
+  submitHistoryGetRequestPromises.set(requestKey, nextRequest);
+  return nextRequest;
+}
+
+export async function fetchSubmitHistories(params: FetchSubmitHistoriesParams): Promise<SubmitHistoryPageData> {
   const searchParams = new URLSearchParams({
     page: String(params.page),
   });
@@ -122,54 +138,60 @@ export async function fetchSubmitHistories(params: FetchSubmitHistoriesParams): 
     });
   }
 
-  try {
-    response = await fetch(`${getApiBaseUrl()}/submit-histories?${searchParams.toString()}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-  } catch {
-    throw new Error('제출 이력 조회에 실패했다.');
-  }
+  const requestPath = `/submit-histories?${searchParams.toString()}`;
 
-  if (!response.ok) {
-    throw new Error('제출 이력 조회에 실패했다.');
-  }
+  return requestSubmitHistoryGet(requestPath, async () => {
+    let response: Response;
 
-  try {
-    const data = (await response.json()) as SubmitHistoryPageResponse;
-    if (
-      typeof data.currentPage !== 'number' ||
-      typeof data.pageSize !== 'number' ||
-      typeof data.totalCount !== 'number' ||
-      typeof data.totalPages !== 'number' ||
-      !Array.isArray(data.problemIds) ||
-      !Array.isArray(data.histories)
-    ) {
-      throw new Error();
+    try {
+      response = await fetch(`${getApiBaseUrl()}${requestPath}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+    } catch {
+      throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
     }
 
-    return {
-      currentPage: data.currentPage,
-      pageSize: data.pageSize,
-      totalCount: data.totalCount,
-      totalPages: data.totalPages,
-      problemIds: data.problemIds.filter((problemId): problemId is string => typeof problemId === 'string'),
-      histories: data.histories
-        .filter(
-          (history): history is Required<SubmitHistoryItemResponse> =>
-            typeof history.submitId === 'string' &&
-            typeof history.handle === 'string' &&
-            typeof history.problemId === 'string' &&
-            typeof history.submittedAt === 'string' &&
-            typeof history.success === 'boolean' &&
-            typeof history.message === 'string' &&
-            typeof history.submittedSql === 'string' &&
-            typeof history.cost === 'number' &&
-            typeof history.executionPlanElement === 'number',
-        )
-        .map(toSubmitHistoryEntry),
-    };
-  } catch {
-    throw new Error('제출 이력 조회에 실패했다.');
-  }
+    if (!response.ok) {
+      throw await createApiErrorFromResponse(response, getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+    }
+
+    try {
+      const data = (await response.json()) as SubmitHistoryPageResponse;
+      if (
+        typeof data.currentPage !== 'number' ||
+        typeof data.pageSize !== 'number' ||
+        typeof data.totalCount !== 'number' ||
+        typeof data.totalPages !== 'number' ||
+        !Array.isArray(data.problemIds) ||
+        !Array.isArray(data.histories)
+      ) {
+        throw new Error();
+      }
+
+      return {
+        currentPage: data.currentPage,
+        pageSize: data.pageSize,
+        totalCount: data.totalCount,
+        totalPages: data.totalPages,
+        problemIds: data.problemIds.filter((problemId): problemId is string => typeof problemId === 'string'),
+        histories: data.histories
+          .filter(
+            (history): history is Required<SubmitHistoryItemResponse> =>
+              typeof history.submitId === 'string' &&
+              typeof history.handle === 'string' &&
+              typeof history.problemId === 'string' &&
+              typeof history.submittedAt === 'string' &&
+              typeof history.success === 'boolean' &&
+              typeof history.message === 'string' &&
+              typeof history.submittedSql === 'string' &&
+              typeof history.cost === 'number' &&
+              typeof history.executionPlanElement === 'number',
+          )
+          .map(toSubmitHistoryEntry),
+      };
+    } catch {
+      throw new Error(getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+    }
+  });
 }

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './authApi';
+import { createApiErrorFromResponse, getUiTextValue } from './uiText';
 import type { DbmsType } from '../types/domain';
 
 interface UserProfileLinkResponse {
@@ -54,9 +55,7 @@ interface UserProfileSubmissionSummaryResponse {
   submissionActivities?: UserProfileSubmissionActivityResponse[];
 }
 
-interface ExceptionResponse {
-  reasons?: string[];
-}
+const profileGetRequestPromises = new Map<string, Promise<unknown>>();
 
 export interface UserProfileLink {
   type: string;
@@ -252,7 +251,12 @@ function normalizeSubmissionSummary(data: UserProfileSubmissionSummaryResponse):
   };
 }
 
-async function requestProfile<T>(path: string, normalizer: (data: unknown) => T, options?: RequestInit, fallbackMessage = '프로필 조회에 실패했다.') {
+async function executeProfileRequest<T>(
+  path: string,
+  normalizer: (data: unknown) => T,
+  options?: RequestInit,
+  fallbackMessage = getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+) {
   let response: Response;
 
   try {
@@ -265,36 +269,40 @@ async function requestProfile<T>(path: string, normalizer: (data: unknown) => T,
   }
 
   if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error('프로필을 찾을 수 없다.');
-    }
-
-    if (response.status === 401) {
-      throw new Error('로그인이 필요하다.');
-    }
-
-    throw new Error(await extractProfileErrorMessage(response, fallbackMessage));
+    throw await createApiErrorFromResponse(response, fallbackMessage);
   }
 
   try {
     return normalizer(await response.json());
   } catch {
-    throw new Error('프로필 응답 형식이 올바르지 않다.');
+    throw new Error(getUiTextValue('PROFILE_PARSE_FAIL_MESSAGE', '프로필 응답 형식이 올바르지 않습니다.'));
   }
 }
 
-async function extractProfileErrorMessage(response: Response, fallbackMessage: string) {
-  try {
-    const data = (await response.json()) as ExceptionResponse;
+function requestProfile<T>(
+  path: string,
+  normalizer: (data: unknown) => T,
+  options?: RequestInit,
+  fallbackMessage = getUiTextValue('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'),
+) {
+  const requestMethod = (options?.method ?? 'GET').toUpperCase();
 
-    if (Array.isArray(data.reasons) && typeof data.reasons[0] === 'string' && data.reasons[0].trim() !== '') {
-      return data.reasons[0];
-    }
-  } catch {
-    return fallbackMessage;
+  if (requestMethod !== 'GET') {
+    return executeProfileRequest(path, normalizer, options, fallbackMessage);
   }
 
-  return fallbackMessage;
+  const requestKey = `${requestMethod}:${path}`;
+  const inFlightRequest = profileGetRequestPromises.get(requestKey);
+  if (inFlightRequest != null) {
+    return inFlightRequest as Promise<T>;
+  }
+
+  const nextRequest = executeProfileRequest(path, normalizer, options, fallbackMessage).finally(() => {
+    profileGetRequestPromises.delete(requestKey);
+  });
+
+  profileGetRequestPromises.set(requestKey, nextRequest);
+  return nextRequest;
 }
 
 function createUpdateUserProfileRequestBody(payload: UpdateUserProfilePayload): UpdateUserProfileRequestBody {
@@ -347,6 +355,6 @@ export async function updateMyProfile(payload: UpdateUserProfilePayload) {
       },
       body: JSON.stringify(createUpdateUserProfileRequestBody(payload)),
     },
-    '프로필 저장에 실패했다.',
+    getUiTextValue('PROFILE_SAVE_FAIL_MESSAGE', '프로필을 저장하지 못했습니다.'),
   );
 }

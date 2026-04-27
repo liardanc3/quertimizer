@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import HttpErrorState from '../components/common/HttpErrorState';
+import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import {
   fetchAuthManage,
   updateProblemGeneratorPermissions,
@@ -8,20 +11,11 @@ import {
   type AuthManageRoleValue,
   type AuthManageUserRowData,
 } from '../lib/authManage';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 
 type AuthManageSection = 'admin' | 'user' | 'problemGenerator';
 
-const ROLE_OPTIONS: { value: AuthManageRoleValue; label: string }[] = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'user', label: 'User' },
-  { value: 'problemGenerator', label: 'ProblemGenerator' },
-];
-
-const AUTH_MANAGE_SECTIONS: Array<{ id: AuthManageSection; label: string }> = [
-  { id: 'admin', label: 'Admin' },
-  { id: 'user', label: 'User' },
-  { id: 'problemGenerator', label: 'ProblemGenerator' },
-];
+const ROLE_VALUES: AuthManageRoleValue[] = ['admin', 'user', 'problemGenerator'];
 
 function RoleEditIcon() {
   return (
@@ -62,16 +56,24 @@ function RemoveIcon() {
 }
 
 function resolveRoleLabel(role: AuthManageRoleValue) {
-  return ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
+  if (role === 'admin') {
+    return getUiTextValue('AUTH_MANAGE_ADMIN_LABEL', 'Admin');
+  }
+
+  if (role === 'problemGenerator') {
+    return getUiTextValue('AUTH_MANAGE_PROBLEM_GENERATOR_LABEL', 'ProblemGenerator');
+  }
+
+  return getUiTextValue('AUTH_MANAGE_USER_LABEL', 'User');
 }
 
 function resolveStaticNote(role: AuthManageRoleValue) {
   if (role === 'admin') {
-    return '전체권한';
+    return getUiTextValue('AUTH_MANAGE_ADMIN_NOTE', '전체 권한');
   }
 
   if (role === 'user') {
-    return '그냥 사용자임';
+    return getUiTextValue('AUTH_MANAGE_USER_NOTE', '일반 사용자');
   }
 
   return '';
@@ -108,10 +110,12 @@ function sortPermissionKeys(permissionKeys: string[]) {
 }
 
 export function AuthManageContent() {
+  const { text } = useUiText();
   const PAGE_SIZE = 10;
   const [authManage, setAuthManage] = useState<AuthManageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [reloadSequence, setReloadSequence] = useState(0);
   const [activeSection, setActiveSection] = useState<AuthManageSection>('admin');
   const [currentPage, setCurrentPage] = useState(1);
@@ -123,6 +127,8 @@ export function AuthManageContent() {
   const [savingRoleHandle, setSavingRoleHandle] = useState<string | null>(null);
   const [savingPermissionHandle, setSavingPermissionHandle] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const roleOptions = ROLE_VALUES.map((value) => ({ value, label: resolveRoleLabel(value) }));
+  const sections = roleOptions.map((option) => ({ id: option.value as AuthManageSection, label: option.label }));
 
   useEffect(() => {
     let cancelled = false;
@@ -130,6 +136,7 @@ export function AuthManageContent() {
     async function loadAuthManage() {
       setIsLoading(true);
       setErrorMessage(null);
+      setLoadErrorStatus(null);
 
       try {
         const nextAuthManage = await fetchAuthManage();
@@ -145,7 +152,9 @@ export function AuthManageContent() {
         setPageJumpDraft('1');
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(error instanceof Error ? error.message : '권한 목록을 불러오지 못했다.');
+          setErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
+          const status = getApiErrorStatus(error);
+          setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
         }
       } finally {
         if (!cancelled) {
@@ -223,7 +232,7 @@ export function AuthManageContent() {
       await updateUserRole(user.handle, nextRole);
       setReloadSequence((value) => value + 1);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '역할을 저장하지 못했다.');
+      setErrorMessage(error instanceof Error ? error.message : text('AUTH_MANAGE_ROLE_SAVE_FAIL_MESSAGE', '역할을 저장하지 못했습니다.'));
     } finally {
       setSavingRoleHandle((current) => (current === user.handle ? null : current));
     }
@@ -239,7 +248,7 @@ export function AuthManageContent() {
     } catch (error) {
       setPermissionErrorMessages((current) => ({
         ...current,
-        [handle]: error instanceof Error ? error.message : '문제 권한을 저장하지 못했다.',
+        [handle]: error instanceof Error ? error.message : text('AUTH_MANAGE_PERMISSION_SAVE_FAIL_MESSAGE', '문제 권한을 저장하지 못했습니다.'),
       }));
     } finally {
       setSavingPermissionHandle((current) => (current === handle ? null : current));
@@ -290,8 +299,12 @@ export function AuthManageContent() {
     <section ref={panelRef} className="panel-card admin-auth-panel">
       {errorMessage && authManage != null ? <p className="admin-auth-feedback is-error">{errorMessage}</p> : null}
 
-      {errorMessage && authManage == null ? <PageLoadFailureState className="admin-auth-empty" /> : isLoading && authManage == null ? (
-        <div className="admin-page-loading-shell admin-auth-loading-shell is-loading" aria-live="polite" aria-label="로딩 중">
+      {errorMessage && authManage == null
+        ? loadErrorStatus != null
+          ? <HttpErrorState status={loadErrorStatus} className="admin-auth-empty" message={errorMessage} />
+          : <PageLoadFailureState className="admin-auth-empty" message={errorMessage} />
+        : isLoading && authManage == null ? (
+        <div className="admin-page-loading-shell admin-auth-loading-shell is-loading" aria-live="polite" aria-label={text('COMMON_LOADING_STATUS', '로딩 중')}>
           <div className="admin-page-loading-body admin-auth-loading-body" aria-hidden="true">
             <div className="admin-page-loading-row is-wide" />
             <div className="admin-page-loading-row" />
@@ -300,14 +313,12 @@ export function AuthManageContent() {
             <div className="admin-page-loading-row" />
           </div>
 
-          <div className="submit-history-loading-overlay" aria-hidden="true">
-            <span className="page-loading-spinner submit-history-loading-badge" />
-          </div>
+          <LoadingOverlay ariaHidden />
         </div>
       ) : (
         <div className="admin-auth-layout">
-          <aside className="admin-auth-side-nav" aria-label="권한 설정 섹션">
-            {AUTH_MANAGE_SECTIONS.map((section) => {
+          <aside className="admin-auth-side-nav" aria-label={text('AUTH_MANAGE_SECTION_NAV_LABEL', '권한 설정 섹션')}>
+            {sections.map((section) => {
               const isSelected = section.id === activeSection;
               return (
                 <button
@@ -323,11 +334,11 @@ export function AuthManageContent() {
           </aside>
 
           <div className="admin-auth-content">
-            <div className="admin-auth-table" role="table" aria-label="권한 설정">
+            <div className="admin-auth-table" role="table" aria-label={text('AUTH_MANAGE_TABLE_LABEL', '권한 설정')}>
               <div className="admin-auth-row admin-auth-row-head" role="row">
-                <div role="columnheader">Handle</div>
-                <div role="columnheader">역할</div>
-                <div role="columnheader">비고</div>
+                <div role="columnheader">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
+                <div role="columnheader">{text('AUTH_MANAGE_ROLE_COLUMN_LABEL', '역할')}</div>
+                <div role="columnheader">{text('AUTH_MANAGE_NOTE_COLUMN_LABEL', '비고')}</div>
               </div>
 
               {pagedUsers.map((user) => {
@@ -348,7 +359,7 @@ export function AuthManageContent() {
                           type="button"
                           className="admin-config-icon-button admin-auth-role-menu-button"
                           onClick={() => setOpenRoleMenuHandle((current) => (current === user.handle ? null : user.handle))}
-                          aria-label="역할 수정"
+                          aria-label={text('AUTH_MANAGE_ROLE_EDIT_LABEL', '역할 수정')}
                           aria-expanded={openRoleMenuHandle === user.handle}
                           disabled={isRoleSaving}
                         >
@@ -356,8 +367,8 @@ export function AuthManageContent() {
                         </button>
 
                         {openRoleMenuHandle === user.handle ? (
-                          <div className="admin-auth-role-menu" role="menu" aria-label={`${user.handle} 역할 선택`}>
-                            {ROLE_OPTIONS.map((option) => (
+                          <div className="admin-auth-role-menu" role="menu" aria-label={text('AUTH_MANAGE_ROLE_MENU_LABEL', { handle: user.handle }, `${user.handle} 역할 선택`)}>
+                            {roleOptions.map((option) => (
                               <button
                                 key={option.value}
                                 type="button"
@@ -386,7 +397,7 @@ export function AuthManageContent() {
                                 <button
                                   type="button"
                                   className="admin-auth-chip-remove"
-                                  aria-label={`${permissionKey} 권한 제거`}
+                                  aria-label={text('AUTH_MANAGE_PERMISSION_REMOVE_LABEL', { permissionKey }, `${permissionKey} 권한 제거`)}
                                   onClick={() => void handlePermissionRemove(user, permissionKey)}
                                   disabled={isPermissionSaving}
                                 >
@@ -402,13 +413,13 @@ export function AuthManageContent() {
                               value={permissionInputDrafts[user.handle] ?? ''}
                               onChange={(event) => setPermissionInputDrafts((current) => ({ ...current, [user.handle]: event.target.value }))}
                               onKeyDown={(event) => handlePermissionInputKeyDown(event, user)}
-                              placeholder="NEW, P00001, P00001-00001"
+                              placeholder={text('AUTH_MANAGE_PERMISSION_PLACEHOLDER', 'NEW, P00001, P00001-00001')}
                               disabled={isPermissionSaving}
                             />
                             <button
                               type="button"
                               className="admin-config-icon-button admin-auth-permission-add-button"
-                              aria-label="권한 추가"
+                              aria-label={text('AUTH_MANAGE_PERMISSION_ADD_LABEL', '권한 추가')}
                               onClick={() => void handlePermissionAdd(user)}
                               disabled={isPermissionSaving}
                             >
@@ -416,7 +427,7 @@ export function AuthManageContent() {
                             </button>
                           </div>
 
-                          <p className="admin-auth-permission-helper">NEW, 테이블셋 번호, 문제 번호를 태그처럼 관리한다.</p>
+                          <p className="admin-auth-permission-helper">{text('AUTH_MANAGE_PERMISSION_HELPER', 'NEW, 테이블셋 번호, 문제 번호를 태그처럼 관리합니다.')}</p>
                           {permissionErrorMessages[user.handle] ? <p className="admin-auth-row-feedback is-error">{permissionErrorMessages[user.handle]}</p> : null}
                         </div>
                       )}
@@ -425,18 +436,18 @@ export function AuthManageContent() {
                 );
               })}
 
-              {pagedUsers.length === 0 ? <div className="admin-auth-empty-text">표시할 계정이 없다.</div> : null}
+              {pagedUsers.length === 0 ? <div className="admin-auth-empty-text">{text('AUTH_MANAGE_EMPTY_STATE', '표시할 계정이 없습니다.')}</div> : null}
             </div>
 
             {!isLoading && filteredUsers.length > 0 ? (
-              <div className="problem-pagination submit-history-pagination" role="navigation" aria-label="권한 설정 페이지">
+              <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('AUTH_MANAGE_PAGE_LABEL', '권한 설정 페이지')}>
                 <button
                   type="button"
                   className="mini-toggle problem-page-button"
                   onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                   disabled={currentPage === 1}
                 >
-                  이전
+                  {text('COMMON_PREVIOUS_BUTTON', '이전')}
                 </button>
 
                 {isPageJumpEditing ? (
@@ -444,7 +455,7 @@ export function AuthManageContent() {
                     type="text"
                     inputMode="numeric"
                     className="problem-pagination-meta-input"
-                    aria-label="이동할 권한 설정 페이지 입력"
+                    aria-label={text('AUTH_MANAGE_PAGE_INPUT_LABEL', '이동할 권한 설정 페이지 입력')}
                     value={pageJumpDraft}
                     onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
                     onBlur={applyPageJump}
@@ -466,7 +477,7 @@ export function AuthManageContent() {
                   <button
                     type="button"
                     className="problem-pagination-meta problem-pagination-meta-button"
-                    aria-label="이동할 권한 설정 페이지 입력 열기"
+                    aria-label={text('AUTH_MANAGE_PAGE_INPUT_OPEN_LABEL', '이동할 권한 설정 페이지 입력 열기')}
                     onClick={() => {
                       setPageJumpDraft(String(currentPage));
                       setIsPageJumpEditing(true);
@@ -482,7 +493,7 @@ export function AuthManageContent() {
                   onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                   disabled={currentPage >= totalPages}
                 >
-                  다음
+                  {text('COMMON_NEXT_BUTTON', '다음')}
                 </button>
               </div>
             ) : null}

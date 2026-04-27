@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { LoadingOverlay } from '../common/LoadingSpinner';
 import { navigate } from '../../lib/navigation';
+import { useUiText } from '../../lib/uiText';
 import type { DbmsType, ProblemSummary } from '../../types/domain';
 import ProblemCard from './ProblemCard';
 import ProblemSpreadRateFilter from './ProblemSpreadRateFilter';
@@ -96,6 +98,7 @@ export default function ProblemList({
   onChangeSpreadRateRange,
   onApplySpreadRateRange,
 }: ProblemListProps) {
+  const { text } = useUiText();
   const [isSolveFilterOpen, setIsSolveFilterOpen] = useState(false);
   const [isSpreadRateFilterOpen, setIsSpreadRateFilterOpen] = useState(false);
   const solveFilterRef = useRef<HTMLDivElement | null>(null);
@@ -150,14 +153,14 @@ export default function ProblemList({
   return (
     <section className="problem-list problem-table-shell">
       <div className={`problem-table-shell-inner ${isLoading ? 'is-loading' : ''}`}>
-        <div className="problem-table" role="table" aria-label="문제 목록">
+        <div className="problem-table" role="table" aria-label={text('PROBLEM_TABLE_LABEL', '문제 목록')}>
           <div className="problem-table-row problem-table-head" role="row">
             <div
               role="columnheader"
               className={`problem-table-head-cell ${showSolveState ? 'problem-table-head-cell-filter' : ''}`.trim()}
               ref={solveFilterRef}
             >
-              <span>해결여부</span>
+              <span>{text('PROBLEM_TABLE_STATUS_COLUMN_LABEL', '해결 여부')}</span>
               {showSolveState ? (
                 <>
                   <button
@@ -165,14 +168,14 @@ export default function ProblemList({
                     className={`problem-table-head-filter-trigger ${isSolveFilterOpen ? 'is-open' : ''} ${
                       showSolved && showUnsolved ? '' : 'is-active'
                     }`.trim()}
-                    aria-label="해결 여부 필터 열기"
+                    aria-label={text('PROBLEM_TABLE_SOLVE_FILTER_OPEN_LABEL', '해결 여부 필터 열기')}
                     onClick={() => setIsSolveFilterOpen((value) => !value)}
                   >
                     ▾
                   </button>
 
                   {isSolveFilterOpen ? (
-                    <div className="problem-table-header-menu" role="menu" aria-label="해결 여부 필터 옵션">
+                    <div className="problem-table-header-menu" role="menu" aria-label={text('PROBLEM_TABLE_SOLVE_FILTER_OPTIONS_LABEL', '해결 여부 필터 옵션')}>
                       <div className="problem-status-checks">
                         <label className="problem-status-check">
                           <input
@@ -180,9 +183,9 @@ export default function ProblemList({
                             checked={showSolved}
                             onChange={onToggleSolved}
                             className="problem-status-check-input"
-                            aria-label="해결"
+                            aria-label={text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}
                           />
-                          <span className="problem-status-check-text">해결</span>
+                          <span className="problem-status-check-text">{text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}</span>
                           <span className="problem-status-check-ui" aria-hidden="true" />
                         </label>
 
@@ -192,9 +195,9 @@ export default function ProblemList({
                             checked={showUnsolved}
                             onChange={onToggleUnsolved}
                             className="problem-status-check-input"
-                            aria-label="미해결"
+                            aria-label={text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}
                           />
-                          <span className="problem-status-check-text">미해결</span>
+                          <span className="problem-status-check-text">{text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}</span>
                           <span className="problem-status-check-ui" aria-hidden="true" />
                         </label>
                       </div>
@@ -204,39 +207,51 @@ export default function ProblemList({
               ) : null}
             </div>
             <div role="columnheader" className="problem-table-head-cell">
-              문제번호
+              {text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제번호')}
             </div>
             <div role="columnheader" className="problem-table-head-cell">
-              문제 제목
+              {text('PROBLEM_TABLE_TITLE_COLUMN_LABEL', '문제 제목')}
             </div>
             <div role="columnheader" className="problem-table-head-cell problem-table-head-cell-filter">
-              <span>푼 사람 수</span>
+              <span>{text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수')}</span>
               <button
                 type="button"
                 className={`problem-table-head-filter-trigger problem-table-head-sort-trigger ${countSortField === 'solvedCount' ? 'is-active' : ''}`}
-                aria-label={countSortField === 'solvedCount' && countSortDirection === 'asc' ? '푼 사람 수 오름차순' : '푼 사람 수 내림차순'}
+                aria-label={
+                  countSortField === 'solvedCount' && countSortDirection === 'asc'
+                    ? text('PROBLEM_TABLE_SOLVED_COUNT_SORT_ASC_LABEL', '푼 사람 수 오름차순')
+                    : text('PROBLEM_TABLE_SOLVED_COUNT_SORT_DESC_LABEL', '푼 사람 수 내림차순')
+                }
                 onClick={() => onToggleCountSort('solvedCount')}
               >
                 {renderSortIcon('solvedCount')}
               </button>
             </div>
             <div role="columnheader" className="problem-table-head-cell problem-table-head-cell-filter">
-              <span>전체 제출</span>
+              <span>{text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출')}</span>
               <button
                 type="button"
                 className={`problem-table-head-filter-trigger problem-table-head-sort-trigger ${countSortField === 'totalSubmitCount' ? 'is-active' : ''}`}
-                aria-label={countSortField === 'totalSubmitCount' && countSortDirection === 'asc' ? '전체 제출 오름차순' : '전체 제출 내림차순'}
+                aria-label={
+                  countSortField === 'totalSubmitCount' && countSortDirection === 'asc'
+                    ? text('PROBLEM_TABLE_TOTAL_SUBMIT_SORT_ASC_LABEL', '전체 제출 오름차순')
+                    : text('PROBLEM_TABLE_TOTAL_SUBMIT_SORT_DESC_LABEL', '전체 제출 내림차순')
+                }
                 onClick={() => onToggleCountSort('totalSubmitCount')}
               >
                 {renderSortIcon('totalSubmitCount')}
               </button>
             </div>
             <div role="columnheader" className="problem-table-head-cell problem-table-head-cell-filter">
-              <span>정답 제출</span>
+              <span>{text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}</span>
               <button
                 type="button"
                 className={`problem-table-head-filter-trigger problem-table-head-sort-trigger ${countSortField === 'successSubmitCount' ? 'is-active' : ''}`}
-                aria-label={countSortField === 'successSubmitCount' && countSortDirection === 'asc' ? '정답 제출 오름차순' : '정답 제출 내림차순'}
+                aria-label={
+                  countSortField === 'successSubmitCount' && countSortDirection === 'asc'
+                    ? text('PROBLEM_TABLE_SUCCESS_SUBMIT_SORT_ASC_LABEL', '정답 제출 오름차순')
+                    : text('PROBLEM_TABLE_SUCCESS_SUBMIT_SORT_DESC_LABEL', '정답 제출 내림차순')
+                }
                 onClick={() => onToggleCountSort('successSubmitCount')}
               >
                 {renderSortIcon('successSubmitCount')}
@@ -247,17 +262,21 @@ export default function ProblemList({
               className="problem-table-head-cell problem-table-head-cell-filter problem-table-head-cell-spread"
               ref={spreadRateFilterRef}
             >
-              <span>Cost 편차</span>
+              <span>{text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}</span>
               <button
                 type="button"
                 className={`problem-table-head-filter-trigger ${isSpreadRateFilterOpen ? 'is-open' : ''} ${isSpreadRateFilterActive ? 'is-active' : ''}`}
-                aria-label="Cost 편차 필터 열기"
+                aria-label={text('PROBLEM_TABLE_COST_SPREAD_FILTER_OPEN_LABEL', 'Cost 편차 필터 열기')}
                 onClick={() => setIsSpreadRateFilterOpen((value) => !value)}
               >
                 ▾
               </button>
               {isSpreadRateFilterOpen ? (
-                <div className="problem-table-header-menu problem-table-header-menu-spread" role="menu" aria-label="Cost 편차 필터 옵션">
+                <div
+                  className="problem-table-header-menu problem-table-header-menu-spread"
+                  role="menu"
+                  aria-label={text('PROBLEM_TABLE_COST_SPREAD_FILTER_OPTIONS_LABEL', 'Cost 편차 필터 옵션')}
+                >
                   <ProblemSpreadRateFilter
                     minBound={spreadRateMinBound}
                     maxBound={spreadRateMaxBound}
@@ -277,7 +296,7 @@ export default function ProblemList({
               ) : null}
             </div>
             <div role="columnheader" className="problem-table-head-cell problem-table-head-cell-stats">
-              통계
+              {text('PROBLEM_TABLE_STATS_COLUMN_LABEL', '통계')}
             </div>
           </div>
 
@@ -296,7 +315,9 @@ export default function ProblemList({
             ))
           ) : problems.length === 0 ? (
             <div className="problem-table-empty-row" role="row">
-              <span className="problem-empty-state problem-empty-state-inline" role="cell">선택한 조건에 맞는 문제가 없습니다.</span>
+              <span className="problem-empty-state problem-empty-state-inline" role="cell">
+                {text('PROBLEM_TABLE_EMPTY_STATE', '선택한 조건에 맞는 문제가 없습니다.')}
+              </span>
             </div>
           ) : (
             problems.map((problem) => (
@@ -313,11 +334,7 @@ export default function ProblemList({
           )}
         </div>
 
-        {isLoading ? (
-          <div className="submit-history-loading-overlay problem-table-loading-overlay" aria-live="polite" aria-label="로딩 중">
-            <span className="page-loading-spinner submit-history-loading-badge" aria-hidden="true" />
-          </div>
-        ) : null}
+        {isLoading ? <LoadingOverlay className="problem-table-loading-overlay" /> : null}
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper, { type Area } from 'react-easy-crop';
 import type { ImageCropAreaPixels } from '../../lib/imageCrop';
+import { useUiText } from '../../lib/uiText';
 import './ImageCropModal.css';
 import 'react-easy-crop/react-easy-crop.css';
 
@@ -32,6 +33,7 @@ export default function ImageCropModal({
   onCancel,
   onApply,
 }: ImageCropModalProps) {
+  const { text } = useUiText();
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(initialZoom);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<ImageCropAreaPixels | null>(null);
@@ -63,7 +65,7 @@ export default function ImageCropModal({
 
           <div className="image-crop-modal-controls">
             <label className="image-crop-zoom-field">
-              <span>확대</span>
+              <span>{text('IMAGE_CROP_ZOOM_LABEL', '확대')}</span>
               <input
                 type="range"
                 min={String(minZoom)}
@@ -78,7 +80,7 @@ export default function ImageCropModal({
 
         <div className="image-crop-modal-actions">
           <button type="button" className="btn ghost" onClick={onCancel} disabled={isApplying}>
-            취소
+            {text('COMMON_CANCEL_BUTTON', '취소')}
           </button>
           <button
             type="button"
@@ -90,7 +92,7 @@ export default function ImageCropModal({
             }}
             disabled={croppedAreaPixels == null || isApplying}
           >
-            {isApplying ? '적용 중' : '적용'}
+            {isApplying ? text('COMMON_APPLYING_LABEL', '적용 중') : text('COMMON_APPLY_BUTTON', '적용')}
           </button>
         </div>
 

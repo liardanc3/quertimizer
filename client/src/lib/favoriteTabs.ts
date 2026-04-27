@@ -33,6 +33,8 @@ let favoriteTabsSessionState: FavoriteTabsSessionState = {
 let favoriteTabsPersistTimerId: number | null = null;
 let favoriteTabsSyncSequence = 0;
 let favoriteTabsIsApplyingServerState = false;
+let favoriteTabsDidHydrateFromServer = false;
+let favoriteTabsHydrationPromise: Promise<void> | null = null;
 
 function isValidFavoriteTabSnapshot(value: unknown): value is FavoriteTabSnapshot {
   if (typeof value !== 'object' || value == null) {
@@ -324,34 +326,63 @@ export async function handleFavoriteTabsSessionState(nextSessionState: FavoriteT
   }
 
   if (!nextSessionState.isAuthenticated) {
+    favoriteTabsDidHydrateFromServer = false;
+    favoriteTabsHydrationPromise = null;
     if (previousSessionState.isAuthenticated) {
       clearStoredFavoriteTabs();
     }
     return;
   }
 
+  if (favoriteTabsDidHydrateFromServer || favoriteTabsHydrationPromise != null) {
+    return;
+  }
+
   const syncSequence = ++favoriteTabsSyncSequence;
   const localEntries = readStoredFavoriteTabs();
+  favoriteTabsHydrationPromise = (async () => {
+    try {
+      const serverEntries = normalizeFavoriteTabs(await fetchMyFavoriteTabs());
+      if (favoriteTabsSyncSequence != syncSequence || !favoriteTabsSessionState.isAuthenticated) {
+        return;
+      }
 
-  try {
-    const serverEntries = normalizeFavoriteTabs(await fetchMyFavoriteTabs());
-    if (favoriteTabsSyncSequence != syncSequence || !favoriteTabsSessionState.isAuthenticated) {
-      return;
+      const mergedEntries = mergeFavoriteTabs(localEntries, serverEntries);
+      favoriteTabsIsApplyingServerState = true;
+      replaceStoredFavoriteTabs(mergedEntries, { persistToServer: false });
+      favoriteTabsIsApplyingServerState = false;
+      favoriteTabsDidHydrateFromServer = true;
+
+      if (serializeFavoriteTabs(mergedEntries) !== serializeFavoriteTabs(serverEntries)) {
+        scheduleFavoriteTabsPersist();
+      }
+    } catch {
+      // keep local snapshot if the server sync fails
+    } finally {
+      favoriteTabsIsApplyingServerState = false;
+      favoriteTabsHydrationPromise = null;
     }
+  })();
 
-    const mergedEntries = mergeFavoriteTabs(localEntries, serverEntries);
-    favoriteTabsIsApplyingServerState = true;
-    replaceStoredFavoriteTabs(mergedEntries, { persistToServer: false });
-    favoriteTabsIsApplyingServerState = false;
+  await favoriteTabsHydrationPromise;
+}
 
-    if (serializeFavoriteTabs(mergedEntries) !== serializeFavoriteTabs(serverEntries)) {
-      scheduleFavoriteTabsPersist();
-    }
-  } catch {
-    // keep local snapshot if the server sync fails
-  } finally {
-    favoriteTabsIsApplyingServerState = false;
+export function prepareFavoriteTabsLogoutReload() {
+  if (typeof window === 'undefined') {
+    return;
   }
+
+  cancelFavoriteTabsPersist();
+  favoriteTabsSyncSequence += 1;
+  favoriteTabsSessionState = {
+    isReady: true,
+    isAuthenticated: false,
+  };
+  favoriteTabsIsApplyingServerState = false;
+  favoriteTabsDidHydrateFromServer = false;
+  favoriteTabsHydrationPromise = null;
+  window.localStorage.removeItem(FAVORITE_TABS_STORAGE_KEY);
+  setFavoriteTabsSnapshotCache([]);
 }
 
 export function navigateToFavoriteTab(entry: FavoriteTabEntry) {
