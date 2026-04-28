@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   HINT_FILTER_OPTIONS,
   buildAvailableBucketFilters,
@@ -15,14 +15,20 @@ import {
   type PlanSectionKey,
 } from '../lib/executionPlanFilters';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
-import HttpErrorState from '../components/common/HttpErrorState';
+import { DataTable } from '../components/common/DataTable';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
-import PageLoadFailureState from '../components/common/PageLoadFailureState';
-import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
+import PageErrorState from '../components/common/PageErrorState';
+import Pagination from '../components/common/Pagination';
+import SortIcon from '../components/icons/SortIcon';
+import { replaceQueryState, useLocationSearch } from '../hooks/useLocationState';
+import useDismissableLayer from '../hooks/useDismissableLayer';
+import useRequestState from '../hooks/useRequestState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { fetchSubmitHistories } from '../lib/submitHistoryApi';
-import { getLocationSearchSnapshot, getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, subscribeLocation, navigate } from '../lib/navigation';
+import { getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from '../lib/navigation';
 import { getUiTextValue, useUiText } from '../lib/uiText';
+import { formatCost, formatSubmittedAt } from '../lib/formatters';
+import { renderStaticHighlightedSql } from '../lib/sqlHighlighter';
 import type {
   DbmsType,
   SubmitHistoryEntry,
@@ -32,33 +38,6 @@ import type {
 } from '../types/domain';
 import '../components/home/ProblemRuntimeChart.css';
 import './SubmitHistoryPage.css';
-
-function SortAscendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.5v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M5.2 5.25 8 2.5l2.8 2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortDescendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.6v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="m5.2 10.75 2.8 2.75 2.8-2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortNeutralIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M5.7 6.2 8 3.9l2.3 2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m5.7 9.8 2.3 2.3 2.3-2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 type DbmsFilterValue = DbmsType | 'all';
 type SubmitHistoryModalState =
@@ -73,26 +52,9 @@ type HeaderFilterMenuState = {
   width: number;
 } | null;
 
-type SubmitHistorySqlTokenKind =
-  | 'keyword'
-  | 'explain-keyword'
-  | 'table'
-  | 'column'
-  | 'string'
-  | 'number'
-  | 'comment'
-  | 'function'
-  | 'operator'
-  | 'identifier';
-
 type JudgeSelectionValue = Exclude<SubmitHistoryJudge, 'all'>;
 type SubmitHistoryCostSortOrder = 'none' | 'desc' | 'asc';
 type SubmitHistoryHeaderFilterKey = 'judge' | 'plan';
-
-interface SubmitHistorySqlHighlightToken {
-  text: string;
-  kind: SubmitHistorySqlTokenKind | null;
-}
 
 type SubmitHistoryPlanFiltersByDbms = Record<DbmsType, SubmitHistoryPlanFilters>;
 
@@ -115,7 +77,6 @@ interface SubmitHistoryFavoriteSnapshot {
 }
 
 const submitHistoryLoadingRows = Array.from({ length: 10 }, (_, index) => index);
-const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 
 function readSubmitHistoryDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
@@ -141,93 +102,6 @@ const DEFAULT_PLAN_SECTION_KEYS: PlanSectionKey[] = [
   'aggregateBucket',
   'hint',
 ];
-const SUBMIT_HISTORY_SQL_HIGHLIGHT_KEYWORDS = new Set([
-  'SELECT',
-  'FROM',
-  'WHERE',
-  'GROUP',
-  'BY',
-  'ORDER',
-  'HAVING',
-  'LIMIT',
-  'OFFSET',
-  'JOIN',
-  'INNER',
-  'LEFT',
-  'RIGHT',
-  'FULL',
-  'OUTER',
-  'ON',
-  'AS',
-  'AND',
-  'OR',
-  'NOT',
-  'IN',
-  'EXISTS',
-  'BETWEEN',
-  'LIKE',
-  'IS',
-  'NULL',
-  'COUNT',
-  'SUM',
-  'AVG',
-  'MIN',
-  'MAX',
-  'DISTINCT',
-  'CASE',
-  'WHEN',
-  'THEN',
-  'ELSE',
-  'END',
-  'WITH',
-  'UNION',
-  'ALL',
-  'EXPLAIN',
-  'ANALYZE',
-  'ANALYSE',
-  'CREATE',
-  'TEMP',
-  'TABLE',
-  'INSERT',
-  'INTO',
-  'VALUES',
-  'UPDATE',
-  'SET',
-  'DELETE',
-  'INDEX',
-  'DROP',
-  'ALTER',
-  'ADD',
-  'PRIMARY',
-  'KEY',
-  'FOREIGN',
-  'REFERENCES',
-  'UNIQUE',
-  'CHECK',
-  'DEFAULT',
-  'PUBLIC',
-  'INTEGER',
-  'VARCHAR',
-  'TEXT',
-  'TIMESTAMP',
-  'DATE',
-  'BOOLEAN',
-  'DECIMAL',
-  'NUMERIC',
-  'BIGINT',
-  'SMALLINT',
-  'TRUE',
-  'FALSE',
-]);
-const SUBMIT_HISTORY_SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS = new Set([
-  'FROM',
-  'JOIN',
-  'INTO',
-  'UPDATE',
-  'TABLE',
-  'INDEX',
-  'ON',
-]);
 
 function createEmptySubmitHistoryPage(): SubmitHistoryPageData {
   return {
@@ -259,26 +133,6 @@ function createDefaultFilters(initialDbms: DbmsType = 'postgresql'): SubmitHisto
   };
 }
 
-function formatCost(value: number) {
-  return costFormatter.format(Math.round(value * 10) / 10);
-}
-
-function padDatePart(value: number) {
-  return String(value).padStart(2, '0');
-}
-
-function formatSubmittedAt(value: string) {
-  if (value.trim() === '') {
-    return '-';
-  }
-
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return value;
-  }
-
-  return `${parsedDate.getFullYear()}-${padDatePart(parsedDate.getMonth() + 1)}-${padDatePart(parsedDate.getDate())} ${padDatePart(parsedDate.getHours())}:${padDatePart(parsedDate.getMinutes())}:${padDatePart(parsedDate.getSeconds())}`;
-}
 
 function toggleValue<T extends string>(values: T[], value: T) {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
@@ -394,117 +248,6 @@ function clearAllPlanSectionFiltersByDbms(planFiltersByDbms: SubmitHistoryPlanFi
   };
 }
 
-function tokenizeSubmitHistorySqlLine(line: string) {
-  const tokens: SubmitHistorySqlHighlightToken[] = [];
-  const tokenPattern =
-    /--.*$|'(?:''|[^'])*'|"(?:["]|[^"])*"|[A-Za-z_][A-Za-z0-9_$]*|\d+(?:\.\d+)?|<=|>=|<>|!=|==|[=<>+\-*/%]+|[(),.;]|\s+|./g;
-  const lineTokens = Array.from(line.matchAll(tokenPattern), (match) => match[0]);
-  let expectTable = false;
-
-  for (let index = 0; index < lineTokens.length; index += 1) {
-    const token = lineTokens[index];
-
-    if (/^\s+$/.test(token)) {
-      tokens.push({ text: token, kind: null });
-      continue;
-    }
-
-    if (token.startsWith('--')) {
-      tokens.push({ text: token, kind: 'comment' });
-      break;
-    }
-
-    if (/^'(?:''|[^'])*'$/.test(token) || /^"(?:["]|[^"])*"$/.test(token)) {
-      tokens.push({ text: token, kind: 'string' });
-      expectTable = false;
-      continue;
-    }
-
-    if (/^\d+(?:\.\d+)?$/.test(token)) {
-      tokens.push({ text: token, kind: 'number' });
-      continue;
-    }
-
-    if (/^[(),.;]$/.test(token) || /^[=<>+\-*/%]+$/.test(token)) {
-      tokens.push({ text: token, kind: 'operator' });
-      if (token !== ',') {
-        expectTable = false;
-      }
-      continue;
-    }
-
-    if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(token)) {
-      const upperToken = token.toUpperCase();
-      const previousMeaningfulToken = [...lineTokens.slice(0, index)]
-        .reverse()
-        .find((candidate) => !/^\s+$/.test(candidate));
-      const nextMeaningfulToken = lineTokens.slice(index + 1).find((candidate) => !/^\s+$/.test(candidate));
-
-      if (SUBMIT_HISTORY_SQL_HIGHLIGHT_KEYWORDS.has(upperToken)) {
-        tokens.push({
-          text: token,
-          kind:
-            upperToken === 'EXPLAIN' || upperToken === 'ANALYZE' || upperToken === 'ANALYSE'
-              ? 'explain-keyword'
-              : 'keyword',
-        });
-        expectTable = SUBMIT_HISTORY_SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS.has(upperToken);
-        continue;
-      }
-
-      if (previousMeaningfulToken === '.') {
-        tokens.push({ text: token, kind: 'column' });
-        expectTable = false;
-        continue;
-      }
-
-      if (expectTable) {
-        tokens.push({ text: token, kind: 'table' });
-        expectTable = false;
-        continue;
-      }
-
-      if (nextMeaningfulToken === '(') {
-        tokens.push({ text: token, kind: 'function' });
-        expectTable = false;
-        continue;
-      }
-
-      tokens.push({ text: token, kind: 'identifier' });
-      expectTable = false;
-      continue;
-    }
-
-    tokens.push({ text: token, kind: null });
-  }
-
-  return tokens;
-}
-
-function renderSubmitHistoryHighlightedSql(sql: string) {
-  const normalizedSql = sql.replace(/\r\n/g, '\n');
-  const lines = normalizedSql.split('\n');
-
-  return lines.map((line, lineIndex) => {
-    const lineTokens = tokenizeSubmitHistorySqlLine(line);
-
-    return (
-      <Fragment key={`line-${lineIndex}`}>
-        {lineTokens.map((token, tokenIndex) =>
-          token.kind == null ? (
-            <span key={`token-${lineIndex}-${tokenIndex}`}>{token.text}</span>
-          ) : (
-            <span key={`token-${lineIndex}-${tokenIndex}`} className={`solve-sql-token is-${token.kind}`}>
-              {token.text}
-            </span>
-          ),
-        )}
-        {lineIndex < lines.length - 1 ? '\n' : null}
-      </Fragment>
-    );
-  });
-}
-
 function SelectionCheckbox({ checked }: { checked: boolean }) {
   return <span className={`runtime-check-indicator ${checked ? 'is-checked' : ''}`} aria-hidden="true" />;
 }
@@ -535,24 +278,27 @@ function hasExecutionPlanDetails(history: SubmitHistoryEntry) {
 
 export default function SubmitHistoryPage() {
   const { text } = useUiText();
-  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<SubmitHistoryFavoriteSnapshot>('submitHistory'), []);
   const initialDbms = favoriteRestoreSnapshot?.draftFilters.dbmsSelections[0] ?? readSubmitHistoryDbmsFromSearch(window.location.search);
   const [draftFilters, setDraftFilters] = useState<SubmitHistoryFilters>(() => favoriteRestoreSnapshot?.draftFilters ?? createDefaultFilters(initialDbms));
   const [submittedFilters, setSubmittedFilters] = useState<SubmitHistoryFilters>(() => favoriteRestoreSnapshot?.submittedFilters ?? createDefaultFilters(initialDbms));
   const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
-  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
-  const [pageJumpDraft, setPageJumpDraft] = useState('1');
-  const [historyPage, setHistoryPage] = useState<SubmitHistoryPageData>(createEmptySubmitHistoryPage());
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
-  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
+  const {
+    data: historyPage,
+    setData: setHistoryPage,
+    isLoading,
+    setIsLoading,
+    error: loadError,
+    beginRequest,
+    failRequest,
+  } = useRequestState<SubmitHistoryPageData>(createEmptySubmitHistoryPage);
   const [headerFilterMenuState, setHeaderFilterMenuState] = useState<HeaderFilterMenuState>(null);
   const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(() => favoriteRestoreSnapshot?.selectedPlanSections ?? DEFAULT_PLAN_SECTION_KEYS);
   const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.activePlanDetailDbms ?? 'postgresql');
   const [modalState, setModalState] = useState<SubmitHistoryModalState>(null);
   const headerFilterMenuRef = useRef<HTMLDivElement | null>(null);
+  const headerFilterMenuLayerRefs = useMemo(() => [headerFilterMenuRef], []);
 
   const submittedDbmsFilterValue = useMemo(
     () => resolveSubmitHistoryDbmsFilterValue(submittedFilters.dbmsSelections),
@@ -613,7 +359,7 @@ export default function SubmitHistoryPage() {
       return null;
     }
 
-    return renderSubmitHistoryHighlightedSql(modalState.history.submittedSql);
+    return renderStaticHighlightedSql(modalState.history.submittedSql);
   }, [modalState]);
   const sqlModalHasExecutionPlanDetails = useMemo(
     () => (modalState?.type === 'sql' ? hasExecutionPlanDetails(modalState.history) : false),
@@ -623,14 +369,6 @@ export default function SubmitHistoryPage() {
     () => (modalState?.type === 'plan' ? buildSubmitHistoryPlanSections(modalState.history) : []),
     [modalState],
   );
-
-  useEffect(() => {
-    if (isPageJumpEditing) {
-      return;
-    }
-
-    setPageJumpDraft(String(historyPage.currentPage));
-  }, [historyPage.currentPage, isPageJumpEditing]);
 
   useEffect(() => {
     const nextDbms = readSubmitHistoryDbmsFromSearch(locationSearch);
@@ -660,21 +398,14 @@ export default function SubmitHistoryPage() {
 
   useEffect(() => {
     const nextPath = buildSubmitHistoryPath(selectedDbms);
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-
-    if (currentPath !== nextPath) {
-      window.history.replaceState(window.history.state ?? {}, '', nextPath);
-    }
+    replaceQueryState(nextPath);
   }, [selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSubmitHistories() {
-      setIsLoading(true);
-      setLoadFailed(false);
-      setLoadErrorMessage(null);
-      setLoadErrorStatus(null);
+      beginRequest();
 
       try {
         const fetchedPage = await fetchSubmitHistories({
@@ -701,10 +432,7 @@ export default function SubmitHistoryPage() {
           return;
         }
 
-        setLoadFailed(true);
-        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
-        const status = getApiErrorStatus(error);
-        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
+        failRequest(error, text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -719,44 +447,14 @@ export default function SubmitHistoryPage() {
     };
   }, [requestedPage, submittedDbmsFilterValue, submittedJudgeFilterValue, submittedFilters]);
 
-  useEffect(() => {
-    if (headerFilterMenuState == null) {
-      return;
-    }
-
-    function closeHeaderFilterMenu() {
-      setHeaderFilterMenuState(null);
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('[data-submit-history-filter-trigger="true"]')) {
-        return;
-      }
-
-      if (!headerFilterMenuRef.current?.contains(event.target as Node)) {
-        closeHeaderFilterMenu();
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        closeHeaderFilterMenu();
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('resize', closeHeaderFilterMenu);
-    window.addEventListener('scroll', closeHeaderFilterMenu, true);
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('resize', closeHeaderFilterMenu);
-      window.removeEventListener('scroll', closeHeaderFilterMenu, true);
-    };
-  }, [headerFilterMenuState]);
+  useDismissableLayer({
+    enabled: headerFilterMenuState != null,
+    refs: headerFilterMenuLayerRefs,
+    onDismiss: () => setHeaderFilterMenuState(null),
+    dismissOnResize: true,
+    dismissOnScroll: true,
+    shouldIgnoreOutsidePointerDown: (target) => target?.closest('[data-submit-history-filter-trigger="true"]') != null,
+  });
 
   useEffect(() => {
     if (draftFilters.dbmsSelections.includes(activePlanDetailDbms)) {
@@ -766,20 +464,12 @@ export default function SubmitHistoryPage() {
     setActivePlanDetailDbms(draftFilters.dbmsSelections[0] ?? 'postgresql');
   }, [activePlanDetailDbms, draftFilters.dbmsSelections]);
 
-  useEffect(() => {
-    if (modalState == null) {
-      return;
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setModalState(null);
-      }
-    }
-
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [modalState]);
+  useDismissableLayer({
+    enabled: modalState != null,
+    refs: [],
+    onDismiss: () => setModalState(null),
+    dismissOnOutsidePointerDown: false,
+  });
 
   function commitImmediateFilters(
     updater: (currentFilters: SubmitHistoryFilters) => SubmitHistoryFilters,
@@ -948,25 +638,6 @@ export default function SubmitHistoryPage() {
         width: menuWidth,
       };
     });
-  }
-
-  function applyPageJump() {
-    const parsedPage = Number.parseInt(pageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? historyPage.currentPage
-      : Math.min(historyPage.totalPages, Math.max(1, parsedPage));
-
-    setPageJumpDraft(String(nextPage));
-    setIsPageJumpEditing(false);
-
-    if (nextPage !== historyPage.currentPage) {
-      setRequestedPage(nextPage);
-    }
-  }
-
-  function cancelPageJump() {
-    setPageJumpDraft(String(historyPage.currentPage));
-    setIsPageJumpEditing(false);
   }
 
   const modalContent =
@@ -1325,7 +996,7 @@ export default function SubmitHistoryPage() {
         );
 
   return (
-    <div className="page-stack submit-history-page home-page">
+    <div className="page page-stack submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card">
         <div className="problem-toolbar submit-history-toolbar-stack">
           <div
@@ -1425,14 +1096,12 @@ export default function SubmitHistoryPage() {
         </div>
       </section>
 
-      <section className="panel-card problem-board submit-history-board">
-        {loadFailed ? (
-          loadErrorStatus != null
-            ? <HttpErrorState status={loadErrorStatus} message={loadErrorMessage} />
-            : <PageLoadFailureState message={loadErrorMessage} />
+      <section className="panel-card problem-board submit-history-board data-board">
+        {loadError.failed ? (
+          <PageErrorState status={loadError.status} message={loadError.message} />
         ) : (
           <div className={`submit-history-table-shell ${isLoading ? 'is-loading' : ''}`}>
-            <div className="submit-history-table" role="table" aria-label={text('SUBMIT_HISTORY_TABLE_LABEL', '제출 이력 목록')}>
+            <DataTable className="submit-history-table" label={text('SUBMIT_HISTORY_TABLE_LABEL', '제출 이력 목록')}>
               <div className="submit-history-row submit-history-head" role="row">
                 <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}</div>
                 <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
@@ -1463,7 +1132,7 @@ export default function SubmitHistoryPage() {
                     }
                     onClick={toggleCostSortOrder}
                   >
-                    {draftFilters.costSort === 'asc' ? <SortAscendingIcon /> : draftFilters.costSort === 'desc' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                    <SortIcon direction={draftFilters.costSort === 'asc' ? 'asc' : draftFilters.costSort === 'desc' ? 'desc' : 'none'} />
                   </button>
                 </div>
                 <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
@@ -1564,71 +1233,23 @@ export default function SubmitHistoryPage() {
                   </article>
                 ))
               )}
-            </div>
+            </DataTable>
             {isLoading ? <LoadingOverlay /> : null}
           </div>
         )}
 
-        {!loadFailed && historyPage.totalCount > 0 ? (
-          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('SUBMIT_HISTORY_PAGE_NAV_LABEL', '제출 이력 페이지')}>
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.max(1, page - 1))}
-              disabled={historyPage.currentPage === 1}
-            >
-              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="problem-pagination-meta-input"
-                aria-label={text('SUBMIT_HISTORY_PAGE_INPUT_LABEL', '이동할 제출 이력 페이지 입력')}
-                value={pageJumpDraft}
-                onChange={(event) => {
-                  const nextValue = event.target.value.replace(/\D+/g, '');
-                  setPageJumpDraft(nextValue);
-                }}
-                onBlur={applyPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelPageJump();
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label={text('SUBMIT_HISTORY_PAGE_INPUT_BUTTON_LABEL', '이동할 제출 이력 페이지 입력 열기')}
-                onClick={() => {
-                  setPageJumpDraft(String(historyPage.currentPage));
-                  setIsPageJumpEditing(true);
-                }}
-              >
-                {`${historyPage.currentPage} / ${historyPage.totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => setRequestedPage((page) => Math.min(historyPage.totalPages, page + 1))}
-              disabled={historyPage.currentPage >= historyPage.totalPages}
-            >
-              {text('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
+        {!loadError.failed && historyPage.totalCount > 0 ? (
+          <Pagination
+            className="problem-pagination submit-history-pagination"
+            currentPage={historyPage.currentPage}
+            totalPages={historyPage.totalPages}
+            onPageChange={setRequestedPage}
+            ariaLabel={text('SUBMIT_HISTORY_PAGE_NAV_LABEL', '제출 이력 페이지')}
+            inputLabel={text('SUBMIT_HISTORY_PAGE_INPUT_LABEL', '이동할 제출 이력 페이지 입력')}
+            inputOpenLabel={text('SUBMIT_HISTORY_PAGE_INPUT_BUTTON_LABEL', '이동할 제출 이력 페이지 입력 열기')}
+            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+          />
         ) : null}
       </section>
       {modalContent}

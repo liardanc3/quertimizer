@@ -22,6 +22,7 @@ import { createCommunityEditorSnapshotFromJson, type CommunityEditorSnapshot } f
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
 import { showSessionToast, useMockSession } from '../lib/session';
+import { formatBoardDate, formatInteger } from '../lib/formatters';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import './CommunityPage.css';
 
@@ -43,7 +44,6 @@ function getLocationHashSnapshot() {
   return window.location.hash;
 }
 
-const numberFormatter = new Intl.NumberFormat('ko-KR');
 const COMMENT_LOGIN_DESCRIPTION = getUiTextValue('COMMUNITY_COMMENT_LOGIN_DESC', '작성 중인 댓글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.');
 type EditableCommunityCategory = Extract<CommunityPostDetail['category'], 'discussion' | 'question' | 'notice'>;
 
@@ -54,17 +54,6 @@ const emptyEditorSnapshot: CommunityEditorSnapshot = {
   contentByteLength: 0,
   empty: true,
 };
-
-function formatBoardDate(value: string) {
-  const date = new Date(value);
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
 
 function isProblemTag(tag: string) {
   return /^[PM]?\d{5}-\d{5}$/.test(tag.trim());
@@ -808,9 +797,9 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <span>{post.authorHandle}</span>
             </button>
             <span>{formatBoardDate(post.createdAt)}</span>
-            <span className="community-detail-metric" aria-label={text('COMMUNITY_VIEW_COUNT_LABEL', { count: numberFormatter.format(post.views) }, `조회수 ${numberFormatter.format(post.views)}`)}>
+            <span className="community-detail-metric" aria-label={text('COMMUNITY_VIEW_COUNT_LABEL', { count: formatInteger(post.views) }, `조회수 ${formatInteger(post.views)}`)}>
               <ViewIcon />
-              <span>{numberFormatter.format(post.views)}</span>
+              <span>{formatInteger(post.views)}</span>
             </span>
             <button
               type="button"
@@ -820,11 +809,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               aria-label={post.likedByCurrentUser ? text('COMMUNITY_UNLIKE_BUTTON_LABEL', '좋아요 취소') : text('COMMUNITY_LIKE_BUTTON_LABEL', '좋아요')}
             >
               <LikeIcon />
-              <span>{numberFormatter.format(post.likes)}</span>
+              <span>{formatInteger(post.likes)}</span>
             </button>
-            <span className="community-detail-metric" aria-label={text('COMMUNITY_COMMENT_COUNT_LABEL', { count: numberFormatter.format(post.comments) }, `댓글 ${numberFormatter.format(post.comments)}`)}>
+            <span className="community-detail-metric" aria-label={text('COMMUNITY_COMMENT_COUNT_LABEL', { count: formatInteger(post.comments) }, `댓글 ${formatInteger(post.comments)}`)}>
               <CommentIcon />
-              <span>{numberFormatter.format(post.comments)}</span>
+              <span>{formatInteger(post.comments)}</span>
             </span>
             {post.updatedAt ? <span>{text('COMMUNITY_UPDATED_PREFIX', { date: formatBoardDate(post.updatedAt) }, `수정 ${formatBoardDate(post.updatedAt)}`)}</span> : null}
           </div>
@@ -856,7 +845,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
       <section className="panel-card community-comments-card">
         <div className="community-comments-heading">
-          <h2 className="panel-title">{text('COMMUNITY_COMMENTS_TITLE', { count: numberFormatter.format(post.comments) }, `댓글 ${numberFormatter.format(post.comments)}개`)}</h2>
+          <h2 className="panel-title">{text('COMMUNITY_COMMENTS_TITLE', { count: formatInteger(post.comments) }, `댓글 ${formatInteger(post.comments)}개`)}</h2>
         </div>
 
         <div className="community-comment-compose">

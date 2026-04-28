@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import HttpErrorState from '../components/common/HttpErrorState';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { createUiText, deleteUiText, fetchAdminUiTexts, getUiTextValue, updateUiText, useUiText, type UiTextData } from '../lib/uiText';
@@ -206,8 +207,6 @@ export function GlobalConfigContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
-  const [pageJumpDraft, setPageJumpDraft] = useState('1');
   const loadSequenceRef = useRef(0);
   const keyLabel = text('COMMON_KEY_LABEL', 'key');
   const valueLabel = text('COMMON_VALUE_LABEL', 'value');
@@ -241,9 +240,6 @@ export function GlobalConfigContent() {
         setCurrentPage(loadedPage.currentPage);
       }
 
-      if (!isPageJumpEditing) {
-        setPageJumpDraft(String(loadedPage.currentPage));
-      }
     } catch (error) {
       if (loadSequence !== loadSequenceRef.current) {
         return;
@@ -497,35 +493,12 @@ export function GlobalConfigContent() {
 
     setSearchQuery(nextQuery);
     setCurrentPage(1);
-    setIsPageJumpEditing(false);
-    setPageJumpDraft('1');
   }
 
   function handleResetSearch() {
     setSearchDraft('');
     setSearchQuery('');
     setCurrentPage(1);
-    setIsPageJumpEditing(false);
-    setPageJumpDraft('1');
-  }
-
-  function applyPageJump() {
-    const parsedPage = Number.parseInt(pageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? currentPage
-      : Math.min(totalPages, Math.max(1, parsedPage));
-
-    setPageJumpDraft(String(nextPage));
-    setIsPageJumpEditing(false);
-
-    if (nextPage !== currentPage) {
-      setCurrentPage(nextPage);
-    }
-  }
-
-  function cancelPageJump() {
-    setPageJumpDraft(String(currentPage));
-    setIsPageJumpEditing(false);
   }
 
   const resolvedColumnWidths =
@@ -782,62 +755,19 @@ export function GlobalConfigContent() {
             ))}
           </div>
 
-          <div className="admin-config-pagination" role="navigation" aria-label={text('GLOBAL_CONFIG_PAGE_LABEL', 'UI 텍스트 페이지')}>
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={currentPage <= 1}
-            >
-              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="problem-pagination-meta-input admin-config-pagination-input"
-                value={pageJumpDraft}
-                onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
-                onBlur={applyPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelPageJump();
-                  }
-                }}
-                aria-label={text('GLOBAL_CONFIG_PAGE_INPUT_LABEL', '이동할 UI 텍스트 페이지 입력')}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="problem-pagination-meta problem-pagination-meta-button admin-config-pagination-meta"
-                aria-label={text('GLOBAL_CONFIG_PAGE_INPUT_OPEN_LABEL', '이동할 UI 텍스트 페이지 입력 열기')}
-                onClick={() => {
-                  setPageJumpDraft(String(currentPage));
-                  setIsPageJumpEditing(true);
-                }}
-              >
-                {`${currentPage} / ${totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              disabled={currentPage >= totalPages}
-            >
-              {text('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            ariaLabel={text('GLOBAL_CONFIG_PAGE_LABEL', 'UI 텍스트 페이지')}
+            inputLabel={text('GLOBAL_CONFIG_PAGE_INPUT_LABEL', '이동할 UI 텍스트 페이지 입력')}
+            inputOpenLabel={text('GLOBAL_CONFIG_PAGE_INPUT_OPEN_LABEL', '이동할 UI 텍스트 페이지 입력 열기')}
+            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+            className="admin-config-pagination"
+            metaClassName="problem-pagination-meta admin-config-pagination-meta"
+            inputClassName="problem-pagination-meta-input admin-config-pagination-input"
+          />
         </>
       )}
     </section>

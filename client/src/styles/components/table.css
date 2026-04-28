@@ -1,0 +1,19 @@
+.data-table {
+  position: relative;
+}
+
+.data-row {
+  line-height: var(--data-row-line-height);
+}
+
+.data-cell,
+.data-table [role='cell'],
+.data-table [role='columnheader'] {
+  min-width: 0;
+}
+
+.data-table [role='columnheader'] > span,
+.data-table [role='cell'] > span,
+.data-table button {
+  min-width: 0;
+}

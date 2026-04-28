@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import {
   ADMIN_PATH,
   COMMUNITY_PATH,
@@ -21,40 +21,20 @@ import logoImage from '../../assets/logo.png';
 import { prepareLogoutReload, useMockSession } from '../../lib/session';
 import { getLoginOverlayDescription, OPEN_LOGIN_OVERLAY_EVENT, type OpenLoginOverlayEventDetail } from '../../lib/authOverlay';
 import {
-  DEFAULT_NOTIFICATION_TEXT,
-  NOTIFICATION_UI_TEXT_KEY,
   TITLE_UI_TEXT_KEY,
   useUiText,
-  useUiTextValue,
 } from '../../lib/uiText';
 import { FavoriteStarIcon } from './FavoriteTabButton';
 import { getFavoriteTabsSnapshot, navigateToFavoriteTab, subscribeFavoriteTabs } from '../../lib/favoriteTabs';
 import './Header.css';
 import HeaderAuthOverlay from './HeaderAuthOverlay';
-
-function subscribe(callback: () => void) {
-  window.addEventListener('popstate', callback);
-  return () => window.removeEventListener('popstate', callback);
-}
-
-function getSnapshot() {
-  return window.location.pathname;
-}
-
-function formatAlarmTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return '-';
-  }
-
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  return `${month}-${day} ${hours}:${minutes}`;
-}
+import { useLocationPathname } from '../../hooks/useLocationState';
+import useDismissableLayer from '../../hooks/useDismissableLayer';
+import Pagination from './Pagination';
+import { formatAlarmTime } from '../../lib/formatters';
+import { AlarmListIcon, BellIcon, MenuIcon } from '../icons/HeaderIcons';
+import HeaderMarquee from './header/HeaderMarquee';
+import HeaderNav, { type HeaderNavItem } from './header/HeaderNav';
 
 function truncateAlarmHoverText(value: string) {
   const normalizedValue = value.trim();
@@ -93,40 +73,6 @@ function isAlarmCreatedMessage(message: SessionSocketMessage): message is AlarmC
   return message.type === 'alarm.created';
 }
 
-function AlarmListIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4.5 5.4h11M4.5 10h11M4.5 14.6h11" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-    </svg>
-  );
-}
-
-function MenuIcon({ open }: { open: boolean }) {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      {open ? (
-        <>
-          <path d="M5 5 15 15" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M15 5 5 15" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-        </>
-      ) : (
-        <>
-          <path d="M4.25 5.6h11.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M4.25 10h11.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M4.25 14.4h11.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-interface HeaderNavItem {
-  key: string;
-  label: string;
-  path: string;
-  isActive: boolean;
-}
-
 function resolveLogoutRedirectPath(pathname: string, search: string, currentHandle: string | null) {
   if (currentHandle == null) {
     return `${pathname}${search}`;
@@ -146,7 +92,7 @@ function resolveLogoutRedirectPath(pathname: string, search: string, currentHand
 export default function Header() {
   const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handle: currentHandle } = useMockSession();
   const { text } = useUiText();
-  const pathname = useSyncExternalStore(subscribe, getSnapshot, () => '/');
+  const pathname = useLocationPathname();
   const [isAlarmOpen, setIsAlarmOpen] = useState(false);
   const [isHeaderAuthOverlayOpen, setIsHeaderAuthOverlayOpen] = useState(false);
   const [headerAuthOverlayDescription, setHeaderAuthOverlayDescription] = useState<string | null>(null);
@@ -155,26 +101,17 @@ export default function Header() {
   const [alarmPage, setAlarmPage] = useState<AlarmPageData>(EMPTY_ALARM_PAGE);
   const [requestedAlarmPage, setRequestedAlarmPage] = useState(1);
   const [isAlarmLoading, setIsAlarmLoading] = useState(false);
-  const [isAlarmPageJumpEditing, setIsAlarmPageJumpEditing] = useState(false);
-  const [alarmPageJumpDraft, setAlarmPageJumpDraft] = useState('1');
   const favoriteTabs = useSyncExternalStore(subscribeFavoriteTabs, getFavoriteTabsSnapshot, () => []);
   const [favoritePage, setFavoritePage] = useState(1);
-  const [isFavoritePageJumpEditing, setIsFavoritePageJumpEditing] = useState(false);
-  const [favoritePageJumpDraft, setFavoritePageJumpDraft] = useState('1');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const marqueeMessage = useUiTextValue(NOTIFICATION_UI_TEXT_KEY, DEFAULT_NOTIFICATION_TEXT);
-  const [marqueeMetrics, setMarqueeMetrics] = useState<{
-    startOffset: number;
-    endOffset: number;
-    durationSeconds: number;
-  } | null>(null);
   const alarmRootRef = useRef<HTMLDivElement | null>(null);
   const favoriteRootRef = useRef<HTMLDivElement | null>(null);
-  const marqueeShellRef = useRef<HTMLDivElement | null>(null);
-  const marqueeCopyRef = useRef<HTMLSpanElement | null>(null);
   const floatingHeaderRef = useRef<HTMLDivElement | null>(null);
   const mobileNavButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileNavPanelRef = useRef<HTMLDivElement | null>(null);
+  const alarmLayerRefs = useMemo(() => [alarmRootRef], []);
+  const favoriteLayerRefs = useMemo(() => [favoriteRootRef], []);
+  const mobileNavLayerRefs = useMemo(() => [mobileNavButtonRef, mobileNavPanelRef], []);
 
   const activeNav = pathname.startsWith(RANKING_PATH)
     ? 'ranking'
@@ -246,8 +183,6 @@ export default function Header() {
     if (!isAuthenticated) {
       setAlarmPage(EMPTY_ALARM_PAGE);
       setRequestedAlarmPage(1);
-      setIsAlarmPageJumpEditing(false);
-      setAlarmPageJumpDraft('1');
       setIncomingAlarm(null);
       setIsAlarmOpen(false);
       return;
@@ -343,98 +278,25 @@ export default function Header() {
     };
   }, [incomingAlarm]);
 
-  useEffect(() => {
-    if (!isAlarmOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!alarmRootRef.current?.contains(event.target as Node)) {
-        setIsAlarmOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsAlarmOpen(false);
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [isAlarmOpen]);
-
-  useEffect(() => {
-    if (isAlarmPageJumpEditing) {
-      return;
-    }
-
-    setAlarmPageJumpDraft(String(alarmPage.currentPage));
-  }, [alarmPage.currentPage, isAlarmPageJumpEditing]);
+  useDismissableLayer({
+    enabled: isAlarmOpen,
+    refs: alarmLayerRefs,
+    onDismiss: () => setIsAlarmOpen(false),
+  });
 
   useEffect(() => {
     setFavoritePage((currentPage) => Math.min(currentPage, favoriteTotalPages));
   }, [favoriteTotalPages]);
 
-  useEffect(() => {
-    if (isFavoritePageJumpEditing) {
-      return;
-    }
-
-    setFavoritePageJumpDraft(String(favoritePage));
-  }, [favoritePage, isFavoritePageJumpEditing]);
-
-  useEffect(() => {
-    if (!isFavoriteOpen) {
-      setIsFavoritePageJumpEditing(false);
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!favoriteRootRef.current?.contains(event.target as Node)) {
-        setIsFavoriteOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsFavoriteOpen(false);
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [isFavoriteOpen]);
+  useDismissableLayer({
+    enabled: isFavoriteOpen,
+    refs: favoriteLayerRefs,
+    onDismiss: () => setIsFavoriteOpen(false),
+  });
 
   useEffect(() => {
     if (!isMobileNavOpen) {
       return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-
-      if (mobileNavPanelRef.current?.contains(target) || mobileNavButtonRef.current?.contains(target)) {
-        return;
-      }
-
-      setIsMobileNavOpen(false);
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsMobileNavOpen(false);
-      }
     }
 
     function handleResize() {
@@ -443,75 +305,19 @@ export default function Header() {
       }
     }
 
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
     window.addEventListener('resize', handleResize);
 
     return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
       window.removeEventListener('resize', handleResize);
     };
   }, [isMobileNavOpen]);
 
-  useEffect(() => {
-    const marqueeShell = marqueeShellRef.current;
-    const marqueeCopy = marqueeCopyRef.current;
-    if (!marqueeShell || !marqueeCopy) {
-      return;
-    }
-
-    let animationFrameId = 0;
-
-    function updateMarqueeMetrics() {
-      animationFrameId = window.requestAnimationFrame(() => {
-        const currentMarqueeShell = marqueeShellRef.current;
-        const currentMarqueeCopy = marqueeCopyRef.current;
-        if (!currentMarqueeShell || !currentMarqueeCopy) {
-          return;
-        }
-
-        const shellWidth = Math.ceil(currentMarqueeShell.getBoundingClientRect().width);
-        const copyWidth = Math.ceil(currentMarqueeCopy.scrollWidth);
-        if (shellWidth <= 0 || copyWidth <= 0) {
-          return;
-        }
-
-        const durationSeconds = Math.max(Number(((shellWidth + copyWidth) / 92).toFixed(2)), 12);
-
-        setMarqueeMetrics((currentMetrics) =>
-          currentMetrics != null &&
-          currentMetrics.startOffset === shellWidth &&
-          currentMetrics.endOffset === -copyWidth &&
-          currentMetrics.durationSeconds === durationSeconds
-            ? currentMetrics
-            : {
-                startOffset: shellWidth,
-                endOffset: -copyWidth,
-                durationSeconds,
-              },
-        );
-      });
-    }
-
-    updateMarqueeMetrics();
-
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(() => {
-            window.cancelAnimationFrame(animationFrameId);
-            updateMarqueeMetrics();
-          });
-
-    resizeObserver?.observe(marqueeShell);
-    resizeObserver?.observe(marqueeCopy);
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      resizeObserver?.disconnect();
-    };
-  }, [marqueeMessage]);
+  useDismissableLayer({
+    enabled: isMobileNavOpen,
+    refs: mobileNavLayerRefs,
+    onDismiss: () => setIsMobileNavOpen(false),
+    dismissOnResize: false,
+  });
 
   async function handleMarkAllAlarmsRead() {
     if (alarmPage.unreadCount === 0) {
@@ -615,38 +421,6 @@ export default function Header() {
     return parts.length > 0 ? parts : alarm.message;
   }
 
-  function applyAlarmPageJump() {
-    const parsedPage = Number.parseInt(alarmPageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? alarmPage.currentPage
-      : Math.min(alarmPage.totalPages, Math.max(1, parsedPage));
-
-    setRequestedAlarmPage(nextPage);
-    setAlarmPageJumpDraft(String(nextPage));
-    setIsAlarmPageJumpEditing(false);
-  }
-
-  function cancelAlarmPageJump() {
-    setAlarmPageJumpDraft(String(alarmPage.currentPage));
-    setIsAlarmPageJumpEditing(false);
-  }
-
-  function applyFavoritePageJump() {
-    const parsedPage = Number.parseInt(favoritePageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? favoritePage
-      : Math.min(favoriteTotalPages, Math.max(1, parsedPage));
-
-    setFavoritePage(nextPage);
-    setFavoritePageJumpDraft(String(nextPage));
-    setIsFavoritePageJumpEditing(false);
-  }
-
-  function cancelFavoritePageJump() {
-    setFavoritePageJumpDraft(String(favoritePage));
-    setIsFavoritePageJumpEditing(false);
-  }
-
   function closeMobileNav() {
     setIsMobileNavOpen(false);
   }
@@ -674,24 +448,9 @@ export default function Header() {
     window.location.replace(nextPath);
   }
 
-  const marqueeTrackStyle =
-    marqueeMetrics == null
-      ? undefined
-      : ({
-          '--header-marquee-start': `${marqueeMetrics.startOffset}px`,
-          '--header-marquee-end': `${marqueeMetrics.endOffset}px`,
-          '--header-marquee-duration': `${marqueeMetrics.durationSeconds}s`,
-        } as CSSProperties);
-
   return (
     <header className="header">
-      <div ref={marqueeShellRef} className="header-marquee-shell" aria-label={text('HEADER_NOTICE_LABEL', '긴급 공지')}>
-        <div className="header-marquee-track" style={marqueeTrackStyle}>
-          <span ref={marqueeCopyRef} className="header-marquee-copy">
-            {marqueeMessage}
-          </span>
-        </div>
-      </div>
+      <HeaderMarquee />
 
       <div
         ref={floatingHeaderRef}
@@ -709,18 +468,7 @@ export default function Header() {
             </button>
           </div>
 
-          <nav className="header-nav" aria-label={text('HEADER_NAV_LABEL', '주요 메뉴')}>
-            {visibleHeaderNavItems.map((item) => (
-              <button
-                type="button"
-                key={item.key}
-                className={`nav-pill ${item.isActive ? 'is-active' : ''}`}
-                onClick={() => navigate(item.path)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+          <HeaderNav items={visibleHeaderNavItems} label={text('HEADER_NAV_LABEL', '주요 메뉴')} />
 
           <div className={`header-actions ${isAuthenticated ? 'is-authenticated' : 'is-guest'}`}>
             {isAuthenticated ? (
@@ -742,23 +490,7 @@ export default function Header() {
                     aria-haspopup="dialog"
                     aria-expanded={isAlarmOpen}
                   >
-                    <svg className="header-notification-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        d="M12 3.75a4.25 4.25 0 0 0-4.25 4.25v1.14c0 .9-.28 1.77-.8 2.5l-1.27 1.79a1.75 1.75 0 0 0 1.43 2.77h9.78a1.75 1.75 0 0 0 1.43-2.77l-1.27-1.79a4.3 4.3 0 0 1-.8-2.5V8A4.25 4.25 0 0 0 12 3.75Z"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M9.75 18.25a2.25 2.25 0 0 0 4.5 0"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </svg>
+                    <BellIcon />
                     {alarmPage.unreadCount > 0 ? <span className="header-notification-badge">{alarmPage.unreadCount}</span> : null}
                   </button>
 
@@ -841,65 +573,17 @@ export default function Header() {
                       </div>
 
                       {alarmPage.totalPages > 1 ? (
-                        <div className="problem-pagination header-alarm-pagination" role="navigation" aria-label={text('HEADER_ALARM_PAGE_LABEL', '알림 페이지')}>
-                          <button
-                            type="button"
-                            className="mini-toggle problem-page-button"
-                            onClick={() => setRequestedAlarmPage((currentPage) => Math.max(1, currentPage - 1))}
-                            disabled={alarmPage.currentPage === 1}
-                          >
-                            {text('COMMON_PREVIOUS_BUTTON', '이전')}
-                          </button>
-
-                          {isAlarmPageJumpEditing ? (
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              className="problem-pagination-meta-input"
-                              aria-label={text('HEADER_ALARM_PAGE_INPUT_LABEL', '이동할 알림 페이지 입력')}
-                              value={alarmPageJumpDraft}
-                              onChange={(event) => {
-                                const nextValue = event.target.value.replace(/\D+/g, '');
-                                setAlarmPageJumpDraft(nextValue);
-                              }}
-                              onBlur={applyAlarmPageJump}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault();
-                                  applyAlarmPageJump();
-                                  return;
-                                }
-
-                                if (event.key === 'Escape') {
-                                  event.preventDefault();
-                                  cancelAlarmPageJump();
-                                }
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className="problem-pagination-meta problem-pagination-meta-button"
-                              aria-label={text('HEADER_ALARM_PAGE_INPUT_OPEN_LABEL', '이동할 알림 페이지 입력 열기')}
-                              onClick={() => {
-                                setAlarmPageJumpDraft(String(alarmPage.currentPage));
-                                setIsAlarmPageJumpEditing(true);
-                              }}
-                            >
-                              {`${alarmPage.currentPage} / ${alarmPage.totalPages}`}
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            className="mini-toggle problem-page-button"
-                            onClick={() => setRequestedAlarmPage((currentPage) => Math.min(alarmPage.totalPages, currentPage + 1))}
-                            disabled={alarmPage.currentPage >= alarmPage.totalPages}
-                          >
-                            {text('COMMON_NEXT_BUTTON', '다음')}
-                          </button>
-                        </div>
+                        <Pagination
+                          className="problem-pagination header-alarm-pagination"
+                          currentPage={alarmPage.currentPage}
+                          totalPages={alarmPage.totalPages}
+                          onPageChange={setRequestedAlarmPage}
+                          ariaLabel={text('HEADER_ALARM_PAGE_LABEL', '알림 페이지')}
+                          inputLabel={text('HEADER_ALARM_PAGE_INPUT_LABEL', '이동할 알림 페이지 입력')}
+                          inputOpenLabel={text('HEADER_ALARM_PAGE_INPUT_OPEN_LABEL', '이동할 알림 페이지 입력 열기')}
+                          previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+                          nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+                        />
                       ) : null}
                     </div>
                   ) : null}
@@ -941,65 +625,17 @@ export default function Header() {
                             ))}
                           </div>
 
-                          <div className="problem-pagination header-favorite-pagination" role="navigation" aria-label={text('HEADER_FAVORITES_PAGE_LABEL', '즐겨찾기 페이지')}>
-                            <button
-                              type="button"
-                              className="mini-toggle problem-page-button"
-                              onClick={() => setFavoritePage((currentPage) => Math.max(1, currentPage - 1))}
-                              disabled={favoritePage === 1}
-                            >
-                              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-                            </button>
-
-                            {isFavoritePageJumpEditing ? (
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                className="problem-pagination-meta-input"
-                                aria-label={text('HEADER_FAVORITES_PAGE_INPUT_LABEL', '이동할 즐겨찾기 페이지 입력')}
-                                value={favoritePageJumpDraft}
-                                onChange={(event) => {
-                                  const nextValue = event.target.value.replace(/\D+/g, '');
-                                  setFavoritePageJumpDraft(nextValue);
-                                }}
-                                onBlur={applyFavoritePageJump}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    applyFavoritePageJump();
-                                    return;
-                                  }
-
-                                  if (event.key === 'Escape') {
-                                    event.preventDefault();
-                                    cancelFavoritePageJump();
-                                  }
-                                }}
-                                autoFocus
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                className="problem-pagination-meta problem-pagination-meta-button"
-                                aria-label={text('HEADER_FAVORITES_PAGE_INPUT_OPEN_LABEL', '이동할 즐겨찾기 페이지 입력 열기')}
-                                onClick={() => {
-                                  setFavoritePageJumpDraft(String(favoritePage));
-                                  setIsFavoritePageJumpEditing(true);
-                                }}
-                              >
-                                {`${favoritePage} / ${favoriteTotalPages}`}
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              className="mini-toggle problem-page-button"
-                              onClick={() => setFavoritePage((currentPage) => Math.min(favoriteTotalPages, currentPage + 1))}
-                              disabled={favoritePage >= favoriteTotalPages}
-                            >
-                              {text('COMMON_NEXT_BUTTON', '다음')}
-                            </button>
-                          </div>
+                          <Pagination
+                            className="problem-pagination header-favorite-pagination"
+                            currentPage={favoritePage}
+                            totalPages={favoriteTotalPages}
+                            onPageChange={setFavoritePage}
+                            ariaLabel={text('HEADER_FAVORITES_PAGE_LABEL', '즐겨찾기 페이지')}
+                            inputLabel={text('HEADER_FAVORITES_PAGE_INPUT_LABEL', '이동할 즐겨찾기 페이지 입력')}
+                            inputOpenLabel={text('HEADER_FAVORITES_PAGE_INPUT_OPEN_LABEL', '이동할 즐겨찾기 페이지 입력 열기')}
+                            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+                            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+                          />
                         </>
                       ) : (
                         <p className="header-favorite-empty">{text('HEADER_FAVORITES_EMPTY_STATE', '즐겨찾기한 페이지가 없습니다.')}</p>

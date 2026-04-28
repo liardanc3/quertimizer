@@ -18,6 +18,7 @@ import {
 import HttpErrorState from '../components/common/HttpErrorState';
 import ImageCropModal from '../components/common/ImageCropModal';
 import ContentLoading, { LoadingOverlay } from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
@@ -40,6 +41,7 @@ import {
 import PageStatePanel from '../components/common/PageStatePanel';
 import { patchSessionSnapshot, showSessionErrorToast, showSessionToast, useMockSession } from '../lib/session';
 import { fetchAlarms, markAlarmRead, type AlarmEntry, type AlarmPageData, type AlarmSortDirection } from '../lib/alarmApi';
+import { formatBoardDate, formatInteger } from '../lib/formatters';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './SubmitHistoryPage.css';
@@ -99,7 +101,6 @@ interface ActivityHeatmapCell {
 
 type ProfileTopTab = 'profile' | 'alarms';
 
-const numberFormatter = new Intl.NumberFormat('ko-KR');
 const PROFILE_ALARM_PAGE_SIZE = 10;
 const PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE = 10;
 const PROFILE_IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
@@ -172,22 +173,6 @@ function createHeroLinks(links: UserProfileLink[]) {
       href: resolveLinkHref(link),
     })),
   ].filter((link): link is { key: string; label: string; value: string; href: string } => link != null);
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return '-';
-  }
-
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 function buildTextSnippet(value: string, maxLength: number) {
@@ -517,15 +502,11 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const [profileCommunityActivityErrorMessage, setProfileCommunityActivityErrorMessage] = useState<string | null>(null);
   const [profileCommunityActivityErrorStatus, setProfileCommunityActivityErrorStatus] = useState<number | null>(null);
   const [profileCommunityActivityPage, setProfileCommunityActivityPage] = useState(1);
-  const [profileCommunityActivityPageDraft, setProfileCommunityActivityPageDraft] = useState('1');
-  const [isProfileCommunityActivityPageEditing, setIsProfileCommunityActivityPageEditing] = useState(false);
   const [profileAlarmPageData, setProfileAlarmPageData] = useState<AlarmPageData>(emptyProfileAlarmPage);
   const [isProfileAlarmLoading, setIsProfileAlarmLoading] = useState(false);
   const [profileAlarmErrorMessage, setProfileAlarmErrorMessage] = useState<string | null>(null);
   const [profileAlarmErrorStatus, setProfileAlarmErrorStatus] = useState<number | null>(null);
   const [profileAlarmPage, setProfileAlarmPage] = useState(1);
-  const [profileAlarmPageDraft, setProfileAlarmPageDraft] = useState('1');
-  const [isProfileAlarmPageEditing, setIsProfileAlarmPageEditing] = useState(false);
   const [profileAlarmSort, setProfileAlarmSort] = useState<AlarmSortDirection>('desc');
   const [profileReloadKey, setProfileReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -737,14 +718,10 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     setSelectedHeatmapDates([]);
     setHeatmapSelectionAnchor(null);
     setProfileCommunityActivityPage(1);
-    setProfileCommunityActivityPageDraft('1');
-    setIsProfileCommunityActivityPageEditing(false);
     setProfileCommunityActivityPageData(emptyProfileCommunityActivityPage);
     setProfileCommunityActivityErrorMessage(null);
     setProfileCommunityActivityErrorStatus(null);
     setProfileAlarmPage(1);
-    setProfileAlarmPageDraft('1');
-    setIsProfileAlarmPageEditing(false);
     setProfileAlarmPageData(emptyProfileAlarmPage);
     setProfileAlarmErrorMessage(null);
     setProfileAlarmErrorStatus(null);
@@ -900,22 +877,10 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }, [isAlarmListOpen, isOwnProfile, profileAlarmPage, profileAlarmSort]);
 
   useEffect(() => {
-    if (!isProfileCommunityActivityPageEditing) {
-      setProfileCommunityActivityPageDraft(String(profileCommunityActivityPage));
-    }
-  }, [isProfileCommunityActivityPageEditing, profileCommunityActivityPage]);
-
-  useEffect(() => {
     if (profileCommunityActivityPage > profileCommunityActivityPageData.totalPages) {
       setProfileCommunityActivityPage(profileCommunityActivityPageData.totalPages);
     }
   }, [profileCommunityActivityPage, profileCommunityActivityPageData.totalPages]);
-
-  useEffect(() => {
-    if (!isProfileAlarmPageEditing) {
-      setProfileAlarmPageDraft(String(profileAlarmPageData.currentPage));
-    }
-  }, [isProfileAlarmPageEditing, profileAlarmPageData.currentPage]);
 
   useEffect(() => {
     if (profileAlarmPage > profileAlarmPageData.totalPages) {
@@ -1201,25 +1166,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     setProfileCommunityActivityPage(nextPage);
   }
 
-  function applyProfileCommunityActivityPageJump() {
-    const parsedPage = Number.parseInt(profileCommunityActivityPageDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? profileCommunityActivityPage
-      : Math.min(profileCommunityActivityPageData.totalPages, Math.max(1, parsedPage));
-
-    setProfileCommunityActivityPageDraft(String(nextPage));
-    setIsProfileCommunityActivityPageEditing(false);
-
-    if (nextPage !== profileCommunityActivityPage) {
-      moveProfileCommunityActivityPage(nextPage);
-    }
-  }
-
-  function cancelProfileCommunityActivityPageJump() {
-    setProfileCommunityActivityPageDraft(String(profileCommunityActivityPage));
-    setIsProfileCommunityActivityPageEditing(false);
-  }
-
   function markProfileAlarmAsRead(alarm: AlarmEntry) {
     if (alarm.read) {
       return;
@@ -1312,25 +1258,6 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     }
 
     return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{parts.length > 0 ? parts : alarm.message}</span>;
-  }
-
-  function applyProfileAlarmPageJump() {
-    const parsedPage = Number.parseInt(profileAlarmPageDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? profileAlarmPageData.currentPage
-      : Math.min(profileAlarmPageData.totalPages, Math.max(1, parsedPage));
-
-    setProfileAlarmPageDraft(String(nextPage));
-    setIsProfileAlarmPageEditing(false);
-
-    if (nextPage !== profileAlarmPageData.currentPage) {
-      setProfileAlarmPage(nextPage);
-    }
-  }
-
-  function cancelProfileAlarmPageJump() {
-    setProfileAlarmPageDraft(String(profileAlarmPageData.currentPage));
-    setIsProfileAlarmPageEditing(false);
   }
 
   function updateHeatmapSelection(nextSelection: string[], nextAnchor: string | null) {
@@ -1617,10 +1544,10 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                   <span className="profile-heatmap-tooltip" role="tooltip">
                     <span className="profile-heatmap-tooltip-title">{cell.key}</span>
                     <span className="profile-heatmap-tooltip-caption">
-                      {text('PROFILE_HEATMAP_SUBMISSION_COUNT_LABEL', { count: numberFormatter.format(cell.submissionCount) }, '문제 제출 {count}건')}
+                      {text('PROFILE_HEATMAP_SUBMISSION_COUNT_LABEL', { count: formatInteger(cell.submissionCount) }, '문제 제출 {count}건')}
                     </span>
                     <span className="profile-heatmap-tooltip-caption">
-                      {text('PROFILE_HEATMAP_COMMUNITY_COUNT_LABEL', { count: numberFormatter.format(cell.communityCount) }, '커뮤니티 활동 {count}건')}
+                      {text('PROFILE_HEATMAP_COMMUNITY_COUNT_LABEL', { count: formatInteger(cell.communityCount) }, '커뮤니티 활동 {count}건')}
                     </span>
                   </span>
                 </button>
@@ -1657,19 +1584,19 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
               <div className="profile-problem-stat-card">
                 <span className="profile-problem-stat-label">{text('PROFILE_ATTEMPTED_PROBLEMS_LABEL', '시도한 문제')}</span>
                 <strong className="profile-problem-stat-value">
-                  {text('PROFILE_ITEM_COUNT_LABEL', { count: numberFormatter.format(attemptedProblemIds.length) }, '{count}개')}
+                  {text('PROFILE_ITEM_COUNT_LABEL', { count: formatInteger(attemptedProblemIds.length) }, '{count}개')}
                 </strong>
               </div>
               <div className="profile-problem-stat-card">
                 <span className="profile-problem-stat-label">{text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답')}</span>
                 <strong className="profile-problem-stat-value is-solved">
-                  {text('PROFILE_ITEM_COUNT_LABEL', { count: numberFormatter.format(solvedProblemIds.length) }, '{count}개')}
+                  {text('PROFILE_ITEM_COUNT_LABEL', { count: formatInteger(solvedProblemIds.length) }, '{count}개')}
                 </strong>
               </div>
               <div className="profile-problem-stat-card">
                 <span className="profile-problem-stat-label">{text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}</span>
                 <strong className="profile-problem-stat-value is-attempted">
-                  {text('PROFILE_ITEM_COUNT_LABEL', { count: numberFormatter.format(wrongProblemIds.length) }, '{count}개')}
+                  {text('PROFILE_ITEM_COUNT_LABEL', { count: formatInteger(wrongProblemIds.length) }, '{count}개')}
                 </strong>
               </div>
             </div>
@@ -1774,7 +1701,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <span className="submit-history-cell profile-community-activity-cell" role="cell" data-label={text('COMMON_CONTENT_LABEL', '내용')}>
                       <span className="profile-community-activity-copy">{renderCommunityActivitySentence(activity)}</span>
                     </span>
-                    <span className="submit-history-cell profile-community-activity-date" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatDateTime(activity.happenedAt)}</span>
+                    <span className="submit-history-cell profile-community-activity-date" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatBoardDate(activity.happenedAt)}</span>
                   </article>
                 ))}
               </div>
@@ -1783,64 +1710,17 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
             </div>
 
             {profileCommunityActivityPageData.totalPages > 1 ? (
-              <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_LABEL', '커뮤니티 활동 페이지')}>
-                <button
-                  type="button"
-                  className="mini-toggle problem-page-button"
-                  onClick={() => moveProfileCommunityActivityPage(Math.max(1, profileCommunityActivityPage - 1))}
-                  disabled={profileCommunityActivityPage === 1}
-                >
-                  {text('COMMON_PREVIOUS_BUTTON', '이전')}
-                </button>
-
-                {isProfileCommunityActivityPageEditing ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="problem-pagination-meta-input"
-                    value={profileCommunityActivityPageDraft}
-                    onChange={(event) => {
-                      const nextValue = event.target.value.replace(/\D+/g, '');
-                      setProfileCommunityActivityPageDraft(nextValue);
-                    }}
-                    onBlur={applyProfileCommunityActivityPageJump}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        applyProfileCommunityActivityPageJump();
-                      }
-
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        cancelProfileCommunityActivityPageJump();
-                      }
-                    }}
-                    aria-label={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_INPUT_LABEL', '커뮤니티 활동 페이지 번호')}
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="problem-pagination-meta problem-pagination-meta-button"
-                    onClick={() => {
-                      setProfileCommunityActivityPageDraft(String(profileCommunityActivityPage));
-                      setIsProfileCommunityActivityPageEditing(true);
-                    }}
-                  >
-                    {`${profileCommunityActivityPage} / ${profileCommunityActivityPageData.totalPages}`}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="mini-toggle problem-page-button"
-                  onClick={() => moveProfileCommunityActivityPage(Math.min(profileCommunityActivityPageData.totalPages, profileCommunityActivityPage + 1))}
-                  disabled={profileCommunityActivityPage >= profileCommunityActivityPageData.totalPages}
-                >
-                  {text('COMMON_NEXT_BUTTON', '다음')}
-                </button>
-              </div>
+              <Pagination
+                currentPage={profileCommunityActivityPage}
+                totalPages={profileCommunityActivityPageData.totalPages}
+                onPageChange={moveProfileCommunityActivityPage}
+                ariaLabel={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_LABEL', '커뮤니티 활동 페이지')}
+                inputLabel={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_INPUT_LABEL', '커뮤니티 활동 페이지 번호')}
+                inputOpenLabel={text('PROFILE_COMMUNITY_ACTIVITY_PAGE_INPUT_LABEL', '커뮤니티 활동 페이지 번호')}
+                previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+                nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+                className="problem-pagination submit-history-pagination"
+              />
             ) : null}
           </>
         )}
@@ -1895,7 +1775,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                       <span className="submit-history-cell profile-alarm-cell" role="cell" data-label={text('PROFILE_ALARM_CONTENT_COLUMN_LABEL', '알림 내용')}>
                         {renderProfileAlarmSentence(alarm)}
                       </span>
-                      <span className="submit-history-cell" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatDateTime(alarm.createdAt)}</span>
+                      <span className="submit-history-cell" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatBoardDate(alarm.createdAt)}</span>
                     </article>
                   ))}
                 </div>
@@ -1904,64 +1784,17 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
               </div>
 
               {profileAlarmPageData.totalPages > 1 ? (
-                <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('PROFILE_ALARM_PAGE_LABEL', '알림 목록 페이지')}>
-                  <button
-                    type="button"
-                    className="mini-toggle problem-page-button"
-                    onClick={() => setProfileAlarmPage((currentPage) => Math.max(1, currentPage - 1))}
-                    disabled={profileAlarmPageData.currentPage === 1}
-                  >
-                    {text('COMMON_PREVIOUS_BUTTON', '이전')}
-                  </button>
-
-                  {isProfileAlarmPageEditing ? (
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="problem-pagination-meta-input"
-                      value={profileAlarmPageDraft}
-                      onChange={(event) => {
-                        const nextValue = event.target.value.replace(/\D+/g, '');
-                        setProfileAlarmPageDraft(nextValue);
-                      }}
-                      onBlur={applyProfileAlarmPageJump}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          applyProfileAlarmPageJump();
-                        }
-
-                      if (event.key === 'Escape') {
-                          event.preventDefault();
-                          cancelProfileAlarmPageJump();
-                        }
-                      }}
-                      aria-label={text('PROFILE_ALARM_PAGE_INPUT_LABEL', '알림 목록 페이지 번호')}
-                      autoFocus
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="problem-pagination-meta problem-pagination-meta-button"
-                      onClick={() => {
-                        setProfileAlarmPageDraft(String(profileAlarmPageData.currentPage));
-                        setIsProfileAlarmPageEditing(true);
-                      }}
-                    >
-                      {`${profileAlarmPageData.currentPage} / ${profileAlarmPageData.totalPages}`}
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="mini-toggle problem-page-button"
-                    onClick={() => setProfileAlarmPage((currentPage) => Math.min(profileAlarmPageData.totalPages, currentPage + 1))}
-                    disabled={profileAlarmPageData.currentPage >= profileAlarmPageData.totalPages}
-                  >
-                    {text('COMMON_NEXT_BUTTON', '다음')}
-                  </button>
-                </div>
+                <Pagination
+                  currentPage={profileAlarmPageData.currentPage}
+                  totalPages={profileAlarmPageData.totalPages}
+                  onPageChange={setProfileAlarmPage}
+                  ariaLabel={text('PROFILE_ALARM_PAGE_LABEL', '알림 목록 페이지')}
+                  inputLabel={text('PROFILE_ALARM_PAGE_INPUT_LABEL', '알림 목록 페이지 번호')}
+                  inputOpenLabel={text('PROFILE_ALARM_PAGE_INPUT_LABEL', '알림 목록 페이지 번호')}
+                  previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+                  nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+                  className="problem-pagination submit-history-pagination"
+                />
               ) : null}
             </>
           )}

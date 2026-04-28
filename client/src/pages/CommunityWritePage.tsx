@@ -23,6 +23,7 @@ import { type CommunityEditorSnapshot } from '../lib/communityTiptap';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
 import { showSessionToast, useMockSession } from '../lib/session';
+import { formatInteger } from '../lib/formatters';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import type { CommunityPostCategory } from '../types/domain';
 import './CommunityPage.css';
@@ -45,7 +46,6 @@ interface CommunityWriteFavoriteSnapshot extends EditorValues {
 }
 
 const POST_DRAFT_LOGIN_DESCRIPTION = getUiTextValue('COMMUNITY_WRITE_LOGIN_DRAFT_MESSAGE', '작성 중인 게시글은 유지됩니다. 로그인 후 이어서 작성할 수 있습니다.');
-const contentByteFormatter = new Intl.NumberFormat('ko-KR');
 type EditableCommunityCategory = Extract<CommunityPostCategory, 'discussion' | 'question' | 'notice'>;
 
 const emptyEditorSnapshot: CommunityEditorSnapshot = {
@@ -427,8 +427,8 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
       setFeedback(
         text(
           'COMMUNITY_CONTENT_MAX_BYTES_MESSAGE',
-          { maxBytes: contentByteFormatter.format(COMMUNITY_POST_CONTENT_MAX_BYTES) },
-          `본문은 최대 ${contentByteFormatter.format(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte까지 입력할 수 있습니다.`,
+          { maxBytes: formatInteger(COMMUNITY_POST_CONTENT_MAX_BYTES) },
+          `본문은 최대 ${formatInteger(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte까지 입력할 수 있습니다.`,
         ),
       );
       showSessionToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
@@ -545,7 +545,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
               />
 
               <div className={`community-editor-byte-indicator ${editorSnapshot.contentByteLength > COMMUNITY_POST_CONTENT_MAX_BYTES ? 'is-over' : ''}`.trim()}>
-                {contentByteFormatter.format(editorSnapshot.contentByteLength)} / {contentByteFormatter.format(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte
+                {formatInteger(editorSnapshot.contentByteLength)} / {formatInteger(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte
               </div>
 
               <div className="community-write-text-actions">

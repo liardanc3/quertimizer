@@ -1,4 +1,5 @@
 import { useState, type MouseEvent } from 'react';
+import { formatInteger } from '../../lib/formatters';
 import { useUiText } from '../../lib/uiText';
 import type { DbmsType, ProblemSummary } from '../../types/domain';
 import ProblemRuntimeChart from './ProblemRuntimeChart';
@@ -12,15 +13,13 @@ interface ProblemCardProps {
   onSelect: (id: string) => void;
 }
 
-const countFormatter = new Intl.NumberFormat('ko-KR');
-
 function stopCardEvent(event: MouseEvent<HTMLElement>) {
   event.preventDefault();
   event.stopPropagation();
 }
 
 function formatCount(value: number | undefined) {
-  return countFormatter.format(value ?? 0);
+  return formatInteger(value ?? 0);
 }
 
 function formatSpreadRate(value: number | undefined) {

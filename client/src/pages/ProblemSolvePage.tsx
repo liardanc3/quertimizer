@@ -1,13 +1,14 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
-import { Fragment } from 'react';
 import './ProblemSolvePage.css';
 import './PublicHomePage.css';
 import './SubmitHistoryPage.css';
+import usePageJump from '../hooks/usePageJump';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import HttpErrorState from '../components/common/HttpErrorState';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
@@ -43,6 +44,16 @@ import { syncSession, useMockSession } from '../lib/session';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
 import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import { getExecutionPlanDetailGroups } from '../lib/executionPlanFilters';
+import {
+  EMAIL_PATTERN,
+  PASSWORD_RESET_CODE_PATTERN,
+  getAuthSocialLoginErrorMessage,
+  hasRequiredPasswordFormat,
+  sanitizeVerificationCode,
+  type AuthSocialProvider,
+} from '../lib/authUi';
+import { formatCompactBoardDate, formatCost, formatInteger, formatSubmittedAt } from '../lib/formatters';
+import { renderHighlightedSql, type SqlHighlightRange } from '../lib/sqlHighlighter';
 import { getUiText, getUiTextValue, useUiText } from '../lib/uiText';
 import type { CommunityPostSummary, DbmsType, ProblemDetail, SubmitHistoryEntry, SubmitHistoryPageData, SubmitHistoryPlanFilters } from '../types/domain';
 import logoImage from '../assets/logo.png';
@@ -99,8 +110,6 @@ type SolveRelatedModalState =
   | { type: 'plan'; history: SubmitHistoryEntry }
   | null;
 
-const solveRelatedCostFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
-
 function createEmptySolveSubmitHistoryPage(): SubmitHistoryPageData {
   return {
     currentPage: 1,
@@ -143,41 +152,6 @@ function createEmptySolvePlanFiltersByDbms(): Record<DbmsType, SubmitHistoryPlan
   };
 }
 
-function formatSolveRelatedCost(value: number) {
-  return solveRelatedCostFormatter.format(Math.round(value * 10) / 10);
-}
-
-function padSolveRelatedDatePart(value: number) {
-  return String(value).padStart(2, '0');
-}
-
-function formatSolveRelatedSubmittedAt(value: string) {
-  if (value.trim() === '') {
-    return '-';
-  }
-
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return value;
-  }
-
-  return `${parsedDate.getFullYear()}-${padSolveRelatedDatePart(parsedDate.getMonth() + 1)}-${padSolveRelatedDatePart(parsedDate.getDate())} ${padSolveRelatedDatePart(parsedDate.getHours())}:${padSolveRelatedDatePart(parsedDate.getMinutes())}:${padSolveRelatedDatePart(parsedDate.getSeconds())}`;
-}
-
-function formatSolveRelatedBoardDate(value: string) {
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return '-';
-  }
-
-  const year = String(parsedDate.getFullYear()).slice(-2);
-  const month = padSolveRelatedDatePart(parsedDate.getMonth() + 1);
-  const day = padSolveRelatedDatePart(parsedDate.getDate());
-  const hours = padSolveRelatedDatePart(parsedDate.getHours());
-  const minutes = padSolveRelatedDatePart(parsedDate.getMinutes());
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
-
 function getSolveRelatedCommunityCategoryLabel(value: CommunityPostSummary['category']) {
   if (value === 'question') {
     return getUiTextValue('COMMUNITY_CATEGORY_QUESTION_LABEL', '질문');
@@ -195,7 +169,7 @@ function getSolveRelatedCommunitySearchTerm(problemId: string) {
 }
 
 type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
-type SolveAuthSocialProvider = 'google' | 'github' | 'kakao';
+type SolveAuthSocialProvider = AuthSocialProvider;
 
 type PanelKey = 'editor' | 'submit';
 
@@ -354,11 +328,6 @@ interface SqlExecutionPickerState {
   maxHeight: number;
 }
 
-interface SqlHighlightRange {
-  start: number;
-  end: number;
-}
-
 interface SqlEditorSelection {
   start: number;
   end: number;
@@ -401,23 +370,6 @@ interface ExecutionStatementMarkerLayout {
   topOffsets: Record<number, number>;
 }
 
-type SqlHighlightKind =
-  | 'keyword'
-  | 'explain-keyword'
-  | 'table'
-  | 'column'
-  | 'string'
-  | 'number'
-  | 'comment'
-  | 'function'
-  | 'operator'
-  | 'identifier';
-
-interface SqlHighlightToken {
-  text: string;
-  kind: SqlHighlightKind | null;
-}
-
 type ExecutionStatementStatus = 'idle' | 'running' | 'success' | 'error';
 
 interface ExecutionStatementRun {
@@ -443,8 +395,6 @@ const panelMinHeights: Record<PanelKey, number> = {
 };
 
 const SOLVE_PAGE_AUTH_RETURN_STORAGE_KEY = 'quertimizer.solve-auth-return';
-const PASSWORD_RESET_CODE_PATTERN = /^[A-Z0-9]{6}$/;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const SQL_AUTOCOMPLETE_KEYWORDS = [
   'SELECT',
@@ -490,93 +440,6 @@ const SQL_AUTOCOMPLETE_KEYWORDS = [
   'CREATE INDEX',
   'DROP INDEX',
 ];
-const SQL_HIGHLIGHT_KEYWORDS = new Set([
-  'SELECT',
-  'FROM',
-  'WHERE',
-  'GROUP',
-  'BY',
-  'ORDER',
-  'HAVING',
-  'LIMIT',
-  'OFFSET',
-  'JOIN',
-  'INNER',
-  'LEFT',
-  'RIGHT',
-  'FULL',
-  'OUTER',
-  'ON',
-  'AS',
-  'AND',
-  'OR',
-  'NOT',
-  'IN',
-  'EXISTS',
-  'BETWEEN',
-  'LIKE',
-  'IS',
-  'NULL',
-  'COUNT',
-  'SUM',
-  'AVG',
-  'MIN',
-  'MAX',
-  'DISTINCT',
-  'CASE',
-  'WHEN',
-  'THEN',
-  'ELSE',
-  'END',
-  'WITH',
-  'UNION',
-  'ALL',
-  'EXPLAIN',
-  'ANALYZE',
-  'ANALYSE',
-  'CREATE',
-  'TEMP',
-  'TABLE',
-  'INSERT',
-  'INTO',
-  'VALUES',
-  'UPDATE',
-  'SET',
-  'DELETE',
-  'INDEX',
-  'DROP',
-  'ALTER',
-  'ADD',
-  'PRIMARY',
-  'KEY',
-  'FOREIGN',
-  'REFERENCES',
-  'UNIQUE',
-  'CHECK',
-  'DEFAULT',
-  'PUBLIC',
-  'INTEGER',
-  'VARCHAR',
-  'TEXT',
-  'TIMESTAMP',
-  'DATE',
-  'BOOLEAN',
-  'DECIMAL',
-  'NUMERIC',
-  'BIGINT',
-  'SMALLINT',
-  'TRUE',
-  'FALSE',
-]);
-const SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS = new Set([
-  'FROM',
-  'JOIN',
-  'INTO',
-  'UPDATE',
-  'TABLE',
-  'INDEX',
-  'ON',
-]);
 const SQL_EDITOR_INDENT = '    ';
 const SQL_EDITOR_MIN_HEIGHT = 256;
 const SQL_EDITOR_DEFAULT_FONT_SIZE = 13.5;
@@ -612,11 +475,7 @@ function resolvePreferredDbms(availableDbms: DbmsType[], fallbackDbms: DbmsType[
 }
 
 function formatGroupedNumber(value?: number) {
-  if (value == null) {
-    return '-';
-  }
-
-  return new Intl.NumberFormat('en-US').format(value);
+  return formatInteger(value, 'en-US');
 }
 
 function getExecutionResultPageCount(rowCount: number) {
@@ -759,33 +618,12 @@ function createProblemExecutionError(message: string): ProblemExecutionResult {
   };
 }
 
-function hasRequiredPasswordFormat(value: string) {
-  return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
-}
-
-function sanitizeVerificationCode(value: string) {
-  return value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
-}
-
 function isAuthenticationRequiredMessage(message: string | null | undefined) {
   if (!message) {
     return false;
   }
 
   return message.includes('로그인 후') || message.includes('인증') || message.includes('세션');
-}
-
-function getSolveAuthSocialLoginErrorMessage(provider: SolveAuthSocialProvider | 'oauth2' | null) {
-  switch (provider) {
-    case 'google':
-      return getUiTextValue('AUTH_GOOGLE_LOGIN_FAIL_MESSAGE', 'Google 로그인에 실패했습니다.');
-    case 'github':
-      return getUiTextValue('AUTH_GITHUB_LOGIN_FAIL_MESSAGE', 'Github 로그인에 실패했습니다.');
-    case 'kakao':
-      return getUiTextValue('AUTH_KAKAO_LOGIN_FAIL_MESSAGE', 'Kakao 로그인에 실패했습니다.');
-    default:
-      return getUiTextValue('AUTH_SOCIAL_LOGIN_FAIL_MESSAGE', '소셜 로그인에 실패했습니다.');
-  }
 }
 
 function saveSolvePageAuthReturn(problemId: string, sql: string, selectedDbms: DbmsType) {
@@ -1322,218 +1160,6 @@ function createExecutionPickerOptions(value: string, caretIndex: number): SqlExe
   );
 }
 
-function tokenizeSqlLine(line: string, tableNames: Set<string>, columnNames: Set<string>) {
-  const tokens: SqlHighlightToken[] = [];
-  const tokenPattern =
-    /--.*$|'(?:''|[^'])*'|"(?:["]|[^"])*"|[A-Za-z_][A-Za-z0-9_$]*|\d+(?:\.\d+)?|<=|>=|<>|!=|==|[=<>+\-*/%]+|[(),.;]|\s+|./g;
-  const lineTokens = Array.from(line.matchAll(tokenPattern), (match) => match[0]);
-  let expectTable = false;
-
-  for (let index = 0; index < lineTokens.length; index += 1) {
-    const token = lineTokens[index];
-
-    if (/^\s+$/.test(token)) {
-      tokens.push({ text: token, kind: null });
-      continue;
-    }
-
-    if (token.startsWith('--')) {
-      tokens.push({ text: token, kind: 'comment' });
-      break;
-    }
-
-    if (/^'(?:''|[^'])*'$/.test(token) || /^"(?:["]|[^"])*"$/.test(token)) {
-      tokens.push({ text: token, kind: 'string' });
-      expectTable = false;
-      continue;
-    }
-
-    if (/^\d+(?:\.\d+)?$/.test(token)) {
-      tokens.push({ text: token, kind: 'number' });
-      continue;
-    }
-
-    if (/^[(),.;]$/.test(token) || /^[=<>+\-*/%]+$/.test(token)) {
-      tokens.push({ text: token, kind: 'operator' });
-      if (token !== ',') {
-        expectTable = false;
-      }
-      continue;
-    }
-
-    if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(token)) {
-      const upperToken = token.toUpperCase();
-      const normalizedToken = token.toLowerCase();
-      const previousMeaningfulToken = [...lineTokens.slice(0, index)].reverse().find((candidate) => !/^\s+$/.test(candidate));
-      const nextMeaningfulToken = lineTokens.slice(index + 1).find((candidate) => !/^\s+$/.test(candidate));
-
-      if (SQL_HIGHLIGHT_KEYWORDS.has(upperToken)) {
-        tokens.push({
-          text: token,
-          kind: upperToken === 'EXPLAIN' || upperToken === 'ANALYZE' ? 'explain-keyword' : 'keyword',
-        });
-        expectTable = SQL_HIGHLIGHT_TABLE_CONTEXT_KEYWORDS.has(upperToken);
-        continue;
-      }
-
-      if (previousMeaningfulToken === '.') {
-        tokens.push({ text: token, kind: 'column' });
-        expectTable = false;
-        continue;
-      }
-
-      if (expectTable || tableNames.has(normalizedToken)) {
-        tokens.push({ text: token, kind: 'table' });
-        expectTable = false;
-        continue;
-      }
-
-      if (columnNames.has(normalizedToken)) {
-        tokens.push({ text: token, kind: 'column' });
-        expectTable = false;
-        continue;
-      }
-
-      if (nextMeaningfulToken === '(') {
-        tokens.push({ text: token, kind: 'function' });
-        expectTable = false;
-        continue;
-      }
-
-      tokens.push({ text: token, kind: 'identifier' });
-      expectTable = false;
-      continue;
-    }
-
-    tokens.push({ text: token, kind: null });
-  }
-
-  return tokens;
-}
-
-function normalizeSqlHighlightRanges(ranges: SqlHighlightRange[], sqlLength: number) {
-  const normalizedRanges = ranges
-    .map((range) => ({
-      start: Math.max(0, Math.min(range.start, sqlLength)),
-      end: Math.max(0, Math.min(range.end, sqlLength)),
-    }))
-    .filter((range) => range.end > range.start)
-    .sort((left, right) => left.start - right.start || left.end - right.end);
-
-  return normalizedRanges.reduce<SqlHighlightRange[]>((mergedRanges, range) => {
-    const previousRange = mergedRanges[mergedRanges.length - 1];
-
-    if (!previousRange || range.start > previousRange.end) {
-      mergedRanges.push({ ...range });
-      return mergedRanges;
-    }
-
-    previousRange.end = Math.max(previousRange.end, range.end);
-    return mergedRanges;
-  }, []);
-}
-
-function splitSqlTokenByHighlightRanges(text: string, tokenAbsoluteStart: number, highlightRanges: SqlHighlightRange[]) {
-  if (text.length === 0 || highlightRanges.length === 0) {
-    return [
-      {
-        text,
-        isHighlighted: false,
-      },
-    ];
-  }
-
-  const tokenAbsoluteEnd = tokenAbsoluteStart + text.length;
-  const overlappingRanges = highlightRanges.filter((range) => range.end > tokenAbsoluteStart && range.start < tokenAbsoluteEnd);
-
-  if (overlappingRanges.length === 0) {
-    return [
-      {
-        text,
-        isHighlighted: false,
-      },
-    ];
-  }
-
-  const segments: Array<{ text: string; isHighlighted: boolean }> = [];
-  let cursor = tokenAbsoluteStart;
-
-  overlappingRanges.forEach((range) => {
-    const segmentStart = Math.max(range.start, tokenAbsoluteStart);
-    const segmentEnd = Math.min(range.end, tokenAbsoluteEnd);
-
-    if (cursor < segmentStart) {
-      segments.push({
-        text: text.slice(cursor - tokenAbsoluteStart, segmentStart - tokenAbsoluteStart),
-        isHighlighted: false,
-      });
-    }
-
-    if (segmentStart < segmentEnd) {
-      segments.push({
-        text: text.slice(segmentStart - tokenAbsoluteStart, segmentEnd - tokenAbsoluteStart),
-        isHighlighted: true,
-      });
-    }
-
-    cursor = Math.max(cursor, segmentEnd);
-  });
-
-  if (cursor < tokenAbsoluteEnd) {
-    segments.push({
-      text: text.slice(cursor - tokenAbsoluteStart),
-      isHighlighted: false,
-    });
-  }
-
-  return segments.filter((segment) => segment.text.length > 0);
-}
-
-function renderHighlightedSql(sql: string, tableNames: Set<string>, columnNames: Set<string>, highlightRanges: SqlHighlightRange[] = []) {
-  const normalizedSql = sql.replace(/\r\n/g, '\n');
-  const normalizedHighlightRanges = normalizeSqlHighlightRanges(highlightRanges, normalizedSql.length);
-  const lines = normalizedSql.split('\n');
-
-  let lineAbsoluteStart = 0;
-
-  return lines.map((line, lineIndex) => {
-    const lineTokens = tokenizeSqlLine(line, tableNames, columnNames);
-    let tokenOffset = 0;
-    const renderedLine = lineTokens.flatMap((token, tokenIndex) => {
-      const tokenAbsoluteStart = lineAbsoluteStart + tokenOffset;
-      const tokenSegments = splitSqlTokenByHighlightRanges(token.text, tokenAbsoluteStart, normalizedHighlightRanges);
-
-      tokenOffset += token.text.length;
-
-      return tokenSegments.map((segment, segmentIndex) => {
-        const tokenContent =
-          token.kind == null ? (
-            segment.text
-          ) : (
-            <span className={`solve-sql-token is-${token.kind}`}>{segment.text}</span>
-          );
-
-        return segment.isHighlighted ? (
-          <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`} className="solve-sql-selection-fill">
-            {tokenContent}
-          </span>
-        ) : (
-          <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`}>{tokenContent}</span>
-        );
-      });
-    });
-
-    lineAbsoluteStart += line.length + 1;
-
-    return (
-      <Fragment key={`line-${lineIndex}`}>
-        {renderedLine}
-        {lineIndex < lines.length - 1 ? '\n' : null}
-      </Fragment>
-    );
-  });
-}
-
 function indentSqlEditorValue(value: string, selectionStart: number, selectionEnd: number) {
   if (selectionStart === selectionEnd) {
     const nextSql = `${value.slice(0, selectionStart)}${SQL_EDITOR_INDENT}${value.slice(selectionEnd)}`;
@@ -1871,6 +1497,77 @@ function SubmitProgressItem({ step }: { step: ProblemSubmitProgressStep }) {
   );
 }
 
+function SolveResultPagination({
+  currentPage,
+  totalPages,
+  isPageLoading,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  isPageLoading: boolean;
+  onPageChange: (page: number) => void;
+}) {
+  const pageJump = usePageJump({ currentPage, totalPages, onPageChange });
+
+  return (
+    <div className="solve-result-pagination">
+      <button
+        type="button"
+        className="mini-toggle solve-result-pagination-button"
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1 || isPageLoading}
+      >
+        {getUiTextValue('COMMON_PREVIOUS_BUTTON', '이전')}
+      </button>
+
+      {pageJump.isEditing ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          className="text-field solve-result-pagination-input"
+          aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_INPUT_LABEL', '이동할 페이지 입력')}
+          value={pageJump.draft}
+          onChange={(event) => pageJump.setDraft(event.target.value)}
+          onBlur={pageJump.applyPageJump}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              pageJump.applyPageJump();
+              return;
+            }
+
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              pageJump.cancelPageJump();
+            }
+          }}
+          autoFocus
+        />
+      ) : (
+        <button
+          type="button"
+          className="solve-result-pagination-label solve-result-pagination-meta-button"
+          aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_INPUT_OPEN_LABEL', '이동할 페이지 입력 열기')}
+          disabled={isPageLoading}
+          onClick={pageJump.openPageJump}
+        >
+          {`${currentPage} / ${totalPages}`}
+        </button>
+      )}
+
+      <button
+        type="button"
+        className="mini-toggle solve-result-pagination-button"
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages || isPageLoading}
+      >
+        {getUiTextValue('COMMON_NEXT_BUTTON', '다음')}
+      </button>
+    </div>
+  );
+}
+
 function renderResultTable(
   columns: string[],
   rows: string[][],
@@ -1879,13 +1576,7 @@ function renderResultTable(
   currentPage: number,
   pageSize: number,
   onPageChange: (page: number) => void,
-  pageInput: string,
-  onPageInputChange: (value: string) => void,
-  isPageJumpEditing: boolean,
   isPageLoading: boolean,
-  onStartPageJumpEditing: () => void,
-  onApplyPageJump: () => void,
-  onCancelPageJump: () => void,
   resetKey: number,
   onResetWidths: () => void,
 ) {
@@ -1936,62 +1627,7 @@ function renderResultTable(
             </div>
           ) : null}
         </div>
-        {totalPages > 1 ? (
-          <div className="solve-result-pagination">
-            <button
-              type="button"
-              className="mini-toggle solve-result-pagination-button"
-              onClick={() => onPageChange(normalizedPage - 1)}
-              disabled={normalizedPage === 1 || isPageLoading}
-            >
-              {getUiTextValue('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="text-field solve-result-pagination-input"
-                aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_INPUT_LABEL', '이동할 페이지 입력')}
-                value={pageInput}
-                onChange={(event) => onPageInputChange(event.target.value.replace(/\D+/g, ''))}
-                onBlur={onApplyPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    onApplyPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    onCancelPageJump();
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="solve-result-pagination-label solve-result-pagination-meta-button"
-                aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_INPUT_OPEN_LABEL', '이동할 페이지 입력 열기')}
-                disabled={isPageLoading}
-                onClick={onStartPageJumpEditing}
-              >
-                {`${normalizedPage} / ${totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="mini-toggle solve-result-pagination-button"
-              onClick={() => onPageChange(normalizedPage + 1)}
-              disabled={normalizedPage === totalPages || isPageLoading}
-            >
-              {getUiTextValue('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
-        ) : null}
+        {totalPages > 1 ? <SolveResultPagination currentPage={normalizedPage} totalPages={totalPages} isPageLoading={isPageLoading} onPageChange={onPageChange} /> : null}
       </div>
     </div>
   );
@@ -2002,13 +1638,7 @@ function renderExecutionContent(
   currentPage: number,
   pageSize: number,
   onPageChange: (page: number) => void,
-  pageInput: string,
-  onPageInputChange: (value: string) => void,
-  isPageJumpEditing: boolean,
   isPageLoading: boolean,
-  onStartPageJumpEditing: () => void,
-  onApplyPageJump: () => void,
-  onCancelPageJump: () => void,
   resetKey: number,
   onResetWidths: () => void,
 ) {
@@ -2025,13 +1655,7 @@ function renderExecutionContent(
       currentPage,
       pageSize,
       onPageChange,
-      pageInput,
-      onPageInputChange,
-      isPageJumpEditing,
       isPageLoading,
-      onStartPageJumpEditing,
-      onApplyPageJump,
-      onCancelPageJump,
       resetKey,
       onResetWidths,
     );
@@ -2069,8 +1693,6 @@ function ExecutionStatementResultItem({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState(item.result?.currentPage ?? 1);
-  const [pageInput, setPageInput] = useState('1');
-  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
   const [gridResetKey, setGridResetKey] = useState(0);
   const [isPageLoading, setIsPageLoading] = useState(false);
   const executionItemRef = useRef<HTMLDivElement | null>(null);
@@ -2078,8 +1700,6 @@ function ExecutionStatementResultItem({
   useEffect(() => {
     setCollapsed(false);
     setCurrentPage(item.result?.currentPage ?? 1);
-    setPageInput(String(item.result?.currentPage ?? 1));
-    setIsPageJumpEditing(false);
     setGridResetKey(0);
     setIsPageLoading(false);
   }, [item.key, item.status, item.result?.mode, item.result?.rowCount, item.result?.message, item.result?.currentPage]);
@@ -2091,10 +1711,6 @@ function ExecutionStatementResultItem({
       registerResultItemRef(item.key, null);
     };
   }, [item.key, registerResultItemRef]);
-
-  useEffect(() => {
-    setPageInput(String(currentPage));
-  }, [currentPage]);
 
   const executionResult = item.result;
   const showErrorSummary = item.status === 'error' || (executionResult != null && !executionResult.success);
@@ -2137,23 +1753,6 @@ function ExecutionStatementResultItem({
     } finally {
       setIsPageLoading(false);
     }
-  };
-
-  const applyPageJump = () => {
-    const parsedPage = Number.parseInt(pageInput, 10);
-    if (Number.isNaN(parsedPage)) {
-      setPageInput(String(currentPage));
-      setIsPageJumpEditing(false);
-      return;
-    }
-
-    const nextPage = clamp(parsedPage, 1, executionResultTotalPages);
-    void requestPage(nextPage);
-    setIsPageJumpEditing(false);
-  };
-  const cancelPageJump = () => {
-    setPageInput(String(currentPage));
-    setIsPageJumpEditing(false);
   };
 
   return (
@@ -2202,16 +1801,7 @@ function ExecutionStatementResultItem({
               currentPage,
               resolvedPageSize,
               requestPage,
-              pageInput,
-              setPageInput,
-              isPageJumpEditing,
               isPageLoading,
-              () => {
-                setPageInput(String(currentPage));
-                setIsPageJumpEditing(true);
-              },
-              applyPageJump,
-              cancelPageJump,
               gridResetKey,
               () => setGridResetKey((current) => current + 1),
             )
@@ -2417,7 +2007,7 @@ function SolvePageAuthOverlay({
         if (message.type === 'quertimizer-social-login-error') {
           popup.close();
           stopPolling();
-          setLoginErrors([getSolveAuthSocialLoginErrorMessage(message.provider ?? null)]);
+          setLoginErrors([getAuthSocialLoginErrorMessage(message.provider ?? null)]);
           return;
         }
 
@@ -2463,7 +2053,7 @@ function SolvePageAuthOverlay({
             if (socialLoginError != null) {
               popup.close();
               stopPolling();
-              setLoginErrors([getSolveAuthSocialLoginErrorMessage(socialLoginError)]);
+              setLoginErrors([getAuthSocialLoginErrorMessage(socialLoginError)]);
               return;
             }
           }
@@ -3730,15 +3320,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const [mySubmitLoadError, setMySubmitLoadError] = useState<string | null>(null);
   const [mySubmitLoadErrorStatus, setMySubmitLoadErrorStatus] = useState<number | null>(null);
   const [mySubmitRequestedPage, setMySubmitRequestedPage] = useState(() => favoriteRestoreSnapshot?.mySubmitRequestedPage ?? 1);
-  const [isMySubmitPageJumpEditing, setIsMySubmitPageJumpEditing] = useState(false);
-  const [mySubmitPageJumpDraft, setMySubmitPageJumpDraft] = useState('1');
   const [taggedPostPage, setTaggedPostPage] = useState<CommunityPostPage>(createEmptySolveCommunityPage());
   const [isTaggedPostLoading, setIsTaggedPostLoading] = useState(false);
   const [taggedPostLoadError, setTaggedPostLoadError] = useState<string | null>(null);
   const [taggedPostLoadErrorStatus, setTaggedPostLoadErrorStatus] = useState<number | null>(null);
   const [taggedPostRequestedPage, setTaggedPostRequestedPage] = useState(() => favoriteRestoreSnapshot?.taggedPostRequestedPage ?? 1);
-  const [isTaggedPostPageJumpEditing, setIsTaggedPostPageJumpEditing] = useState(false);
-  const [taggedPostPageJumpDraft, setTaggedPostPageJumpDraft] = useState('1');
   const [relatedModalState, setRelatedModalState] = useState<SolveRelatedModalState>(null);
   const [sql, setSql] = useState(() => favoriteRestoreSnapshot?.sql ?? '');
   const deferredSql = useDeferredValue(sql);
@@ -4028,33 +3614,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setMySubmitLoadError(null);
     setMySubmitLoadErrorStatus(null);
     setMySubmitRequestedPage(restoredMySubmitPage);
-    setIsMySubmitPageJumpEditing(false);
-    setMySubmitPageJumpDraft(String(restoredMySubmitPage));
     setTaggedPostPage(createEmptySolveCommunityPage());
     setIsTaggedPostLoading(false);
     setTaggedPostLoadError(null);
     setTaggedPostLoadErrorStatus(null);
     setTaggedPostRequestedPage(restoredTaggedPostPage);
-    setIsTaggedPostPageJumpEditing(false);
-    setTaggedPostPageJumpDraft(String(restoredTaggedPostPage));
     setRelatedModalState(null);
   }, [favoriteRestoreSnapshot, problemId]);
-
-  useEffect(() => {
-    if (isMySubmitPageJumpEditing) {
-      return;
-    }
-
-    setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
-  }, [isMySubmitPageJumpEditing, mySubmitHistoryPage.currentPage]);
-
-  useEffect(() => {
-    if (isTaggedPostPageJumpEditing) {
-      return;
-    }
-
-    setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
-  }, [isTaggedPostPageJumpEditing, taggedPostPage.currentPage]);
 
   useEffect(() => {
     if (contentTab !== 'submissions') {
@@ -5843,44 +5409,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const hasRelatedExecutionPlanDetails = (history: SubmitHistoryEntry) =>
     getExecutionPlanDetailGroups(history.dbms, history.executionPlanElement).length > 0;
 
-  const applyMySubmitPageJump = () => {
-    const parsedPage = Number.parseInt(mySubmitPageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? mySubmitHistoryPage.currentPage
-      : Math.min(mySubmitHistoryPage.totalPages, Math.max(1, parsedPage));
-
-    setMySubmitPageJumpDraft(String(nextPage));
-    setIsMySubmitPageJumpEditing(false);
-
-    if (nextPage !== mySubmitHistoryPage.currentPage) {
-      setMySubmitRequestedPage(nextPage);
-    }
-  };
-
-  const cancelMySubmitPageJump = () => {
-    setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
-    setIsMySubmitPageJumpEditing(false);
-  };
-
-  const applyTaggedPostPageJump = () => {
-    const parsedPage = Number.parseInt(taggedPostPageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? taggedPostPage.currentPage
-      : Math.min(taggedPostPage.totalPages, Math.max(1, parsedPage));
-
-    setTaggedPostPageJumpDraft(String(nextPage));
-    setIsTaggedPostPageJumpEditing(false);
-
-    if (nextPage !== taggedPostPage.currentPage) {
-      setTaggedPostRequestedPage(nextPage);
-    }
-  };
-
-  const cancelTaggedPostPageJump = () => {
-    setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
-    setIsTaggedPostPageJumpEditing(false);
-  };
-
   const relatedModalContent =
     relatedModalState == null || typeof document === 'undefined'
       ? null
@@ -5911,9 +5439,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       <div className="submit-history-modal-meta-stack">
                         <span className="submit-history-modal-meta-line">{getDbmsLabel(relatedModalState.history.dbms)}</span>
                         {relatedModalState.history.success || relatedModalState.history.cost > 0 ? (
-                          <span className="submit-history-modal-meta-line">{formatSolveRelatedCost(relatedModalState.history.cost)}</span>
+                          <span className="submit-history-modal-meta-line">{formatCost(relatedModalState.history.cost)}</span>
                         ) : null}
-                        <span className="submit-history-modal-meta-line">{formatSolveRelatedSubmittedAt(relatedModalState.history.submittedAt)}</span>
+                        <span className="submit-history-modal-meta-line">{formatSubmittedAt(relatedModalState.history.submittedAt)}</span>
                         {hasRelatedExecutionPlanDetails(relatedModalState.history) ? (
                           <button
                             type="button"
@@ -5952,7 +5480,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 <div className="submit-history-modal-body submit-history-plan-modal-body">
                   <div className="submit-history-plan-modal-summary">
                     <span className="submit-history-plan-modal-label">{text('COMMON_COST_LABEL', 'Cost')}</span>
-                    <strong>{formatSolveRelatedCost(relatedModalState.history.cost)}</strong>
+                    <strong>{formatCost(relatedModalState.history.cost)}</strong>
                   </div>
 
                   {getExecutionPlanDetailGroups(relatedModalState.history.dbms, relatedModalState.history.executionPlanElement).length > 0 ? (
@@ -6053,10 +5581,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     </button>
                   </span>
                   <span className="submit-history-cell" role="cell" data-label={text('COMMON_COST_LABEL', 'Cost')}>
-                    {history.success || history.cost > 0 ? formatSolveRelatedCost(history.cost) : '-'}
+                    {history.success || history.cost > 0 ? formatCost(history.cost) : '-'}
                   </span>
                   <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
-                    {formatSolveRelatedSubmittedAt(history.submittedAt)}
+                    {formatSubmittedAt(history.submittedAt)}
                   </span>
                   <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label={text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}>
                     {hasRelatedExecutionPlanDetails(history) ? (
@@ -6081,62 +5609,21 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         </div>
 
         {mySubmitHistoryPage.totalCount > 0 ? (
-          <div className="solve-related-pagination" role="navigation" aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_LABEL', '내 제출 페이지')}>
-            <button
-              type="button"
-              className="solve-related-page-button"
-              onClick={() => setMySubmitRequestedPage((page) => Math.max(1, page - 1))}
-              disabled={mySubmitHistoryPage.currentPage === 1}
-            >
-              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isMySubmitPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="solve-related-pagination-input"
-                aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_INPUT_LABEL', '이동할 내 제출 페이지 입력')}
-                value={mySubmitPageJumpDraft}
-                onChange={(event) => setMySubmitPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
-                onBlur={applyMySubmitPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyMySubmitPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelMySubmitPageJump();
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="solve-related-pagination-meta"
-                aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_INPUT_OPEN_LABEL', '이동할 내 제출 페이지 입력 열기')}
-                onClick={() => {
-                  setMySubmitPageJumpDraft(String(mySubmitHistoryPage.currentPage));
-                  setIsMySubmitPageJumpEditing(true);
-                }}
-              >
-                {`${mySubmitHistoryPage.currentPage} / ${mySubmitHistoryPage.totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="solve-related-page-button"
-              onClick={() => setMySubmitRequestedPage((page) => Math.min(mySubmitHistoryPage.totalPages, page + 1))}
-              disabled={mySubmitHistoryPage.currentPage >= mySubmitHistoryPage.totalPages}
-            >
-              {text('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
+          <Pagination
+            currentPage={mySubmitHistoryPage.currentPage}
+            totalPages={mySubmitHistoryPage.totalPages}
+            onPageChange={setMySubmitRequestedPage}
+            ariaLabel={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_LABEL', '내 제출 페이지')}
+            inputLabel={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_INPUT_LABEL', '이동할 내 제출 페이지 입력')}
+            inputOpenLabel={text('PROBLEM_SOLVE_RELATED_SUBMIT_PAGE_INPUT_OPEN_LABEL', '이동할 내 제출 페이지 입력 열기')}
+            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+            className="solve-related-pagination"
+            pageButtonClassName="solve-related-page-button"
+            metaClassName="solve-related-pagination-meta"
+            metaButtonClassName=""
+            inputClassName="solve-related-pagination-input"
+          />
         ) : null}
       </div>
     );
@@ -6214,7 +5701,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       {post.authorHandle}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>{formatSolveRelatedBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>{formatCompactBoardDate(post.updatedAt ?? post.createdAt)}</span>
                   <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>{formatGroupedNumber(post.views)}</span>
                   <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>{formatGroupedNumber(post.likes)}</span>
                   <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>{formatGroupedNumber(post.comments)}</span>
@@ -6227,62 +5714,21 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         </div>
 
         {taggedPostPage.totalCount > 0 ? (
-          <div className="solve-related-pagination" role="navigation" aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_LABEL', '태그된 게시글 페이지')}>
-            <button
-              type="button"
-              className="solve-related-page-button"
-              onClick={() => setTaggedPostRequestedPage((page) => Math.max(1, page - 1))}
-              disabled={taggedPostPage.currentPage === 1}
-            >
-              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isTaggedPostPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="solve-related-pagination-input"
-                aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_INPUT_LABEL', '이동할 태그된 게시글 페이지 입력')}
-                value={taggedPostPageJumpDraft}
-                onChange={(event) => setTaggedPostPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
-                onBlur={applyTaggedPostPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyTaggedPostPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelTaggedPostPageJump();
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="solve-related-pagination-meta"
-                aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_INPUT_OPEN_LABEL', '이동할 태그된 게시글 페이지 입력 열기')}
-                onClick={() => {
-                  setTaggedPostPageJumpDraft(String(taggedPostPage.currentPage));
-                  setIsTaggedPostPageJumpEditing(true);
-                }}
-              >
-                {`${taggedPostPage.currentPage} / ${taggedPostPage.totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="solve-related-page-button"
-              onClick={() => setTaggedPostRequestedPage((page) => Math.min(taggedPostPage.totalPages, page + 1))}
-              disabled={taggedPostPage.currentPage >= taggedPostPage.totalPages}
-            >
-              {text('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
+          <Pagination
+            currentPage={taggedPostPage.currentPage}
+            totalPages={taggedPostPage.totalPages}
+            onPageChange={setTaggedPostRequestedPage}
+            ariaLabel={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_LABEL', '태그된 게시글 페이지')}
+            inputLabel={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_INPUT_LABEL', '이동할 태그된 게시글 페이지 입력')}
+            inputOpenLabel={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_PAGE_INPUT_OPEN_LABEL', '이동할 태그된 게시글 페이지 입력 열기')}
+            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+            className="solve-related-pagination"
+            pageButtonClassName="solve-related-page-button"
+            metaClassName="solve-related-pagination-meta"
+            metaButtonClassName=""
+            inputClassName="solve-related-pagination-input"
+          />
         ) : null}
       </div>
     );

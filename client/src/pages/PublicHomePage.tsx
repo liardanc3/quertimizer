@@ -23,14 +23,18 @@ import {
   LANDING_SIGNUP_PATH,
   navigate,
 } from '../lib/navigation';
+import {
+  EMAIL_PATTERN,
+  PASSWORD_RESET_CODE_PATTERN,
+  getAuthSocialLoginErrorMessage,
+  hasRequiredPasswordFormat,
+  sanitizeVerificationCode,
+} from '../lib/authUi';
 import { getUiTextValue, useHomeSiteTitle, useUiText } from '../lib/uiText';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VERIFICATION_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const DUPLICATED_EMAIL_REASON = getUiTextValue('AUTH_EMAIL_DUPLICATED_MESSAGE', '이미 사용 중인 이메일입니다.');
 
 type DuplicateCheckStatus = 'idle' | 'checking' | 'available' | 'duplicated';
-type SocialProvider = 'google' | 'github' | 'kakao' | 'oauth2';
 
 function subscribe(callback: () => void) {
   window.addEventListener('popstate', callback);
@@ -44,29 +48,6 @@ function subscribe(callback: () => void) {
 
 function getSnapshot() {
   return window.location.hash;
-}
-
-function hasRequiredPasswordFormat(value: string) {
-  return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
-}
-
-function sanitizeVerificationCode(value: string) {
-  return value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
-}
-
-function getSocialLoginErrorMessage(provider: string | null) {
-  const normalizedProvider = provider?.toLowerCase() as SocialProvider | undefined;
-
-  switch (normalizedProvider) {
-    case 'google':
-      return getUiTextValue('AUTH_GOOGLE_LOGIN_FAIL_MESSAGE', 'Google 로그인에 실패했습니다.');
-    case 'github':
-      return getUiTextValue('AUTH_GITHUB_LOGIN_FAIL_MESSAGE', 'Github 로그인에 실패했습니다.');
-    case 'kakao':
-      return getUiTextValue('AUTH_KAKAO_LOGIN_FAIL_MESSAGE', 'Kakao 로그인에 실패했습니다.');
-    default:
-      return getUiTextValue('AUTH_SOCIAL_LOGIN_FAIL_MESSAGE', '소셜 로그인에 실패했습니다.');
-  }
 }
 
 function clearLandingQuery() {
@@ -209,7 +190,7 @@ export default function PublicHomePage() {
   const isSignupPasswordValid = hasRequiredPasswordFormat(signupPassword);
   const isSignupPasswordConfirmValid = signupPasswordConfirm !== '' && signupPassword === signupPasswordConfirm;
   const isSignupEmailValid = EMAIL_PATTERN.test(normalizedEmail);
-  const isSignupCodeValid = VERIFICATION_CODE_PATTERN.test(normalizedSignupCode);
+  const isSignupCodeValid = PASSWORD_RESET_CODE_PATTERN.test(normalizedSignupCode);
   const signupEmailHint = text('AUTH_EMAIL_HINT', '올바른 이메일 형식으로 입력해 주세요.');
   const signupEmailCheckingMessage = text('PUBLIC_HOME_SIGNUP_CHECKING_MESSAGE', '이메일 중복을 확인하고 있습니다.');
   const signupEmailAvailableMessage = text('AUTH_EMAIL_AVAILABLE_MESSAGE', '사용 가능한 이메일입니다.');
@@ -313,7 +294,7 @@ export default function PublicHomePage() {
         }
 
         if (!isDisposed) {
-          setLoginErrorReasons([getSocialLoginErrorMessage(socialLoginError)]);
+          setLoginErrorReasons([getAuthSocialLoginErrorMessage(socialLoginError)]);
         }
         clearLandingQuery();
         return;
@@ -341,7 +322,7 @@ export default function PublicHomePage() {
         await handleAuthenticatedUser(session, { useSolveReturnPath: true });
       } catch {
         if (!isDisposed) {
-          setLoginErrorReasons([getSocialLoginErrorMessage(socialLoginSuccess)]);
+          setLoginErrorReasons([getAuthSocialLoginErrorMessage(socialLoginSuccess)]);
         }
       } finally {
         clearLandingQuery();

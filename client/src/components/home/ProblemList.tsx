@@ -1,37 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { DataTable } from '../common/DataTable';
 import { LoadingOverlay } from '../common/LoadingSpinner';
+import SortIcon from '../icons/SortIcon';
+import useDismissableLayer from '../../hooks/useDismissableLayer';
 import { navigate } from '../../lib/navigation';
 import { useUiText } from '../../lib/uiText';
 import type { DbmsType, ProblemSummary } from '../../types/domain';
 import ProblemCard from './ProblemCard';
 import ProblemSpreadRateFilter from './ProblemSpreadRateFilter';
-
-function SortAscendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.5v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M5.2 5.25 8 2.5l2.8 2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortDescendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.6v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="m5.2 10.75 2.8 2.75 2.8-2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortNeutralIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M5.7 6.2 8 3.9l2.3 2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m5.7 9.8 2.3 2.3 2.3-2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
 
@@ -103,57 +79,30 @@ export default function ProblemList({
   const [isSpreadRateFilterOpen, setIsSpreadRateFilterOpen] = useState(false);
   const solveFilterRef = useRef<HTMLDivElement | null>(null);
   const spreadRateFilterRef = useRef<HTMLDivElement | null>(null);
+  const filterLayerRefs = useMemo(() => [solveFilterRef, spreadRateFilterRef], []);
 
-  useEffect(() => {
-    if (!isSolveFilterOpen && !isSpreadRateFilterOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (isSolveFilterOpen && !solveFilterRef.current?.contains(target)) {
-        setIsSolveFilterOpen(false);
-      }
-      if (isSpreadRateFilterOpen && !spreadRateFilterRef.current?.contains(target)) {
-        setIsSpreadRateFilterOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsSolveFilterOpen(false);
-        setIsSpreadRateFilterOpen(false);
-      }
-    }
-
-    function handleResize() {
+  useDismissableLayer({
+    enabled: isSolveFilterOpen || isSpreadRateFilterOpen,
+    refs: filterLayerRefs,
+    onDismiss: () => {
       setIsSolveFilterOpen(false);
       setIsSpreadRateFilterOpen(false);
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isSolveFilterOpen, isSpreadRateFilterOpen]);
+    },
+    dismissOnResize: true,
+  });
 
   function renderSortIcon(field: CountSortField) {
     if (countSortField !== field) {
-      return <SortNeutralIcon />;
+      return <SortIcon direction="none" />;
     }
 
-    return countSortDirection === 'asc' ? <SortAscendingIcon /> : <SortDescendingIcon />;
+    return <SortIcon direction={countSortDirection} />;
   }
 
   return (
     <section className="problem-list problem-table-shell">
       <div className={`problem-table-shell-inner ${isLoading ? 'is-loading' : ''}`}>
-        <div className="problem-table" role="table" aria-label={text('PROBLEM_TABLE_LABEL', '문제 목록')}>
+        <DataTable className="problem-table" label={text('PROBLEM_TABLE_LABEL', '문제 목록')}>
           <div className="problem-table-row problem-table-head" role="row">
             <div
               role="columnheader"
@@ -332,7 +281,7 @@ export default function ProblemList({
               />
             ))
           )}
-        </div>
+        </DataTable>
 
         {isLoading ? <LoadingOverlay className="problem-table-loading-overlay" /> : null}
       </div>

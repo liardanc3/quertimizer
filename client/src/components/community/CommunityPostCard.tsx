@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { getCommunityPostPath, getProfilePath, navigate } from '../../lib/navigation';
+import { formatCompactBoardDate, formatInteger } from '../../lib/formatters';
 import { useUiText } from '../../lib/uiText';
 import type { CommunityPostSummary } from '../../types/domain';
 
@@ -9,19 +10,6 @@ interface CommunityPostCardProps {
   activeTag: string;
   onOpenPost: (postId: string) => void;
   onSelectTag: (tag: string) => void;
-}
-
-const numberFormatter = new Intl.NumberFormat('ko-KR');
-
-function formatBoardDate(value: string) {
-  const date = new Date(value);
-  const year = String(date.getFullYear()).slice(-2);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 function normalizeKeyword(value: string) {
@@ -160,19 +148,19 @@ export default function CommunityPostCard({
       </div>
 
       <div className="community-board-cell community-board-date" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>
-        {formatBoardDate(post.updatedAt ?? post.createdAt)}
+        {formatCompactBoardDate(post.updatedAt ?? post.createdAt)}
       </div>
 
       <div className="community-board-cell community-board-metric" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>
-        {numberFormatter.format(post.views)}
+        {formatInteger(post.views)}
       </div>
 
       <div className="community-board-cell community-board-metric" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>
-        {numberFormatter.format(post.likes)}
+        {formatInteger(post.likes)}
       </div>
 
       <div className="community-board-cell community-board-metric" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>
-        {numberFormatter.format(post.comments)}
+        {formatInteger(post.comments)}
       </div>
     </article>
   );

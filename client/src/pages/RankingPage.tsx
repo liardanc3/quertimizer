@@ -1,13 +1,19 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
-import HttpErrorState from '../components/common/HttpErrorState';
+import { DataTable } from '../components/common/DataTable';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
-import PageLoadFailureState from '../components/common/PageLoadFailureState';
-import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
+import PageErrorState from '../components/common/PageErrorState';
+import Pagination from '../components/common/Pagination';
+import { PageToolbar, SearchForm, SegmentedTabs } from '../components/common/PageToolbar';
+import SortIcon from '../components/icons/SortIcon';
+import { replaceQueryState, useLocationSearch } from '../hooks/useLocationState';
+import useDismissableLayer from '../hooks/useDismissableLayer';
+import useRequestState from '../hooks/useRequestState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
-import { getLocationSearchSnapshot, getProfilePath, RANKING_PATH, subscribeLocation, navigate } from '../lib/navigation';
+import { getProfilePath, RANKING_PATH, navigate } from '../lib/navigation';
 import { fetchRanks, type RankPage } from '../lib/rankApi';
+import { formatPercent } from '../lib/formatters';
 import { useUiText } from '../lib/uiText';
 import type { DbmsType, RankingMetricKey } from '../types/domain';
 import './HomePage.css';
@@ -30,33 +36,6 @@ function buildRankingPath(dbms: DbmsType) {
   }
 
   return `${RANKING_PATH}?dbms=${encodeURIComponent(dbms)}`;
-}
-
-function SortAscendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.5v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M5.2 5.25 8 2.5l2.8 2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortDescendingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 2.6v10.9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="m5.2 10.75 2.8 2.75 2.8-2.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortNeutralIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M5.7 6.2 8 3.9l2.3 2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m5.7 9.8 2.3 2.3 2.3-2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }
 
 type LinkMenuState = {
@@ -85,28 +64,27 @@ function createEmptyRankPage(): RankPage {
   };
 }
 
-function formatPercentile(value: number) {
-  return `${value.toFixed(1)}%`;
-}
-
 export default function RankingPage() {
   const { text } = useUiText();
-  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<RankingPageFavoriteSnapshot>('ranking'), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readRankingDbmsFromSearch(window.location.search));
   const [sortKey, setSortKey] = useState<RankingMetricKey>(() => favoriteRestoreSnapshot?.sortKey ?? 'solvedCount');
   const [draftQuery, setDraftQuery] = useState(() => favoriteRestoreSnapshot?.draftQuery ?? '');
   const [submittedQuery, setSubmittedQuery] = useState(() => favoriteRestoreSnapshot?.submittedQuery ?? '');
   const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
-  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
-  const [pageJumpDraft, setPageJumpDraft] = useState('1');
-  const [rankPage, setRankPage] = useState<RankPage>(createEmptyRankPage());
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
-  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
+  const {
+    data: rankPage,
+    setData: setRankPage,
+    isLoading,
+    setIsLoading,
+    error: loadError,
+    beginRequest,
+    failRequest,
+  } = useRequestState<RankPage>(createEmptyRankPage);
   const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
   const linkMenuRef = useRef<HTMLButtonElement | null>(null);
+  const linkMenuLayerRefs = useMemo(() => [linkMenuRef], []);
 
   useEffect(() => {
     clearFavoriteRestoreSnapshot('ranking');
@@ -122,14 +100,6 @@ export default function RankingPage() {
   );
 
   useEffect(() => {
-    if (isPageJumpEditing) {
-      return;
-    }
-
-    setPageJumpDraft(String(rankPage.currentPage));
-  }, [isPageJumpEditing, rankPage.currentPage]);
-
-  useEffect(() => {
     const nextDbms = readRankingDbmsFromSearch(locationSearch);
 
     setSelectedDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
@@ -137,21 +107,14 @@ export default function RankingPage() {
 
   useEffect(() => {
     const nextPath = buildRankingPath(selectedDbms);
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-
-    if (currentPath !== nextPath) {
-      window.history.replaceState(window.history.state ?? {}, '', nextPath);
-    }
+    replaceQueryState(nextPath);
   }, [selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadRanks() {
-      setIsLoading(true);
-      setLoadFailed(false);
-      setLoadErrorMessage(null);
-      setLoadErrorStatus(null);
+      beginRequest();
 
       try {
         const fetchedRankPage = await fetchRanks({
@@ -175,10 +138,7 @@ export default function RankingPage() {
           return;
         }
 
-        setLoadFailed(true);
-        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
-        const status = getApiErrorStatus(error);
-        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
+        failRequest(error, text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -193,39 +153,13 @@ export default function RankingPage() {
     };
   }, [requestedPage, selectedDbms, sortKey, submittedQuery]);
 
-  useEffect(() => {
-    if (linkMenuState == null) {
-      return;
-    }
-
-    function closeLinkMenu() {
-      setLinkMenuState(null);
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!linkMenuRef.current?.contains(event.target as Node)) {
-        closeLinkMenu();
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        closeLinkMenu();
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('resize', closeLinkMenu);
-    window.addEventListener('scroll', closeLinkMenu, true);
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('resize', closeLinkMenu);
-      window.removeEventListener('scroll', closeLinkMenu, true);
-    };
-  }, [linkMenuState]);
+  useDismissableLayer({
+    enabled: linkMenuState != null,
+    refs: linkMenuLayerRefs,
+    onDismiss: () => setLinkMenuState(null),
+    dismissOnResize: true,
+    dismissOnScroll: true,
+  });
 
   function applySearch() {
     const willReload = draftQuery.trim() !== submittedQuery.trim() || requestedPage !== 1;
@@ -236,25 +170,6 @@ export default function RankingPage() {
     setIsLoading(true);
     setSubmittedQuery(draftQuery);
     setRequestedPage(1);
-  }
-
-  function applyPageJump() {
-    const parsedPage = Number.parseInt(pageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? rankPage.currentPage
-      : Math.min(rankPage.totalPages, Math.max(1, parsedPage));
-
-    setPageJumpDraft(String(nextPage));
-    setIsPageJumpEditing(false);
-
-    if (nextPage !== rankPage.currentPage) {
-      requestRankPage(nextPage);
-    }
-  }
-
-  function cancelPageJump() {
-    setPageJumpDraft(String(rankPage.currentPage));
-    setIsPageJumpEditing(false);
   }
 
   function requestRankPage(nextPage: number) {
@@ -305,33 +220,23 @@ export default function RankingPage() {
         );
 
   return (
-    <div className="page-stack ranking-page submit-history-page home-page">
+    <div className="page page-stack ranking-page submit-history-page home-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card ranking-toolbar-card">
-        <div className="problem-toolbar home-problem-toolbar-stack submit-history-toolbar-stack ranking-toolbar-stack">
-          <div className="solve-dbms-tab-row ranking-dbms-tab-row" role="tablist" aria-label={text('RANKING_DBMS_TABLIST_LABEL', '랭킹 DBMS 선택')}>
-            {dbmsOptions.map((dbmsOption) => {
-              const isSelected = dbmsOption === selectedDbms;
-              const dbmsLabel = dbmsOption === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
-
-              return (
-                <button
-                  key={dbmsOption}
-                  type="button"
-                  className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
-                  role="tab"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    if (!isSelected) {
-                      setIsLoading(true);
-                      setSelectedDbms(dbmsOption);
-                      setRequestedPage(1);
-                    }
-                  }}
-                >
-                  {dbmsLabel}
-                </button>
-              );
-            })}
+        <PageToolbar className="problem-toolbar home-problem-toolbar-stack submit-history-toolbar-stack ranking-toolbar-stack">
+          <SegmentedTabs
+            className="solve-dbms-tab-row ranking-dbms-tab-row"
+            label={text('RANKING_DBMS_TABLIST_LABEL', '랭킹 DBMS 선택')}
+            tabs={dbmsOptions.map((dbmsOption) => ({
+              value: dbmsOption,
+              label: dbmsOption === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL'),
+            }))}
+            selectedValue={selectedDbms}
+            onSelect={(dbmsOption) => {
+              setIsLoading(true);
+              setSelectedDbms(dbmsOption);
+              setRequestedPage(1);
+            }}
+            actions={
             <FavoriteTabButton
               className="favorite-tab-toggle-end"
               label={text(
@@ -351,39 +256,30 @@ export default function RankingPage() {
                 },
               }}
             />
-          </div>
+            }
+          />
 
-          <form
+          <SearchForm
             className="problem-search-form home-problem-search-form ranking-search-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              applySearch();
-            }}
-          >
-            <label className="problem-search-field home-problem-search-field ranking-search-field">
-              <input
-                type="search"
-                value={draftQuery}
-                onChange={(event) => setDraftQuery(event.target.value)}
-                className="text-field problem-search-input home-problem-search-input ranking-search-input"
-                placeholder={text('RANKING_HANDLE_SEARCH_PLACEHOLDER', 'Handle 검색')}
-                aria-label={text('RANKING_HANDLE_SEARCH_LABEL', 'Handle 검색')}
-              />
-              <button type="submit" className="problem-search-button home-problem-search-button" aria-label={text('RANKING_HANDLE_SEARCH_SUBMIT_LABEL', 'Handle 검색 실행')}>
-                {text('COMMON_SEARCH_BUTTON', '검색')}
-              </button>
-            </label>
-          </form>
-        </div>
+            fieldClassName="problem-search-field home-problem-search-field ranking-search-field"
+            inputClassName="problem-search-input home-problem-search-input ranking-search-input"
+            buttonClassName="problem-search-button home-problem-search-button"
+            value={draftQuery}
+            onChange={setDraftQuery}
+            onSubmit={applySearch}
+            placeholder={text('RANKING_HANDLE_SEARCH_PLACEHOLDER', 'Handle 검색')}
+            label={text('RANKING_HANDLE_SEARCH_LABEL', 'Handle 검색')}
+            submitLabel={text('RANKING_HANDLE_SEARCH_SUBMIT_LABEL', 'Handle 검색 실행')}
+            buttonLabel={text('COMMON_SEARCH_BUTTON', '검색')}
+          />
+        </PageToolbar>
       </section>
 
-      <section className="panel-card problem-board submit-history-board ranking-board">
-        {loadFailed ? (
-          loadErrorStatus != null
-            ? <HttpErrorState status={loadErrorStatus} message={loadErrorMessage} />
-            : <PageLoadFailureState message={loadErrorMessage} />
+      <section className="panel-card problem-board submit-history-board ranking-board data-board">
+        {loadError.failed ? (
+          <PageErrorState status={loadError.status} message={loadError.message} />
         ) : (
-          <div className={`submit-history-table ranking-table ${isLoading ? 'is-loading' : ''}`} role="table" aria-label={text('RANKING_TABLE_LABEL', '랭킹 목록')}>
+          <DataTable className="submit-history-table ranking-table" isLoading={isLoading} label={text('RANKING_TABLE_LABEL', '랭킹 목록')}>
             <div className="submit-history-row submit-history-head ranking-head" role="row">
               <div role="columnheader" className="submit-history-head-cell">{text('RANKING_RANK_COLUMN_LABEL', '순위')}</div>
               <div role="columnheader" className="submit-history-head-cell ranking-head-handle-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
@@ -401,7 +297,7 @@ export default function RankingPage() {
                     }
                   }}
                 >
-                  {sortKey === 'solvedCount' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+                  <SortIcon direction={sortKey === 'solvedCount' ? 'desc' : 'none'} />
                 </button>
               </div>
               <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
@@ -418,7 +314,7 @@ export default function RankingPage() {
                     }
                   }}
                 >
-                  {sortKey === 'avgExecutionPercentile' ? <SortAscendingIcon /> : <SortNeutralIcon />}
+                  <SortIcon direction={sortKey === 'avgExecutionPercentile' ? 'asc' : 'none'} />
                 </button>
               </div>
               <div role="columnheader" className="submit-history-head-cell">{text('RANKING_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출 수')}</div>
@@ -462,7 +358,7 @@ export default function RankingPage() {
                     {entry.solvedCount}
                   </span>
                   <span className="submit-history-cell ranking-emphasis-cell" role="cell" data-label={text('RANKING_COST_PERCENTILE_COLUMN_LABEL', '평균 Cost 백분위')}>
-                    {formatPercentile(entry.avgExecutionPercentile)}
+                    {formatPercent(entry.avgExecutionPercentile)}
                   </span>
                   <span className="submit-history-cell" role="cell" data-label={text('RANKING_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출 수')}>
                     {entry.totalSubmitCount}
@@ -475,66 +371,21 @@ export default function RankingPage() {
             )}
 
             {isLoading ? <LoadingOverlay className="ranking-table-loading-overlay" /> : null}
-          </div>
+          </DataTable>
         )}
 
-        {!loadFailed && rankPage.totalCount > 0 ? (
-          <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('RANKING_PAGE_LABEL', '랭킹 페이지')}>
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => requestRankPage(rankPage.currentPage - 1)}
-              disabled={rankPage.currentPage === 1}
-            >
-              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="problem-pagination-meta-input"
-                aria-label={text('RANKING_PAGE_INPUT_LABEL', '이동할 랭킹 페이지 입력')}
-                value={pageJumpDraft}
-                onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
-                onBlur={applyPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelPageJump();
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label={text('RANKING_PAGE_INPUT_OPEN_LABEL', '이동할 랭킹 페이지 입력 열기')}
-                onClick={() => {
-                  setPageJumpDraft(String(rankPage.currentPage));
-                  setIsPageJumpEditing(true);
-                }}
-              >
-                {`${rankPage.currentPage} / ${rankPage.totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => requestRankPage(rankPage.currentPage + 1)}
-              disabled={rankPage.currentPage >= rankPage.totalPages}
-            >
-              {text('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
+        {!loadError.failed && rankPage.totalCount > 0 ? (
+          <Pagination
+            className="problem-pagination submit-history-pagination"
+            currentPage={rankPage.currentPage}
+            totalPages={rankPage.totalPages}
+            onPageChange={requestRankPage}
+            ariaLabel={text('RANKING_PAGE_LABEL', '랭킹 페이지')}
+            inputLabel={text('RANKING_PAGE_INPUT_LABEL', '이동할 랭킹 페이지 입력')}
+            inputOpenLabel={text('RANKING_PAGE_INPUT_OPEN_LABEL', '이동할 랭킹 페이지 입력 열기')}
+            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+          />
         ) : null}
       </section>
       {linkMenuContent}

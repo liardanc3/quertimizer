@@ -1,0 +1,14 @@
+.problem-pagination,
+.solve-related-pagination,
+.header-alarm-pagination,
+.header-favorite-pagination {
+  align-items: center;
+}
+
+.problem-pagination-meta,
+.problem-pagination-meta-button,
+.problem-pagination-meta-input,
+.solve-related-pagination-meta,
+.solve-related-pagination-input {
+  line-height: 1;
+}

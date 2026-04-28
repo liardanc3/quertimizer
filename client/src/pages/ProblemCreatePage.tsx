@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import StatusPopup from '../components/common/StatusPopup';
+import useDismissableLayer from '../hooks/useDismissableLayer';
 import {
   createProblem,
   fetchAdminProblemOptions,
@@ -418,37 +419,14 @@ function ProblemCreateSelectMenu({
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const dismissLayerRefs = useMemo(() => [shellRef], []);
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handleDocumentMouseDown(event: MouseEvent) {
-      if (!(event.target instanceof Node)) {
-        return;
-      }
-
-      if (!shellRef.current?.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentMouseDown);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
+  useDismissableLayer({
+    enabled: isOpen,
+    refs: dismissLayerRefs,
+    onDismiss: () => setIsOpen(false),
+  });
 
   return (
     <div ref={shellRef} className={`problem-create-select-shell ${isOpen ? 'is-open' : ''} ${disabled ? 'is-disabled' : ''}`.trim()}>

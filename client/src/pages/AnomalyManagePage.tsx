@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import HttpErrorState from '../components/common/HttpErrorState';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
+import { formatDateTime } from '../lib/formatters';
 import {
   blockAdminUser,
   fetchAdminAnomalyTrends,
@@ -47,21 +49,6 @@ const emptyBlockedIpPage: AdminBlockedIpPageData = {
   items: [],
 };
 const anomalyLoadingRows = Array.from({ length: 6 }, (_, index) => index);
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '-';
-  }
-
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-}
 
 function formatDateTimeInputValue(date: Date) {
   const year = String(date.getFullYear());
@@ -119,93 +106,6 @@ function UnblockIcon() {
   );
 }
 
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  draft: string;
-  isEditing: boolean;
-  navigationLabel: string;
-  inputLabel: string;
-  previousLabel: string;
-  nextLabel: string;
-  onDraftChange: (value: string) => void;
-  onStartEditing: () => void;
-  onCancelEditing: () => void;
-  onApplyEditing: () => void;
-  onPageChange: (page: number) => void;
-}
-
-function Pagination({
-  currentPage,
-  totalPages,
-  draft,
-  isEditing,
-  navigationLabel,
-  inputLabel,
-  previousLabel,
-  nextLabel,
-  onDraftChange,
-  onStartEditing,
-  onCancelEditing,
-  onApplyEditing,
-  onPageChange,
-}: PaginationProps) {
-  if (totalPages <= 1) {
-    return null;
-  }
-
-  return (
-    <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={navigationLabel}>
-      <button
-        type="button"
-        className="mini-toggle problem-page-button"
-        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-        disabled={currentPage === 1}
-      >
-        {previousLabel}
-      </button>
-
-      {isEditing ? (
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          className="problem-pagination-meta-input"
-          value={draft}
-          onChange={(event) => onDraftChange(event.target.value.replace(/\D+/g, ''))}
-          onBlur={onApplyEditing}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              onApplyEditing();
-            }
-
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              onCancelEditing();
-            }
-          }}
-          aria-label={inputLabel}
-          autoFocus
-        />
-      ) : (
-        <button type="button" className="problem-pagination-meta problem-pagination-meta-button" onClick={onStartEditing}>
-          {`${currentPage} / ${totalPages}`}
-        </button>
-      )}
-
-      <button
-        type="button"
-        className="mini-toggle problem-page-button"
-        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-        disabled={currentPage >= totalPages}
-      >
-        {nextLabel}
-      </button>
-    </div>
-  );
-}
-
 export function AnomalyManageContent() {
   const { text } = useUiText();
   const initialCustomEnd = formatDateTimeInputValue(new Date());
@@ -236,22 +136,16 @@ export function AnomalyManageContent() {
   const [customRangeEnd, setCustomRangeEnd] = useState(initialCustomEnd);
   const [customRangeErrorMessage, setCustomRangeErrorMessage] = useState<string | null>(null);
   const [trendPage, setTrendPage] = useState(1);
-  const [trendPageDraft, setTrendPageDraft] = useState('1');
-  const [isTrendPageEditing, setIsTrendPageEditing] = useState(false);
   const [trendPageData, setTrendPageData] = useState<AdminAnomalyTrendPageData>(emptyTrendPage);
   const [isTrendLoading, setIsTrendLoading] = useState(true);
   const [trendErrorMessage, setTrendErrorMessage] = useState<string | null>(null);
   const [trendErrorStatus, setTrendErrorStatus] = useState<number | null>(null);
   const [blockedUserPage, setBlockedUserPage] = useState(1);
-  const [blockedUserPageDraft, setBlockedUserPageDraft] = useState('1');
-  const [isBlockedUserPageEditing, setIsBlockedUserPageEditing] = useState(false);
   const [blockedUserPageData, setBlockedUserPageData] = useState<AdminBlockedUserPageData>(emptyBlockedUserPage);
   const [isBlockedUserLoading, setIsBlockedUserLoading] = useState(false);
   const [blockedUserErrorMessage, setBlockedUserErrorMessage] = useState<string | null>(null);
   const [blockedUserErrorStatus, setBlockedUserErrorStatus] = useState<number | null>(null);
   const [blockedIpPage, setBlockedIpPage] = useState(1);
-  const [blockedIpPageDraft, setBlockedIpPageDraft] = useState('1');
-  const [isBlockedIpPageEditing, setIsBlockedIpPageEditing] = useState(false);
   const [blockedIpPageData, setBlockedIpPageData] = useState<AdminBlockedIpPageData>(emptyBlockedIpPage);
   const [isBlockedIpLoading, setIsBlockedIpLoading] = useState(false);
   const [blockedIpErrorMessage, setBlockedIpErrorMessage] = useState<string | null>(null);
@@ -381,24 +275,6 @@ export function AnomalyManageContent() {
   }, [activeSection, blockedIpPage, blockedIpReloadSequence, blockedIpPageData.items.length]);
 
   useEffect(() => {
-    if (!isTrendPageEditing) {
-      setTrendPageDraft(String(trendPageData.currentPage));
-    }
-  }, [isTrendPageEditing, trendPageData.currentPage]);
-
-  useEffect(() => {
-    if (!isBlockedUserPageEditing) {
-      setBlockedUserPageDraft(String(blockedUserPageData.currentPage));
-    }
-  }, [isBlockedUserPageEditing, blockedUserPageData.currentPage]);
-
-  useEffect(() => {
-    if (!isBlockedIpPageEditing) {
-      setBlockedIpPageDraft(String(blockedIpPageData.currentPage));
-    }
-  }, [isBlockedIpPageEditing, blockedIpPageData.currentPage]);
-
-  useEffect(() => {
     if (trendPage > trendPageData.totalPages) {
       setTrendPage(trendPageData.totalPages);
     }
@@ -418,44 +294,9 @@ export function AnomalyManageContent() {
 
   useEffect(() => {
     setTrendPage(1);
-    setTrendPageDraft('1');
-    setIsTrendPageEditing(false);
   }, [activeRange, customRangeEnd, customRangeStart]);
 
   const blockedHandles = useMemo(() => new Set(blockedUserPageData.items.map((item) => item.handle)), [blockedUserPageData.items]);
-
-  function applyTrendPageJump() {
-    const parsedPage = Number.parseInt(trendPageDraft, 10);
-    const nextPage = Number.isNaN(parsedPage) ? trendPageData.currentPage : Math.min(trendPageData.totalPages, Math.max(1, parsedPage));
-
-    setTrendPageDraft(String(nextPage));
-    setIsTrendPageEditing(false);
-    if (nextPage !== trendPageData.currentPage) {
-      setTrendPage(nextPage);
-    }
-  }
-
-  function applyBlockedUserPageJump() {
-    const parsedPage = Number.parseInt(blockedUserPageDraft, 10);
-    const nextPage = Number.isNaN(parsedPage) ? blockedUserPageData.currentPage : Math.min(blockedUserPageData.totalPages, Math.max(1, parsedPage));
-
-    setBlockedUserPageDraft(String(nextPage));
-    setIsBlockedUserPageEditing(false);
-    if (nextPage !== blockedUserPageData.currentPage) {
-      setBlockedUserPage(nextPage);
-    }
-  }
-
-  function applyBlockedIpPageJump() {
-    const parsedPage = Number.parseInt(blockedIpPageDraft, 10);
-    const nextPage = Number.isNaN(parsedPage) ? blockedIpPageData.currentPage : Math.min(blockedIpPageData.totalPages, Math.max(1, parsedPage));
-
-    setBlockedIpPageDraft(String(nextPage));
-    setIsBlockedIpPageEditing(false);
-    if (nextPage !== blockedIpPageData.currentPage) {
-      setBlockedIpPage(nextPage);
-    }
-  }
 
   async function handleBlockUser(handle: string) {
     setActingKey(`block:${handle}`);
@@ -641,23 +482,14 @@ export function AnomalyManageContent() {
         <Pagination
           currentPage={trendPageData.currentPage}
           totalPages={trendPageData.totalPages}
-          draft={trendPageDraft}
-          isEditing={isTrendPageEditing}
-          navigationLabel={text('ANOMALY_TREND_PAGE_LABEL', '이상계정 추이 페이지')}
+          onPageChange={setTrendPage}
+          ariaLabel={text('ANOMALY_TREND_PAGE_LABEL', '이상계정 추이 페이지')}
           inputLabel={text('ANOMALY_TREND_PAGE_INPUT_LABEL', '이상계정 추이 페이지 번호')}
+          inputOpenLabel={text('ANOMALY_TREND_PAGE_INPUT_LABEL', '이상계정 추이 페이지 번호')}
           previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
           nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
-          onDraftChange={setTrendPageDraft}
-          onStartEditing={() => {
-            setTrendPageDraft(String(trendPageData.currentPage));
-            setIsTrendPageEditing(true);
-          }}
-          onCancelEditing={() => {
-            setTrendPageDraft(String(trendPageData.currentPage));
-            setIsTrendPageEditing(false);
-          }}
-          onApplyEditing={applyTrendPageJump}
-          onPageChange={setTrendPage}
+          className="problem-pagination submit-history-pagination"
+          hideWhenSinglePage
         />
       </>
     );
@@ -735,23 +567,14 @@ export function AnomalyManageContent() {
         <Pagination
           currentPage={blockedUserPageData.currentPage}
           totalPages={blockedUserPageData.totalPages}
-          draft={blockedUserPageDraft}
-          isEditing={isBlockedUserPageEditing}
-          navigationLabel={text('ANOMALY_BLOCKED_USERS_PAGE_LABEL', '차단 계정 목록 페이지')}
+          onPageChange={setBlockedUserPage}
+          ariaLabel={text('ANOMALY_BLOCKED_USERS_PAGE_LABEL', '차단 계정 목록 페이지')}
           inputLabel={text('ANOMALY_BLOCKED_USERS_PAGE_INPUT_LABEL', '차단 계정 목록 페이지 번호')}
+          inputOpenLabel={text('ANOMALY_BLOCKED_USERS_PAGE_INPUT_LABEL', '차단 계정 목록 페이지 번호')}
           previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
           nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
-          onDraftChange={setBlockedUserPageDraft}
-          onStartEditing={() => {
-            setBlockedUserPageDraft(String(blockedUserPageData.currentPage));
-            setIsBlockedUserPageEditing(true);
-          }}
-          onCancelEditing={() => {
-            setBlockedUserPageDraft(String(blockedUserPageData.currentPage));
-            setIsBlockedUserPageEditing(false);
-          }}
-          onApplyEditing={applyBlockedUserPageJump}
-          onPageChange={setBlockedUserPage}
+          className="problem-pagination submit-history-pagination"
+          hideWhenSinglePage
         />
       </>
     );
@@ -825,23 +648,14 @@ export function AnomalyManageContent() {
         <Pagination
           currentPage={blockedIpPageData.currentPage}
           totalPages={blockedIpPageData.totalPages}
-          draft={blockedIpPageDraft}
-          isEditing={isBlockedIpPageEditing}
-          navigationLabel={text('ANOMALY_BLOCKED_IPS_PAGE_LABEL', '차단 IP 목록 페이지')}
+          onPageChange={setBlockedIpPage}
+          ariaLabel={text('ANOMALY_BLOCKED_IPS_PAGE_LABEL', '차단 IP 목록 페이지')}
           inputLabel={text('ANOMALY_BLOCKED_IPS_PAGE_INPUT_LABEL', '차단 IP 목록 페이지 번호')}
+          inputOpenLabel={text('ANOMALY_BLOCKED_IPS_PAGE_INPUT_LABEL', '차단 IP 목록 페이지 번호')}
           previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
           nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
-          onDraftChange={setBlockedIpPageDraft}
-          onStartEditing={() => {
-            setBlockedIpPageDraft(String(blockedIpPageData.currentPage));
-            setIsBlockedIpPageEditing(true);
-          }}
-          onCancelEditing={() => {
-            setBlockedIpPageDraft(String(blockedIpPageData.currentPage));
-            setIsBlockedIpPageEditing(false);
-          }}
-          onApplyEditing={applyBlockedIpPageJump}
-          onPageChange={setBlockedIpPage}
+          className="problem-pagination submit-history-pagination"
+          hideWhenSinglePage
         />
       </>
     );

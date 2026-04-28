@@ -1,0 +1,9 @@
+:root {
+  --control-height-sm: 2rem;
+  --control-height-md: 2.38rem;
+  --data-row-line-height: 1.35;
+  --data-row-min-width: 0;
+  --z-dropdown: 50;
+  --z-modal: 80;
+  --z-header: 90;
+}

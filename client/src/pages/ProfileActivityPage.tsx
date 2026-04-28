@@ -17,6 +17,7 @@ import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigatio
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { openLoginOverlay } from '../lib/authOverlay';
 import { useMockSession } from '../lib/session';
+import { formatCompactBoardDate, formatInteger } from '../lib/formatters';
 import { useUiText } from '../lib/uiText';
 
 interface ProfileActivityPageProps {
@@ -25,19 +26,7 @@ interface ProfileActivityPageProps {
 
 type ActivityTab = 'posts' | 'comments' | 'likes';
 
-const numberFormatter = new Intl.NumberFormat('ko-KR');
 const communityActivityLoadingRows = Array.from({ length: 5 }, (_, index) => index);
-
-function formatBoardDate(value: string) {
-  const date = new Date(value);
-  const year = String(date.getFullYear()).slice(-2);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
 
 function readActiveTab(): ActivityTab {
   const tab = new URLSearchParams(window.location.search).get('tab');
@@ -154,7 +143,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
           {tabs.map((tab) => (
             <article key={tab.id} className="community-activity-summary-card">
               <p className="stat-label">{tab.label}</p>
-              <strong className="community-activity-summary-value">{numberFormatter.format(tab.count)}</strong>
+              <strong className="community-activity-summary-value">{formatInteger(tab.count)}</strong>
             </article>
           ))}
         </div>
@@ -170,7 +159,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
-              <span className="tab-meta">{numberFormatter.format(tab.count)}</span>
+              <span className="tab-meta">{formatInteger(tab.count)}</span>
             </button>
           ))}
         </div>
@@ -216,12 +205,12 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                 >
                   <div className="community-activity-item-head">
                     <strong>{post.title}</strong>
-                    <span>{formatBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                    <span>{formatCompactBoardDate(post.updatedAt ?? post.createdAt)}</span>
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
-                    <span>{text('PROFILE_ACTIVITY_LIKES_COUNT_LABEL', { count: numberFormatter.format(post.likeCount) }, `좋아요 ${numberFormatter.format(post.likeCount)}`)}</span>
-                    <span>{text('PROFILE_ACTIVITY_COMMENTS_COUNT_LABEL', { count: numberFormatter.format(post.commentCount) }, `댓글 ${numberFormatter.format(post.commentCount)}`)}</span>
+                    <span>{text('PROFILE_ACTIVITY_LIKES_COUNT_LABEL', { count: formatInteger(post.likeCount) }, `좋아요 ${formatInteger(post.likeCount)}`)}</span>
+                    <span>{text('PROFILE_ACTIVITY_COMMENTS_COUNT_LABEL', { count: formatInteger(post.commentCount) }, `댓글 ${formatInteger(post.commentCount)}`)}</span>
                   </div>
                 </button>
               ))}
@@ -243,7 +232,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                 >
                   <div className="community-activity-item-head">
                     <strong>{comment.postTitle}</strong>
-                    <span>{formatBoardDate(comment.createdAt)}</span>
+                    <span>{formatCompactBoardDate(comment.createdAt)}</span>
                   </div>
                   <p>{comment.content}</p>
                   <div className="community-activity-item-meta">
@@ -269,12 +258,12 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                 >
                   <div className="community-activity-item-head">
                     <strong>{post.title}</strong>
-                    <span>{formatBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                    <span>{formatCompactBoardDate(post.updatedAt ?? post.createdAt)}</span>
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
-                    <span>{text('PROFILE_ACTIVITY_LIKES_COUNT_LABEL', { count: numberFormatter.format(post.likeCount) }, `좋아요 ${numberFormatter.format(post.likeCount)}`)}</span>
-                    <span>{text('PROFILE_ACTIVITY_COMMENTS_COUNT_LABEL', { count: numberFormatter.format(post.commentCount) }, `댓글 ${numberFormatter.format(post.commentCount)}`)}</span>
+                    <span>{text('PROFILE_ACTIVITY_LIKES_COUNT_LABEL', { count: formatInteger(post.likeCount) }, `좋아요 ${formatInteger(post.likeCount)}`)}</span>
+                    <span>{text('PROFILE_ACTIVITY_COMMENTS_COUNT_LABEL', { count: formatInteger(post.commentCount) }, `댓글 ${formatInteger(post.commentCount)}`)}</span>
                   </div>
                 </button>
               ))}

@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { formatInteger, formatPreciseCost, formatRoundedPercent } from '../../lib/formatters';
 import { useMockSession } from '../../lib/session';
 import { getUiText, getUiTextValue, useUiText } from '../../lib/uiText';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '../../types/domain';
@@ -8,8 +9,6 @@ import './ProblemRuntimeChart.css';
 const TARGET_BUCKET_COUNT = 40;
 const MIN_VISUAL_BUCKET_COUNT = 12;
 const FLOATING_TOOLTIP_DELAY_MS = 250;
-const numberFormatter = new Intl.NumberFormat('ko-KR');
-const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
 
 type MarkerKey = 'fastest' | 'mine';
 type MarkerTone = 'fastest' | 'mine';
@@ -177,11 +176,11 @@ function roundToPrecision(value: number, precision = 6) {
 }
 
 function formatCostValue(value: number) {
-  return costFormatter.format(Math.round(value * 100) / 100);
+  return formatPreciseCost(value);
 }
 
 function formatPercent(value: number) {
-  return `${numberFormatter.format(Math.round(value * 10) / 10)}%`;
+  return formatRoundedPercent(value);
 }
 
 function formatBucketDisplayLabel(value: BucketFilterValue) {
@@ -853,7 +852,7 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
     [activeSamples, availableBucketFilters, selectedBucketFilters, selectedDbms]
   );
   const costMetricItems = [
-    { id: 'sample-count', label: text('RUNTIME_SAMPLE_COUNT_LABEL', '집계 수'), value: numberFormatter.format(filteredSamples.length) },
+    { id: 'sample-count', label: text('RUNTIME_SAMPLE_COUNT_LABEL', '집계 수'), value: formatInteger(filteredSamples.length) },
     { id: 'avg', label: text('RUNTIME_AVERAGE_COST_LABEL', '평균 Cost'), value: timeSummary ? formatCostValue(timeSummary.average) : '-' },
     { id: 'min', label: text('RUNTIME_MINIMUM_COST_LABEL', '최소 Cost'), value: timeSummary ? formatCostValue(timeSummary.min) : '-' },
     { id: 'median', label: text('RUNTIME_MEDIAN_COST_LABEL', 'Cost 중앙값'), value: timeSummary ? formatCostValue(timeSummary.median) : '-' },

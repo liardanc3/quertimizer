@@ -1,0 +1,24 @@
+.page {
+  min-width: 0;
+}
+
+.page-stack {
+  min-width: 0;
+}
+
+.page-toolbar,
+.tab-row,
+.search-field,
+.data-table,
+.data-row,
+.data-cell {
+  min-width: var(--data-row-min-width);
+}
+
+.tab-row,
+.search-field,
+.data-row,
+.data-cell,
+.sort-button {
+  align-items: center;
+}

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import HttpErrorState from '../components/common/HttpErrorState';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
+import useDismissableLayer from '../hooks/useDismissableLayer';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import {
   fetchAuthManage,
@@ -119,16 +121,21 @@ export function AuthManageContent() {
   const [reloadSequence, setReloadSequence] = useState(0);
   const [activeSection, setActiveSection] = useState<AuthManageSection>('admin');
   const [currentPage, setCurrentPage] = useState(1);
-  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
-  const [pageJumpDraft, setPageJumpDraft] = useState('1');
   const [openRoleMenuHandle, setOpenRoleMenuHandle] = useState<string | null>(null);
   const [permissionInputDrafts, setPermissionInputDrafts] = useState<Record<string, string>>({});
   const [permissionErrorMessages, setPermissionErrorMessages] = useState<Record<string, string>>({});
   const [savingRoleHandle, setSavingRoleHandle] = useState<string | null>(null);
   const [savingPermissionHandle, setSavingPermissionHandle] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const dismissLayerRefs = useMemo(() => [panelRef], []);
   const roleOptions = ROLE_VALUES.map((value) => ({ value, label: resolveRoleLabel(value) }));
   const sections = roleOptions.map((option) => ({ id: option.value as AuthManageSection, label: option.label }));
+
+  useDismissableLayer({
+    enabled: openRoleMenuHandle != null,
+    refs: dismissLayerRefs,
+    onDismiss: () => setOpenRoleMenuHandle(null),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -148,8 +155,6 @@ export function AuthManageContent() {
         setPermissionInputDrafts({});
         setPermissionErrorMessages({});
         setCurrentPage(1);
-        setIsPageJumpEditing(false);
-        setPageJumpDraft('1');
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
@@ -170,32 +175,6 @@ export function AuthManageContent() {
     };
   }, [reloadSequence]);
 
-  useEffect(() => {
-    function handleDocumentMouseDown(event: MouseEvent) {
-      if (!(event.target instanceof Node)) {
-        return;
-      }
-
-      if (!panelRef.current?.contains(event.target)) {
-        setOpenRoleMenuHandle(null);
-      }
-    }
-
-    function handleEscape(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpenRoleMenuHandle(null);
-      }
-    }
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentMouseDown);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, []);
-
   const users = useMemo(() => authManage?.users ?? [], [authManage]);
   const filteredUsers = useMemo(
     () => users.filter((user) => user.role === activeSection),
@@ -215,8 +194,6 @@ export function AuthManageContent() {
 
   useEffect(() => {
     setCurrentPage(1);
-    setIsPageJumpEditing(false);
-    setPageJumpDraft('1');
   }, [activeSection]);
 
   async function handleRoleChange(user: AuthManageUserRowData, nextRole: AuthManageRoleValue) {
@@ -282,17 +259,6 @@ export function AuthManageContent() {
       event.preventDefault();
       void handlePermissionAdd(user);
     }
-  }
-
-  function applyPageJump() {
-    const parsedPage = Number.parseInt(pageJumpDraft, 10);
-    setCurrentPage(Number.isNaN(parsedPage) ? currentPage : Math.min(Math.max(parsedPage, 1), totalPages));
-    setIsPageJumpEditing(false);
-  }
-
-  function cancelPageJump() {
-    setPageJumpDraft(String(currentPage));
-    setIsPageJumpEditing(false);
   }
 
   return (
@@ -440,62 +406,17 @@ export function AuthManageContent() {
             </div>
 
             {!isLoading && filteredUsers.length > 0 ? (
-              <div className="problem-pagination submit-history-pagination" role="navigation" aria-label={text('AUTH_MANAGE_PAGE_LABEL', '권한 설정 페이지')}>
-                <button
-                  type="button"
-                  className="mini-toggle problem-page-button"
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  disabled={currentPage === 1}
-                >
-                  {text('COMMON_PREVIOUS_BUTTON', '이전')}
-                </button>
-
-                {isPageJumpEditing ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="problem-pagination-meta-input"
-                    aria-label={text('AUTH_MANAGE_PAGE_INPUT_LABEL', '이동할 권한 설정 페이지 입력')}
-                    value={pageJumpDraft}
-                    onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D+/g, ''))}
-                    onBlur={applyPageJump}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        applyPageJump();
-                        return;
-                      }
-
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        cancelPageJump();
-                      }
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="problem-pagination-meta problem-pagination-meta-button"
-                    aria-label={text('AUTH_MANAGE_PAGE_INPUT_OPEN_LABEL', '이동할 권한 설정 페이지 입력 열기')}
-                    onClick={() => {
-                      setPageJumpDraft(String(currentPage));
-                      setIsPageJumpEditing(true);
-                    }}
-                  >
-                    {`${currentPage} / ${totalPages}`}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="mini-toggle problem-page-button"
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                  disabled={currentPage >= totalPages}
-                >
-                  {text('COMMON_NEXT_BUTTON', '다음')}
-                </button>
-              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                ariaLabel={text('AUTH_MANAGE_PAGE_LABEL', '권한 설정 페이지')}
+                inputLabel={text('AUTH_MANAGE_PAGE_INPUT_LABEL', '이동할 권한 설정 페이지 입력')}
+                inputOpenLabel={text('AUTH_MANAGE_PAGE_INPUT_OPEN_LABEL', '이동할 권한 설정 페이지 입력 열기')}
+                previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+                nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+                className="problem-pagination submit-history-pagination"
+              />
             ) : null}
           </div>
         </div>

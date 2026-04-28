@@ -16,17 +16,11 @@ import {
   getProfilePath,
   navigate,
 } from '../lib/navigation';
+import { formatCompactInteger, formatRoundedPercent } from '../lib/formatters';
 import { getUiTextValue, useHomeSiteTitle, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './DashboardPage.css';
 
-const compactNumberFormatter = new Intl.NumberFormat('ko-KR', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
-const percentFormatter = new Intl.NumberFormat('ko-KR', {
-  maximumFractionDigits: 1,
-});
 const COMMUNITY_FEATURED_PAGE_SIZE = 4;
 const COMMUNITY_GRID_PAGE_SIZE = 9;
 const PROBLEM_PAGE_SIZE = 6;
@@ -46,7 +40,7 @@ function formatDbmsLabel(dbms: DbmsType) {
 }
 
 function formatCount(value: number) {
-  return compactNumberFormatter.format(value);
+  return formatCompactInteger(value);
 }
 
 function getCategoryLabel(category: string) {
@@ -221,7 +215,7 @@ function ProblemMeta({ problem }: { problem: DashboardProblemRecommendation }) {
       </span>
       <span className="dashboard-problem-metric">
         <span>{text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}</span>
-        <strong>{`${percentFormatter.format(problem.spreadRate)}%`}</strong>
+        <strong>{formatRoundedPercent(problem.spreadRate)}</strong>
       </span>
     </div>
   );

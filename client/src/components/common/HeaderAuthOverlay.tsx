@@ -15,12 +15,20 @@ import {
   verifySignupVerificationCode,
 } from '../../lib/authApi';
 import { completeAuthentication } from '../../lib/authSession';
-import { getUiTextValue, useUiText } from '../../lib/uiText';
+import {
+  EMAIL_PATTERN,
+  PASSWORD_RESET_CODE_PATTERN,
+  getAuthSocialLoginErrorMessage,
+  hasRequiredPasswordFormat,
+  sanitizeVerificationCode,
+  type AuthSocialProvider,
+} from '../../lib/authUi';
+import { useUiText } from '../../lib/uiText';
 import logoImage from '../../assets/logo.png';
 import './HeaderAuthOverlay.css';
 
 type HeaderAuthOverlayMode = 'login' | 'signup' | 'reset-password';
-type HeaderAuthSocialProvider = 'google' | 'github' | 'kakao';
+type HeaderAuthSocialProvider = AuthSocialProvider;
 type SignupEmailCheckStatus = 'idle' | 'checking' | 'available' | 'duplicated';
 
 interface HeaderAuthOverlayProps {
@@ -30,30 +38,6 @@ interface HeaderAuthOverlayProps {
   disableBackdropBlur?: boolean;
   hideModalBorder?: boolean;
   hideCloseButton?: boolean;
-}
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_RESET_CODE_PATTERN = /^[A-Z0-9]{6}$/;
-
-function hasRequiredPasswordFormat(value: string) {
-  return value.length >= 8 && /[^A-Za-z0-9]/.test(value);
-}
-
-function sanitizeVerificationCode(value: string) {
-  return value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
-}
-
-function getHeaderAuthSocialLoginErrorMessage(provider: string | null) {
-  switch (provider?.toLowerCase()) {
-    case 'google':
-      return getUiTextValue('AUTH_GOOGLE_LOGIN_FAIL_MESSAGE', 'Google 로그인에 실패했습니다.');
-    case 'github':
-      return getUiTextValue('AUTH_GITHUB_LOGIN_FAIL_MESSAGE', 'Github 로그인에 실패했습니다.');
-    case 'kakao':
-      return getUiTextValue('AUTH_KAKAO_LOGIN_FAIL_MESSAGE', 'Kakao 로그인에 실패했습니다.');
-    default:
-      return getUiTextValue('AUTH_SOCIAL_LOGIN_FAIL_MESSAGE', '소셜 로그인에 실패했습니다.');
-  }
 }
 
 function CloseIcon() {
@@ -318,7 +302,7 @@ export default function HeaderAuthOverlay({
         if (message.type === 'quertimizer-social-login-error') {
           popup.close();
           stopPolling();
-          setLoginErrors([getHeaderAuthSocialLoginErrorMessage(message.provider ?? null)]);
+          setLoginErrors([getAuthSocialLoginErrorMessage(message.provider ?? null)]);
           return;
         }
 
@@ -364,7 +348,7 @@ export default function HeaderAuthOverlay({
             if (socialLoginError != null) {
               popup.close();
               stopPolling();
-              setLoginErrors([getHeaderAuthSocialLoginErrorMessage(socialLoginError)]);
+              setLoginErrors([getAuthSocialLoginErrorMessage(socialLoginError)]);
               return;
             }
           }

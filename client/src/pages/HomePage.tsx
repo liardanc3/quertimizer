@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import HandleSetupGate from '../components/home/HandleSetupGate';
-import HttpErrorState from '../components/common/HttpErrorState';
+import PageErrorState from '../components/common/PageErrorState';
+import Pagination from '../components/common/Pagination';
+import { PageToolbar, SearchForm, SegmentedTabs } from '../components/common/PageToolbar';
 import ProblemList from '../components/home/ProblemList';
-import PageLoadFailureState from '../components/common/PageLoadFailureState';
-import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
+import { replaceQueryState, useLocationSearch } from '../hooks/useLocationState';
+import useRequestState from '../hooks/useRequestState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
-import { getLocationSearchSnapshot, PROBLEMS_PATH, subscribeLocation } from '../lib/navigation';
+import { PROBLEMS_PATH } from '../lib/navigation';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
 import { useMockSession } from '../lib/session';
 import { useHomeSiteTitle, useUiText } from '../lib/uiText';
@@ -121,7 +123,7 @@ export default function HomePage() {
   useHomeSiteTitle();
   const { text } = useUiText();
   const { isAuthenticated, isReady, handle } = useMockSession();
-  const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
+  const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<HomePageFavoriteSnapshot>('home'), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search));
   const [showSolved, setShowSolved] = useState(() => favoriteRestoreSnapshot?.showSolved ?? true);
@@ -132,13 +134,15 @@ export default function HomePage() {
   const [draftSearchValue, setDraftSearchValue] = useState(() => favoriteRestoreSnapshot?.draftSearchValue ?? '');
   const [searchQuery, setSearchQuery] = useState(() => favoriteRestoreSnapshot?.searchQuery ?? '');
   const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
-  const [isPageJumpEditing, setIsPageJumpEditing] = useState(false);
-  const [pageJumpDraft, setPageJumpDraft] = useState('1');
-  const [problemPage, setProblemPage] = useState<ProblemPage>(createEmptyProblemPage());
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
-  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
+  const {
+    data: problemPage,
+    setData: setProblemPage,
+    isLoading,
+    setIsLoading,
+    error: loadError,
+    beginRequest,
+    failRequest,
+  } = useRequestState<ProblemPage>(createEmptyProblemPage);
   const [selectedSpreadRateRange, setSelectedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.selectedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
   const [committedSpreadRateRange, setCommittedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.committedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
 
@@ -168,14 +172,6 @@ export default function HomePage() {
   }, [spreadRateSliderBounds]);
 
   useEffect(() => {
-    if (isPageJumpEditing) {
-      return;
-    }
-
-    setPageJumpDraft(String(problemPage.currentPage));
-  }, [isPageJumpEditing, problemPage.currentPage]);
-
-  useEffect(() => {
     const nextDbms = readProblemsDbmsFromSearch(locationSearch);
 
     setSelectedDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
@@ -183,21 +179,14 @@ export default function HomePage() {
 
   useEffect(() => {
     const nextPath = buildProblemsPath(selectedDbms);
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-
-    if (currentPath !== nextPath) {
-      window.history.replaceState(window.history.state ?? {}, '', nextPath);
-    }
+    replaceQueryState(nextPath);
   }, [selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadProblems() {
-      setIsLoading(true);
-      setLoadFailed(false);
-      setLoadErrorMessage(null);
-      setLoadErrorStatus(null);
+      beginRequest();
 
       try {
         const fetchedProblemPage = await fetchProblems({
@@ -226,10 +215,7 @@ export default function HomePage() {
           return;
         }
 
-        setLoadFailed(true);
-        setLoadErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
-        const status = getApiErrorStatus(error);
-        setLoadErrorStatus(isCommonHttpErrorStatus(status) ? status : null);
+        failRequest(error, text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -320,25 +306,6 @@ export default function HomePage() {
     });
   }
 
-  function applyPageJump() {
-    const parsedPage = Number.parseInt(pageJumpDraft, 10);
-    const nextPage = Number.isNaN(parsedPage)
-      ? problemPage.currentPage
-      : Math.min(problemPage.totalPages, Math.max(1, parsedPage));
-
-    setPageJumpDraft(String(nextPage));
-    setIsPageJumpEditing(false);
-
-    if (nextPage !== problemPage.currentPage) {
-      requestProblemPage(nextPage);
-    }
-  }
-
-  function cancelPageJump() {
-    setPageJumpDraft(String(problemPage.currentPage));
-    setIsPageJumpEditing(false);
-  }
-
   function requestProblemPage(nextPage: number) {
     const normalizedPage = Math.min(problemPage.totalPages, Math.max(1, nextPage));
 
@@ -351,95 +318,71 @@ export default function HomePage() {
   }
 
   return (
-    <div className="page-stack home-page">
+    <div className="page page-stack home-page">
       <section className="panel-card compact problem-toolbar-card">
-        <div className="problem-toolbar home-problem-toolbar-stack">
-          <div className="solve-dbms-tab-row home-problem-dbms-tab-row" role="tablist" aria-label={text('HOME_DBMS_TABLIST_LABEL', '문제 목록 DBMS 선택')}>
-            {dbmsOptions.map((dbmsOption) => {
-              const isSelected = dbmsOption === selectedDbms;
-              const dbmsLabel = dbmsOption === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL');
-
-              return (
-                <button
-                  key={dbmsOption}
-                  type="button"
-                  className={`solve-dbms-tab ${isSelected ? 'is-selected' : ''}`}
-                  role="tab"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    if (!isSelected) {
-                      setSelectedDbms(dbmsOption);
-                      setRequestedPage(1);
-                    }
-                  }}
-                >
-                  {dbmsLabel}
-                </button>
-              );
-            })}
-            <FavoriteTabButton
-              className="favorite-tab-toggle-end"
-              label={text(
-                'HOME_FAVORITE_LABEL',
-                { dbms: selectedDbms === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
-                '문제 / {dbms}',
-              )}
-              path={buildProblemsPath(selectedDbms)}
-              snapshot={{
-                kind: 'home',
-                payload: {
-                  selectedDbms,
-                  showSolved,
-                  showUnsolved,
-                  countSortField,
-                  countSortDirection,
-                  spreadRateSortOrder,
-                  draftSearchValue,
-                  searchQuery,
-                  requestedPage,
-                  selectedSpreadRateRange,
-                  committedSpreadRateRange,
-                },
-              }}
-            />
-          </div>
-
-          <form
-            className="problem-search-form home-problem-search-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              applySearch(draftSearchValue);
+        <PageToolbar className="problem-toolbar home-problem-toolbar-stack">
+          <SegmentedTabs
+            className="solve-dbms-tab-row home-problem-dbms-tab-row"
+            label={text('HOME_DBMS_TABLIST_LABEL', '문제 목록 DBMS 선택')}
+            tabs={dbmsOptions.map((dbmsOption) => ({
+              value: dbmsOption,
+              label: dbmsOption === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL'),
+            }))}
+            selectedValue={selectedDbms}
+            onSelect={(dbmsOption) => {
+              setSelectedDbms(dbmsOption);
+              setRequestedPage(1);
             }}
-          >
-            <label className="problem-search-field home-problem-search-field">
-              <span className="problem-search-icon" aria-hidden="true">
-                ⌕
-              </span>
-              <input
-                type="search"
-                value={draftSearchValue}
-                onChange={(event) => setDraftSearchValue(event.target.value)}
-                className="text-field problem-search-input home-problem-search-input"
-                placeholder={text('HOME_PROBLEM_SEARCH_PLACEHOLDER', '문제 번호, 제목 검색')}
-                aria-label={text('HOME_PROBLEM_SEARCH_LABEL', '문제 검색')}
+            actions={
+              <FavoriteTabButton
+                className="favorite-tab-toggle-end"
+                label={text(
+                  'HOME_FAVORITE_LABEL',
+                  { dbms: selectedDbms === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                  '문제 / {dbms}',
+                )}
+                path={buildProblemsPath(selectedDbms)}
+                snapshot={{
+                  kind: 'home',
+                  payload: {
+                    selectedDbms,
+                    showSolved,
+                    showUnsolved,
+                    countSortField,
+                    countSortDirection,
+                    spreadRateSortOrder,
+                    draftSearchValue,
+                    searchQuery,
+                    requestedPage,
+                    selectedSpreadRateRange,
+                    committedSpreadRateRange,
+                  },
+                }}
               />
+            }
+          />
 
-              <button
-                type="submit"
-                className="btn secondary problem-search-button home-problem-search-button"
-                aria-label={text('COMMON_SEARCH_BUTTON', '검색')}
-              >
-                {text('COMMON_SEARCH_BUTTON', '검색')}
-              </button>
-            </label>
-          </form>
-        </div>
+          <SearchForm
+            className="problem-search-form home-problem-search-form"
+            fieldClassName="problem-search-field home-problem-search-field"
+            inputClassName="problem-search-input home-problem-search-input"
+            buttonClassName="btn secondary problem-search-button home-problem-search-button"
+            value={draftSearchValue}
+            onChange={setDraftSearchValue}
+            onSubmit={() => applySearch(draftSearchValue)}
+            placeholder={text('HOME_PROBLEM_SEARCH_PLACEHOLDER', '문제 번호, 제목 검색')}
+            label={text('HOME_PROBLEM_SEARCH_LABEL', '문제 검색')}
+            submitLabel={text('COMMON_SEARCH_BUTTON', '검색')}
+            buttonLabel={text('COMMON_SEARCH_BUTTON', '검색')}
+            withIcon
+          />
+        </PageToolbar>
       </section>
 
-      <section className="panel-card problem-board">
-        {loadFailed ? (
+      <section className="panel-card problem-board data-board">
+        {loadError.failed ? (
           <section className="problem-list is-empty">
-            {loadErrorStatus != null ? <HttpErrorState status={loadErrorStatus} message={loadErrorMessage} /> : <PageLoadFailureState message={loadErrorMessage} />}
+            <PageErrorState status={loadError.status} message={loadError.message} />
           </section>
         ) : (
           <ProblemList
@@ -473,81 +416,19 @@ export default function HomePage() {
           />
         )}
 
-        {!loadFailed && problemPage.totalCount > 0 ? (
-          <div className="problem-pagination" role="navigation" aria-label={text('HOME_PAGE_NAV_LABEL', '문제 페이지')}>
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => requestProblemPage(problemPage.currentPage - 1)}
-              disabled={problemPage.currentPage === 1}
-            >
-              {text('COMMON_PREVIOUS_BUTTON', '이전')}
-            </button>
-
-            {isPageJumpEditing ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                className="problem-pagination-meta-input"
-                aria-label={text('HOME_PAGE_INPUT_LABEL', '이동할 페이지 입력')}
-                value={pageJumpDraft}
-                onChange={(event) => {
-                  const nextValue = event.target.value.replace(/\D+/g, '');
-                  setPageJumpDraft(nextValue);
-                }}
-                onBlur={applyPageJump}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyPageJump();
-                    return;
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelPageJump();
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                className="problem-pagination-meta problem-pagination-meta-button"
-                aria-label={text('HOME_PAGE_INPUT_OPEN_LABEL', '이동할 페이지 입력 열기')}
-                onClick={() => {
-                  setPageJumpDraft(String(problemPage.currentPage));
-                  setIsPageJumpEditing(true);
-                }}
-              >
-                {`${problemPage.currentPage} / ${problemPage.totalPages}`}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="mini-toggle problem-page-button"
-              onClick={() => requestProblemPage(problemPage.currentPage + 1)}
-              disabled={problemPage.currentPage === problemPage.totalPages}
-            >
-              {text('COMMON_NEXT_BUTTON', '다음')}
-            </button>
-          </div>
+        {!loadError.failed && problemPage.totalCount > 0 ? (
+          <Pagination
+            currentPage={problemPage.currentPage}
+            totalPages={problemPage.totalPages}
+            onPageChange={requestProblemPage}
+            ariaLabel={text('HOME_PAGE_NAV_LABEL', '문제 페이지')}
+            inputLabel={text('HOME_PAGE_INPUT_LABEL', '이동할 페이지 입력')}
+            inputOpenLabel={text('HOME_PAGE_INPUT_OPEN_LABEL', '이동할 페이지 입력 열기')}
+            previousLabel={text('COMMON_PREVIOUS_BUTTON', '이전')}
+            nextLabel={text('COMMON_NEXT_BUTTON', '다음')}
+          />
         ) : null}
       </section>
-
-      <div hidden>
-        <section className="panel-card disabled-panel">
-          <div className="panel-heading-row responsive">
-            <div>
-              <p className="panel-meta">{text('HOME_NOSQL_META', '준비 중인 영역')}</p>
-              <h2 className="panel-title">{text('HOME_NOSQL_TITLE', 'NoSQL 트랙')}</h2>
-            </div>
-            <span className="section-badge is-disabled">{text('HOME_NOSQL_BADGE', 'Coming Soon')}</span>
-          </div>
-          <p className="content-text">{text('HOME_NOSQL_DESC', '문서형 데이터 모델, 샤딩 구조, NoSQL 전용 성능 문제 세트는 다음 단계에서 공개될 예정입니다.')}</p>
-        </section>
-      </div>
 
       <HandleSetupGate />
     </div>
