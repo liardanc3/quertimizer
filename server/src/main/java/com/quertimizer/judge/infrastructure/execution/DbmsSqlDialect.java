@@ -13,4 +13,18 @@ public interface DbmsSqlDialect {
     List<String> useSchemaSqls(String schemaName);
 
     String dropSchemaIfExistsSql(String schemaName);
+
+    List<String> statementTimeoutSqls(int timeoutSeconds);
+
+    String validateSelectSql(String statementName, String sql);
+
+    String cleanupValidatedSelectSql(String statementName);
+
+    String explainSql(String sql);
+
+    String explainAnalyzeSql(String sql);
+
+    String selectCountSql(String sql);
+
+    String selectPageSql(String sql);
 }

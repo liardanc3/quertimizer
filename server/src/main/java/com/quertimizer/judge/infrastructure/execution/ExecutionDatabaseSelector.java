@@ -4,5 +4,5 @@ import java.util.List;
 
 public interface ExecutionDatabaseSelector {
 
-    int selectStartIndex(List<ExecutionDatabasePool.ExecutionDatabaseWorker> workers);
+    int selectStartIndex(List<JudgeDatabaseNode> workers);
 }

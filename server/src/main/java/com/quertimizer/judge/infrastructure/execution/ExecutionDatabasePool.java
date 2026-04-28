@@ -1,53 +1,19 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.judge.infrastructure.config.JudgeDatabaseProperties;
-import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
 @Component
+@RequiredArgsConstructor
 public class ExecutionDatabasePool {
 
-    private final Map<DbmsType, List<ExecutionDatabaseWorker>> workersByDbms = new EnumMap<>(DbmsType.class);
+    private final JudgeDatabaseCluster judgeDatabaseCluster;
 
-    public ExecutionDatabasePool(JudgeDatabaseProperties judgeDatabaseProperties) {
-        for (DbmsType dbmsType : DbmsType.values()) {
-            workersByDbms.put(dbmsType, judgeDatabaseProperties.getExecutionDatabases(dbmsType).stream()
-                    .map(properties -> new ExecutionDatabaseWorker(new ExecutionDatabaseConnectionInfo(
-                            dbmsType,
-                            properties.getName(),
-                            properties.getUrl(),
-                            properties.getUsername(),
-                            properties.getPassword()
-                    )))
-                    .toList());
-        }
-    }
-
-    public List<ExecutionDatabaseWorker> getWorkers(DbmsType dbmsType) {
-        // DBMS 유형별 execution worker 목록을 조회
-        return workersByDbms.getOrDefault(dbmsType, List.of());
-    }
-
-    @Getter
-    public static final class ExecutionDatabaseWorker {
-        private final ExecutionDatabaseConnectionInfo connectionInfo;
-        private boolean busy;
-
-        private ExecutionDatabaseWorker(ExecutionDatabaseConnectionInfo connectionInfo) {
-            this.connectionInfo = connectionInfo;
-        }
-
-        void markBusy() {
-            busy = true;
-        }
-
-        void release() {
-            busy = false;
-        }
+    public List<JudgeDatabaseNode> getWorkers(DbmsType dbmsType) {
+        // DBMS 유형별 judge DB node 목록을 조회
+        return judgeDatabaseCluster.getReadyNodes(dbmsType);
     }
 }

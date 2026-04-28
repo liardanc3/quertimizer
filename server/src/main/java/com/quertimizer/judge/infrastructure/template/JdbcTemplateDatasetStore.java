@@ -3,35 +3,61 @@ package com.quertimizer.judge.infrastructure.template;
 import com.quertimizer.judge.application.input.RefreshTemplateDatasetInput;
 import com.quertimizer.judge.application.port.JudgeTemplateDatasetPort;
 import com.quertimizer.judge.domain.service.JudgeSqlStatementParser;
-import com.quertimizer.judge.infrastructure.config.JudgeDatabaseProperties;
 import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialect;
 import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
+import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseCluster;
+import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseLease;
+import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.Statement;
+import java.util.List;
+import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
 public class JdbcTemplateDatasetStore implements JudgeTemplateDatasetPort {
 
-    private final JudgeDatabaseProperties judgeDatabaseProperties;
+    private final JudgeDatabaseCluster judgeDatabaseCluster;
     private final JudgeSqlStatementParser judgeSqlStatementParser;
     private final DbmsSqlDialects dbmsSqlDialects;
 
     @Override
     public void refreshTemplateDataset(RefreshTemplateDatasetInput input) {
-        // DBMS별 template schema를 canonical DDL + actualDataSql 기준으로 재생성
-        JudgeDatabaseProperties.NamedDatabaseProperties properties = judgeDatabaseProperties.getTemplateDatabase(input.dbmsType());
-        if (properties == null || isBlank(properties.getUrl()) || isBlank(properties.getUsername())) {
-            throw new IllegalStateException("%s template DB 설정이 없다.".formatted(input.dbmsType().getValue()));
+        // DBMS별 judge DB node 안의 template cache schema를 canonical SQL 기준으로 재생성
+        List<JudgeDatabaseNode> nodes = judgeDatabaseCluster.getReadyNodes(input.dbmsType());
+        if (nodes.isEmpty()) {
+            throw new IllegalStateException("%s judge DB node 설정이 0개다.".formatted(input.dbmsType().getValue()));
         }
 
-        String schemaName = resolveTemplateSchemaName(input.problemSetId());
+        String schemaName = resolveTemplateSchemaName(input.problemSetId(), input.templateVersion());
+        for (JudgeDatabaseNode node : nodes) {
+            refreshTemplateDatasetOnNode(input, node, schemaName);
+        }
+    }
+
+    public String resolveTemplateSchemaName(String problemSetId) {
+        // template schema 명명 규칙을 일관되게 유지
+        return resolveTemplateSchemaName(problemSetId, "latest");
+    }
+
+    public String resolveTemplateSchemaName(String problemSetId, String templateVersion) {
+        // template schema 명명 규칙을 일관되게 유지
+        String normalizedProblemSetId = normalizeSchemaToken(problemSetId);
+        String normalizedTemplateVersion = normalizeSchemaToken(templateVersion);
+        String shortVersion = normalizedTemplateVersion.length() > 16
+                ? normalizedTemplateVersion.substring(0, 16)
+                : normalizedTemplateVersion;
+
+        return "qt_template_" + normalizedProblemSetId + "_" + shortVersion;
+    }
+
+    private void refreshTemplateDatasetOnNode(RefreshTemplateDatasetInput input, JudgeDatabaseNode node, String schemaName) {
         DbmsSqlDialect dialect = dbmsSqlDialects.get(input.dbmsType());
-        try (Connection connection = DriverManager.getConnection(properties.getUrl(), properties.getUsername(), properties.getPassword())) {
+        try (JudgeDatabaseLease lease = judgeDatabaseCluster.acquireNode(node.getId());
+             Connection connection = lease.openConnection()) {
             connection.setAutoCommit(false);
 
             try (Statement statement = connection.createStatement()) {
@@ -50,11 +76,6 @@ public class JdbcTemplateDatasetStore implements JudgeTemplateDatasetPort {
         }
     }
 
-    public String resolveTemplateSchemaName(String problemSetId) {
-        // template schema 명명 규칙을 일관되게 유지
-        return "judge_template_" + problemSetId.toLowerCase();
-    }
-
     private void executeStatements(Connection connection, String sql) throws Exception {
         for (String statementSql : judgeSqlStatementParser.splitStatements(sql)) {
             try (Statement statement = connection.createStatement()) {
@@ -63,7 +84,12 @@ public class JdbcTemplateDatasetStore implements JudgeTemplateDatasetPort {
         }
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+    private String normalizeSchemaToken(String value) {
+        // schema 이름에 사용할 token을 정규화
+        String normalizedValue = value != null
+                ? value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_")
+                : "";
+
+        return !normalizedValue.isBlank() ? normalizedValue : "unknown";
     }
 }

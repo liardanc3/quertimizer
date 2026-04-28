@@ -1,8 +1,11 @@
 package com.quertimizer.judge.application.service;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.judge.domain.service.JudgeAnswerHashSupport;
+import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialect;
+import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistoryId;
@@ -15,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -71,11 +73,13 @@ public class JudgeQueryService {
             Pattern.compile("\\bWITH\\b[\\s\\S]*\\b(INSERT|UPDATE|DELETE|MERGE)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PLAN_TOTAL_COST_PATTERN =
             Pattern.compile("cost=[0-9]+(?:\\.[0-9]+)?\\.\\.([0-9]+(?:\\.[0-9]+)?)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MYSQL_QUERY_COST_PATTERN =
+            Pattern.compile("\"query_cost\"\\s*:\\s*\"?([0-9]+(?:\\.[0-9]+)?)\"?", Pattern.CASE_INSENSITIVE);
     private static final Pattern PLAN_EXECUTION_TIME_PATTERN =
             Pattern.compile("Execution Time:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*ms", Pattern.CASE_INSENSITIVE);
 
-    private final DataSource dataSource;
     private final JudgeWorkspaceService judgeWorkspaceService;
+    private final DbmsSqlDialects dbmsSqlDialects;
     private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
     private final ProblemRepository problemRepository;
@@ -89,22 +93,18 @@ public class JudgeQueryService {
                                                       DbmsType dbmsType,
                                                       Integer page,
                                                       Integer pageSize) {
-        if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(INTERACTIVE_DBMS_UNSUPPORTED.getMessage());
-        }
-
         String trimmedSql = trimTrailingSemicolon(sql);
         validateSql(trimmedSql, handle);
         ExecutionMode executionMode = resolveExecutionMode(trimmedSql);
-        JudgeWorkspaceService.WorkspaceHandle workspaceHandle =
-                judgeWorkspaceService.prepareWorkspace(handle, problemId, socketId);
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (JudgeWorkspaceService.WorkspaceSession workspaceSession =
+                     judgeWorkspaceService.openWorkspace(handle, problemId, socketId, dbmsType)) {
+            Connection connection = workspaceSession.connection();
             connection.setAutoCommit(false);
-            configureExecutionConnection(connection, workspaceHandle.schemaName());
+            configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
             Double estimatedCost = executionMode == ExecutionMode.SELECT
-                    ? estimateQueryCost(socketId, connection, trimmedSql)
+                    ? estimateQueryCost(socketId, connection, dbmsType, trimmedSql)
                     : null;
             int normalizedPage = normalizeExecutionPage(page);
             int normalizedPageSize = normalizeExecutionPageSize(pageSize);
@@ -113,6 +113,7 @@ public class JudgeQueryService {
                 case SELECT -> executeSelectPage(
                         socketId,
                         connection,
+                        dbmsType,
                         trimmedSql,
                         problemId,
                         estimatedCost,
@@ -291,12 +292,12 @@ public class JudgeQueryService {
                         dbmsType,
                         progressListener
                 );
-                planAnalysisResult = analyzePostgreSqlPlan(explainAnalyzeResult.planLines(), submittedExecutionContext.referenceSql());
+                planAnalysisResult = analyzePlan(dbmsType, explainAnalyzeResult.planLines(), submittedExecutionContext.referenceSql());
                 progressListener.accept(ProblemSubmitProgress.success(
                         submittedProblemId,
                         PLAN.getKey(),
                         PLAN_SUCCESS.getText(),
-                        buildPlanProgressDetailLines(explainAnalyzeResult, planAnalysisResult)
+                        buildPlanProgressDetailLines(dbmsType, explainAnalyzeResult, planAnalysisResult)
                 ));
             } catch (Exception exception) {
                 String message = resolveProblemSubmitErrorMessage(exception);
@@ -467,25 +468,31 @@ public class JudgeQueryService {
         }
     }
 
-    private void configureExecutionConnection(Connection connection, String schemaName) throws SQLException {
+    private void configureExecutionConnection(Connection connection, DbmsType dbmsType, String schemaName) throws SQLException {
         // 실행용 세션 설정 적용
+        DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
         try (Statement statement = connection.createStatement()) {
-            statement.execute("SET LOCAL search_path TO " + quoteIdentifier(schemaName) + ", public");
-            statement.execute("SET LOCAL statement_timeout TO '" + QUERY_TIMEOUT_SECONDS + "s'");
+            for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {
+                statement.execute(useSchemaSql);
+            }
+            for (String timeoutSql : dialect.statementTimeoutSqls(QUERY_TIMEOUT_SECONDS)) {
+                statement.execute(timeoutSql);
+            }
         }
     }
 
     private QueryExecutionResult executeSelectPage(String socketId,
                                                    Connection connection,
+                                                   DbmsType dbmsType,
                                                    String sql,
                                                    String problemId,
                                                    Double cost,
                                                    int page,
                                                    int pageSize) throws SQLException {
-        long rowCount = fetchSelectRowCount(socketId, connection, sql);
+        long rowCount = fetchSelectRowCount(socketId, connection, dbmsType, sql);
         int totalPages = Math.max(1, (int) Math.ceil((double) rowCount / pageSize));
         int normalizedPage = Math.min(page, totalPages);
-        SelectPageResult selectPageResult = fetchSelectPage(socketId, connection, sql, normalizedPage, pageSize);
+        SelectPageResult selectPageResult = fetchSelectPage(socketId, connection, dbmsType, sql, normalizedPage, pageSize);
 
         return QueryExecutionResult.selectWithCost(
                 problemId,
@@ -538,12 +545,12 @@ public class JudgeQueryService {
         }
     }
 
-    private long fetchSelectRowCount(String socketId, Connection connection, String sql) throws SQLException {
+    private long fetchSelectRowCount(String socketId, Connection connection, DbmsType dbmsType, String sql) throws SQLException {
         // 전체 조회 건수 계산
         Statement statement = createTrackedStatement(socketId, connection);
         try (statement) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
-            statement.execute("SELECT COUNT(*) FROM (" + sql + ") execution_result_count");
+            statement.execute(dbmsSqlDialects.get(dbmsType).selectCountSql(sql));
 
             try (ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet == null || !resultSet.next()) {
@@ -559,13 +566,14 @@ public class JudgeQueryService {
 
     private SelectPageResult fetchSelectPage(String socketId,
                                              Connection connection,
+                                             DbmsType dbmsType,
                                              String sql,
                                              int page,
                                              int pageSize) throws SQLException {
         PreparedStatement statement = createTrackedPreparedStatement(
                 socketId,
                 connection,
-                "SELECT * FROM (" + sql + ") execution_result_page LIMIT ? OFFSET ?"
+                dbmsSqlDialects.get(dbmsType).selectPageSql(sql)
         );
 
         try (statement) {
@@ -616,10 +624,7 @@ public class JudgeQueryService {
                     throw new IllegalArgumentException(PLAN_RESULT_UNAVAILABLE.getMessage());
                 }
 
-                List<String> planLines = new ArrayList<>();
-                while (resultSet.next()) {
-                    planLines.add(resultSet.getString(1));
-                }
+                List<String> planLines = readPlanLines(resultSet);
 
                 return QueryExecutionResult.planWithCost(problemId, mode, planLines, extractEstimatedCost(planLines));
             }
@@ -787,24 +792,23 @@ public class JudgeQueryService {
                                           String socketId,
                                           String problemId,
                                           String sql,
-        DbmsType dbmsType) {
-        if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
-        }
-
-        JudgeWorkspaceService.WorkspaceHandle workspaceHandle =
-                judgeWorkspaceService.prepareWorkspace(handle, problemId, socketId);
-
-        try (Connection connection = dataSource.getConnection()) {
+                                          DbmsType dbmsType) {
+        try (JudgeWorkspaceService.WorkspaceSession workspaceSession =
+                     judgeWorkspaceService.openWorkspace(handle, problemId, socketId, dbmsType)) {
+            Connection connection = workspaceSession.connection();
             connection.setAutoCommit(false);
-            configureExecutionConnection(connection, workspaceHandle.schemaName());
+            configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
             String preparedStatementName = "qt_submit_validate_" + System.nanoTime();
+            DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
             Statement statement = createTrackedStatement(socketId, connection);
             try (statement) {
                 statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
-                statement.execute("PREPARE " + preparedStatementName + " AS " + sql);
-                statement.execute("DEALLOCATE " + preparedStatementName);
+                statement.execute(dialect.validateSelectSql(preparedStatementName, sql));
+                String cleanupValidatedSelectSql = dialect.cleanupValidatedSelectSql(preparedStatementName);
+                if (!cleanupValidatedSelectSql.isBlank()) {
+                    statement.execute(cleanupValidatedSelectSql);
+                }
             } finally {
                 clearTrackedStatement(socketId, statement);
             }
@@ -821,17 +825,13 @@ public class JudgeQueryService {
                                                               String problemId,
                                                               List<SubmittedStatement> statements,
                                                               DbmsType dbmsType) {
-        if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
-        }
-
         SubmittedStatement referenceStatement = resolveReferenceStatement(statements);
-        JudgeWorkspaceService.WorkspaceHandle workspaceHandle =
-                judgeWorkspaceService.prepareWorkspace(handle, problemId, socketId);
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (JudgeWorkspaceService.WorkspaceSession workspaceSession =
+                     judgeWorkspaceService.openWorkspace(handle, problemId, socketId, dbmsType)) {
+            Connection connection = workspaceSession.connection();
             connection.setAutoCommit(false);
-            configureExecutionConnection(connection, workspaceHandle.schemaName());
+            configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
             long startTime = System.nanoTime();
             QueryExecutionResult referenceResult = executeSelectAll(socketId, connection, referenceStatement.sql(), problemId, null)
@@ -851,20 +851,15 @@ public class JudgeQueryService {
                                                  String problemId,
                                                  List<SubmittedStatement> ddlStatements,
                                                  DbmsType dbmsType) {
-        if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
-        }
-
         if (ddlStatements.isEmpty()) {
             return List.of();
         }
 
-        JudgeWorkspaceService.WorkspaceHandle workspaceHandle =
-                judgeWorkspaceService.prepareWorkspace(handle, problemId, socketId);
-
-        try (Connection connection = dataSource.getConnection()) {
+        try (JudgeWorkspaceService.WorkspaceSession workspaceSession =
+                     judgeWorkspaceService.openWorkspace(handle, problemId, socketId, dbmsType)) {
+            Connection connection = workspaceSession.connection();
             connection.setAutoCommit(false);
-            configureExecutionConnection(connection, workspaceHandle.schemaName());
+            configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
             List<String> detailLines = new ArrayList<>();
             for (SubmittedStatement ddlStatement : ddlStatements) {
@@ -892,23 +887,18 @@ public class JudgeQueryService {
     private QueryExecutionResult executeExplainAnalyzeOnce(String handle,
                                                            String socketId,
                                                            String problemId,
-                                                          String sql,
-                                                          DbmsType dbmsType) {
-        if (dbmsType != DbmsType.POSTGRESQL) {
-            throw new IllegalArgumentException(SUBMIT_DBMS_UNSUPPORTED.getMessage());
-        }
-
-        JudgeWorkspaceService.WorkspaceHandle workspaceHandle =
-                judgeWorkspaceService.prepareWorkspace(handle, problemId, socketId);
-
-        try (Connection connection = dataSource.getConnection()) {
+                                                           String sql,
+                                                           DbmsType dbmsType) {
+        try (JudgeWorkspaceService.WorkspaceSession workspaceSession =
+                     judgeWorkspaceService.openWorkspace(handle, problemId, socketId, dbmsType)) {
+            Connection connection = workspaceSession.connection();
             connection.setAutoCommit(false);
-            configureExecutionConnection(connection, workspaceHandle.schemaName());
+            configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
             QueryExecutionResult explainAnalyzeResult = executeExplain(
                     socketId,
                     connection,
-                    "EXPLAIN ANALYZE " + sql,
+                    dbmsSqlDialects.get(dbmsType).explainAnalyzeSql(sql),
                     problemId,
                     "explain_analyze"
             );
@@ -1192,29 +1182,19 @@ public class JudgeQueryService {
                 : sanitizedHandle;
     }
 
-    private String quoteIdentifier(String identifier) {
-        // SQL 식별자 인용
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
-    }
-
-    private Double estimateQueryCost(String socketId, Connection connection, String sql) throws SQLException {
+    private Double estimateQueryCost(String socketId, Connection connection, DbmsType dbmsType, String sql) throws SQLException {
         // 실행 계획 기준 예상 Cost 계산
         Statement statement = createTrackedStatement(socketId, connection);
         try (statement) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
-            statement.execute("EXPLAIN " + sql);
+            statement.execute(dbmsSqlDialects.get(dbmsType).explainSql(sql));
 
             try (ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet == null) {
                     return null;
                 }
 
-                List<String> planLines = new ArrayList<>();
-                while (resultSet.next()) {
-                    planLines.add(resultSet.getString(1));
-                }
-
-                return extractEstimatedCost(planLines);
+                return extractEstimatedCost(readPlanLines(resultSet));
             }
         } finally {
             clearTrackedStatement(socketId, statement);
@@ -1236,9 +1216,40 @@ public class JudgeQueryService {
                     return null;
                 }
             }
+
+            Matcher mysqlMatcher = MYSQL_QUERY_COST_PATTERN.matcher(planLine);
+            if (mysqlMatcher.find()) {
+                try {
+                    return Double.parseDouble(mysqlMatcher.group(1));
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
         }
 
         return null;
+    }
+
+    private List<String> readPlanLines(ResultSet resultSet) throws SQLException {
+        // DBMS별 EXPLAIN 결과를 문자열 목록으로 변환
+        ResultSetMetaData metaData = resultSet.getMetaData();
+        List<String> planLines = new ArrayList<>();
+
+        while (resultSet.next()) {
+            if (metaData.getColumnCount() == 1) {
+                planLines.add(String.valueOf(resultSet.getObject(1)));
+                continue;
+            }
+
+            List<String> values = new ArrayList<>();
+            for (int columnIndex = 1; columnIndex <= metaData.getColumnCount(); columnIndex++) {
+                Object value = resultSet.getObject(columnIndex);
+                values.add(metaData.getColumnLabel(columnIndex) + "=" + (value != null ? value : ""));
+            }
+            planLines.add(String.join(", ", values));
+        }
+
+        return planLines;
     }
 
     private boolean isCorrectAnswer(String problemId, List<String> columns, List<List<String>> rows) {
@@ -1351,11 +1362,12 @@ public class JudgeQueryService {
         return cost == null ? "-" : "%.1f".formatted(cost);
     }
 
-    private List<String> buildPlanProgressDetailLines(QueryExecutionResult explainAnalyzeResult,
+    private List<String> buildPlanProgressDetailLines(DbmsType dbmsType,
+                                                      QueryExecutionResult explainAnalyzeResult,
                                                       PlanAnalysisResult planAnalysisResult) {
         List<String> detailLines = new ArrayList<>();
         detailLines.add(COST_PREFIX.getText() + formatCost(explainAnalyzeResult.cost()));
-        detailLines.addAll(resolvePlanElementDetailLines(planAnalysisResult.executionPlanElement()));
+        detailLines.addAll(resolvePlanElementDetailLines(dbmsType, planAnalysisResult.executionPlanElement()));
 
         if (detailLines.size() == 1) {
             for (String summaryLine : planAnalysisResult.summaryLines()) {
@@ -1366,8 +1378,12 @@ public class JudgeQueryService {
         return List.copyOf(detailLines);
     }
 
-    private List<String> resolvePlanElementDetailLines(long executionPlanElement) {
+    private List<String> resolvePlanElementDetailLines(DbmsType dbmsType, long executionPlanElement) {
         // 실행 계획 Element 상세 Lines 결정
+        if (dbmsType == DbmsType.MYSQL) {
+            return resolveMySqlPlanElementDetailLines(executionPlanElement);
+        }
+
         LinkedHashSet<String> detailLines = new LinkedHashSet<>();
 
         if (hasAnyPlanElement(
@@ -1455,6 +1471,73 @@ public class JudgeQueryService {
         return List.copyOf(detailLines);
     }
 
+    private List<String> resolveMySqlPlanElementDetailLines(long executionPlanElement) {
+        // MySQL 실행 계획 Element 상세 Lines 결정
+        LinkedHashSet<String> detailLines = new LinkedHashSet<>();
+
+        if (hasPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.FULL_TABLE_SCAN)) {
+            detailLines.add(PLAN_FULL_SCAN.getText());
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                MySqlExecutionPlanElementIndex.INDEX_SCAN,
+                MySqlExecutionPlanElementIndex.RANGE_SCAN,
+                MySqlExecutionPlanElementIndex.REF_SCAN,
+                MySqlExecutionPlanElementIndex.EQ_REF_SCAN,
+                MySqlExecutionPlanElementIndex.CONST_SCAN,
+                MySqlExecutionPlanElementIndex.INDEX_MERGE
+        )) {
+            detailLines.add(PLAN_INDEX_SCAN.getText());
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                MySqlExecutionPlanElementIndex.DERIVED_TABLE,
+                MySqlExecutionPlanElementIndex.MATERIALIZED_SUBQUERY
+        )) {
+            detailLines.add(PLAN_DERIVED_SCAN.getText());
+        }
+
+        if (hasPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.NESTED_LOOP_JOIN)) {
+            detailLines.add(PLAN_NESTED_LOOP.getText());
+        }
+
+        if (hasPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.HASH_JOIN)) {
+            detailLines.add(PLAN_HASH_JOIN.getText());
+        }
+
+        if (hasPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.INDEX_CONDITION)) {
+            detailLines.add(PLAN_ACCESS_FILTER.getText());
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                MySqlExecutionPlanElementIndex.FILTER_CONDITION,
+                MySqlExecutionPlanElementIndex.ATTACHED_CONDITION
+        )) {
+            detailLines.add(PLAN_POST_FILTER.getText());
+        }
+
+        if (hasPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.FILESORT)) {
+            detailLines.add(PLAN_PLAIN_SORT.getText());
+        }
+
+        if (hasAnyPlanElement(
+                executionPlanElement,
+                MySqlExecutionPlanElementIndex.GROUPING_OPERATION,
+                MySqlExecutionPlanElementIndex.AGGREGATE
+        )) {
+            detailLines.add(PLAN_GROUP_AGG.getText());
+        }
+
+        if (hasPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.HINT)) {
+            detailLines.add(PLAN_HINT_USED.getText());
+        }
+
+        return List.copyOf(detailLines);
+    }
+
     private boolean hasAnyPlanElement(long executionPlanElement, int... indexes) {
         // Any 실행 계획 Element 여부 확인
         for (int index : indexes) {
@@ -1469,6 +1552,14 @@ public class JudgeQueryService {
     private boolean hasPlanElement(long executionPlanElement, int index) {
         // 실행 계획 Element 여부 확인
         return (executionPlanElement & (1L << index)) != 0;
+    }
+
+    private PlanAnalysisResult analyzePlan(DbmsType dbmsType, List<String> planLines, String submittedSql) {
+        // DBMS별 실행 계획 분석
+        return switch (dbmsType) {
+            case POSTGRESQL -> analyzePostgreSqlPlan(planLines, submittedSql);
+            case MYSQL -> analyzeMySqlPlan(planLines, submittedSql);
+        };
     }
 
     private PlanAnalysisResult analyzePostgreSqlPlan(List<String> planLines, String submittedSql) {
@@ -1620,6 +1711,131 @@ public class JudgeQueryService {
             if (containsAny(normalizedLine, Set.of("FILTER:", "ROWS REMOVED BY FILTER", "JOIN FILTER:"))) {
                 executionPlanElement = appendPlanElement(executionPlanElement, PostgreSqlExecutionPlanElementIndex.FILTER);
                 summaryLines.add(POST_FILTER_INCLUDED.getText());
+            }
+        }
+
+        if (summaryLines.isEmpty()) {
+            summaryLines.add(REPRESENTATIVE_ELEMENT_NOT_FOUND.getText());
+        }
+
+        return new PlanAnalysisResult(executionPlanElement, List.copyOf(summaryLines));
+    }
+
+    private PlanAnalysisResult analyzeMySqlPlan(List<String> planLines, String submittedSql) {
+        // MySQL 실행 계획 처리
+        long executionPlanElement = 0L;
+        LinkedHashSet<String> summaryLines = new LinkedHashSet<>();
+
+        if (submittedSql != null && submittedSql.contains("/*+")) {
+            executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.HINT);
+            summaryLines.add(HINT_USED.getText());
+        }
+
+        for (String planLine : planLines) {
+            if (planLine == null || planLine.isBlank()) {
+                continue;
+            }
+
+            String normalizedLine = planLine.trim().toUpperCase(Locale.ROOT);
+
+            if (containsAny(normalizedLine, Set.of("TYPE=ALL", "\"ACCESS_TYPE\": \"ALL\"", "\"ACCESS_TYPE\":\"ALL\""))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.FULL_TABLE_SCAN);
+                summaryLines.add(SEQ_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("TYPE=INDEX", "\"ACCESS_TYPE\": \"INDEX\"", "\"ACCESS_TYPE\":\"INDEX\""))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.INDEX_SCAN);
+                summaryLines.add(INDEX_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("TYPE=RANGE", "\"ACCESS_TYPE\": \"RANGE\"", "\"ACCESS_TYPE\":\"RANGE\""))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.RANGE_SCAN);
+                summaryLines.add(INDEX_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("TYPE=REF", "\"ACCESS_TYPE\": \"REF\"", "\"ACCESS_TYPE\":\"REF\""))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.REF_SCAN);
+                summaryLines.add(INDEX_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("TYPE=EQ_REF", "\"ACCESS_TYPE\": \"EQ_REF\"", "\"ACCESS_TYPE\":\"EQ_REF\""))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.EQ_REF_SCAN);
+                summaryLines.add(INDEX_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("TYPE=CONST", "\"ACCESS_TYPE\": \"CONST\"", "\"ACCESS_TYPE\":\"CONST\""))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.CONST_SCAN);
+                summaryLines.add(INDEX_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("INDEX_MERGE", "INDEX MERGE"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.INDEX_MERGE);
+                summaryLines.add(INDEX_SCAN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("DERIVED", "DEPENDENT DERIVED"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.DERIVED_TABLE);
+                summaryLines.add(SUBQUERY_SCAN_INCLUDED.getText());
+            }
+
+            if (normalizedLine.contains("MATERIALIZED")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.MATERIALIZED_SUBQUERY);
+                summaryLines.add(MATERIALIZE_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("NESTED_LOOP", "NESTED LOOP"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.NESTED_LOOP_JOIN);
+                summaryLines.add(NESTED_LOOP_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("HASH_JOIN", "HASH JOIN"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.HASH_JOIN);
+                summaryLines.add(HASH_JOIN_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("USING INDEX CONDITION", "INDEX_CONDITION", "INDEX CONDITION"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.INDEX_CONDITION);
+                summaryLines.add(INDEX_CONDITION_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("USING WHERE", "FILTER_CONDITION", "ATTACHED_CONDITION", "ATTACHED CONDITION"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.FILTER_CONDITION);
+                summaryLines.add(POST_FILTER_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("USING FILESORT", "FILESORT"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.FILESORT);
+                summaryLines.add(SORT_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("USING TEMPORARY", "TEMPORARY_TABLE", "TEMPORARY TABLE"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.TEMPORARY_TABLE);
+                summaryLines.add(MATERIALIZE_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("GROUPING_OPERATION", "GROUPING OPERATION", "GROUP BY"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.GROUPING_OPERATION);
+                summaryLines.add(GROUP_AGGREGATE_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("WINDOWING", "WINDOW_OPERATION", "WINDOW OPERATION"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.WINDOW_OPERATION);
+                summaryLines.add(GROUP_AGGREGATE_INCLUDED.getText());
+            }
+
+            if (normalizedLine.contains("AGGREGATE")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.AGGREGATE);
+                summaryLines.add(GROUP_AGGREGATE_INCLUDED.getText());
+            }
+
+            if (normalizedLine.contains("LIMIT")) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.LIMIT);
+                summaryLines.add(LIMIT_INCLUDED.getText());
+            }
+
+            if (containsAny(normalizedLine, Set.of("USING JOIN BUFFER", "JOIN_BUFFER", "JOIN BUFFER"))) {
+                executionPlanElement = appendPlanElement(executionPlanElement, MySqlExecutionPlanElementIndex.USING_JOIN_BUFFER);
+                summaryLines.add(NESTED_LOOP_INCLUDED.getText());
             }
         }
 

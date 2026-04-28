@@ -1,16 +1,22 @@
 package com.quertimizer.judge.application.service;
 
+import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
+import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseCluster;
+import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseLease;
+import com.quertimizer.judge.infrastructure.execution.SqlReplayProvisioningStrategy;
 import com.quertimizer.problem.application.store.ProblemStore;
 import com.quertimizer.problem.domain.entity.Problem;
+import com.quertimizer.problem.domain.entity.ProblemSet;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,33 +47,42 @@ public class JudgeWorkspaceService {
 
     private static final Duration DISCONNECTED_CLEANUP_DELAY = Duration.ofMinutes(10);
     private static final Duration WORKSPACE_INACTIVITY_TIMEOUT = Duration.ofMinutes(30);
-    private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile("CREATE TABLE\\s+(?:[\\w]+\\.)?(\\w+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile(
+            "CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:[`\"\\w]+\\.)?[`\"]?(\\w+)[`\"]?\\s*\\(",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern WORKSPACE_SCHEMA_PATTERN =
+            Pattern.compile(".*_problem_\\d{5}_\\d{5}", Pattern.CASE_INSENSITIVE);
 
-    private final DataSource dataSource;
+    private final JudgeDatabaseCluster judgeDatabaseCluster;
+    private final SqlReplayProvisioningStrategy sqlReplayProvisioningStrategy;
+    private final DbmsSqlDialects dbmsSqlDialects;
     private final ProblemStore problemStore;
 
     private final Map<String, WorkspaceContext> workspaceByKey = new ConcurrentHashMap<>();
     private final Map<String, String> workspaceKeyBySocketId = new ConcurrentHashMap<>();
     private final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor(new CleanupThreadFactory());
 
-    public WorkspaceHandle prepareWorkspace(String handle, String problemId, String socketId) {
-        // 인터랙티브 실행용 작업 스키마를 준비
+    public WorkspaceSession openWorkspace(String handle, String problemId, String socketId, DbmsType dbmsType) {
+        // 인터랙티브 실행용 작업 스키마와 커넥션을 준비
         Problem problem = problemStore.findProblem(problemId)
                 .orElseThrow(() -> new IllegalArgumentException(PROBLEM_NOT_FOUND.getMessage()));
+        ProblemSet problemSet = problemStore.findProblemSet(problem.getResolvedProblemSetId())
+                .orElseThrow(() -> new IllegalArgumentException(PROBLEM_NOT_FOUND.getMessage()));
 
-        String workspaceKey = createWorkspaceKey(handle, problemId);
+        String workspaceKey = createWorkspaceKey(handle, problemId, dbmsType);
         WorkspaceContext workspaceContext = workspaceByKey.computeIfAbsent(
                 workspaceKey,
                 key -> new WorkspaceContext(
                         workspaceKey,
                         createSchemaName(handle, problemId),
                         problem.getBaseProblemSetId(),
-                        resolveProblemTableNames(problem)
+                        dbmsType,
+                        resolveProblemTableNames(problemSet.getDdl())
                 )
         );
 
         synchronized (workspaceContext.monitor) {
-
             // 연결 정보, 마지막 활동 시각 갱신
             cancelCleanup(workspaceContext);
             workspaceContext.activeSocketIds.add(socketId);
@@ -75,10 +90,8 @@ public class JudgeWorkspaceService {
             workspaceKeyBySocketId.put(socketId, workspaceKey);
 
             // 작업용 스키마가 없으면 문제 기준 subset 복제
-            createWorkspaceIfMissing(workspaceContext);
+            return createWorkspaceSession(workspaceContext, problemSet);
         }
-
-        return new WorkspaceHandle(workspaceContext.schemaName, workspaceContext.problemSetId);
     }
 
     public void markActivity(String socketId) {
@@ -119,25 +132,29 @@ public class JudgeWorkspaceService {
 
     public void cleanupResidualWorkspaces() {
         // 서버 재시작 뒤 잔여 작업용 스키마 정리
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("""
-                     SELECT schema_name
-                     FROM information_schema.schemata
-                     WHERE schema_name LIKE '%\\_problem\\_%\\_%' ESCAPE '\\'
-                       AND schema_name NOT LIKE 'problem_set\\_%' ESCAPE '\\'
-                     """)) {
-
-            List<String> schemaNames = new ArrayList<>();
-            while (resultSet.next()) {
-                schemaNames.add(resultSet.getString("schema_name"));
+        for (var node : judgeDatabaseCluster.getConfiguredNodes()) {
+            if (!node.isReady()) {
+                continue;
             }
 
-            for (String schemaName : schemaNames) {
-                dropSchema(connection, schemaName);
+            try (JudgeDatabaseLease lease = judgeDatabaseCluster.acquireNode(node.getId());
+                 Connection connection = lease.openConnection();
+                 Statement statement = connection.createStatement();
+                 ResultSet resultSet = statement.executeQuery("SELECT schema_name FROM information_schema.schemata")) {
+                List<String> schemaNames = new ArrayList<>();
+                while (resultSet.next()) {
+                    String schemaName = resultSet.getString("schema_name");
+                    if (isWorkspaceSchema(schemaName)) {
+                        schemaNames.add(schemaName);
+                    }
+                }
+
+                for (String schemaName : schemaNames) {
+                    dropSchema(connection, node.getEngine(), schemaName);
+                }
+            } catch (Exception exception) {
+                log.warn(RESIDUAL_WORKSPACE_CLEANUP_FAILED.getMessage(), exception);
             }
-        } catch (Exception exception) {
-            log.warn(RESIDUAL_WORKSPACE_CLEANUP_FAILED.getMessage(), exception);
         }
     }
 
@@ -205,8 +222,15 @@ public class JudgeWorkspaceService {
 
     private void cleanupWorkspace(WorkspaceContext workspaceContext) {
         // 작업용 스키마 drop 후 메모리 상태 제거
-        try (Connection connection = dataSource.getConnection()) {
-            dropSchema(connection, workspaceContext.schemaName);
+        if (workspaceContext.nodeId == null) {
+            cancelCleanup(workspaceContext);
+            workspaceByKey.remove(workspaceContext.workspaceKey, workspaceContext);
+            return;
+        }
+
+        try (JudgeDatabaseLease lease = judgeDatabaseCluster.acquireNode(workspaceContext.nodeId);
+             Connection connection = lease.openConnection()) {
+            dropSchema(connection, workspaceContext.dbmsType, workspaceContext.schemaName);
         } catch (Exception exception) {
             log.warn(WORKSPACE_CLEANUP_FAILED.getMessage(), workspaceContext.schemaName, exception);
             return;
@@ -226,33 +250,65 @@ public class JudgeWorkspaceService {
         return Optional.ofNullable(workspaceByKey.get(workspaceKey));
     }
 
-    private void createWorkspaceIfMissing(WorkspaceContext workspaceContext) {
-        // 작업용 스키마 생성
-        String baseSchemaName = "problem_set_" + workspaceContext.problemSetId;
+    private WorkspaceSession createWorkspaceSession(WorkspaceContext workspaceContext, ProblemSet problemSet) {
+        // 작업용 schema가 있는 node를 점유하고 커넥션을 연다
+        JudgeDatabaseLease lease = acquireWorkspaceLease(workspaceContext);
+        Connection connection = null;
 
-        try (Connection connection = dataSource.getConnection();
-            Statement statement = connection.createStatement()) {
-            List<String> tableNames = workspaceContext.tableNames;
-            if (tableNames.isEmpty()) {
-                throw new IllegalArgumentException(TABLE_REQUIRED.getMessage());
-            }
-
-            if (schemaExists(connection, workspaceContext.schemaName)) {
-                if (hasAllWorkspaceTables(connection, workspaceContext.schemaName, tableNames)) {
-                    return;
-                }
-
-                dropSchema(connection, workspaceContext.schemaName);
-            }
-
-            // 작업용 스키마 생성
-            statement.execute("CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(workspaceContext.schemaName));
-
-            for (String tableName : tableNames) {
-                createWorkspaceTable(connection, baseSchemaName, workspaceContext.schemaName, tableName);
-            }
+        try {
+            connection = lease.openConnection();
+            createWorkspaceIfMissing(connection, workspaceContext, problemSet);
+            return new WorkspaceSession(workspaceContext.schemaName, workspaceContext.problemSetId, workspaceContext.dbmsType, connection, lease);
         } catch (Exception exception) {
+            closeQuietly(connection);
+            lease.close();
             throw new IllegalStateException(WORKSPACE_PREPARATION_FAILED.getMessage(), exception);
+        }
+    }
+
+    private JudgeDatabaseLease acquireWorkspaceLease(WorkspaceContext workspaceContext) {
+        // 기존 workspace는 같은 node를 다시 점유하고, 신규 workspace는 엔진 기준으로 node를 선택
+        if (workspaceContext.nodeId != null) {
+            return judgeDatabaseCluster.acquireNode(workspaceContext.nodeId);
+        }
+
+        JudgeDatabaseLease lease = judgeDatabaseCluster.acquire(workspaceContext.dbmsType);
+        workspaceContext.nodeId = lease.node().getId();
+        return lease;
+    }
+
+    private void createWorkspaceIfMissing(Connection connection,
+                                          WorkspaceContext workspaceContext,
+                                          ProblemSet problemSet) throws Exception {
+        // 작업용 schema를 canonical DDL + actualDataSql replay로 생성
+        List<String> tableNames = workspaceContext.tableNames;
+        if (tableNames.isEmpty()) {
+            throw new IllegalArgumentException(TABLE_REQUIRED.getMessage());
+        }
+
+        if (schemaExists(connection, workspaceContext.schemaName)) {
+            if (hasAllWorkspaceTables(connection, workspaceContext.schemaName, tableNames)) {
+                return;
+            }
+
+            dropSchema(connection, workspaceContext.dbmsType, workspaceContext.schemaName);
+        }
+
+        connection.setAutoCommit(false);
+        try {
+            sqlReplayProvisioningStrategy.provision(
+                    connection,
+                    workspaceContext.dbmsType,
+                    workspaceContext.schemaName,
+                    problemSet.getDdl(),
+                    problemSet.getActualDataSql()
+            );
+            connection.commit();
+        } catch (Exception exception) {
+            rollback(connection);
+            throw exception;
+        } finally {
+            connection.setAutoCommit(true);
         }
     }
 
@@ -271,7 +327,6 @@ public class JudgeWorkspaceService {
             }
         }
     }
-
 
     private boolean hasAllWorkspaceTables(Connection connection, String schemaName, List<String> tableNames) throws Exception {
         // 작업 스키마 테이블 준비 여부 확인
@@ -302,44 +357,10 @@ public class JudgeWorkspaceService {
         }
     }
 
-    private void createWorkspaceTable(Connection connection,
-                                      String baseSchemaName,
-                                      String workspaceSchemaName,
-                                      String tableName) throws Exception {
-        try (Statement statement = connection.createStatement()) {
-
-            // 원본 테이블 구조 복제
-            statement.execute("""
-                    CREATE TABLE %s.%s
-                    (LIKE %s.%s INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS INCLUDING COMMENTS)
-                    """.formatted(
-                    quoteIdentifier(workspaceSchemaName),
-                    quoteIdentifier(tableName),
-                    quoteIdentifier(baseSchemaName),
-                    quoteIdentifier(tableName)
-            ));
-
-            // 원본 데이터 복제
-            statement.execute("""
-                    INSERT INTO %s.%s
-                    SELECT *
-                    FROM %s.%s
-                    """.formatted(
-                    quoteIdentifier(workspaceSchemaName),
-                    quoteIdentifier(tableName),
-                    quoteIdentifier(baseSchemaName),
-                    quoteIdentifier(tableName)
-            ));
-
-            // 통계 갱신
-            statement.execute("ANALYZE " + quoteIdentifier(workspaceSchemaName) + "." + quoteIdentifier(tableName));
-        }
-    }
-
-    private void dropSchema(Connection connection, String schemaName) throws Exception {
+    private void dropSchema(Connection connection, DbmsType dbmsType, String schemaName) throws Exception {
         // 작업 스키마 삭제
         try (Statement statement = connection.createStatement()) {
-            statement.execute("DROP SCHEMA IF EXISTS " + quoteIdentifier(schemaName) + " CASCADE");
+            statement.execute(dbmsSqlDialects.get(dbmsType).dropSchemaIfExistsSql(schemaName));
         }
     }
 
@@ -353,9 +374,8 @@ public class JudgeWorkspaceService {
         workspaceContext.cleanupFuture = null;
     }
 
-    private List<String> resolveProblemTableNames(Problem problem) {
+    private List<String> resolveProblemTableNames(String ddl) {
         // 문제 DDL 기준 테이블 이름 추출
-        String ddl = problem.getDdl();
         if (ddl == null || ddl.isBlank()) {
             return List.of();
         }
@@ -369,9 +389,9 @@ public class JudgeWorkspaceService {
         return tableNames.stream().distinct().toList();
     }
 
-    private String createWorkspaceKey(String handle, String problemId) {
+    private String createWorkspaceKey(String handle, String problemId, DbmsType dbmsType) {
         // 작업 스키마 식별 키 생성
-        return sanitizeSchemaPrefix(handle) + ":" + problemId;
+        return dbmsType.getValue() + ":" + sanitizeSchemaPrefix(handle) + ":" + problemId;
     }
 
     private String createSchemaName(String handle, String problemId) {
@@ -397,28 +417,74 @@ public class JudgeWorkspaceService {
                 : sanitizedHandle;
     }
 
-    private String quoteIdentifier(String identifier) {
-        // SQL 식별자 인용
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    private boolean isWorkspaceSchema(String schemaName) {
+        // 작업용 schema 이름 여부 확인
+        if (schemaName == null || schemaName.startsWith("problem_set_")) {
+            return false;
+        }
+
+        return WORKSPACE_SCHEMA_PATTERN.matcher(schemaName).matches();
     }
 
-    public record WorkspaceHandle(String schemaName, String problemSetId) {
+    private void rollback(Connection connection) {
+        // 작업용 schema 생성 transaction을 정리
+        try {
+            connection.rollback();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void closeQuietly(Connection connection) {
+        // 커넥션 정리
+        if (connection == null) {
+            return;
+        }
+
+        try {
+            connection.close();
+        } catch (SQLException ignored) {
+        }
+    }
+
+    public record WorkspaceSession(String schemaName,
+                                   String problemSetId,
+                                   DbmsType dbmsType,
+                                   Connection connection,
+                                   JudgeDatabaseLease lease) implements AutoCloseable {
+
+        @Override
+        public void close() {
+            // workspace session 커넥션과 lease를 정리
+            try {
+                connection.close();
+            } catch (SQLException ignored) {
+            } finally {
+                lease.close();
+            }
+        }
     }
 
     private static final class WorkspaceContext {
         private final String workspaceKey;
         private final String schemaName;
         private final String problemSetId;
+        private final DbmsType dbmsType;
         private final List<String> tableNames;
         private final Set<String> activeSocketIds = ConcurrentHashMap.newKeySet();
         private final Object monitor = new Object();
+        private String nodeId;
         private Instant lastActivityAt = Instant.now();
         private ScheduledFuture<?> cleanupFuture;
 
-        private WorkspaceContext(String workspaceKey, String schemaName, String problemSetId, List<String> tableNames) {
+        private WorkspaceContext(String workspaceKey,
+                                 String schemaName,
+                                 String problemSetId,
+                                 DbmsType dbmsType,
+                                 List<String> tableNames) {
             this.workspaceKey = workspaceKey;
             this.schemaName = schemaName;
             this.problemSetId = problemSetId;
+            this.dbmsType = dbmsType;
             this.tableNames = tableNames;
         }
     }

@@ -28,4 +28,39 @@ public class PostgreSqlDialect implements DbmsSqlDialect {
     public String dropSchemaIfExistsSql(String schemaName) {
         return "DROP SCHEMA IF EXISTS " + quoteIdentifier(schemaName) + " CASCADE";
     }
+
+    @Override
+    public List<String> statementTimeoutSqls(int timeoutSeconds) {
+        return List.of("SET LOCAL statement_timeout TO '" + timeoutSeconds + "s'");
+    }
+
+    @Override
+    public String validateSelectSql(String statementName, String sql) {
+        return "PREPARE " + quoteIdentifier(statementName) + " AS " + sql;
+    }
+
+    @Override
+    public String cleanupValidatedSelectSql(String statementName) {
+        return "DEALLOCATE " + quoteIdentifier(statementName);
+    }
+
+    @Override
+    public String explainSql(String sql) {
+        return "EXPLAIN " + sql;
+    }
+
+    @Override
+    public String explainAnalyzeSql(String sql) {
+        return "EXPLAIN ANALYZE " + sql;
+    }
+
+    @Override
+    public String selectCountSql(String sql) {
+        return "SELECT COUNT(*) FROM (" + sql + ") execution_result_count";
+    }
+
+    @Override
+    public String selectPageSql(String sql) {
+        return "SELECT * FROM (" + sql + ") execution_result_page LIMIT ? OFFSET ?";
+    }
 }

@@ -463,7 +463,7 @@ function getDbmsLabel(dbms: DbmsType) {
 }
 
 function getAvailableDbms(problem: ProblemDetail) {
-  return problem.dbmsOptions.filter((dbms) => !problem.disabledDbms.includes(dbms));
+  return problem.dbmsOptions;
 }
 
 function resolvePreferredDbms(availableDbms: DbmsType[], fallbackDbms: DbmsType[], defaultDbms: DbmsType | null) {
@@ -556,7 +556,7 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
       ...matchedProblem,
       problemNumber: matchedProblem.problemNumber ?? problemId,
       dbmsOptions: scopedDbms ? [scopedDbms] : matchedProblem.dbmsOptions,
-      disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['mysql'] : ['postgresql']) : matchedProblem.disabledDbms,
+      disabledDbms: [],
     };
   }
 
@@ -569,7 +569,7 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
     preview: '',
     description: '',
     dbmsOptions: scopedDbms ? [scopedDbms] : mockProblemDetails[0].dbmsOptions,
-    disabledDbms: scopedDbms ? (scopedDbms === 'postgresql' ? ['mysql'] : ['postgresql']) : mockProblemDetails[0].disabledDbms,
+    disabledDbms: [],
   };
 }
 
@@ -681,9 +681,8 @@ function consumeSolvePageAuthReturn(problemId: string) {
 
 function resolveProblemDdl(detail: ProblemDetailData | null, dbms: DbmsType) {
   const preferredDdl = dbms === 'mysql' ? detail?.ddlMysql ?? '' : detail?.ddlPostgresql ?? '';
-  const fallbackDdl = dbms === 'mysql' ? detail?.ddlPostgresql ?? '' : detail?.ddlMysql ?? '';
 
-  return preferredDdl.trim() !== '' ? preferredDdl : fallbackDdl;
+  return preferredDdl;
 }
 
 function extractAutocompleteItemsFromDdl(ddl: string): SqlAutocompleteItem[] {
@@ -4259,20 +4258,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
-    if (selectedDbms !== 'postgresql') {
-      setSubmitProgressSteps([]);
-      setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_NOT_SUPPORTED_MESSAGE', '제출은 PostgreSQL만 지원합니다.'));
-      setCollapsedCards((current) => ({
-        ...current,
-        submit: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        submit: true,
-      }));
-      return;
-    }
-
     if (sql.trim().length === 0) {
       setSubmitProgressSteps([]);
       setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_SQL_REQUIRED_MESSAGE', '제출할 SQL을 입력해 주세요.'));
@@ -4666,24 +4651,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     if (!isAuthenticated) {
       openAuthOverlay('login');
-      return;
-    }
-
-    if (selectedDbms !== 'postgresql') {
-      setExecutionRuns([
-        createSingleExecutionStatementRun(
-          sql,
-          createProblemExecutionError(text('PROBLEM_SOLVE_INTERACTIVE_NOT_SUPPORTED_MESSAGE', '인터랙티브 실행은 PostgreSQL만 지원합니다.')),
-        ),
-      ]);
-      setCollapsedCards((current) => ({
-        ...current,
-        execute: false,
-      }));
-      setPanelVisibility((current) => ({
-        ...current,
-        editor: true,
-      }));
       return;
     }
 

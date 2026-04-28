@@ -28,4 +28,39 @@ public class MySqlDialect implements DbmsSqlDialect {
     public String dropSchemaIfExistsSql(String schemaName) {
         return "DROP SCHEMA IF EXISTS " + quoteIdentifier(schemaName);
     }
+
+    @Override
+    public List<String> statementTimeoutSqls(int timeoutSeconds) {
+        return List.of("SET SESSION MAX_EXECUTION_TIME = " + timeoutSeconds * 1000L);
+    }
+
+    @Override
+    public String validateSelectSql(String statementName, String sql) {
+        return "EXPLAIN " + sql;
+    }
+
+    @Override
+    public String cleanupValidatedSelectSql(String statementName) {
+        return "";
+    }
+
+    @Override
+    public String explainSql(String sql) {
+        return "EXPLAIN " + sql;
+    }
+
+    @Override
+    public String explainAnalyzeSql(String sql) {
+        return "EXPLAIN FORMAT=JSON " + sql;
+    }
+
+    @Override
+    public String selectCountSql(String sql) {
+        return "SELECT COUNT(*) FROM (" + sql + ") execution_result_count";
+    }
+
+    @Override
+    public String selectPageSql(String sql) {
+        return "SELECT * FROM (" + sql + ") execution_result_page LIMIT ? OFFSET ?";
+    }
 }

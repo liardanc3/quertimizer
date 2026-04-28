@@ -12,11 +12,9 @@ export default function DbmsSelector({
   selectedDbms,
   onChange,
   supportedDbms,
-  disabledDbms,
 }: DbmsSelectorProps) {
   const visibleDbms = mockDbmsOptions.filter((dbms) => supportedDbms.includes(dbms.id));
-  const availableCount = visibleDbms.filter((dbms) => !dbms.disabled && !disabledDbms.includes(dbms.id)).length;
-  const disabledCount = visibleDbms.length - availableCount;
+  const availableCount = visibleDbms.length;
 
   return (
     <section className="panel-card compact solve-dbms-card">
@@ -27,27 +25,20 @@ export default function DbmsSelector({
         </div>
         <div className="solve-dbms-summary">
           <span className="subtle-chip">{availableCount}개 사용 가능</span>
-          <span className="subtle-chip">{disabledCount}개 준비 중</span>
         </div>
       </div>
 
       <div className="section-gate">
-        {visibleDbms.map((dbms) => {
-          const isDisabled = dbms.disabled || disabledDbms.includes(dbms.id);
-
-          return (
-            <button
-              key={dbms.id}
-              type="button"
-              disabled={isDisabled}
-              onClick={() => onChange(dbms.id)}
-              className={`mini-toggle ${selectedDbms === dbms.id ? 'is-selected' : ''}`}
-            >
-              {dbms.label}
-              {isDisabled ? <span className="tab-meta">준비 중</span> : null}
-            </button>
-          );
-        })}
+        {visibleDbms.map((dbms) => (
+          <button
+            key={dbms.id}
+            type="button"
+            onClick={() => onChange(dbms.id)}
+            className={`mini-toggle ${selectedDbms === dbms.id ? 'is-selected' : ''}`}
+          >
+            {dbms.label}
+          </button>
+        ))}
       </div>
 
       <p className="hint-text">

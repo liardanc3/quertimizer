@@ -142,6 +142,7 @@ public class AuthController {
         httpResponse.sendRedirect(url);
     }
 
+
     @CanonicalCode
     @PostMapping("/duplicate-check/handle")
     public ResponseEntity<Void> checkDuplicateHandle(@Valid @RequestBody DuplicateCheckHandleReq request) {

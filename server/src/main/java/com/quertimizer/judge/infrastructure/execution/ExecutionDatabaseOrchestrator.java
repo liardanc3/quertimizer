@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
@@ -44,23 +43,24 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
                                                            String dataSql,
                                                            String answerSql,
                                                            String purpose) {
-        ExecutionDatabasePool.ExecutionDatabaseWorker worker = executionDatabaseQueue.acquire(dbmsType);
         String schemaName = createExecutionSchemaName(purpose);
+        JudgeDatabaseLease lease = executionDatabaseQueue.acquire(dbmsType);
 
-        try (Connection connection = DriverManager.getConnection(
-                worker.getConnectionInfo().url(),
-                worker.getConnectionInfo().username(),
-                worker.getConnectionInfo().password())) {
+        try (lease; Connection connection = lease.openConnection()) {
             connection.setAutoCommit(false);
-            provisionDataset(connection, dbmsType, schemaName, ddl, dataSql);
-            ProblemOutputPreviewOutput output = executeSelect(connection, dbmsType, schemaName, answerSql);
-            connection.commit();
-            return output;
+            try {
+                provisionDataset(connection, dbmsType, schemaName, ddl, dataSql);
+                ProblemOutputPreviewOutput output = executeSelect(connection, dbmsType, schemaName, answerSql);
+                connection.commit();
+                return output;
+            } catch (Exception exception) {
+                rollback(connection);
+                throw exception;
+            } finally {
+                cleanupSchema(connection, dbmsType, schemaName);
+            }
         } catch (Exception exception) {
             throw new IllegalStateException("judge execution 환경 처리에 실패했다.", exception);
-        } finally {
-            cleanupSchema(worker.getConnectionInfo(), schemaName);
-            executionDatabaseQueue.release(worker);
         }
     }
 
@@ -73,20 +73,11 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
         }
 
         if ("template-copy".equalsIgnoreCase(strategy)) {
-            validateTemplateCopyConfiguration(dbmsType);
             templateSchemaCopyProvisioningStrategy.provision(connection, dbmsType, schemaName, ddl, dataSql);
             return;
         }
 
         throw new IllegalStateException("지원하지 않는 judge.dataset-provisioning.strategy 값이다: " + strategy);
-    }
-
-    private void validateTemplateCopyConfiguration(DbmsType dbmsType) {
-        // template-copy 전략은 template DB 설정이 선행되어야 한다
-        JudgeDatabaseProperties.NamedDatabaseProperties properties = judgeDatabaseProperties.getTemplateDatabase(dbmsType);
-        if (properties == null || isBlank(properties.getUrl()) || isBlank(properties.getUsername())) {
-            throw new IllegalStateException("template-copy 전략에는 judge.template-databases.%s 설정이 필요하다.".formatted(dbmsType.getValue()));
-        }
     }
 
     private ProblemOutputPreviewOutput executeSelect(Connection connection, DbmsType dbmsType, String schemaName, String sql) throws Exception {
@@ -124,21 +115,25 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
         }
     }
 
-    private void cleanupSchema(ExecutionDatabaseConnectionInfo connectionInfo, String schemaName) {
+    private void cleanupSchema(Connection connection, DbmsType dbmsType, String schemaName) {
         // 임시 execution schema만 정리하고 template schema는 남겨 둔다
-        try (Connection connection = DriverManager.getConnection(connectionInfo.url(), connectionInfo.username(), connectionInfo.password());
-             Statement statement = connection.createStatement()) {
-            statement.execute(dbmsSqlDialects.get(connectionInfo.dbmsType()).dropSchemaIfExistsSql(schemaName));
+        try (Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(true);
+            statement.execute(dbmsSqlDialects.get(dbmsType).dropSchemaIfExistsSql(schemaName));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void rollback(Connection connection) {
+        // 실패한 execution transaction을 정리
+        try {
+            connection.rollback();
         } catch (Exception ignored) {
         }
     }
 
     private String createExecutionSchemaName(String purpose) {
-        return "judge_exec_" + purpose + "_" + Long.toString(System.nanoTime(), 36);
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return "qt_exec_" + purpose + "_" + Long.toString(System.nanoTime(), 36);
     }
 
 }

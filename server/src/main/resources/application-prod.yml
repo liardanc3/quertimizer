@@ -99,25 +99,20 @@ app:
 judge:
   dataset-provisioning:
     strategy: ${JUDGE_DATASET_PROVISIONING_STRATEGY:sql-replay}
-  template-databases:
-    postgresql:
-      name: ${JUDGE_POSTGRESQL_TEMPLATE_NAME:pg-template}
-      url: ${JUDGE_POSTGRESQL_TEMPLATE_URL:}
-      username: ${JUDGE_POSTGRESQL_TEMPLATE_USERNAME:}
-      password: ${JUDGE_POSTGRESQL_TEMPLATE_PASSWORD:}
-    mysql:
-      name: ${JUDGE_MYSQL_TEMPLATE_NAME:mysql-template}
-      url: ${JUDGE_MYSQL_TEMPLATE_URL:}
-      username: ${JUDGE_MYSQL_TEMPLATE_USERNAME:}
-      password: ${JUDGE_MYSQL_TEMPLATE_PASSWORD:}
-  execution-databases:
-    postgresql:
-      - name: ${JUDGE_POSTGRESQL_WORKER_1_NAME:pg-worker-1}
-        url: ${JUDGE_POSTGRESQL_WORKER_1_URL:}
-        username: ${JUDGE_POSTGRESQL_WORKER_1_USERNAME:}
-        password: ${JUDGE_POSTGRESQL_WORKER_1_PASSWORD:}
-    mysql:
-      - name: ${JUDGE_MYSQL_WORKER_1_NAME:mysql-worker-1}
-        url: ${JUDGE_MYSQL_WORKER_1_URL:}
-        username: ${JUDGE_MYSQL_WORKER_1_USERNAME:}
-        password: ${JUDGE_MYSQL_WORKER_1_PASSWORD:}
+  databases:
+    - id: ${JUDGE_POSTGRESQL_WORKER_1_ID:pg-worker-1}
+      name: ${JUDGE_POSTGRESQL_WORKER_1_NAME:pg-worker-1}
+      engine: postgresql
+      url: ${JUDGE_POSTGRESQL_WORKER_1_URL:}
+      username: ${JUDGE_POSTGRESQL_WORKER_1_USERNAME:}
+      password: ${JUDGE_POSTGRESQL_WORKER_1_PASSWORD:}
+      enabled: ${JUDGE_POSTGRESQL_WORKER_1_ENABLED:true}
+      max-concurrency: ${JUDGE_POSTGRESQL_WORKER_1_MAX_CONCURRENCY:1}
+    - id: ${JUDGE_MYSQL_WORKER_1_ID:mysql-worker-1}
+      name: ${JUDGE_MYSQL_WORKER_1_NAME:mysql-worker-1}
+      engine: mysql
+      url: ${JUDGE_MYSQL_WORKER_1_URL:}
+      username: ${JUDGE_MYSQL_WORKER_1_USERNAME:}
+      password: ${JUDGE_MYSQL_WORKER_1_PASSWORD:}
+      enabled: ${JUDGE_MYSQL_WORKER_1_ENABLED:true}
+      max-concurrency: ${JUDGE_MYSQL_WORKER_1_MAX_CONCURRENCY:1}

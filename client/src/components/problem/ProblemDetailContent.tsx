@@ -759,9 +759,8 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   const selectedDdl = useMemo(
     () => {
       const preferredDdl = selectedDbms === 'mysql' ? detail?.ddlMysql ?? '' : detail?.ddlPostgresql ?? '';
-      const fallbackDdl = selectedDbms === 'mysql' ? detail?.ddlPostgresql ?? '' : detail?.ddlMysql ?? '';
 
-      return preferredDdl.trim() !== '' ? preferredDdl : fallbackDdl;
+      return preferredDdl;
     },
     [detail?.ddlMysql, detail?.ddlPostgresql, selectedDbms],
   );
@@ -772,9 +771,8 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   const selectedDataSampleSql = useMemo(
     () => {
       const preferredData = selectedDbms === 'mysql' ? detail?.dataMysql ?? '' : detail?.dataPostgresql ?? '';
-      const fallbackData = selectedDbms === 'mysql' ? detail?.dataPostgresql ?? '' : detail?.dataMysql ?? '';
 
-      return preferredData.trim() !== '' ? preferredData : fallbackData;
+      return preferredData;
     },
     [detail?.dataMysql, detail?.dataPostgresql, selectedDbms],
   );
