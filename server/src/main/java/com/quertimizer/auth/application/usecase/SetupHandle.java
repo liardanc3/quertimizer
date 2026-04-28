@@ -11,8 +11,12 @@ public class SetupHandle {
 
     private final AuthService authService;
 
+    /**
+     * 가입 직후 필요한 Handle을 설정한다.
+     *
+     * @param input 인증 이메일과 설정할 Handle 입력
+     */
     public void execute(SetupHandleInput input) {
-        // 가입 직후 Handle을 설정
         authService.configureHandle(input.getAuthenticatedEmail(), input);
     }
 }

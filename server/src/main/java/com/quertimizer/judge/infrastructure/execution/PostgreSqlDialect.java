@@ -1,5 +1,7 @@
 package com.quertimizer.judge.infrastructure.execution;
 
+import com.quertimizer.judge.application.port.DbmsSqlDialect;
+
 import java.util.List;
 
 public class PostgreSqlDialect implements DbmsSqlDialect {

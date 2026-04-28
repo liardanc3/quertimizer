@@ -1,18 +1,21 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.auth.application.input.UpdateProblemGeneratorPermissionsInput;
+import com.quertimizer.auth.application.input.UpdateUserRoleInput;
 import com.quertimizer.auth.application.output.AuthManageOutput;
 import com.quertimizer.auth.application.output.AuthManageUserRowOutput;
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.auth.domain.policy.AuthManagePolicy;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.problem.domain.entity.Problem;
-import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
-import com.quertimizer.problem.domain.entity.ProblemSet;
-import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.problem.application.port.ProblemGeneratorPermissionRepository;
 import com.quertimizer.problem.application.port.ProblemRepository;
 import com.quertimizer.problem.application.port.ProblemSetRepository;
+import com.quertimizer.problem.domain.entity.Problem;
+import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
+import com.quertimizer.problem.domain.entity.ProblemSet;
+import com.quertimizer.problem.domain.policy.ProblemManagementPolicy;
 import com.quertimizer.user.application.port.UserRepository;
+import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -29,8 +32,6 @@ import java.util.stream.StreamSupport;
 
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.INVALID_PERMISSION_KEY;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.INVALID_ROLE;
-import static com.quertimizer.auth.domain.model.AuthManageFailReason.LAST_ADMIN_PROTECTION;
-import static com.quertimizer.auth.domain.model.AuthManageFailReason.PROBLEM_GENERATOR_REQUIRED;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.USER_NOT_FOUND;
 import static com.quertimizer.problem.domain.model.ProblemPermissionKey.NEW;
 
@@ -43,6 +44,8 @@ public class AuthManageService {
     private final ProblemRepository problemRepository;
     private final ProblemSetRepository problemSetRepository;
     private final ProblemGeneratorPermissionRepository problemGeneratorPermissionRepository;
+    private final ProblemManagementPolicy problemManagementPolicy;
+    private final AuthManagePolicy authManagePolicy;
 
     public AuthManageOutput getAuthManage() {
         // 권한 설정 화면에 필요한 사용자와 권한 목록을 조회
@@ -68,46 +71,42 @@ public class AuthManageService {
     }
 
     @Transactional
-    public void updateUserRole(String handle, String role) {
+    public void updateUserRole(UpdateUserRoleInput input) {
         // 변경 대상 사용자와 다음 역할을 확정
-        User user = findUser(handle);
-        UserRole nextRole = normalizeRole(role);
+        User user = findUser(input.getHandle());
+        UserRole nextRole = normalizeRole(input.getRole());
 
         // 마지막 Admin 역할 해제를 차단
-        if (user.getResolvedRole() == UserRole.ADMIN && nextRole != UserRole.ADMIN) {
-            validateAdminRoleRemoval();
-        }
+        authManagePolicy.validateAdminRoleChange(user.getResolvedRole(), nextRole);
 
         // 사용자 역할을 수정하고 불필요한 권한을 정리
         user.changeRole(nextRole);
         if (nextRole != UserRole.PROBLEM_GENERATOR) {
-            problemGeneratorPermissionRepository.deleteAllByIdHandle(handle);
+            problemGeneratorPermissionRepository.deleteAllByIdHandle(input.getHandle());
         }
     }
 
     @Transactional
-    public void updateProblemGeneratorPermissions(String handle, List<String> permissionKeys) {
+    public void updateProblemGeneratorPermissions(UpdateProblemGeneratorPermissionsInput input) {
         // ProblemGenerator 사용자만 문제 권한을 수정
-        User user = findUser(handle);
-        if (user.getResolvedRole() != UserRole.PROBLEM_GENERATOR) {
-            throw new BusinessException(PROBLEM_GENERATOR_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
-        }
+        User user = findUser(input.getHandle());
+        authManagePolicy.validateProblemGeneratorRole(user.getResolvedRole());
 
         // 저장할 권한 키를 정규화하고 유효성을 검증
-        List<String> normalizedPermissionKeys = normalizePermissionKeys(permissionKeys);
+        List<String> normalizedPermissionKeys = normalizePermissionKeys(input.getPermissionKeys());
         validatePermissionKeys(normalizedPermissionKeys);
 
         // 기존 권한을 교체하고 새 권한을 저장
-        problemGeneratorPermissionRepository.deleteAllByIdHandle(handle);
+        problemGeneratorPermissionRepository.deleteAllByIdHandle(input.getHandle());
         if (!normalizedPermissionKeys.isEmpty()) {
             problemGeneratorPermissionRepository.saveAll(normalizedPermissionKeys.stream()
-                    .map(permissionKey -> ProblemGeneratorPermission.create(handle, permissionKey))
+                    .map(permissionKey -> ProblemGeneratorPermission.create(input.getHandle(), permissionKey))
                     .toList());
         }
     }
 
     private User findUser(String handle) {
-        // Handle 기준으로 대상 사용자를 조회
+        // handle 기준으로 변경 대상 사용자를 찾는다
         return userRepository.findByHandle(handle)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
     }
@@ -126,17 +125,6 @@ public class AuthManageService {
             case "PROBLEMGENERATOR" -> UserRole.PROBLEM_GENERATOR;
             default -> throw new BusinessException(INVALID_ROLE.getMessage(), HttpStatus.BAD_REQUEST);
         };
-    }
-
-    private void validateAdminRoleRemoval() {
-        // 마지막 Admin 해제를 막기 위해 현재 Admin 수를 확인
-        long adminCount = userRepository.findAllByOrderByHandleAsc().stream()
-                .filter(user -> user.getResolvedRole() == UserRole.ADMIN)
-                .count();
-
-        if (adminCount <= 1) {
-            throw new BusinessException(LAST_ADMIN_PROTECTION.getMessage(), HttpStatus.BAD_REQUEST);
-        }
     }
 
     private List<String> normalizePermissionKeys(List<String> permissionKeys) {
@@ -179,30 +167,8 @@ public class AuthManageService {
     }
 
     private String normalizePermissionKey(String permissionKey) {
-        // 권한 키를 화면과 저장소에서 공통으로 쓰는 형식으로 정규화
-        String normalizedPermissionKey = Optional.ofNullable(permissionKey)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .map(value -> value.toUpperCase(Locale.ROOT))
-                .orElse("");
-
-        if (normalizedPermissionKey.isEmpty()) {
-            return "";
-        }
-
-        if (NEW.getValue().equals(normalizedPermissionKey)) {
-            return NEW.getValue();
-        }
-
-        if (normalizedPermissionKey.matches("^\\d{5}-\\d{5}$")) {
-            return "P" + normalizedPermissionKey;
-        }
-
-        if (normalizedPermissionKey.matches("^\\d{5}$")) {
-            return "P" + normalizedPermissionKey;
-        }
-
-        return normalizedPermissionKey;
+        // 권한 키를 problem domain 정책 기준으로 정규화
+        return problemManagementPolicy.normalizePermissionKey(permissionKey);
     }
 
     private String normalizeStoredPermissionKey(String permissionKey) {
@@ -215,12 +181,12 @@ public class AuthManageService {
 
     private boolean isScopedProblemId(String permissionKey) {
         // 문제 번호 형식 권한인지 확인
-        return DbmsType.isScopedProblemId(permissionKey);
+        return problemManagementPolicy.isScopedProblemId(permissionKey);
     }
 
     private boolean isScopedProblemSetId(String permissionKey) {
         // 테이블셋 번호 형식 권한인지 확인
-        return DbmsType.isScopedProblemSetId(permissionKey);
+        return problemManagementPolicy.isScopedProblemSetId(permissionKey);
     }
 
     private List<String> sortPermissionKeys(List<String> permissionKeys) {

@@ -10,8 +10,12 @@ public class MarkAllAlarmsRead {
 
     private final AlarmService alarmService;
 
+    /**
+     * 사용자 알람을 모두 읽음 처리한다.
+     *
+     * @param handle 읽음 처리할 사용자 handle
+     */
     public void execute(String handle) {
-        // 사용자 알람을 모두 읽음 처리
         alarmService.markAllRead(handle);
     }
 }

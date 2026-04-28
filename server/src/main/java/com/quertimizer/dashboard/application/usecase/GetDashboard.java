@@ -11,8 +11,12 @@ public class GetDashboard {
 
     private final DashboardService dashboardService;
 
+    /**
+     * 로그인 여부에 맞는 대시보드 데이터를 조회한다.
+     *
+     * @param currentHandle 현재 사용자 handle
+     */
     public DashboardOutput execute(String currentHandle) {
-        // 대시보드 데이터를 조회
         return dashboardService.getDashboard(currentHandle);
     }
 }

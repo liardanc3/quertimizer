@@ -4,7 +4,6 @@ import com.quertimizer.auth.application.input.EmailLoginInput;
 import com.quertimizer.auth.application.input.ResetPasswordInput;
 import com.quertimizer.auth.application.input.SendCodeInput;
 import com.quertimizer.auth.application.input.SetupHandleInput;
-import com.quertimizer.auth.application.input.SignupInput;
 import com.quertimizer.auth.application.input.SocialLoginInput;
 import com.quertimizer.auth.application.input.VerifyCodeInput;
 import com.quertimizer.auth.application.output.UserBootstrapOutput;
@@ -30,7 +29,6 @@ import com.quertimizer.auth.presentation.dto.request.SignupReq;
 import com.quertimizer.auth.presentation.dto.request.VerifyCodeReq;
 import com.quertimizer.auth.presentation.dto.response.UserBootstrapInfoRes;
 import com.quertimizer.auth.presentation.support.AuthSupport;
-import com.quertimizer.global.util.CanonicalCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -70,169 +68,243 @@ public class AuthController {
 
     private final AuthSupport authSupport;
 
-    @CanonicalCode
+    /**
+     * 회원가입용 인증코드를 이메일로 전송한다.
+     *
+     * @param request 인증코드를 받을 이메일 요청
+     */
     @PostMapping("/signup/send-code")
     public ResponseEntity<Void> sendSignupCode(@Valid @RequestBody SendCodeReq request) {
-        // 이메일 가입 인증코드 전송
         sendSignupCode.execute(SendCodeInput.of(request.getEmail()));
-
         return ResponseEntity.ok().build();
     }
 
-    @CanonicalCode
+    /**
+     * 회원가입용 인증코드를 검증한다.
+     *
+     * @param request 인증코드 검증 요청
+     */
     @PostMapping("/signup/verify-code")
     public ResponseEntity<Void> verifySignupCode(@Valid @RequestBody VerifyCodeReq request) {
-        // 이메일 가입 인증코드 확인
         verifySignupCode.execute(VerifyCodeInput.of(request.getEmail(), request.getCode()));
-
         return ResponseEntity.ok().build();
     }
 
-    @CanonicalCode
+    /**
+     * 이메일 회원가입을 완료하고 생성된 사용자를 현재 세션에 로그인시킨다.
+     *
+     * <ol>
+     *   <li>회원가입 처리
+     *   <li>이메일 로그인 인증 결과 생성
+     *   <li>인증 결과 저장 후 완료 응답 반환
+     * </ol>
+     *
+     * @param signupReq 회원가입 요청
+     * @param httpRequest 클라이언트 IP 조회와 인증 저장소 저장에 사용하는 HTTP 요청
+     * @param httpResponse 인증 저장소 저장에 사용하는 HTTP 응답
+     */
     @PostMapping("/signup")
     public ResponseEntity<Void> signup(@Valid @RequestBody SignupReq signupReq,
                                        HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        // 회원가입
-        SignupInput signupInput = SignupInput.of(signupReq.getEmail(), signupReq.getPassword(), signupReq.getCode());
-        signup.execute(signupInput);
+        signup.execute(signupReq.toSignupInput());
 
-        // 이메일 로그인 후 인증결과 조회
-        EmailLoginInput emailLoginInput = EmailLoginInput.of(signupReq.getEmail(), signupReq.getPassword(), authSupport.resolveClientIp(httpRequest));
+        String accessIp = authSupport.resolveClientIp(httpRequest);
+        EmailLoginInput emailLoginInput = EmailLoginInput.of(signupReq.getEmail(), signupReq.getPassword(), accessIp);
         Authentication authentication = emailLogin.execute(emailLoginInput);
 
-        // 인증결과를 인증 저장소에 저장
         authSupport.saveAuthenticationToRepository(authentication, httpRequest, httpResponse);
-
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    @CanonicalCode
+    /**
+     * 이메일 로그인 결과를 세션과 remember-me 쿠키에 반영하고 부트스트랩 정보를 반환한다.
+     *
+     * <ol>
+     *   <li>이메일 로그인 인증 결과 생성
+     *   <li>인증 결과를 SecurityContextRepository에 저장
+     *   <li>remember-me 쿠키 저장
+     *   <li>사용자 부트스트랩 정보 반환
+     * </ol>
+     *
+     * @param loginReq 이메일 로그인 요청
+     * @param httpRequest 클라이언트 IP 조회와 인증 저장소 저장에 사용하는 HTTP 요청
+     * @param httpResponse 인증 저장소 저장과 쿠키 저장에 사용하는 HTTP 응답
+     */
     @PostMapping("/login")
     public ResponseEntity<UserBootstrapInfoRes> emailLogin(@Valid @RequestBody LoginReq loginReq,
                                                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        // 이메일 로그인 후 인증결과 조회
-        EmailLoginInput emailLoginInput = EmailLoginInput.of(loginReq.getEmail(), loginReq.getPassword(), authSupport.resolveClientIp(httpRequest));
+        String accessIp = authSupport.resolveClientIp(httpRequest);
+        EmailLoginInput emailLoginInput = EmailLoginInput.of(loginReq.getEmail(), loginReq.getPassword(), accessIp);
         Authentication authentication = emailLogin.execute(emailLoginInput);
 
-        // 인증결과를 인증 저장소에 저장
         authSupport.saveAuthenticationToRepository(authentication, httpRequest, httpResponse);
 
-        // 로그인 유지용 remember-me 쿠키 응답 헤더(Set-Cookie)에 추가
         authSupport.saveRememberMeCookie(authentication, httpRequest, httpResponse);
 
-        // 화면 구성용 유저 부트스트랩 정보 조회 후 반환
         UserBootstrapOutput userBootstrapInfo = getUserBootstrapInfo.execute(authentication.getName());
         return ResponseEntity.ok(UserBootstrapInfoRes.from(userBootstrapInfo));
     }
 
-    @CanonicalCode
+    /**
+     * OAuth2 인증 결과로 소셜 로그인을 완료한다.
+     *
+     * <ol>
+     *   <li>Spring Security가 전달한 OAuth2 인증 정보를 서비스 인증 결과로 변환
+     *   <li>서비스 인증 결과를 SecurityContextRepository에 저장
+     *   <li>provider 정보를 포함한 소셜 로그인 성공 URL로 리다이렉트
+     * </ol>
+     *
+     * @param authentication Spring Security가 생성한 OAuth2 인증 정보
+     * @param httpRequest 클라이언트 IP 조회와 인증 저장소 저장에 사용하는 HTTP 요청
+     * @param httpResponse 인증 저장소 저장과 리다이렉트에 사용하는 HTTP 응답
+     * @throws IOException 소셜 로그인 성공 URL로 리다이렉트하지 못한 경우
+     */
     @GetMapping("/login/social/success")
     public void completeSocialLogin(Authentication authentication,
                                     HttpServletRequest httpRequest, HttpServletResponse httpResponse) throws IOException {
-        // 소셜 로그인 후 인증결과 조회
         SocialLoginInput socialLoginInput = SocialLoginInput.of(authentication, authSupport.resolveClientIp(httpRequest));
         Authentication sessionAuthentication = socialLogin.execute(socialLoginInput);
 
-        // 인증결과를 인증 저장소에 저장
         authSupport.saveAuthenticationToRepository(sessionAuthentication, httpRequest, httpResponse);
 
-        // Provider에 따른 성공 페이지 url 생성 후 리다이렉트
         String provider = ((OAuth2AuthenticationToken) authentication).getAuthorizedClientRegistrationId();
         String url = authSupport.buildSocialLoginSuccessUrl(provider);
         httpResponse.sendRedirect(url);
     }
 
-
-    @CanonicalCode
+    /**
+     * 회원가입에 사용할 handle 중복 여부를 검증한다.
+     *
+     * @param request 중복 검증할 handle 요청
+     */
     @PostMapping("/duplicate-check/handle")
     public ResponseEntity<Void> checkDuplicateHandle(@Valid @RequestBody DuplicateCheckHandleReq request) {
-        // Handle 사용 가능 여부 검증
         validateAvailableHandle.execute(request.getHandle());
-
         return ResponseEntity.ok().build();
     }
 
-    @CanonicalCode
+    /**
+     * 회원가입에 사용할 이메일 중복 여부를 검증한다.
+     *
+     * @param request 중복 검증할 이메일 요청
+     */
     @PostMapping("/duplicate-check/email")
     public ResponseEntity<Void> checkDuplicateEmail(@Valid @RequestBody DuplicateCheckEmailReq request) {
-        // email 사용 가능 여부 검증
         validateAvailableEmail.execute(request.getEmail());
-
         return ResponseEntity.ok().build();
     }
 
-    @CanonicalCode
+    /**
+     * 가입 직후 필요한 handle을 설정하고 최신 부트스트랩 정보를 반환한다.
+     *
+     * <ol>
+     *   <li>handle 설정 입력 생성 및 실행
+     *   <li>사용자 부트스트랩 정보 반환
+     * </ol>
+     *
+     * @param request 설정할 handle 요청
+     * @param authentication 현재 세션 인증 정보
+     */
     @PostMapping("/signup/handle")
     public ResponseEntity<UserBootstrapInfoRes> setupHandle(@Valid @RequestBody SetupHandleReq request, Authentication authentication) {
-        // Handle 설정
         SetupHandleInput setupHandleInput = SetupHandleInput.of(authentication.getName(), request.getHandle());
         setupHandle.execute(setupHandleInput);
 
-        // 화면 구성용 유저 부트스트랩 정보 조회 후 반환
         UserBootstrapOutput userBootstrapInfo = getUserBootstrapInfo.execute(authentication.getName());
         return ResponseEntity.ok(UserBootstrapInfoRes.from(userBootstrapInfo));
     }
 
-    @CanonicalCode
+    /**
+     * 현재 세션의 소켓, remember-me 쿠키, 인증 정보를 정리한다.
+     *
+     * <ol>
+     *   <li>HttpSession에 연결된 WebSocket 종료
+     *   <li>remember-me 쿠키와 SecurityContext 정리
+     * </ol>
+     *
+     * @param authentication 현재 세션 인증 정보
+     * @param httpRequest 세션 조회와 로그아웃 처리에 사용하는 HTTP 요청
+     * @param httpResponse 쿠키 삭제에 사용하는 HTTP 응답
+     */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(Authentication authentication,
                                        HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        // 로그아웃 대상 세션 연결 정리
         Optional.ofNullable(httpRequest.getSession(false))
                 .map(HttpSession::getId)
                 .ifPresent(authSupport::closeSessionSocket);
 
-        // 로그인 유지 쿠키 삭제
         authSupport.deleteRememberMeCookie(authentication, httpRequest, httpResponse);
-
         return ResponseEntity.ok().build();
     }
 
-    @CanonicalCode
+    /**
+     * 현재 세션 인증 상태를 복원하고 화면 부트스트랩 정보를 반환한다.
+     *
+     * <ol>
+     *   <li>미인증 세션은 비로그인 응답 반환
+     *   <li>인증 세션은 SecurityContextRepository에 재저장
+     *   <li>사용자 부트스트랩 정보 반환
+     * </ol>
+     *
+     * @param authentication 현재 세션 인증 정보
+     * @param httpRequest 인증 저장소 저장에 사용하는 HTTP 요청
+     * @param httpResponse 인증 저장소 저장에 사용하는 HTTP 응답
+     */
     @PostMapping("/session/me")
     public ResponseEntity<UserBootstrapInfoRes> getSession(Authentication authentication,
                                                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        // 인증된 세션이 아니면 부트스트랩 정보 비워서 반환
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return ResponseEntity.ok(UserBootstrapInfoRes.unauthenticated());
         }
 
-        // remember-me 복원 뒤 새 세션에 인증정보 재저장
         authSupport.saveAuthenticationToRepository(authentication, httpRequest, httpResponse);
 
-        // 화면 구성용 유저 부트스트랩 정보 조회 후 반환
         UserBootstrapOutput userBootstrapInfo = getUserBootstrapInfo.execute(authentication.getName());
         return ResponseEntity.ok(UserBootstrapInfoRes.from(userBootstrapInfo));
     }
 
-    @CanonicalCode
+    /**
+     * 소셜 로그인 실패 정보를 포함한 프런트엔드 URL로 리다이렉트한다.
+     *
+     * @param provider 실패한 소셜 로그인 provider
+     * @param httpResponse 리다이렉트에 사용하는 HTTP 응답
+     * @throws IOException 소셜 로그인 실패 URL로 리다이렉트하지 못한 경우
+     */
     @GetMapping("/login/social/failure")
     public void failSocialLogin(@RequestParam(required = false) String provider, HttpServletResponse httpResponse) throws IOException {
-        // Provider에 따른 실패 페이지 url 생성 후 리다이렉트
         httpResponse.sendRedirect(authSupport.buildSocialLoginFailureUrl(provider));
     }
 
+    /**
+     * 비밀번호 찾기 인증코드를 이메일로 전송한다.
+     *
+     * @param request 인증코드를 받을 이메일 요청
+     */
     @PostMapping("/find-password/send-code")
     public ResponseEntity<Void> sendFindPasswordCode(@Valid @RequestBody SendCodeReq request) {
-        // 비밀번호 찾기 인증코드 발송
         sendFindPasswordCode.execute(SendCodeInput.of(request.getEmail()));
-
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * 비밀번호 찾기 인증코드를 검증하고 재설정 가능 상태로 전환한다.
+     *
+     * @param request 인증코드 검증 요청
+     */
     @PostMapping("/find-password/verify-code")
     public ResponseEntity<Void> verifyFindPasswordCode(@Valid @RequestBody VerifyCodeReq request) {
-        // 인증코드 확인 후 비밀번호 재설정 가능 상태로 전환
         verifyFindPasswordCode.execute(VerifyCodeInput.of(request.getEmail(), request.getCode()));
-
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * 인증이 끝난 이메일의 비밀번호를 재설정한다.
+     *
+     * @param request 비밀번호 재설정 요청
+     */
     @PostMapping("/find-password/reset")
     public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordReq request) {
-        // 비밀번호 재설정
         resetPassword.execute(ResetPasswordInput.of(request.getEmail(), request.getPassword()));
-
         return ResponseEntity.ok().build();
     }
 }

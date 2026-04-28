@@ -5,6 +5,7 @@ import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
+import com.quertimizer.ranking.application.input.RankSearchInput;
 import com.quertimizer.ranking.application.output.RankListItemOutput;
 import com.quertimizer.ranking.application.output.RankMonthlyDeltaOutput;
 import com.quertimizer.ranking.application.output.RankPageOutput;
@@ -33,11 +34,21 @@ public class GetRanks {
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
     private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
 
-    public RankPageOutput execute(int requestedPage, Integer requestedPageSize, String dbms, String query, String sortKey) {
-        // 랭킹 페이지 데이터를 조회
-        int pageSize = resolvePageSize(requestedPageSize);
-        DbmsType dbmsType = resolveDbmsType(dbms);
-        RankSortKey rankSortKey = resolveRankSortKey(sortKey);
+    /**
+     * 랭킹 검색 입력에 맞는 사용자 랭킹 페이지를 생성한다.
+     *
+     * <ol>
+     *   <li>페이지 크기와 DBMS, 정렬 기준 확정
+     *   <li>현재 및 월초 기준 랭킹 지표 계산
+     *   <li>검색, 정렬, 페이징 반영 응답 생성
+     * </ol>
+     *
+     * @param input 랭킹 검색 조건
+     */
+    public RankPageOutput execute(RankSearchInput input) {
+        int pageSize = resolvePageSize(input.getRequestedPageSize());
+        DbmsType dbmsType = resolveDbmsType(input.getDbms());
+        RankSortKey rankSortKey = resolveRankSortKey(input.getSortKey());
         LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         List<ProblemSolveHistory> histories = problemSolveHistoryRepository.findAll();
         List<ProblemSubmitHistory> submitHistories = problemSubmitHistoryRepository.findAll();
@@ -69,14 +80,14 @@ public class GetRanks {
                         submitMetricsByHandle.getOrDefault(metrics.handle(), EMPTY_SUBMIT_METRICS).successSubmitCount(),
                         monthlyDeltaByHandle.getOrDefault(metrics.handle(), EMPTY_MONTHLY_DELTA)
                 ))
-                .filter(rank -> matchesHandle(rank, query))
+                .filter(rank -> matchesHandle(rank, input.getQuery()))
                 .sorted(createRankComparator(rankSortKey))
                 .toList();
 
         // 페이지 경계 계산
         int totalCount = filteredRanks.size();
         int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) pageSize));
-        int currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
+        int currentPage = Math.min(Math.max(input.getRequestedPage(), 1), totalPages);
         int fromIndex = Math.min((currentPage - 1) * pageSize, totalCount);
         int toIndex = Math.min(fromIndex + pageSize, totalCount);
 
@@ -369,17 +380,17 @@ public class GetRanks {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
-        // DBMS 유형 결정
+        // 랭킹 조회 기준 DBMS를 기본값까지 포함해 확정한다.
         return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
-        // DBMS 유형 결정
+        // 오래된 해결 이력은 PostgreSQL 기록으로 간주한다.
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
     private DbmsType resolveDbmsType(ProblemSubmitHistory history) {
-        // DBMS 유형 결정
+        // 오래된 제출 이력은 PostgreSQL 기록으로 간주한다.
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
@@ -393,15 +404,15 @@ public class GetRanks {
     }
 
     private record UserSolvedHistoryKey(String handle, String problemId) {
-        // 사용자 해결한 기록 키 처리
+        // 사용자와 문제 조합으로 최고 해결 기록을 식별한다.
     }
 
     private record RankMetrics(String handle, int solvedCount, double avgExecutionPercentile) {
-        // Rank 지표 처리
+        // 랭킹 정렬과 응답에 필요한 사용자별 지표를 담는다.
     }
 
     private record SubmitMetrics(int totalSubmitCount, int successSubmitCount) {
-        // 제출 지표 처리
+        // 랭킹 보조 정보로 표시할 제출 집계를 담는다.
     }
 
     private enum RankSortKey {

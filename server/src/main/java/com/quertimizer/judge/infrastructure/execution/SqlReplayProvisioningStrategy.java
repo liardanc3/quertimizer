@@ -1,24 +1,29 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.application.port.DatasetProvisioningStrategy;
+import com.quertimizer.judge.application.port.DbmsSqlDialect;
+import com.quertimizer.judge.application.port.DbmsSqlDialectProvider;
 import com.quertimizer.judge.domain.service.JudgeSqlStatementParser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
 import java.sql.Statement;
 
 @Component
+@Primary
 @RequiredArgsConstructor
 public class SqlReplayProvisioningStrategy implements DatasetProvisioningStrategy {
 
     private final JudgeSqlStatementParser judgeSqlStatementParser;
-    private final DbmsSqlDialects dbmsSqlDialects;
+    private final DbmsSqlDialectProvider dbmsSqlDialectProvider;
 
     @Override
     public void provision(Connection connection, DbmsType dbmsType, String schemaName, String ddl, String dataSql) throws Exception {
         // DDL + data SQL을 execution schema에서 매번 재생해 dataset을 준비
-        DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
+        DbmsSqlDialect dialect = dbmsSqlDialectProvider.get(dbmsType);
         try (Statement statement = connection.createStatement()) {
             statement.execute(dialect.createSchemaIfMissingSql(schemaName));
             for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {

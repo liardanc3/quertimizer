@@ -11,8 +11,12 @@ public class SendFindPasswordCode {
 
     private final AuthService authService;
 
+    /**
+     * 비밀번호 찾기 인증코드를 전송한다.
+     *
+     * @param input 인증코드 전송 입력
+     */
     public void execute(SendCodeInput input) {
-        // 비밀번호 찾기 인증코드를 전송
         authService.sendFindPasswordCode(input);
     }
 }

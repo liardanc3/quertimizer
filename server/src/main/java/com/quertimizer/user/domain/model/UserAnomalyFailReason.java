@@ -14,7 +14,7 @@ public enum UserAnomalyFailReason {
     }
 
     public String getMessage() {
-        // 메시지 조회
+        // 실패 메시지를 반환한다
         return message;
     }
 

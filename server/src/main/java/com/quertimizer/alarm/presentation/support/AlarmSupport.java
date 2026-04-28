@@ -11,8 +11,12 @@ public class AlarmSupport {
 
     private final AuthService authService;
 
+    /**
+     * Spring Security 인증 정보에서 현재 사용자 handle을 확인한다.
+     *
+     * @param authentication 현재 요청의 인증 정보
+     */
     public String resolveCurrentHandle(Authentication authentication) {
-        // 현재 인증 기준 Handle을 해석
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return null;
         }

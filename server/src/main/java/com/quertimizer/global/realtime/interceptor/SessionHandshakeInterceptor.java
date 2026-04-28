@@ -30,6 +30,21 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     private final AuthService authService;
     private final LoginPolicy loginPolicy;
 
+    /**
+     * WebSocket handshake 요청을 인증하고 세션 속성을 준비한다.
+     *
+     * <ol>
+     *   <li>handshake 요청 로그 기록
+     *   <li>HTTP 세션 또는 principal 인증 정보 확인
+     *   <li>차단 사용자 검증
+     *   <li>WebSocket 세션 속성 저장
+     * </ol>
+     *
+     * @param request handshake HTTP 요청
+     * @param response handshake HTTP 응답
+     * @param wsHandler WebSocket handler
+     * @param attributes WebSocket 세션에 전달할 속성 map
+     */
     @Override
     public boolean beforeHandshake(ServerHttpRequest request,
                                    ServerHttpResponse response,
@@ -75,6 +90,14 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
         return true;
     }
 
+    /**
+     * WebSocket handshake 성공 로그를 기록한다.
+     *
+     * @param request handshake HTTP 요청
+     * @param response handshake HTTP 응답
+     * @param wsHandler WebSocket handler
+     * @param exception handshake 처리 예외
+     */
     @Override
     public void afterHandshake(ServerHttpRequest request,
                                ServerHttpResponse response,

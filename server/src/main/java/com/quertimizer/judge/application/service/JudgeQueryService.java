@@ -3,9 +3,12 @@ package com.quertimizer.judge.application.service;
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
+import com.quertimizer.judge.application.port.DbmsSqlDialect;
+import com.quertimizer.judge.application.port.DbmsSqlDialectProvider;
+import com.quertimizer.judge.domain.model.JudgeSqlExecutionMode;
+import com.quertimizer.judge.domain.policy.JudgeSqlStatementPolicy;
 import com.quertimizer.judge.domain.service.JudgeAnswerHashSupport;
-import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialect;
-import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
+import com.quertimizer.judge.domain.service.JudgeSqlStatementParser;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistoryId;
@@ -49,28 +52,10 @@ import static com.quertimizer.problem.domain.model.ProblemSubmitProgressText.*;
 public class JudgeQueryService {
 
     private static final int QUERY_TIMEOUT_SECONDS = 60;
-    private static final int MAX_SQL_LENGTH = 20_000;
     private static final int CONNECTION_RETRY_COUNT = 3;
     private static final long CONNECTION_RETRY_DELAY_MS = 2_000L;
     private static final int DEFAULT_SELECT_PAGE_SIZE = 10;
 
-    private static final Pattern CREATE_INDEX_PATTERN =
-            Pattern.compile("^CREATE\\s+(UNIQUE\\s+)?INDEX\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DROP_INDEX_PATTERN =
-            Pattern.compile("^DROP\\s+INDEX\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ALTER_INDEX_PATTERN =
-            Pattern.compile("^ALTER\\s+INDEX\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern EXPLAIN_ANALYZE_PATTERN =
-            Pattern.compile("^EXPLAIN\\s+(\\([^)]*ANALYZE[^)]*\\)|ANALYZE\\b)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern OTHER_WORKSPACE_PATTERN =
-            Pattern.compile("\\b[a-z0-9_]+_problem_\\d{5}_\\d{5}\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern BASE_WORKSPACE_PATTERN =
-            Pattern.compile("\\bproblem_set_\\d{5}\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern TEMPLATE_PATTERN =
-            Pattern.compile("\\bproblem_[a-z0-9_]+_template\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern MULTI_STATEMENT_PATTERN = Pattern.compile(";(?=.+\\S)");
-    private static final Pattern WRITE_CTE_PATTERN =
-            Pattern.compile("\\bWITH\\b[\\s\\S]*\\b(INSERT|UPDATE|DELETE|MERGE)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PLAN_TOTAL_COST_PATTERN =
             Pattern.compile("cost=[0-9]+(?:\\.[0-9]+)?\\.\\.([0-9]+(?:\\.[0-9]+)?)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MYSQL_QUERY_COST_PATTERN =
@@ -79,7 +64,9 @@ public class JudgeQueryService {
             Pattern.compile("Execution Time:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*ms", Pattern.CASE_INSENSITIVE);
 
     private final JudgeWorkspaceService judgeWorkspaceService;
-    private final DbmsSqlDialects dbmsSqlDialects;
+    private final DbmsSqlDialectProvider dbmsSqlDialectProvider;
+    private final JudgeSqlStatementPolicy judgeSqlStatementPolicy;
+    private final JudgeSqlStatementParser judgeSqlStatementParser;
     private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
     private final ProblemRepository problemRepository;
@@ -94,8 +81,8 @@ public class JudgeQueryService {
                                                       Integer page,
                                                       Integer pageSize) {
         String trimmedSql = trimTrailingSemicolon(sql);
-        validateSql(trimmedSql, handle);
-        ExecutionMode executionMode = resolveExecutionMode(trimmedSql);
+        judgeSqlStatementPolicy.validateInteractiveSql(trimmedSql, handle);
+        JudgeSqlExecutionMode executionMode = judgeSqlStatementPolicy.resolveExecutionMode(trimmedSql);
 
         try (JudgeWorkspaceService.WorkspaceSession workspaceSession =
                      judgeWorkspaceService.openWorkspace(handle, problemId, socketId, dbmsType)) {
@@ -103,7 +90,7 @@ public class JudgeQueryService {
             connection.setAutoCommit(false);
             configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
-            Double estimatedCost = executionMode == ExecutionMode.SELECT
+            Double estimatedCost = executionMode == JudgeSqlExecutionMode.SELECT
                     ? estimateQueryCost(socketId, connection, dbmsType, trimmedSql)
                     : null;
             int normalizedPage = normalizeExecutionPage(page);
@@ -152,7 +139,7 @@ public class JudgeQueryService {
             List<SubmittedStatement> ddlStatements = resolveDdlStatements(submittedStatements);
 
             for (SubmittedStatement statement : submittedStatements) {
-                validateSqlStatement(statement.sql(), handle);
+                judgeSqlStatementPolicy.validateSqlStatement(statement.sql(), handle);
             }
 
             progressListener.accept(ProblemSubmitProgress.running(submittedProblemId, VALIDATE.getKey(), SQL_VALIDATE_RUNNING.getText()));
@@ -407,70 +394,9 @@ public class JudgeQueryService {
         }
     }
 
-    private void validateSql(String sql, String handle) {
-        // SQL 검증
-        validateSqlText(sql);
-
-        if (MULTI_STATEMENT_PATTERN.matcher(sql).find()) {
-            throw new IllegalArgumentException(SINGLE_SQL_ONLY.getMessage());
-        }
-
-        validateSqlStatement(sql, handle);
-    }
-
-    private void validateSqlText(String sql) {
-        // SQL 텍스트 검증
-        if (sql.isBlank()) {
-            throw new IllegalArgumentException(SQL_REQUIRED.getMessage());
-        }
-
-        if (sql.length() > MAX_SQL_LENGTH) {
-            throw new IllegalArgumentException(SQL_LENGTH_EXCEEDED.getMessage());
-        }
-    }
-
-    private void validateSqlStatement(String sql, String handle) {
-        // SQL 구문 검증
-        validateSqlText(sql);
-        String normalizedSql = normalizeSql(sql);
-        validateForbiddenKeyword(normalizedSql, "ALTER SYSTEM", ALTER_SYSTEM_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "COPY", COPY_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "PROGRAM", PROGRAM_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "CREATE EXTENSION", CREATE_EXTENSION_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "DROP SCHEMA", DROP_SCHEMA_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "DROP TABLE", DROP_TABLE_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "TRUNCATE", TRUNCATE_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "VACUUM", VACUUM_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "REINDEX", REINDEX_UNAVAILABLE.getMessage());
-        validateForbiddenKeyword(normalizedSql, "PG_CATALOG", PG_CATALOG_ACCESS_DENIED.getMessage());
-        validateForbiddenKeyword(normalizedSql, "INFORMATION_SCHEMA", INFORMATION_SCHEMA_ACCESS_DENIED.getMessage());
-        validateForbiddenKeyword(normalizedSql, "CONCURRENTLY", CONCURRENTLY_UNAVAILABLE.getMessage());
-
-        if (TEMPLATE_PATTERN.matcher(sql).find()) {
-            throw new IllegalArgumentException(TEMPLATE_TABLE_ACCESS_DENIED.getMessage());
-        }
-
-        if (BASE_WORKSPACE_PATTERN.matcher(sql).find()) {
-            throw new IllegalArgumentException(BASE_WORKSPACE_ACCESS_DENIED.getMessage());
-        }
-
-        if (Pattern.compile("\\bsession_[a-z0-9_]+\\b", Pattern.CASE_INSENSITIVE).matcher(sql).find()) {
-            throw new IllegalArgumentException(OTHER_SESSION_SCHEMA_ACCESS_DENIED.getMessage());
-        }
-
-        Matcher otherWorkspaceMatcher = OTHER_WORKSPACE_PATTERN.matcher(sql);
-        String currentWorkspacePrefix = sanitizeWorkspacePrefix(handle);
-        while (otherWorkspaceMatcher.find()) {
-            String schemaName = otherWorkspaceMatcher.group().toLowerCase(Locale.ROOT);
-            if (!schemaName.startsWith(currentWorkspacePrefix + "_problem_")) {
-                throw new IllegalArgumentException(OTHER_USER_WORKSPACE_ACCESS_DENIED.getMessage());
-            }
-        }
-    }
-
     private void configureExecutionConnection(Connection connection, DbmsType dbmsType, String schemaName) throws SQLException {
         // 실행용 세션 설정 적용
-        DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
+        DbmsSqlDialect dialect = dbmsSqlDialectProvider.get(dbmsType);
         try (Statement statement = connection.createStatement()) {
             for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {
                 statement.execute(useSchemaSql);
@@ -550,7 +476,7 @@ public class JudgeQueryService {
         Statement statement = createTrackedStatement(socketId, connection);
         try (statement) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
-            statement.execute(dbmsSqlDialects.get(dbmsType).selectCountSql(sql));
+            statement.execute(dbmsSqlDialectProvider.get(dbmsType).selectCountSql(sql));
 
             try (ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet == null || !resultSet.next()) {
@@ -573,7 +499,7 @@ public class JudgeQueryService {
         PreparedStatement statement = createTrackedPreparedStatement(
                 socketId,
                 connection,
-                dbmsSqlDialects.get(dbmsType).selectPageSql(sql)
+                dbmsSqlDialectProvider.get(dbmsType).selectPageSql(sql)
         );
 
         try (statement) {
@@ -650,39 +576,6 @@ public class JudgeQueryService {
         } finally {
             clearTrackedStatement(socketId, statement);
         }
-    }
-
-    private ExecutionMode resolveExecutionMode(String sql) {
-        // 실행 모드 결정
-        String normalizedSql = normalizeSql(sql);
-
-        if (EXPLAIN_ANALYZE_PATTERN.matcher(normalizedSql).find()) {
-            return ExecutionMode.EXPLAIN_ANALYZE;
-        }
-
-        if (normalizedSql.startsWith("EXPLAIN ")) {
-            return ExecutionMode.EXPLAIN;
-        }
-
-        if (CREATE_INDEX_PATTERN.matcher(normalizedSql).find()
-                || DROP_INDEX_PATTERN.matcher(normalizedSql).find()
-                || ALTER_INDEX_PATTERN.matcher(normalizedSql).find()) {
-            return ExecutionMode.INDEX_COMMAND;
-        }
-
-        if (normalizedSql.startsWith("SELECT ")) {
-            return ExecutionMode.SELECT;
-        }
-
-        if (normalizedSql.startsWith("WITH ")) {
-            if (WRITE_CTE_PATTERN.matcher(normalizedSql).find()) {
-                throw new IllegalArgumentException(WRITE_CTE_UNSUPPORTED.getMessage());
-            }
-
-            return ExecutionMode.SELECT;
-        }
-
-        throw new IllegalArgumentException(UNSUPPORTED_SQL_COMMAND.getMessage());
     }
 
     private void validateSubmittedSqlWithRetry(String handle,
@@ -800,7 +693,7 @@ public class JudgeQueryService {
             configureExecutionConnection(connection, dbmsType, workspaceSession.schemaName());
 
             String preparedStatementName = "qt_submit_validate_" + System.nanoTime();
-            DbmsSqlDialect dialect = dbmsSqlDialects.get(dbmsType);
+            DbmsSqlDialect dialect = dbmsSqlDialectProvider.get(dbmsType);
             Statement statement = createTrackedStatement(socketId, connection);
             try (statement) {
                 statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
@@ -898,7 +791,7 @@ public class JudgeQueryService {
             QueryExecutionResult explainAnalyzeResult = executeExplain(
                     socketId,
                     connection,
-                    dbmsSqlDialects.get(dbmsType).explainAnalyzeSql(sql),
+                    dbmsSqlDialectProvider.get(dbmsType).explainAnalyzeSql(sql),
                     problemId,
                     "explain_analyze"
             );
@@ -908,13 +801,6 @@ public class JudgeQueryService {
             return explainAnalyzeResult.withExecutionTimeMs(extractExplainAnalyzeExecutionTimeMs(explainAnalyzeResult.planLines()));
         } catch (SQLException exception) {
             throw new IllegalStateException(resolveSqlErrorMessage(exception), exception);
-        }
-    }
-
-    private void validateForbiddenKeyword(String normalizedSql, String keyword, String message) {
-        // 금지 키워드 검증
-        if (normalizedSql.contains(keyword)) {
-            throw new IllegalArgumentException(message);
         }
     }
 
@@ -940,16 +826,16 @@ public class JudgeQueryService {
 
     private List<SubmittedStatement> parseSubmittedStatements(String sql) {
         // 제출 구문 목록 파싱
-        validateSqlText(sql);
+        judgeSqlStatementPolicy.validateSqlText(sql);
 
-        List<String> normalizedStatements = splitSqlStatements(sql);
+        List<String> normalizedStatements = judgeSqlStatementParser.splitStatements(sql);
         List<SubmittedStatement> statements = new ArrayList<>();
         int referenceStatementIndex = -1;
 
         for (String statementSql : normalizedStatements) {
-            ExecutionMode executionMode = resolveSubmitExecutionMode(statementSql);
+            JudgeSqlExecutionMode executionMode = judgeSqlStatementPolicy.resolveSubmitExecutionMode(statementSql);
             int statementIndex = statements.size();
-            if (executionMode == ExecutionMode.SELECT) {
+            if (executionMode == JudgeSqlExecutionMode.SELECT) {
                 if (referenceStatementIndex >= 0) {
                     throw new IllegalArgumentException(SUBMIT_SELECT_ONLY.getMessage());
                 }
@@ -989,90 +875,6 @@ public class JudgeQueryService {
         return resolvedStatements;
     }
 
-    private List<String> splitSqlStatements(String sql) {
-        // split SQL 구문 목록 처리
-        List<String> statements = new ArrayList<>();
-        int statementStart = 0;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-
-        for (int index = 0; index < sql.length(); index++) {
-            char currentChar = sql.charAt(index);
-            char nextChar = index + 1 < sql.length() ? sql.charAt(index + 1) : '\0';
-
-            if (inLineComment) {
-                if (currentChar == '\n') {
-                    inLineComment = false;
-                }
-                continue;
-            }
-
-            if (inBlockComment) {
-                if (currentChar == '*' && nextChar == '/') {
-                    inBlockComment = false;
-                    index++;
-                }
-                continue;
-            }
-
-            if (inSingleQuote) {
-                if (currentChar == '\'' && nextChar == '\'') {
-                    index++;
-                    continue;
-                }
-
-                if (currentChar == '\'') {
-                    inSingleQuote = false;
-                }
-                continue;
-            }
-
-            if (inDoubleQuote) {
-                if (currentChar == '"' && nextChar == '"') {
-                    index++;
-                    continue;
-                }
-
-                if (currentChar == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-
-            if (currentChar == '-' && nextChar == '-') {
-                inLineComment = true;
-                index++;
-                continue;
-            }
-
-            if (currentChar == '/' && nextChar == '*') {
-                inBlockComment = true;
-                index++;
-                continue;
-            }
-
-            if (currentChar == '\'') {
-                inSingleQuote = true;
-                continue;
-            }
-
-            if (currentChar == '"') {
-                inDoubleQuote = true;
-                continue;
-            }
-
-            if (currentChar == ';') {
-                collectSqlStatement(sql, statementStart, index + 1, statements);
-                statementStart = index + 1;
-            }
-        }
-
-        collectSqlStatement(sql, statementStart, sql.length(), statements);
-        return statements;
-    }
-
     private SubmittedStatement resolveReferenceStatement(List<SubmittedStatement> statements) {
         // 기준 구문 결정
         for (SubmittedStatement statement : statements) {
@@ -1088,7 +890,7 @@ public class JudgeQueryService {
         // DDL 구문 목록 결정
         List<SubmittedStatement> ddlStatements = new ArrayList<>();
         for (SubmittedStatement statement : statements) {
-            if (statement.mode() == ExecutionMode.INDEX_COMMAND) {
+            if (statement.mode() == JudgeSqlExecutionMode.INDEX_COMMAND) {
                 ddlStatements.add(statement);
             }
         }
@@ -1096,55 +898,9 @@ public class JudgeQueryService {
         return List.copyOf(ddlStatements);
     }
 
-    private void collectSqlStatement(String sql, int statementStart, int statementEnd, List<String> statements) {
-        // SQL 구문 수집
-        String rawStatement = sql.substring(statementStart, statementEnd);
-        int firstContentOffset = findFirstContentOffset(rawStatement);
-        if (firstContentOffset < 0) {
-            return;
-        }
-
-        int trailingWhitespaceLength = rawStatement.length() - rawStatement.stripTrailing().length();
-        String normalizedStatement = trimTrailingSemicolon(
-                sql.substring(statementStart + firstContentOffset, statementEnd - trailingWhitespaceLength)
-        ).trim();
-
-        if (!normalizedStatement.isBlank()) {
-            statements.add(normalizedStatement);
-        }
-    }
-
-    private int findFirstContentOffset(String sql) {
-        // First 본문 Offset 조회
-        for (int index = 0; index < sql.length(); index++) {
-            if (!Character.isWhitespace(sql.charAt(index))) {
-                return index;
-            }
-        }
-
-        return -1;
-    }
-
-    private ExecutionMode resolveSubmitExecutionMode(String sql) {
-        // 제출 실행 모드 결정
-        ExecutionMode executionMode = resolveExecutionMode(sql);
-        if (executionMode == ExecutionMode.EXPLAIN || executionMode == ExecutionMode.EXPLAIN_ANALYZE) {
-            throw new IllegalArgumentException(SUBMIT_SELECT_AND_INDEX_DDL_ONLY.getMessage());
-        }
-
-        return executionMode;
-    }
-
     private String createSubmittedStatementKey(int statementIndex) {
         // 제출 구문 키 생성
         return "submit-statement-" + statementIndex;
-    }
-
-    private String normalizeSql(String sql) {
-        // SQL 정규화
-        return sql.trim()
-                .replaceAll("\\s+", " ")
-                .toUpperCase(Locale.ROOT);
     }
 
     private int normalizeExecutionPage(Integer page) {
@@ -1165,29 +921,12 @@ public class JudgeQueryService {
         return Math.min(pageSize, DEFAULT_SELECT_PAGE_SIZE);
     }
 
-    private String sanitizeWorkspacePrefix(String handle) {
-        // sanitize 작업 스키마 Prefix 처리
-        String sanitizedHandle = handle.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
-        if (sanitizedHandle.isBlank()) {
-            sanitizedHandle = "user";
-        }
-
-        if (Character.isDigit(sanitizedHandle.charAt(0))) {
-            sanitizedHandle = "u_" + sanitizedHandle;
-        }
-
-        int maxPrefixLength = Math.max(1, 63 - "_problem_00001_00001".length());
-        return sanitizedHandle.length() > maxPrefixLength
-                ? sanitizedHandle.substring(0, maxPrefixLength)
-                : sanitizedHandle;
-    }
-
     private Double estimateQueryCost(String socketId, Connection connection, DbmsType dbmsType, String sql) throws SQLException {
         // 실행 계획 기준 예상 Cost 계산
         Statement statement = createTrackedStatement(socketId, connection);
         try (statement) {
             statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
-            statement.execute(dbmsSqlDialects.get(dbmsType).explainSql(sql));
+            statement.execute(dbmsSqlDialectProvider.get(dbmsType).explainSql(sql));
 
             try (ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet == null) {
@@ -1998,13 +1737,6 @@ public class JudgeQueryService {
         return preview.substring(0, 20) + "...";
     }
 
-    private enum ExecutionMode {
-        SELECT,
-        EXPLAIN,
-        EXPLAIN_ANALYZE,
-        INDEX_COMMAND
-    }
-
     public record QueryExecutionResult(String problemId,
                                        String mode,
                                        String message,
@@ -2132,7 +1864,11 @@ public class JudgeQueryService {
 
         private static ProblemSubmitProgress success(String problemId, String stepKey, String message, List<String> detailLines) {
             // success 처리
-            return new ProblemSubmitProgress(problemId, stepKey, "success", message, detailLines != null ? detailLines : List.of(), null, null, null, null, null);
+            return new ProblemSubmitProgress(
+                    problemId, stepKey, "success", message,
+                    detailLines != null ? detailLines : List.of(),
+                    null, null, null, null, null
+            );
         }
 
         private static ProblemSubmitProgress incorrect(String problemId, String stepKey, String message) {
@@ -2147,7 +1883,11 @@ public class JudgeQueryService {
 
         private static ProblemSubmitProgress error(String problemId, String stepKey, String message, List<String> detailLines) {
             // error 처리
-            return new ProblemSubmitProgress(problemId, stepKey, "error", message, detailLines != null ? detailLines : List.of(), null, null, null, null, null);
+            return new ProblemSubmitProgress(
+                    problemId, stepKey, "error", message,
+                    detailLines != null ? detailLines : List.of(),
+                    null, null, null, null, null
+            );
         }
 
         private static ProblemSubmitProgress runningStatement(String problemId, SubmittedStatement statement, String message) {
@@ -2176,7 +1916,7 @@ public class JudgeQueryService {
                     statement.key(),
                     statement.index(),
                     statement.sql(),
-                    statement.mode() == ExecutionMode.SELECT ? "select" : "command",
+                    statement.mode() == JudgeSqlExecutionMode.SELECT ? "select" : "command",
                     statement.referenceSelect()
             );
         }
@@ -2185,7 +1925,7 @@ public class JudgeQueryService {
     private record SubmittedStatement(String key,
                                       int index,
                                       String sql,
-                                      ExecutionMode mode,
+                                      JudgeSqlExecutionMode mode,
                                       boolean referenceSelect) {
     }
 

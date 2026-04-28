@@ -7,6 +7,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public class AlarmTemplateInput {
 
+    private final String alarmType;
     private final String sentence;
     private final String description;
 }

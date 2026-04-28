@@ -23,13 +23,25 @@ public class SessionSocketSender {
     private final LogFormatter logFormatter;
     private final SessionSocketRegistry sessionSocketRegistry;
 
+    /**
+     * 객체 payload를 JSON 문자열로 직렬화해 WebSocket으로 전송한다.
+     *
+     * @param session 메시지를 보낼 WebSocket 세션
+     * @param payload 직렬화할 응답 payload
+     * @throws Exception JSON 직렬화 또는 WebSocket 전송에 실패한 경우
+     */
     public void sendObjectMessage(WebSocketSession session, Object payload) throws Exception {
-        // 객체 payload를 JSON 문자열로 직렬화 후 전송
         sendTextMessage(session, objectMapper.writeValueAsString(payload));
     }
 
+    /**
+     * WebSocket 텍스트 메시지를 로그에 남긴 뒤 전송한다.
+     *
+     * @param session 메시지를 보낼 WebSocket 세션
+     * @param payload 전송할 텍스트 payload
+     * @throws Exception WebSocket 전송에 실패한 경우
+     */
     public void sendTextMessage(WebSocketSession session, String payload) throws Exception {
-        // WebSocket 텍스트 메시지를 전송
         String actor = resolveActor(session);
         String prefix = logFormatter.prefix(actor);
 
@@ -45,8 +57,14 @@ public class SessionSocketSender {
         }
     }
 
+    /**
+     * 사용자 handle에 연결된 모든 WebSocket 세션으로 payload를 전송한다.
+     *
+     * @param handle 전송 대상 사용자 handle
+     * @param payload 전송할 응답 payload
+     * @throws Exception JSON 직렬화 또는 WebSocket 전송에 실패한 경우
+     */
     public void sendToUser(String handle, Object payload) throws Exception {
-        // 사용자 Handle 기준으로 payload를 브로드캐스트
         Set<WebSocketSession> userSockets = sessionSocketRegistry.findUserSockets(handle);
         if (userSockets.isEmpty()) {
             return;
@@ -62,8 +80,12 @@ public class SessionSocketSender {
         }
     }
 
+    /**
+     * 같은 HttpSession에 연결된 모든 WebSocket 세션을 종료한다.
+     *
+     * @param sessionId 종료할 HTTP 세션 ID
+     */
     public void closeSessionSockets(String sessionId) {
-        // 같은 HttpSession에 연결된 모든 WebSocket 연결을 종료
         for (WebSocketSession session : sessionSocketRegistry.takeSessionSockets(sessionId)) {
             if (!session.isOpen()) {
                 continue;

@@ -1,6 +1,6 @@
 package com.quertimizer.community.application.usecase;
 
-import com.quertimizer.community.application.input.CommunityPostInput;
+import com.quertimizer.community.application.input.UpdateCommunityPostInput;
 import com.quertimizer.community.application.service.CommunityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -13,8 +13,12 @@ public class UpdateCommunityPost {
 
     private final CommunityService communityService;
 
-    public Optional<Long> execute(Long postId, String handle, CommunityPostInput input) {
-        // 게시글을 수정
-        return communityService.updatePost(postId, handle, input);
+    /**
+     * 커뮤니티 게시글을 수정한다.
+     *
+     * @param input 수정할 게시글, 요청자, 저장할 게시글 입력
+     */
+    public Optional<Long> execute(UpdateCommunityPostInput input) {
+        return communityService.updatePost(input.getPostId(), input.getHandle(), input.getPost());
     }
 }

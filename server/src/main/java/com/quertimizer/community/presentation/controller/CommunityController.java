@@ -1,12 +1,20 @@
 package com.quertimizer.community.presentation.controller;
 
+import com.quertimizer.community.application.input.AddCommunityCommentInput;
+import com.quertimizer.community.application.input.CommunityPostDetailInput;
+import com.quertimizer.community.application.input.CommunityPostSearchInput;
+import com.quertimizer.community.application.input.CreateCommunityPostInput;
+import com.quertimizer.community.application.input.DeleteCommunityPostInput;
+import com.quertimizer.community.application.input.ToggleCommunityCommentLikeInput;
+import com.quertimizer.community.application.input.ToggleCommunityPostLikeInput;
+import com.quertimizer.community.application.input.UpdateCommunityPostInput;
 import com.quertimizer.community.application.usecase.AddCommunityComment;
 import com.quertimizer.community.application.usecase.CreateCommunityPost;
 import com.quertimizer.community.application.usecase.DeleteCommunityPost;
+import com.quertimizer.community.application.usecase.GetCommunityImage;
 import com.quertimizer.community.application.usecase.GetCommunityPostDetail;
 import com.quertimizer.community.application.usecase.GetCommunityPosts;
 import com.quertimizer.community.application.usecase.GetCommunityTagSuggestions;
-import com.quertimizer.community.application.usecase.GetCommunityImage;
 import com.quertimizer.community.application.usecase.ToggleCommunityCommentLike;
 import com.quertimizer.community.application.usecase.ToggleCommunityPostLike;
 import com.quertimizer.community.application.usecase.UpdateCommunityPost;
@@ -57,50 +65,92 @@ public class CommunityController {
 
     private final CommunitySupport communitySupport;
 
+    /**
+     * 커뮤니티 게시글 목록을 검색, 필터, 정렬 조건에 맞게 반환한다.
+     *
+     * <ol>
+     *   <li>게시글 검색 입력 생성
+     *   <li>게시글 목록 페이지 응답 생성
+     * </ol>
+     *
+     * @param page 요청 페이지 번호
+     * @param search 검색어
+     * @param tag 태그 필터
+     * @param category 카테고리 필터
+     * @param sortKey 정렬 기준
+     */
     @GetMapping("/community/posts")
     public ResponseEntity<CommunityPostPageRes> getPosts(@RequestParam(defaultValue = "1") int page,
                                                          @RequestParam(required = false) String search,
                                                          @RequestParam(required = false) String tag,
                                                          @RequestParam(defaultValue = "all") String category,
                                                          @RequestParam(defaultValue = "default") String sortKey) {
-        // 게시글 목록 검색, 태그 필터, 정렬, 페이징 조회
+        CommunityPostSearchInput input = new CommunityPostSearchInput(page, search, tag, category, sortKey);
+
         return ResponseEntity.ok(CommunityPostPageRes.from(
-                getCommunityPosts.execute(page, search, tag, category, sortKey)
+                getCommunityPosts.execute(input)
         ));
     }
 
+    /**
+     * 게시글 상세를 현재 사용자 반응 정보와 함께 반환한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 상세 응답 생성
+     * </ol>
+     *
+     * @param postId 조회할 게시글 번호
+     * @param authentication 현재 요청의 인증 정보
+     */
     @GetMapping("/community/posts/{postId}")
     public ResponseEntity<CommunityPostDetailRes> getPostDetail(@PathVariable Long postId,
                                                                 Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
 
-        // 게시글 상세 조회
-        return ResponseEntity.of(getCommunityPostDetail.execute(postId, currentHandle).map(CommunityPostDetailRes::from));
+        CommunityPostDetailInput input = new CommunityPostDetailInput(postId, currentHandle);
+        return ResponseEntity.of(getCommunityPostDetail.execute(input).map(CommunityPostDetailRes::from));
     }
 
+    /**
+     * 현재 사용자의 커뮤니티 게시글을 생성하고 Location을 반환한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 생성 후 Location 응답 생성
+     * </ol>
+     *
+     * @param request 생성할 게시글 요청
+     * @param authentication 현재 요청의 인증 정보
+     */
     @PostMapping("/community/posts")
     public ResponseEntity<Void> createPost(@Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 게시글 작성
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        Long createdPostId = createCommunityPost.execute(currentHandle, request.toCommunityPostInput());
+        CreateCommunityPostInput input = new CreateCommunityPostInput(currentHandle, request.toCommunityPostInput());
+        Long createdPostId = createCommunityPost.execute(input);
         return ResponseEntity.created(communitySupport.buildPostLocation(createdPostId)).build();
     }
 
+    /**
+     * 커뮤니티 게시글 작성용 이미지를 업로드한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>이미지 업로드 응답 생성
+     * </ol>
+     *
+     * @param file 업로드할 이미지 파일
+     * @param authentication 현재 요청의 인증 정보
+     */
     @PostMapping("/community/images")
     public ResponseEntity<CommunityImageUploadRes> uploadImage(@RequestParam("file") MultipartFile file,
                                                                Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 커뮤니티 글쓰기 이미지를 업로드
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -108,9 +158,13 @@ public class CommunityController {
         return ResponseEntity.ok(CommunityImageUploadRes.from(uploadCommunityImage.execute(file)));
     }
 
+    /**
+     * 커뮤니티 이미지를 리소스 응답으로 반환한다.
+     *
+     * @param imageId 조회할 커뮤니티 이미지 ID
+     */
     @GetMapping("/community/images/{imageId}")
     public ResponseEntity<Resource> getImage(@PathVariable String imageId) {
-        // 커뮤니티 이미지를 조회
         return getCommunityImage.execute(imageId)
                 .map(image -> ResponseEntity.ok()
                         .contentType(MediaType.parseMediaType(image.getContentType()))
@@ -118,87 +172,137 @@ public class CommunityController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * 현재 사용자의 커뮤니티 게시글을 수정한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 수정 결과 응답 생성
+     * </ol>
+     *
+     * @param postId 수정할 게시글 번호
+     * @param request 저장할 게시글 요청
+     * @param authentication 현재 요청의 인증 정보
+     */
     @PutMapping("/community/posts/{postId}")
     public ResponseEntity<Void> updatePost(@PathVariable Long postId,
                                            @Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 본인 게시글 수정
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        if (updateCommunityPost.execute(postId, currentHandle, request.toCommunityPostInput()).isPresent()) {
+        UpdateCommunityPostInput input = new UpdateCommunityPostInput(postId, currentHandle, request.toCommunityPostInput());
+        if (updateCommunityPost.execute(input).isPresent()) {
             return ResponseEntity.noContent().build();
         }
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
 
+    /**
+     * 현재 사용자의 커뮤니티 게시글을 삭제한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 삭제 결과 응답 생성
+     * </ol>
+     *
+     * @param postId 삭제할 게시글 번호
+     * @param authentication 현재 요청의 인증 정보
+     */
     @DeleteMapping("/community/posts/{postId}")
     public ResponseEntity<Void> deletePost(@PathVariable Long postId, Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 본인 게시글 삭제
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return deleteCommunityPost.execute(postId, currentHandle)
+        return deleteCommunityPost.execute(new DeleteCommunityPostInput(postId, currentHandle))
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
 
+    /**
+     * 현재 사용자의 게시글 좋아요 상태를 토글한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 좋아요 결과 응답 생성
+     * </ol>
+     *
+     * @param postId 좋아요를 토글할 게시글 번호
+     * @param authentication 현재 요청의 인증 정보
+     */
     @PostMapping("/community/posts/{postId}/likes")
     public ResponseEntity<CommunityReactionRes> togglePostLike(@PathVariable Long postId,
                                                                Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 게시글 좋아요 토글
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(toggleCommunityPostLike.execute(postId, currentHandle).map(CommunityReactionRes::from));
+        ToggleCommunityPostLikeInput input = new ToggleCommunityPostLikeInput(postId, currentHandle);
+        return ResponseEntity.of(toggleCommunityPostLike.execute(input).map(CommunityReactionRes::from));
     }
 
+    /**
+     * 현재 사용자의 댓글 또는 대댓글을 생성한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>댓글 생성 결과 응답 생성
+     * </ol>
+     *
+     * @param postId 댓글을 작성할 게시글 번호
+     * @param request 생성할 댓글 요청
+     * @param authentication 현재 요청의 인증 정보
+     */
     @PostMapping("/community/posts/{postId}/comments")
     public ResponseEntity<CommunityCommentRes> addComment(@PathVariable Long postId,
                                                           @Valid @RequestBody CommunityCommentCreateReq request,
                                                           Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 댓글, 대댓글 작성
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(addCommunityComment.execute(postId, currentHandle, request.toCommunityCommentInput())
+        AddCommunityCommentInput input = new AddCommunityCommentInput(postId, currentHandle, request.toCommunityCommentInput());
+        return ResponseEntity.of(addCommunityComment.execute(input)
                 .map(CommunityCommentRes::from));
     }
 
+    /**
+     * 현재 사용자의 댓글 좋아요 상태를 토글한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>댓글 좋아요 결과 응답 생성
+     * </ol>
+     *
+     * @param commentId 좋아요를 토글할 댓글 번호
+     * @param authentication 현재 요청의 인증 정보
+     */
     @PostMapping("/community/comments/{commentId}/likes")
     public ResponseEntity<CommunityReactionRes> toggleCommentLike(@PathVariable Long commentId,
                                                                   Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-
-        // 댓글 좋아요 토글
         if (currentHandle == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        return ResponseEntity.of(toggleCommunityCommentLike.execute(commentId, currentHandle).map(CommunityReactionRes::from));
+        ToggleCommunityCommentLikeInput input = new ToggleCommunityCommentLikeInput(commentId, currentHandle);
+        return ResponseEntity.of(toggleCommunityCommentLike.execute(input).map(CommunityReactionRes::from));
     }
 
+    /**
+     * 게시글 작성용 태그 자동완성 후보를 반환한다.
+     *
+     * @param query 태그 검색어
+     */
     @GetMapping("/community/tags/suggestions")
     public ResponseEntity<List<CommunityTagSuggestionRes>> getTagSuggestions(@RequestParam(required = false) String query) {
-        // 게시글 작성용 태그 자동완성 조회
         return ResponseEntity.ok(getCommunityTagSuggestions.execute(query).stream()
                 .map(CommunityTagSuggestionRes::from)
                 .toList());

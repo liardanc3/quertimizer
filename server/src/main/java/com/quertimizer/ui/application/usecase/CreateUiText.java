@@ -12,8 +12,12 @@ public class CreateUiText {
 
     private final UiTextService uiTextService;
 
+    /**
+     * UI 텍스트를 생성한다.
+     *
+     * @param input 생성할 UI 텍스트 입력
+     */
     public UiTextOutput execute(UiTextInput input) {
-        // UI 텍스트를 생성
         return uiTextService.createUiText(input);
     }
 }

@@ -11,8 +11,12 @@ public class ResetPassword {
 
     private final AuthService authService;
 
+    /**
+     * 인증이 끝난 이메일의 비밀번호를 재설정한다.
+     *
+     * @param input 비밀번호 재설정 입력
+     */
     public void execute(ResetPasswordInput input) {
-        // 비밀번호를 재설정
         authService.resetPassword(input);
     }
 }

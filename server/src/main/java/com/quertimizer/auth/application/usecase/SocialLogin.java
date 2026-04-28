@@ -17,11 +17,19 @@ public class SocialLogin {
 
     private final AuthService authService;
 
+    /**
+     * OAuth2 인증 결과로 소셜 로그인 인증 결과를 생성한다.
+     *
+     * <ol>
+     *   <li>OAuth2 인증 정보 해석
+     *   <li>소셜 로그인 인증 결과 생성
+     * </ol>
+     *
+     * @param input 소셜 로그인 입력
+     */
     public Authentication execute(SocialLoginInput input) {
-        // OAuth2 인증정보에서 provider와 attribute를 해석
         OAuth2AuthenticationToken authentication = resolveOAuth2Authentication(input.getAuthentication());
 
-        // 소셜 로그인 인증결과를 생성
         return authService.loginWithOAuth2(
                 authentication.getAuthorizedClientRegistrationId(),
                 authentication.getPrincipal().getAttributes(),

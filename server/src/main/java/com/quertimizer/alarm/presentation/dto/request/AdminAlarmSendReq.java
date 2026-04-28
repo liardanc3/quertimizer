@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.presentation.dto.request;
 
+import com.quertimizer.alarm.application.input.SendAdminAlarmInput;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -18,5 +19,9 @@ public class AdminAlarmSendReq {
     @NotBlank
     @Size(max = 500)
     private String message;
+
+    public SendAdminAlarmInput toSendAdminAlarmInput() {
+        return new SendAdminAlarmInput(recipientHandles, message);
+    }
 
 }

@@ -3,6 +3,8 @@ package com.quertimizer.judge.presentation.realtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.auth.domain.model.AuthFailReason;
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.application.input.InteractiveSqlInput;
+import com.quertimizer.judge.application.input.SubmitProblemSqlInput;
 import com.quertimizer.judge.application.service.JudgeQueryService;
 import com.quertimizer.judge.application.service.JudgeWorkspaceService;
 import com.quertimizer.judge.application.usecase.CancelInteractiveExecution;
@@ -49,6 +51,11 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
     @Qualifier("problemExecutingExecutor")
     private final TaskExecutor problemExecutingExecutor;
 
+    /**
+     * judge WebSocket message type을 이 handler가 처리할 수 있는지 확인한다.
+     *
+     * @param type 수신한 WebSocket message type
+     */
     @Override
     public boolean supports(String type) {
         return PROBLEM_EXECUTE.equals(type)
@@ -63,6 +70,19 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
                 || JUDGE_LEAVE.equals(type);
     }
 
+    /**
+     * judge WebSocket 메시지를 요청 DTO로 변환하고 type별 처리 흐름으로 라우팅한다.
+     *
+     * <ol>
+     *   <li>payload를 문제 소켓 요청으로 변환
+     *   <li>요청 type 검증
+     *   <li>type별 실행, 제출, 취소, 이탈 처리로 위임
+     * </ol>
+     *
+     * @param session 수신한 WebSocket 세션
+     * @param message 라우팅할 WebSocket 메시지
+     * @throws Exception payload 변환 또는 이탈 응답 전송에 실패한 경우
+     */
     @Override
     public void handle(WebSocketSession session, SessionSocketMessage message) throws Exception {
         ProblemSocketReq request = objectMapper.treeToValue(message.payload(), ProblemSocketReq.class);
@@ -81,9 +101,14 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
         }
     }
 
+    /**
+     * judge WebSocket 연결 종료 시 작업용 스키마 정리를 예약한다.
+     *
+     * @param session 종료된 WebSocket 세션
+     * @param status 연결 종료 상태
+     */
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        // Judge 관련 작업용 스키마 정리를 연결 종료 시점에 예약
         judgeWorkspaceService.handleConnectionClose(session.getId());
     }
 
@@ -119,15 +144,7 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
     private void executeProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedHandle) {
         // 실행 결과를 소켓 응답으로 변환
         try {
-            JudgeQueryService.QueryExecutionResult executionResult = executeInteractiveSql.execute(
-                    authenticatedHandle,
-                    session.getId(),
-                    request.problemId(),
-                    request.sql(),
-                    resolveDbmsType(request.dbms()),
-                    request.page(),
-                    request.pageSize()
-            );
+            JudgeQueryService.QueryExecutionResult executionResult = executeInteractiveSqlRequest(session, request, authenticatedHandle);
 
             sessionSocketSender.sendObjectMessage(session, ProblemExecuteRes.executionSuccess(
                     executionResult.problemId(),
@@ -150,15 +167,7 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
     private void executeProblemQueryPage(WebSocketSession session, ProblemSocketReq request, String authenticatedHandle) {
         // 실행 페이지 결과를 소켓 응답으로 변환
         try {
-            JudgeQueryService.QueryExecutionResult executionResult = executeInteractiveSql.execute(
-                    authenticatedHandle,
-                    session.getId(),
-                    request.problemId(),
-                    request.sql(),
-                    resolveDbmsType(request.dbms()),
-                    request.page(),
-                    request.pageSize()
-            );
+            JudgeQueryService.QueryExecutionResult executionResult = executeInteractiveSqlRequest(session, request, authenticatedHandle);
 
             sessionSocketSender.sendObjectMessage(session, ProblemExecuteRes.executionSuccess(
                     executionResult.problemId(),
@@ -178,10 +187,25 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
         }
     }
 
+    private JudgeQueryService.QueryExecutionResult executeInteractiveSqlRequest(WebSocketSession session,
+                                                                                ProblemSocketReq request,
+                                                                                String authenticatedHandle) {
+        // 소켓 요청을 인터랙티브 SQL 실행 입력으로 변환
+        return executeInteractiveSql.execute(new InteractiveSqlInput(
+                authenticatedHandle,
+                session.getId(),
+                request.problemId(),
+                request.sql(),
+                resolveDbmsType(request.dbms()),
+                request.page(),
+                request.pageSize()
+        ));
+    }
+
     private void submitProblemQuery(WebSocketSession session, ProblemSocketReq request, String authenticatedHandle) {
         // 제출 결과와 progress를 소켓 응답으로 변환
         try {
-            JudgeQueryService.ProblemSubmitResult submitResult = submitProblemSql.execute(
+            SubmitProblemSqlInput input = new SubmitProblemSqlInput(
                     authenticatedHandle,
                     session.getId(),
                     request.problemId(),
@@ -189,17 +213,19 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
                     resolveDbmsType(request.dbms()),
                     progress -> sendProblemSubmitProgressMessage(session, progress)
             );
+            JudgeQueryService.ProblemSubmitResult submitResult = submitProblemSql.execute(input);
 
-            sessionSocketSender.sendObjectMessage(session, submitResult.success()
+            ProblemExecuteRes response = submitResult.success()
                     ? ProblemExecuteRes.submitSuccess(
-                    submitResult.problemId(),
-                    submitResult.message(),
-                    submitResult.executionTimeMs()
-            )
+                            submitResult.problemId(),
+                            submitResult.message(),
+                            submitResult.executionTimeMs()
+                    )
                     : ProblemExecuteRes.submitFailure(
-                    submitResult.problemId(),
-                    submitResult.message()
-            ));
+                            submitResult.problemId(),
+                            submitResult.message()
+                    );
+            sessionSocketSender.sendObjectMessage(session, response);
         } catch (Exception exception) {
             try {
                 sessionSocketSender.sendObjectMessage(session, ProblemExecuteRes.submitFailure(request.problemId(), resolveErrorMessage(exception)));
@@ -240,7 +266,7 @@ public class JudgeSocketMessageHandler implements SessionSocketMessageHandler {
     }
 
     private String resolveAuthenticatedHandle(WebSocketSession session) {
-        // 인증 Handle을 조회
+        // 소켓 세션에서 인증 handle을 확인
         String handle = (String) session.getAttributes().get("handle");
         if (handle == null || handle.isBlank()) {
             throw new IllegalArgumentException(AuthFailReason.LOGIN_INFORMATION_NOT_FOUND.getMessage());

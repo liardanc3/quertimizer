@@ -222,7 +222,7 @@ public class User {
     }
 
     public UserRole getResolvedRole() {
-        // Resolved 역할 조회
+        // 역할이 비어 있는 오래된 데이터는 일반 사용자로 간주한다.
         return role != null ? role : UserRole.USER;
     }
 
@@ -232,27 +232,27 @@ public class User {
     }
 
     public boolean isSqlPublicEnabled() {
-        // SQL Public Enabled 여부 확인
+        // SQL 공개 설정은 null이면 공개 상태로 해석한다.
         return sqlPublic == null || Boolean.TRUE.equals(sqlPublic);
     }
 
     public boolean isExecutionPercentilePublicEnabled() {
-        // 실행 백분위 Public Enabled 여부 확인
+        // 실행 백분위 공개 설정은 null이면 공개 상태로 해석한다.
         return executionPercentilePublic == null || Boolean.TRUE.equals(executionPercentilePublic);
     }
 
     public boolean isSolvedRecordsPublicEnabled() {
-        // 풀이 기록 목록 Public Enabled 여부 확인
+        // 풀이 기록 목록 공개 설정은 null이면 공개 상태로 해석한다.
         return solvedRecordsPublic == null || Boolean.TRUE.equals(solvedRecordsPublic);
     }
 
     public boolean isSolvedProblemCountPublicEnabled() {
-        // 해결한 문제 Count Public Enabled 여부 확인
+        // 해결한 문제 수 공개 설정은 null이면 공개 상태로 해석한다.
         return solvedProblemCountPublic == null || Boolean.TRUE.equals(solvedProblemCountPublic);
     }
 
     public boolean isCommunityActivityPublicEnabled() {
-        // 커뮤니티 활동 Public Enabled 여부 확인
+        // 커뮤니티 활동 공개 설정은 null이면 공개 상태로 해석한다.
         return communityActivityPublic == null || Boolean.TRUE.equals(communityActivityPublic);
     }
 
@@ -267,7 +267,7 @@ public class User {
     }
 
     public boolean hasHandle() {
-        // Handle 설정 완료 여부를 판단할 때 사용한다.
+        // 가입 직후 사용할 handle 설정이 끝났는지 판단한다.
         return handle != null && !handle.isBlank();
     }
 

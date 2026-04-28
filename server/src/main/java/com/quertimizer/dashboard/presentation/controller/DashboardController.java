@@ -17,11 +17,14 @@ public class DashboardController {
 
     private final DashboardSupport dashboardSupport;
 
+    /**
+     * 로그인 여부에 맞는 대시보드 데이터를 반환한다.
+     *
+     * @param authentication 현재 요청의 인증 정보
+     */
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardRes> getDashboard(Authentication authentication) {
-        // 현재 사용자 Handle을 해석
         String currentHandle = dashboardSupport.resolveCurrentHandle(authentication);
-        // 로그인 여부에 맞는 커뮤니티/문제 대시보드 데이터 반환
         return ResponseEntity.ok(DashboardRes.from(getDashboard.execute(currentHandle)));
     }
 }

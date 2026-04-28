@@ -27,16 +27,30 @@ public class SmtpAuthMailSender implements AuthMailSender {
     private final JavaMailSender javaMailSender;
     private final Environment environment;
 
+    /**
+     * 인증코드 메일을 생성해 JavaMailSender로 전송한다.
+     *
+     * <ol>
+     *   <li>메일 메시지 생성
+     *   <li>수신자와 본문 설정
+     *   <li>메일 전송
+     * </ol>
+     *
+     * @param to 수신자 이메일
+     * @param subject 메일 제목
+     * @param title 메일 본문 제목
+     * @param description 인증코드 안내 문구
+     * @param code 전송할 인증코드
+     * @throws IllegalStateException 메일 메시지를 생성하지 못한 경우
+     */
     @Async
     @Override
     public void sendAuthCodeMail(String to, String subject, String title, String description, String code) {
-        // Auth 인증코드 Mail 전송
         MimeMessage message = javaMailSender.createMimeMessage();
 
         try {
             MimeMessageHelper helper = createMailMessageHelper(message, true);
 
-            // 수신자, 제목, 본문 설정
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(buildAuthCodeMailText(title, description, code), buildAuthCodeMailHtml(title, description, code));

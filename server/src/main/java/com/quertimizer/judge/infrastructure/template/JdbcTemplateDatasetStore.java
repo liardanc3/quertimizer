@@ -3,7 +3,7 @@ package com.quertimizer.judge.infrastructure.template;
 import com.quertimizer.judge.application.input.RefreshTemplateDatasetInput;
 import com.quertimizer.judge.application.port.JudgeTemplateDatasetPort;
 import com.quertimizer.judge.domain.service.JudgeSqlStatementParser;
-import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialect;
+import com.quertimizer.judge.application.port.DbmsSqlDialect;
 import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
 import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseCluster;
 import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseLease;

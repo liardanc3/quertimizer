@@ -11,8 +11,12 @@ public class VerifySignupCode {
 
     private final AuthService authService;
 
+    /**
+     * 회원가입용 인증코드를 검증한다.
+     *
+     * @param input 인증코드 검증 입력
+     */
     public void execute(VerifyCodeInput input) {
-        // 회원가입 인증코드를 확인
         authService.verifySignupCode(input);
     }
 }

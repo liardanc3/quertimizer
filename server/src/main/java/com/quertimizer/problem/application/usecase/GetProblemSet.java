@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.usecase;
 
+import com.quertimizer.problem.application.input.ProblemSetAccessInput;
 import com.quertimizer.problem.application.output.ProblemSetDetailOutput;
 import com.quertimizer.problem.application.service.ProblemService;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +14,12 @@ public class GetProblemSet {
 
     private final ProblemService problemService;
 
-    public Optional<ProblemSetDetailOutput> execute(String problemSetId, String authenticatedEmail) {
-        // 문제 테이블셋 상세를 조회
-        return problemService.getProblemSet(problemSetId, authenticatedEmail);
+    /**
+     * 문제 테이블셋 상세를 조회한다.
+     *
+     * @param input 조회할 문제 테이블셋과 인증 이메일 입력
+     */
+    public Optional<ProblemSetDetailOutput> execute(ProblemSetAccessInput input) {
+        return problemService.getProblemSet(input.getProblemSetId(), input.getAuthenticatedEmail());
     }
 }

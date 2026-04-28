@@ -13,8 +13,12 @@ public class GetProblemSets {
 
     private final ProblemService problemService;
 
+    /**
+     * 문제 테이블셋 목록을 조회한다.
+     *
+     * @param authenticatedEmail 조회 권한을 확인할 인증 이메일
+     */
     public List<ProblemSetSummaryOutput> execute(String authenticatedEmail) {
-        // 문제 테이블셋 목록을 조회
         return problemService.getProblemSets(authenticatedEmail);
     }
 }

@@ -12,8 +12,12 @@ public class SearchAlarmRecipientHandles {
 
     private final AlarmService alarmService;
 
+    /**
+     * 관리자 알람 수신 handle 후보를 검색한다.
+     *
+     * @param keyword 수신자 검색어
+     */
     public List<String> execute(String keyword) {
-        // 관리자 알람 수신 Handle 후보를 검색
         return alarmService.searchRecipientHandles(keyword);
     }
 }

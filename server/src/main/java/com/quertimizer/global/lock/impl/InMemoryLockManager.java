@@ -17,7 +17,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public boolean tryLock(String key) {
-        // try 락 처리
+        // 즉시 점유하지 못한 락 엔트리는 참조 수를 되돌린다.
         LockEntry entry = retainEntry(key);
         boolean locked = entry.lock.tryLock();
 
@@ -30,7 +30,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public boolean tryLock(String key, long timeoutMillis) {
-        // try 락 처리
+        // 제한 시간 안에 점유하지 못한 락 엔트리는 참조 수를 되돌린다.
         LockEntry entry = retainEntry(key);
         boolean locked = false;
 
@@ -49,7 +49,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public void lock(String key) {
-        // lock 처리
+        // 블로킹 락 점유가 실패하면 생성한 참조를 정리한다.
         LockEntry entry = retainEntry(key);
         boolean success = false;
 
@@ -65,7 +65,7 @@ public class InMemoryLockManager implements LockManager {
 
     @Override
     public void unlock(String key) {
-        // unlock 처리
+        // 점유 해제 후 더 이상 쓰지 않는 락 엔트리를 제거한다.
         LockEntry entry = locks.get(key);
 
         if (entry == null) {
@@ -92,7 +92,7 @@ public class InMemoryLockManager implements LockManager {
     }
 
     private void releaseEntry(String key, LockEntry entry) {
-        // release Entry 처리
+        // 참조와 대기자가 모두 사라진 락 엔트리만 map에서 제거한다.
         locks.computeIfPresent(key, (ignored, current) -> {
             if (current != entry) {
                 return current;

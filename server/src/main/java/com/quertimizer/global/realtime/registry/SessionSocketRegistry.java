@@ -12,8 +12,13 @@ public class SessionSocketRegistry {
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionSockets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Set<WebSocketSession>> userSockets = new ConcurrentHashMap<>();
 
+    /**
+     * HttpSession ID 기준 WebSocket 연결을 등록한다.
+     *
+     * @param sessionId WebSocket과 연결된 HTTP 세션 ID
+     * @param session 등록할 WebSocket 세션
+     */
     public void registerSessionSocket(String sessionId, WebSocketSession session) {
-        // HttpSession 기준 WebSocket 연결을 등록
         if (sessionId == null || sessionId.isBlank()) {
             return;
         }
@@ -21,8 +26,13 @@ public class SessionSocketRegistry {
         sessionSockets.computeIfAbsent(sessionId, key -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
+    /**
+     * 사용자 handle 기준 WebSocket 연결을 등록한다.
+     *
+     * @param handle WebSocket과 연결된 사용자 handle
+     * @param session 등록할 WebSocket 세션
+     */
     public void registerUserSocket(String handle, WebSocketSession session) {
-        // 사용자 Handle 기준 WebSocket 연결을 등록
         if (handle == null || handle.isBlank()) {
             return;
         }
@@ -30,8 +40,13 @@ public class SessionSocketRegistry {
         userSockets.computeIfAbsent(handle, key -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
+    /**
+     * HttpSession ID 기준 WebSocket 연결을 해제한다.
+     *
+     * @param sessionId WebSocket과 연결된 HTTP 세션 ID
+     * @param session 해제할 WebSocket 세션
+     */
     public void unregisterSessionSocket(String sessionId, WebSocketSession session) {
-        // HttpSession 기준 WebSocket 연결을 해제
         if (sessionId == null || sessionId.isBlank()) {
             return;
         }
@@ -42,8 +57,13 @@ public class SessionSocketRegistry {
         });
     }
 
+    /**
+     * 사용자 handle 기준 WebSocket 연결을 해제한다.
+     *
+     * @param handle WebSocket과 연결된 사용자 handle
+     * @param session 해제할 WebSocket 세션
+     */
     public void unregisterUserSocket(String handle, WebSocketSession session) {
-        // 사용자 Handle 기준 WebSocket 연결을 해제
         if (handle == null || handle.isBlank()) {
             return;
         }
@@ -54,8 +74,12 @@ public class SessionSocketRegistry {
         });
     }
 
+    /**
+     * 로그아웃한 HTTP 세션의 WebSocket 연결 목록을 제거하고 반환한다.
+     *
+     * @param sessionId 제거할 HTTP 세션 ID
+     */
     public Set<WebSocketSession> takeSessionSockets(String sessionId) {
-        // 로그아웃 시 HttpSession 기준 WebSocket 연결 목록을 제거 후 반환
         if (sessionId == null || sessionId.isBlank()) {
             return Set.of();
         }
@@ -64,8 +88,12 @@ public class SessionSocketRegistry {
         return sessions != null ? Set.copyOf(sessions) : Set.of();
     }
 
+    /**
+     * 사용자 handle 기준 WebSocket 연결 목록을 반환한다.
+     *
+     * @param handle 조회할 사용자 handle
+     */
     public Set<WebSocketSession> findUserSockets(String handle) {
-        // 사용자 Handle 기준 WebSocket 연결 목록을 조회
         if (handle == null || handle.isBlank()) {
             return Set.of();
         }

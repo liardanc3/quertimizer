@@ -29,9 +29,20 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
     private final SessionSocketSender sessionSocketSender;
     private final SessionSocketMessageRouter sessionSocketMessageRouter;
 
+    /**
+     * WebSocket 연결 주체를 registry에 등록하고 연결 완료 메시지를 전송한다.
+     *
+     * <ol>
+     *   <li>로그 주체와 세션 속성 확인
+     *   <li>HttpSession과 사용자 handle 기준으로 registry 등록
+     *   <li>연결 완료 메시지 전송
+     * </ol>
+     *
+     * @param session 새로 열린 WebSocket 세션
+     * @throws Exception 연결 완료 메시지 전송에 실패한 경우
+     */
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        // 연결 주체와 세션 연결 대상을 공용 registry에 등록
         String actor = resolveActor(session);
         String handle = (String) session.getAttributes().get("handle");
         String sessionId = (String) session.getAttributes().get("sessionId");
@@ -46,9 +57,22 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         ));
     }
 
+    /**
+     * WebSocket 텍스트 payload를 로깅하고 도메인 message router로 전달한다.
+     *
+     * <ol>
+     *   <li>수신 payload 로그 기록
+     *   <li>message type 추출
+     *   <li>도메인 inbound handler로 라우팅
+     *   <li>실패 시 공용 error payload 전송
+     * </ol>
+     *
+     * @param session 메시지를 수신한 WebSocket 세션
+     * @param message 수신한 텍스트 메시지
+     * @throws Exception error payload 전송에 실패한 경우
+     */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        // 공용 WebSocket handler는 payload를 로깅하고 message routing만 담당
         String actor = resolveActor(session);
         String prefix = logFormatter.prefix(actor);
 
@@ -72,9 +96,14 @@ public class SessionWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * WebSocket 연결 종료 후 registry와 도메인 정리 로직을 실행한다.
+     *
+     * @param session 종료된 WebSocket 세션
+     * @param status 연결 종료 상태
+     */
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        // 연결 종료 후 registry와 각 도메인 inbound handler 정리 로직을 실행
         String actor = resolveActor(session);
         String sessionId = (String) session.getAttributes().get("sessionId");
         String handle = (String) session.getAttributes().get("handle");

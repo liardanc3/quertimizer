@@ -1,15 +1,15 @@
-package com.quertimizer.community.application.service;
+package com.quertimizer.community.infrastructure.search;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostSearchPort;
+import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import com.quertimizer.community.application.output.CommunityPostPageOutput;
 import com.quertimizer.community.application.output.CommunityPostSummaryOutput;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
 import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
-import com.quertimizer.community.application.port.CommunityPostRepository;
-import com.quertimizer.community.application.port.CommunityPostTagRepository;
-import com.quertimizer.community.infrastructure.search.CommunityPostDocument;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -34,7 +34,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class CommunitySearchService {
+public class CommunitySearchService implements CommunityPostSearchPort {
 
     private final ObjectProvider<ElasticsearchOperations> elasticsearchOperationsProvider;
     private final ObjectMapper objectMapper;
@@ -59,6 +59,7 @@ public class CommunitySearchService {
         }
     }
 
+    @Override
     public CommunityPostPageOutput searchPosts(int requestedPage,
                                                int pageSize,
                                                String searchKeyword,
@@ -90,6 +91,7 @@ public class CommunitySearchService {
         }
     }
 
+    @Override
     public void syncPost(CommunityPost post, List<String> tags) {
         // 단일 게시글 검색 인덱스를 동기화
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
@@ -117,6 +119,7 @@ public class CommunitySearchService {
         }
     }
 
+    @Override
     public void deletePost(Long postId) {
         // 삭제된 게시글 검색 인덱스를 정리
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();

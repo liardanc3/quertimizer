@@ -10,8 +10,12 @@ public class ValidateAvailableEmail {
 
     private final SignupPolicy signupPolicy;
 
+    /**
+     * 회원가입 가능한 이메일인지 검증한다.
+     *
+     * @param email 검증할 이메일
+     */
     public void execute(String email) {
-        // 회원가입 가능 이메일인지 확인
         signupPolicy.validateAvailableEmail(email);
     }
 }

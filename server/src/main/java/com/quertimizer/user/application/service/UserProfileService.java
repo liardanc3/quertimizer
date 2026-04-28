@@ -757,7 +757,7 @@ public class UserProfileService {
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
-        // DBMS 유형 결정
+        // 요청 DBMS 값을 내부 유형으로 맞춘다
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 

@@ -1,10 +1,10 @@
 package com.quertimizer.alarm.presentation.controller;
 
+import com.quertimizer.alarm.application.usecase.SearchAlarmRecipientHandles;
+import com.quertimizer.alarm.application.usecase.SendAdminAlarm;
 import com.quertimizer.alarm.presentation.dto.request.AdminAlarmSendReq;
 import com.quertimizer.alarm.presentation.dto.response.AdminAlarmRecipientRes;
 import com.quertimizer.alarm.presentation.dto.response.AdminAlarmSendRes;
-import com.quertimizer.alarm.application.usecase.SearchAlarmRecipientHandles;
-import com.quertimizer.alarm.application.usecase.SendAdminAlarm;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,19 +23,25 @@ public class AdminAlarmController {
     private final SearchAlarmRecipientHandles searchAlarmRecipientHandles;
     private final SendAdminAlarm sendAdminAlarm;
 
+    /**
+     * 관리자 알람 수신 handle 후보를 검색한다.
+     *
+     * @param keyword 수신자 검색어
+     */
     @GetMapping("/admin/alarms/recipients")
     public ResponseEntity<List<AdminAlarmRecipientRes>> searchAlarmRecipients(@RequestParam String keyword) {
-        // 관리자 알람 수신 Handle 후보를 조회
         return ResponseEntity.ok(searchAlarmRecipientHandles.execute(keyword).stream()
                 .map(AdminAlarmRecipientRes::new)
                 .toList());
     }
 
+    /**
+     * 관리자가 지정한 사용자들에게 공지 알람을 전송한다.
+     *
+     * @param request 수신 handle 목록과 메시지 요청
+     */
     @PostMapping("/admin/alarms/send")
     public ResponseEntity<AdminAlarmSendRes> sendAdminAlarm(@Valid @RequestBody AdminAlarmSendReq request) {
-        // 관리자 공지 알람을 전송
-        return ResponseEntity.ok(new AdminAlarmSendRes(
-                sendAdminAlarm.execute(request.getRecipientHandles(), request.getMessage())
-        ));
+        return ResponseEntity.ok(new AdminAlarmSendRes(sendAdminAlarm.execute(request.toSendAdminAlarmInput())));
     }
 }

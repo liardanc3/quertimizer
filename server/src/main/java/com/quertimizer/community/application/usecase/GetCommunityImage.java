@@ -13,8 +13,12 @@ public class GetCommunityImage {
 
     private final CommunityImageService communityImageService;
 
+    /**
+     * 커뮤니티 이미지를 조회한다.
+     *
+     * @param imageId 조회할 이미지 ID
+     */
     public Optional<CommunityImageOutput> execute(String imageId) {
-        // 커뮤니티 이미지를 조회
         return communityImageService.getImage(imageId);
     }
 }

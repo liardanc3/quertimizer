@@ -1,6 +1,7 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.application.port.DatasetProvisioningStrategy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

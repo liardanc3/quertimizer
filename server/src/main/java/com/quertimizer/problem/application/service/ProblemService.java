@@ -283,7 +283,7 @@ public class ProblemService {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
-        // DBMS 유형 결정
+        // 요청 DBMS 값을 내부 유형으로 맞춘다
         return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 

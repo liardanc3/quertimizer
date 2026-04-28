@@ -39,7 +39,9 @@ public class UserAnomalyDetectionService {
         // 조회 페이지와 범위에 맞는 제출 이상 추세를 조회
         int currentPage = Math.max(1, requestedPage);
         int pageSize = normalizePageSize(requestedPageSize);
-        Page<ProblemSubmitHistoryRepository.UserSubmitCountProjection> submitTrendPage = resolveSubmitTrendPage(range, startedAt, endedAt, currentPage, pageSize);
+        Page<ProblemSubmitHistoryRepository.UserSubmitCountProjection> submitTrendPage = resolveSubmitTrendPage(
+                range, startedAt, endedAt, currentPage, pageSize
+        );
 
         return new UserAnomalyTrendPageOutput(
                 currentPage,

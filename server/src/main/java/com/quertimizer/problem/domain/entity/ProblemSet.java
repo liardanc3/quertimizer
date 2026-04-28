@@ -58,17 +58,17 @@ public class ProblemSet {
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
-        // supports DBMS 처리
+        // 이 테이블셋이 요청 DBMS에서 사용할 수 있는지 판단한다.
         return this.dbmsType == dbmsType;
     }
 
     public boolean hasSupportedDbms() {
-        // Supported DBMS 여부 확인
+        // DBMS가 지정된 최신 테이블셋인지 판단한다.
         return dbmsType != null;
     }
 
     public DbmsType getDbmsType() {
-        // DBMS 유형 조회
+        // 이 테이블셋이 속한 DBMS 유형을 반환한다.
         return dbmsType;
     }
 

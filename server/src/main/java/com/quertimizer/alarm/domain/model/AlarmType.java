@@ -47,27 +47,22 @@ public enum AlarmType {
     }
 
     public String getValue() {
-        // 값 조회
         return value;
     }
 
     public String getTitle() {
-        // 제목 조회
         return title;
     }
 
     public String getDefaultSentence() {
-        // 기본 Sentence 조회
         return defaultSentence;
     }
 
     public String getDefaultDescription() {
-        // 기본 Description 조회
         return defaultDescription;
     }
 
     public String formatDefaultMessage(String actorHandle) {
-        // 기본 메시지 포맷
         return defaultMessageTemplate.formatted(actorHandle);
     }
 

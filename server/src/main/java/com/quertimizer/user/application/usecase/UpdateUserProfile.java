@@ -1,6 +1,6 @@
 package com.quertimizer.user.application.usecase;
 
-import com.quertimizer.user.application.input.UserProfileUpdateInput;
+import com.quertimizer.user.application.input.UserProfileUpdateCommandInput;
 import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import com.quertimizer.user.application.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
@@ -14,8 +14,12 @@ public class UpdateUserProfile {
 
     private final UserProfileService userProfileService;
 
-    public Optional<UserProfileSummaryOutput> execute(String handle, UserProfileUpdateInput input) {
-        // 프로필을 수정
-        return userProfileService.updateProfile(handle, input);
+    /**
+     * 프로필을 수정한다.
+     *
+     * @param input 수정 대상과 저장할 프로필 입력
+     */
+    public Optional<UserProfileSummaryOutput> execute(UserProfileUpdateCommandInput input) {
+        return userProfileService.updateProfile(input.getHandle(), input.getProfile());
     }
 }

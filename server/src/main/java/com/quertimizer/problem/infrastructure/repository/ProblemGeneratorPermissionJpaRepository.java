@@ -5,5 +5,6 @@ import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
 import com.quertimizer.problem.domain.entity.ProblemGeneratorPermissionId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ProblemGeneratorPermissionJpaRepository extends JpaRepository<ProblemGeneratorPermission, ProblemGeneratorPermissionId>, ProblemGeneratorPermissionRepository {
+public interface ProblemGeneratorPermissionJpaRepository
+        extends JpaRepository<ProblemGeneratorPermission, ProblemGeneratorPermissionId>, ProblemGeneratorPermissionRepository {
 }

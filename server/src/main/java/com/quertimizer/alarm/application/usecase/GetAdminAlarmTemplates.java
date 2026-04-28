@@ -13,8 +13,10 @@ public class GetAdminAlarmTemplates {
 
     private final AlarmTemplateService alarmTemplateService;
 
+    /**
+     * 관리자 알람 템플릿 목록을 조회한다.
+     */
     public List<AlarmTemplateOutput> execute() {
-        // 관리자 알람 템플릿 목록을 조회
         return alarmTemplateService.getAdminAlarmTemplates();
     }
 }

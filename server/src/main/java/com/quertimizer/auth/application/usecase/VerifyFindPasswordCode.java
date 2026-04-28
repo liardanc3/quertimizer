@@ -11,8 +11,12 @@ public class VerifyFindPasswordCode {
 
     private final AuthService authService;
 
+    /**
+     * 비밀번호 찾기 인증코드를 검증한다.
+     *
+     * @param input 인증코드 검증 입력
+     */
     public void execute(VerifyCodeInput input) {
-        // 비밀번호 찾기 인증코드를 확인
         authService.verifyFindPasswordCode(input);
     }
 }

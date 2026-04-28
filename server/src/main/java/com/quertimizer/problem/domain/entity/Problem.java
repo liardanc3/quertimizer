@@ -72,7 +72,10 @@ public class Problem {
                                  String sampleOutput,
                                  String answerHash,
                                  String answerSql) {
-        return new Problem(problemId, problemSetId, title, description, ddl, dbmsType, condition, output, sampleDataSql, sampleOutput, answerHash, answerSql);
+        return new Problem(
+                problemId, problemSetId, title, description, ddl, dbmsType,
+                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+        );
     }
 
     public void changeContent(String title,
@@ -118,7 +121,7 @@ public class Problem {
     }
 
     public DbmsType getDbmsType() {
-        // DBMS 유형 조회
+        // DBMS 유형을 반환한다
         return dbmsType;
     }
 

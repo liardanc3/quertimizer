@@ -13,8 +13,12 @@ public class GetProblem {
 
     private final ProblemService problemService;
 
+    /**
+     * 문제 상세를 조회한다.
+     *
+     * @param problemId 조회할 문제 번호
+     */
     public Optional<ProblemDetailOutput> execute(String problemId) {
-        // 문제 상세를 조회
         return problemService.getProblem(problemId);
     }
 }

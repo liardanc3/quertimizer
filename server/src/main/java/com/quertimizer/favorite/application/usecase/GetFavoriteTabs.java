@@ -11,8 +11,12 @@ public class GetFavoriteTabs {
 
     private final FavoriteTabService favoriteTabService;
 
+    /**
+     * 즐겨찾기 탭 목록을 조회한다.
+     *
+     * @param userEmail 즐겨찾기를 조회할 사용자 이메일
+     */
     public FavoriteTabsOutput execute(String userEmail) {
-        // 즐겨찾기 탭 목록을 조회
         return favoriteTabService.getFavoriteTabs(userEmail);
     }
 }

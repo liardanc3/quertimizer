@@ -24,6 +24,7 @@ import com.quertimizer.community.application.port.CommunityCommentLikeRepository
 import com.quertimizer.community.application.port.CommunityCommentRepository;
 import com.quertimizer.community.application.port.CommunityPostLikeRepository;
 import com.quertimizer.community.application.port.CommunityPostRepository;
+import com.quertimizer.community.application.port.CommunityPostSearchPort;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
 import com.quertimizer.global.exception.BusinessException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -56,7 +57,7 @@ public class CommunityService {
     private final CommunityCommentRepository communityCommentRepository;
     private final CommunityPostLikeRepository communityPostLikeRepository;
     private final CommunityCommentLikeRepository communityCommentLikeRepository;
-    private final CommunitySearchService communitySearchService;
+    private final CommunityPostSearchPort communityPostSearchPort;
     private final AlarmService alarmService;
     private final ObjectMapper objectMapper;
 
@@ -67,7 +68,7 @@ public class CommunityService {
         Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
         // 게시글 목록 검색, 필터, 정렬, 페이징
-        return communitySearchService.searchPosts(
+        return communityPostSearchPort.searchPosts(
                 requestedPage,
                 COMMUNITY_PAGE_SIZE,
                 searchKeyword,
@@ -110,7 +111,7 @@ public class CommunityService {
                     );
 
                     // 조회수 변경 후 검색 인덱스 반영
-                    communitySearchService.syncPost(post, tags);
+                    communityPostSearchPort.syncPost(post, tags);
                     return detailResponse;
                 });
     }
@@ -130,10 +131,13 @@ public class CommunityService {
 
         // 게시글 저장 후 태그와 검색 인덱스 동기화
         CommunityPost post = communityPostRepository.save(
-                CommunityPost.create(nextPostId, handle, normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory)
+                CommunityPost.create(
+                        nextPostId, handle, normalizedTitle, normalizedContentJson,
+                        normalizedPlainTextSummary, normalizedImageIds, normalizedCategory
+                )
         );
         replaceTags(post.getPostId(), normalizedTags);
-        communitySearchService.syncPost(post, normalizedTags);
+        communityPostSearchPort.syncPost(post, normalizedTags);
         return post.getPostId();
     }
 
@@ -153,7 +157,7 @@ public class CommunityService {
                     // 게시글 본문, 태그, 검색 인덱스 갱신
                     post.changeContent(normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory);
                     replaceTags(postId, normalizedTags);
-                    communitySearchService.syncPost(post, normalizedTags);
+                    communityPostSearchPort.syncPost(post, normalizedTags);
                     return postId;
                 });
     }
@@ -180,7 +184,7 @@ public class CommunityService {
         communityPostLikeRepository.deleteAllByIdPostId(postId);
         communityPostTagRepository.deleteAllByPostId(postId);
         communityPostRepository.delete(post.get());
-        communitySearchService.deletePost(postId);
+        communityPostSearchPort.deletePost(postId);
         return true;
     }
 
@@ -194,13 +198,13 @@ public class CommunityService {
                     if (communityPostLikeRepository.existsById(postLikeId)) {
                         communityPostLikeRepository.deleteById(postLikeId);
                         post.decreaseLikeCount();
-                        communitySearchService.syncPost(post, createTags(postId));
+                        communityPostSearchPort.syncPost(post, createTags(postId));
                         return new CommunityReactionOutput(false, post.getLikeCount());
                     }
 
                     communityPostLikeRepository.save(CommunityPostLike.create(postId, handle));
                     post.increaseLikeCount();
-                    communitySearchService.syncPost(post, createTags(postId));
+                    communityPostSearchPort.syncPost(post, createTags(postId));
                     publishPostLikeAlarm(post, handle);
                     return new CommunityReactionOutput(true, post.getLikeCount());
                 });
@@ -224,7 +228,7 @@ public class CommunityService {
                             )
                     );
                     post.increaseCommentCount();
-                    communitySearchService.syncPost(post, createTags(postId));
+                    communityPostSearchPort.syncPost(post, createTags(postId));
                     publishCommentAlarms(post, comment, parentComment, handle);
                     return new CommunityCommentOutput(
                             comment.getCommentId(),

@@ -14,8 +14,12 @@ public class CommunitySupport {
 
     private final AuthService authService;
 
+    /**
+     * Spring Security 인증 정보에서 현재 사용자 handle을 확인한다.
+     *
+     * @param authentication 현재 요청의 인증 정보
+     */
     public String resolveCurrentHandle(Authentication authentication) {
-        // 현재 인증 기준 Handle을 해석
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return null;
         }
@@ -23,8 +27,12 @@ public class CommunitySupport {
         return authService.resolveCurrentHandle(authentication.getName());
     }
 
+    /**
+     * 생성된 게시글의 Location 응답 URI를 만든다.
+     *
+     * @param postId Location으로 변환할 게시글 번호
+     */
     public URI buildPostLocation(Long postId) {
-        // 게시글 상세 URI를 생성
         return URI.create("/community/posts/" + CommunityPostIdPolicy.format(postId));
     }
 }

@@ -12,8 +12,12 @@ public class UploadCommunityImage {
 
     private final CommunityImageService communityImageService;
 
+    /**
+     * 커뮤니티 글쓰기 이미지를 업로드한다.
+     *
+     * @param file 업로드할 이미지 파일
+     */
     public CommunityImageOutput execute(MultipartFile file) {
-        // 커뮤니티 글쓰기 이미지를 업로드
         return communityImageService.uploadImage(file);
     }
 }

@@ -86,9 +86,9 @@ public class AlarmTemplateService {
     }
 
     @Transactional
-    public AlarmTemplateOutput updateAlarmTemplate(String alarmType, AlarmTemplateInput input) {
+    public AlarmTemplateOutput updateAlarmTemplate(AlarmTemplateInput input) {
         // 알람 템플릿 내용을 수정
-        AlarmTemplate alarmTemplate = getAlarmTemplate(alarmType);
+        AlarmTemplate alarmTemplate = getAlarmTemplate(input.getAlarmType());
 
         alarmTemplate.changeContent(
                 requireText(input.getSentence(), SENTENCE_REQUIRED.getMessage()),
@@ -131,7 +131,6 @@ public class AlarmTemplateService {
     }
 
     private record DefaultAlarmTemplate(String sentence, String description) {
-        // 기본 알람 템플릿 처리
     }
 
 }

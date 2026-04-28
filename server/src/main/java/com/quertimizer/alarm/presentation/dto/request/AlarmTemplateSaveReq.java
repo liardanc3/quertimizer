@@ -15,7 +15,7 @@ public class AlarmTemplateSaveReq {
     @NotBlank
     private String description;
 
-    public AlarmTemplateInput toAlarmTemplateInput() {
-        return new AlarmTemplateInput(sentence, description);
+    public AlarmTemplateInput toAlarmTemplateInput(String alarmType) {
+        return new AlarmTemplateInput(alarmType, sentence, description);
     }
 }

@@ -12,8 +12,12 @@ public class UpdateAlarmTemplate {
 
     private final AlarmTemplateService alarmTemplateService;
 
-    public AlarmTemplateOutput execute(String alarmType, AlarmTemplateInput input) {
-        // 관리자 알람 템플릿을 수정
-        return alarmTemplateService.updateAlarmTemplate(alarmType, input);
+    /**
+     * 관리자 알람 템플릿 내용을 수정한다.
+     *
+     * @param input 수정할 알람 템플릿 내용
+     */
+    public AlarmTemplateOutput execute(AlarmTemplateInput input) {
+        return alarmTemplateService.updateAlarmTemplate(input);
     }
 }

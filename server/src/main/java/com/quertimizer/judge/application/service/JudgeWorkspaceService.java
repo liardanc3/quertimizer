@@ -1,10 +1,10 @@
 package com.quertimizer.judge.application.service;
 
 import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.judge.infrastructure.execution.DbmsSqlDialects;
-import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseCluster;
-import com.quertimizer.judge.infrastructure.execution.JudgeDatabaseLease;
-import com.quertimizer.judge.infrastructure.execution.SqlReplayProvisioningStrategy;
+import com.quertimizer.judge.application.port.DatasetProvisioningStrategy;
+import com.quertimizer.judge.application.port.DbmsSqlDialectProvider;
+import com.quertimizer.judge.application.port.JudgeDatabaseClusterPort;
+import com.quertimizer.judge.application.port.JudgeDatabaseLeasePort;
 import com.quertimizer.problem.application.store.ProblemStore;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSet;
@@ -54,9 +54,9 @@ public class JudgeWorkspaceService {
     private static final Pattern WORKSPACE_SCHEMA_PATTERN =
             Pattern.compile(".*_problem_\\d{5}_\\d{5}", Pattern.CASE_INSENSITIVE);
 
-    private final JudgeDatabaseCluster judgeDatabaseCluster;
-    private final SqlReplayProvisioningStrategy sqlReplayProvisioningStrategy;
-    private final DbmsSqlDialects dbmsSqlDialects;
+    private final JudgeDatabaseClusterPort judgeDatabaseCluster;
+    private final DatasetProvisioningStrategy datasetProvisioningStrategy;
+    private final DbmsSqlDialectProvider dbmsSqlDialectProvider;
     private final ProblemStore problemStore;
 
     private final Map<String, WorkspaceContext> workspaceByKey = new ConcurrentHashMap<>();
@@ -137,7 +137,7 @@ public class JudgeWorkspaceService {
                 continue;
             }
 
-            try (JudgeDatabaseLease lease = judgeDatabaseCluster.acquireNode(node.getId());
+            try (JudgeDatabaseLeasePort lease = judgeDatabaseCluster.acquireNode(node.getId());
                  Connection connection = lease.openConnection();
                  Statement statement = connection.createStatement();
                  ResultSet resultSet = statement.executeQuery("SELECT schema_name FROM information_schema.schemata")) {
@@ -228,7 +228,7 @@ public class JudgeWorkspaceService {
             return;
         }
 
-        try (JudgeDatabaseLease lease = judgeDatabaseCluster.acquireNode(workspaceContext.nodeId);
+        try (JudgeDatabaseLeasePort lease = judgeDatabaseCluster.acquireNode(workspaceContext.nodeId);
              Connection connection = lease.openConnection()) {
             dropSchema(connection, workspaceContext.dbmsType, workspaceContext.schemaName);
         } catch (Exception exception) {
@@ -252,7 +252,7 @@ public class JudgeWorkspaceService {
 
     private WorkspaceSession createWorkspaceSession(WorkspaceContext workspaceContext, ProblemSet problemSet) {
         // 작업용 schema가 있는 node를 점유하고 커넥션을 연다
-        JudgeDatabaseLease lease = acquireWorkspaceLease(workspaceContext);
+        JudgeDatabaseLeasePort lease = acquireWorkspaceLease(workspaceContext);
         Connection connection = null;
 
         try {
@@ -266,13 +266,13 @@ public class JudgeWorkspaceService {
         }
     }
 
-    private JudgeDatabaseLease acquireWorkspaceLease(WorkspaceContext workspaceContext) {
+    private JudgeDatabaseLeasePort acquireWorkspaceLease(WorkspaceContext workspaceContext) {
         // 기존 workspace는 같은 node를 다시 점유하고, 신규 workspace는 엔진 기준으로 node를 선택
         if (workspaceContext.nodeId != null) {
             return judgeDatabaseCluster.acquireNode(workspaceContext.nodeId);
         }
 
-        JudgeDatabaseLease lease = judgeDatabaseCluster.acquire(workspaceContext.dbmsType);
+        JudgeDatabaseLeasePort lease = judgeDatabaseCluster.acquire(workspaceContext.dbmsType);
         workspaceContext.nodeId = lease.node().getId();
         return lease;
     }
@@ -296,7 +296,7 @@ public class JudgeWorkspaceService {
 
         connection.setAutoCommit(false);
         try {
-            sqlReplayProvisioningStrategy.provision(
+            datasetProvisioningStrategy.provision(
                     connection,
                     workspaceContext.dbmsType,
                     workspaceContext.schemaName,
@@ -360,7 +360,7 @@ public class JudgeWorkspaceService {
     private void dropSchema(Connection connection, DbmsType dbmsType, String schemaName) throws Exception {
         // 작업 스키마 삭제
         try (Statement statement = connection.createStatement()) {
-            statement.execute(dbmsSqlDialects.get(dbmsType).dropSchemaIfExistsSql(schemaName));
+            statement.execute(dbmsSqlDialectProvider.get(dbmsType).dropSchemaIfExistsSql(schemaName));
         }
     }
 
@@ -450,7 +450,7 @@ public class JudgeWorkspaceService {
                                    String problemSetId,
                                    DbmsType dbmsType,
                                    Connection connection,
-                                   JudgeDatabaseLease lease) implements AutoCloseable {
+                                   JudgeDatabaseLeasePort lease) implements AutoCloseable {
 
         @Override
         public void close() {

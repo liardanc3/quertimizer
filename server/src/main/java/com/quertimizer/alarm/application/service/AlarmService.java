@@ -1,27 +1,30 @@
 package com.quertimizer.alarm.application.service;
 
-import com.quertimizer.alarm.application.port.AlarmNotifier;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.alarm.application.input.AlarmPageInput;
+import com.quertimizer.alarm.application.input.MarkAlarmReadInput;
+import com.quertimizer.alarm.application.input.SendAdminAlarmInput;
 import com.quertimizer.alarm.application.output.AlarmCreatedOutput;
 import com.quertimizer.alarm.application.output.AlarmItemOutput;
 import com.quertimizer.alarm.application.output.AlarmPageOutput;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.alarm.application.port.AlarmNotifier;
+import com.quertimizer.alarm.application.port.UserAlarmRepository;
+import com.quertimizer.alarm.domain.entity.AlarmTemplate;
+import com.quertimizer.alarm.domain.entity.UserAlarm;
 import com.quertimizer.alarm.domain.model.AdminDirectAlarm;
 import com.quertimizer.alarm.domain.model.AlarmBinding;
 import com.quertimizer.alarm.domain.model.AlarmSpec;
 import com.quertimizer.alarm.domain.model.AlarmType;
-import com.quertimizer.alarm.domain.entity.UserAlarm;
-import com.quertimizer.alarm.domain.entity.AlarmTemplate;
-import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.alarm.application.port.UserAlarmRepository;
 import com.quertimizer.user.application.port.UserRepository;
+import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,16 +54,16 @@ public class AlarmService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public AlarmPageOutput getAlarms(String handle, int requestedPage, Integer requestedPageSize, String createdAtSort) {
+    public AlarmPageOutput getAlarms(AlarmPageInput input) {
         // 사용자 알람 페이지를 조회
-        int normalizedPage = Math.max(1, requestedPage);
-        int pageSize = normalizePageSize(requestedPageSize);
-        Page<UserAlarm> alarmPage = findAlarmPage(handle, normalizedPage, pageSize, createdAtSort);
+        int normalizedPage = Math.max(1, input.getPage());
+        int pageSize = normalizePageSize(input.getPageSize());
+        Page<UserAlarm> alarmPage = findAlarmPage(input.getHandle(), normalizedPage, pageSize, input.getCreatedAtSort());
         int totalPages = Math.max(1, alarmPage.getTotalPages());
         int currentPage = Math.min(normalizedPage, totalPages);
 
         if (currentPage != normalizedPage) {
-            alarmPage = findAlarmPage(handle, currentPage, pageSize, createdAtSort);
+            alarmPage = findAlarmPage(input.getHandle(), currentPage, pageSize, input.getCreatedAtSort());
         }
 
         return new AlarmPageOutput(
@@ -68,7 +71,7 @@ public class AlarmService {
                 pageSize,
                 alarmPage.getTotalElements(),
                 Math.max(1, alarmPage.getTotalPages()),
-                userAlarmRepository.countByHandleAndReadFalse(handle),
+                userAlarmRepository.countByHandleAndReadFalse(input.getHandle()),
                 alarmPage.getContent().stream()
                         .map(this::toAlarmItemOutput)
                         .toList()
@@ -86,9 +89,9 @@ public class AlarmService {
         unreadAlarms.forEach(UserAlarm::markRead);
     }
 
-    public boolean markRead(Long alarmId, String handle) {
+    public boolean markRead(MarkAlarmReadInput input) {
         // 단일 알람을 읽음 처리
-        return userAlarmRepository.findByAlarmIdAndHandle(alarmId, handle)
+        return userAlarmRepository.findByAlarmIdAndHandle(input.getAlarmId(), input.getHandle())
                 .map(alarm -> {
                     if (!alarm.isRead()) {
                         alarm.markRead();
@@ -115,10 +118,10 @@ public class AlarmService {
                 .toList();
     }
 
-    public int sendAdminAlarm(List<String> recipientHandles, String message) {
+    public int sendAdminAlarm(SendAdminAlarmInput input) {
         // 관리자 공지 알람을 전송
-        List<String> normalizedRecipientHandles = normalizeRecipientHandles(recipientHandles);
-        String normalizedMessage = requireMessage(message);
+        List<String> normalizedRecipientHandles = normalizeRecipientHandles(input.getRecipientHandles());
+        String normalizedMessage = requireMessage(input.getMessage());
         List<User> recipientUsers = userRepository.findAllByHandleIn(normalizedRecipientHandles);
         List<String> resolvedRecipientHandles = recipientUsers.stream()
                 .map(User::getHandle)

@@ -1,4 +1,4 @@
-package com.quertimizer.judge.infrastructure.execution;
+package com.quertimizer.judge.application.port;
 
 import com.quertimizer.global.constant.DbmsType;
 

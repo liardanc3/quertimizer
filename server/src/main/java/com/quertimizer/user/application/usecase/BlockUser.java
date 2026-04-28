@@ -10,8 +10,12 @@ public class BlockUser {
 
     private final AccountRestrictionService accountRestrictionService;
 
+    /**
+     * 사용자를 차단한다.
+     *
+     * @param handle 차단할 사용자 handle
+     */
     public void execute(String handle) {
-        // 사용자를 차단
         accountRestrictionService.blockUser(handle);
     }
 }

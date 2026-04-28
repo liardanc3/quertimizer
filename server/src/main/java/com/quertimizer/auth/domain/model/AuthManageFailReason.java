@@ -1,5 +1,8 @@
 package com.quertimizer.auth.domain.model;
 
+import lombok.Getter;
+
+@Getter
 public enum AuthManageFailReason {
 
     USER_NOT_FOUND("존재하지 않는 사용자다."),
@@ -13,10 +16,4 @@ public enum AuthManageFailReason {
     AuthManageFailReason(String message) {
         this.message = message;
     }
-
-    public String getMessage() {
-        // 메시지 조회
-        return message;
-    }
-
 }

@@ -13,8 +13,12 @@ public class GetUiTexts {
 
     private final UiTextService uiTextService;
 
+    /**
+     * 언어 기준 UI 텍스트 목록을 조회한다.
+     *
+     * @param language 조회할 UI 텍스트 언어
+     */
     public List<UiTextOutput> execute(String language) {
-        // 언어 기준 UI 텍스트 목록을 조회
         return uiTextService.getUiTexts(language);
     }
 }

@@ -11,8 +11,10 @@ public class GetAuthManage {
 
     private final AuthManageService authManageService;
 
+    /**
+     * 권한 설정 화면 데이터를 조회한다.
+     */
     public AuthManageOutput execute() {
-        // 권한 설정 화면 데이터를 조회
         return authManageService.getAuthManage();
     }
 }

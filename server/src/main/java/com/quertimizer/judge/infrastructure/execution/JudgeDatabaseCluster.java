@@ -1,6 +1,8 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.application.port.JudgeDatabaseClusterPort;
+import com.quertimizer.judge.application.port.JudgeDatabaseNodePort;
 import com.quertimizer.judge.infrastructure.config.JudgeDatabaseProperties;
 import org.springframework.stereotype.Component;
 
@@ -11,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-public class JudgeDatabaseCluster {
+public class JudgeDatabaseCluster implements JudgeDatabaseClusterPort {
 
     private final Map<DbmsType, List<JudgeDatabaseNode>> nodesByEngine = new EnumMap<>(DbmsType.class);
     private final Map<String, JudgeDatabaseNode> nodesById = new HashMap<>();
@@ -32,6 +34,7 @@ public class JudgeDatabaseCluster {
         }
     }
 
+    @Override
     public synchronized JudgeDatabaseLease acquire(DbmsType engine) {
         // DBMS 엔진 기준으로 사용 가능한 judge DB node를 점유
         List<JudgeDatabaseNode> nodes = getReadyNodes(engine);
@@ -42,6 +45,7 @@ public class JudgeDatabaseCluster {
         return waitAndAcquire(nodes, "%s judge DB node 대기 중 인터럽트가 발생했다.".formatted(engine.getValue()));
     }
 
+    @Override
     public synchronized JudgeDatabaseLease acquireNode(String nodeId) {
         // 지정된 judge DB node를 점유
         JudgeDatabaseNode node = nodesById.get(nodeId);
@@ -64,9 +68,12 @@ public class JudgeDatabaseCluster {
                 .toList();
     }
 
-    public List<JudgeDatabaseNode> getConfiguredNodes() {
+    @Override
+    public List<JudgeDatabaseNodePort> getConfiguredNodes() {
         // 설정된 전체 judge DB node 목록 조회
-        return List.copyOf(nodesById.values());
+        return nodesById.values().stream()
+                .map(JudgeDatabaseNodePort.class::cast)
+                .toList();
     }
 
     private JudgeDatabaseLease waitAndAcquire(List<JudgeDatabaseNode> nodes, String interruptedMessage) {

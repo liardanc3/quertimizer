@@ -1,6 +1,7 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.application.port.JudgeDatabaseNodePort;
 import lombok.Getter;
 
 import java.sql.Connection;
@@ -8,7 +9,7 @@ import java.sql.SQLException;
 import java.util.concurrent.Semaphore;
 
 @Getter
-public class JudgeDatabaseNode {
+public class JudgeDatabaseNode implements JudgeDatabaseNodePort {
 
     private final String id;
     private final String name;

@@ -1,5 +1,6 @@
 package com.quertimizer.ui.application.usecase;
 
+import com.quertimizer.ui.application.input.UiTextKeyInput;
 import com.quertimizer.ui.application.service.UiTextService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -10,8 +11,12 @@ public class DeleteUiText {
 
     private final UiTextService uiTextService;
 
-    public void execute(String key, String language) {
-        // UI 텍스트를 삭제
-        uiTextService.deleteUiText(key, language);
+    /**
+     * UI 텍스트를 삭제한다.
+     *
+     * @param input 삭제할 UI 텍스트 key와 언어 입력
+     */
+    public void execute(UiTextKeyInput input) {
+        uiTextService.deleteUiText(input.getKey(), input.getLanguage());
     }
 }

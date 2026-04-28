@@ -1,5 +1,7 @@
 package com.quertimizer.auth.presentation.controller;
 
+import com.quertimizer.auth.application.input.UpdateProblemGeneratorPermissionsInput;
+import com.quertimizer.auth.application.input.UpdateUserRoleInput;
 import com.quertimizer.auth.application.usecase.GetAuthManage;
 import com.quertimizer.auth.application.usecase.UpdateProblemGeneratorPermissions;
 import com.quertimizer.auth.application.usecase.UpdateUserRole;
@@ -23,25 +25,39 @@ public class AuthManageController {
     private final UpdateUserRole updateUserRole;
     private final UpdateProblemGeneratorPermissions updateProblemGeneratorPermissions;
 
+    /**
+     * 관리자 권한 관리 화면 데이터를 반환한다.
+     */
     @GetMapping("/admin/auth-manage")
     public ResponseEntity<AuthManageRes> getAuthManage() {
-        // 관리자 권한 현황 조회
         return ResponseEntity.ok(AuthManageRes.from(getAuthManage.execute()));
     }
 
+    /**
+     * 관리자가 사용자 역할을 변경한다.
+     *
+     * @param handle 역할을 변경할 사용자 handle
+     * @param request 변경할 역할 요청
+     */
     @PutMapping("/admin/auth-manage/users/{handle}/role")
     public ResponseEntity<Void> updateUserRole(@PathVariable String handle,
                                                @Valid @RequestBody AuthManageRoleUpdateReq request) {
-        // 관리자 사용자 역할 수정
-        updateUserRole.execute(handle, request.getRole());
+        updateUserRole.execute(UpdateUserRoleInput.of(handle, request.getRole()));
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * 관리자가 ProblemGenerator의 문제 권한을 교체한다.
+     *
+     * @param handle 권한을 변경할 사용자 handle
+     * @param request 교체할 권한 key 목록 요청
+     */
     @PutMapping("/admin/auth-manage/problem-generators/{handle}/permissions")
     public ResponseEntity<Void> updateProblemGeneratorPermissions(@PathVariable String handle,
                                                                   @RequestBody AuthManageProblemPermissionUpdateReq request) {
-        // 관리자 ProblemGenerator 문제 권한 수정
-        updateProblemGeneratorPermissions.execute(handle, request.getPermissionKeys());
+        updateProblemGeneratorPermissions.execute(
+                UpdateProblemGeneratorPermissionsInput.of(handle, request.getPermissionKeys())
+        );
         return ResponseEntity.ok().build();
     }
 }

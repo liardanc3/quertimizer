@@ -8,7 +8,6 @@ import com.quertimizer.auth.application.port.AuthMailSender;
 import com.quertimizer.auth.application.port.VerificationCodeRepository;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
-import com.quertimizer.global.util.CanonicalCode;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.global.lock.Lock;
@@ -60,21 +59,30 @@ public class AuthService {
     private final LoginPolicy loginPolicy;
     private final SignupPolicy signupPolicy;
 
+    /**
+     * 만료된 인증코드를 스케줄러로 정리한다.
+     */
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void deleteExpiredRecoveryCode() {
-        // 메모리 기반 인증코드는 하루에 한 번 만료 정리한다.
         verificationCodeRepository.deleteExpired(LocalDateTime.now());
     }
 
+    /**
+     * 회원가입용 인증코드를 발급하고 메일로 전송한다.
+     *
+     * <ol>
+     *   <li>인증코드 발급
+     *   <li>메일 전송
+     * </ol>
+     *
+     * @param targetEmail 인증코드를 받을 이메일
+     */
     public void sendSignupCode(String targetEmail) {
-        // 회원가입용 인증코드 발급
         String code = issueVerificationCode(targetEmail);
 
         try {
-            // 이메일 가입 인증코드 메일 발송
             authMailSender.sendAuthCodeMail(targetEmail, SIGNUP_CODE_SUBJECT, SIGNUP_CODE_TITLE, SIGNUP_CODE_DESCRIPTION, code);
         } catch (RuntimeException exception) {
-            // 전송 실패 시 인증코드 메모리 삭제 후 Exception 반환
             clearVerificationCode(targetEmail);
             throw new BusinessException(VERIFICATION_EMAIL_SEND_FAILED.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -149,8 +157,17 @@ public class AuthService {
         verificationCodeRepository.markVerified(email);
     }
 
+    /**
+     * 비밀번호 찾기 인증코드를 발급하고 메일로 전송한다.
+     *
+     * <ol>
+     *   <li>가입 이메일 조회와 인증코드 발급
+     *   <li>메일 전송
+     * </ol>
+     *
+     * @param input 인증코드를 받을 이메일 입력
+     */
     public void sendFindPasswordCode(SendCodeInput input) {
-        // 비밀번호 찾기 인증코드 발급
         User user = userRepository.findByEmailIgnoreCase(input.getEmail())
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
         String email = user.getEmail().toLowerCase(Locale.ROOT);
@@ -174,7 +191,6 @@ public class AuthService {
         verificationCodeRepository.markVerified(email);
     }
 
-    @CanonicalCode
     public void resetPassword(ResetPasswordInput input) {
         // 인증코드 검사여부 검증 후 인증코드 파기
         validateVerifiedEmail(input.getEmail(), PASSWORD_RESET_VERIFICATION_REQUIRED.getMessage());

@@ -10,8 +10,12 @@ public class UnblockIp {
 
     private final AccountRestrictionService accountRestrictionService;
 
+    /**
+     * IP 차단을 해제한다.
+     *
+     * @param ipAddress 차단 해제할 IP 주소
+     */
     public void execute(String ipAddress) {
-        // IP 차단을 해제
         accountRestrictionService.unblockIp(ipAddress);
     }
 }

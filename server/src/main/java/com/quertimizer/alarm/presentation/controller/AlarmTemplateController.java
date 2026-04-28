@@ -1,9 +1,9 @@
 package com.quertimizer.alarm.presentation.controller;
 
-import com.quertimizer.alarm.presentation.dto.request.AlarmTemplateSaveReq;
-import com.quertimizer.alarm.presentation.dto.response.AlarmTemplateRes;
 import com.quertimizer.alarm.application.usecase.GetAdminAlarmTemplates;
 import com.quertimizer.alarm.application.usecase.UpdateAlarmTemplate;
+import com.quertimizer.alarm.presentation.dto.request.AlarmTemplateSaveReq;
+import com.quertimizer.alarm.presentation.dto.response.AlarmTemplateRes;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,20 +22,27 @@ public class AlarmTemplateController {
     private final GetAdminAlarmTemplates getAdminAlarmTemplates;
     private final UpdateAlarmTemplate updateAlarmTemplate;
 
+    /**
+     * 관리자 알람 템플릿 목록을 반환한다.
+     */
     @GetMapping("/admin/alarm-templates")
     public ResponseEntity<List<AlarmTemplateRes>> getAdminAlarmTemplates() {
-        // 관리자 알람 템플릿 목록을 조회
         return ResponseEntity.ok(getAdminAlarmTemplates.execute().stream()
                 .map(AlarmTemplateRes::from)
                 .toList());
     }
 
+    /**
+     * 관리자 알람 템플릿 내용을 수정한다.
+     *
+     * @param alarmType 수정할 알람 유형
+     * @param request 저장할 템플릿 요청
+     */
     @PutMapping("/admin/alarm-templates/{alarmType}")
     public ResponseEntity<AlarmTemplateRes> updateAlarmTemplate(@PathVariable String alarmType,
                                                                 @Valid @RequestBody AlarmTemplateSaveReq request) {
-        // 관리자 알람 템플릿을 수정
         return ResponseEntity.ok(AlarmTemplateRes.from(
-                updateAlarmTemplate.execute(alarmType, request.toAlarmTemplateInput())
+                updateAlarmTemplate.execute(request.toAlarmTemplateInput(alarmType))
         ));
     }
 }

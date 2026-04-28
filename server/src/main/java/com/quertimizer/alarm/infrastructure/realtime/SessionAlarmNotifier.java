@@ -13,9 +13,15 @@ public class SessionAlarmNotifier implements AlarmNotifier {
 
     private final SessionSocketSender sessionSocketSender;
 
+    /**
+     * 생성된 알람 payload를 사용자 WebSocket 세션으로 전송한다.
+     *
+     * @param handle 알람을 받을 사용자 handle
+     * @param payload 전송할 알람 생성 payload
+     * @throws Exception WebSocket 전송에 실패한 경우
+     */
     @Override
     public void notifyCreated(String handle, AlarmCreatedOutput payload) throws Exception {
-        // 생성된 알람을 소켓으로 전송
         sessionSocketSender.sendToUser(handle, AlarmSocketRes.from(payload));
     }
 }

@@ -1,13 +1,11 @@
 package com.quertimizer.auth.application.input;
 
-import com.quertimizer.global.util.CanonicalCode;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.Locale;
 import java.util.Optional;
 
-@CanonicalCode
 @Data
 @AllArgsConstructor
 public class EmailLoginInput {

@@ -1,7 +1,6 @@
 package com.quertimizer.auth.application.service;
 
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.global.util.CanonicalCode;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.user.application.port.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,6 @@ public class LoginService {
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
 
-    @CanonicalCode
     public void updateLastAccess(String authenticatedEmail, String accessIp) {
         // IP, 현재시간 기록
         userRepository.findByEmailIgnoreCase(authenticatedEmail)

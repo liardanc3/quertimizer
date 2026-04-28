@@ -4,6 +4,7 @@ import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.judge.application.input.GenerateAnswerHashInput;
 import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
 import com.quertimizer.judge.application.output.ProblemOutputPreviewOutput;
+import com.quertimizer.judge.application.port.DbmsSqlDialect;
 import com.quertimizer.judge.application.port.JudgeExecutionOrchestratorPort;
 import com.quertimizer.judge.infrastructure.config.JudgeDatabaseProperties;
 import lombok.RequiredArgsConstructor;

@@ -6,6 +6,7 @@ import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
+import com.quertimizer.submit.application.input.SubmitHistorySearchInput;
 import com.quertimizer.submit.application.output.SubmitHistoryListItemOutput;
 import com.quertimizer.submit.application.output.SubmitHistoryPageOutput;
 import lombok.RequiredArgsConstructor;
@@ -32,54 +33,40 @@ public class GetSubmitHistories {
 
     private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
 
-    public SubmitHistoryPageOutput execute(int requestedPage,
-                                           String submitId,
-                                           String query,
-                                           String dbms,
-                                           String problemId,
-                                           String judge,
-                                           String costSort,
-                                           String planMatchMode,
-                                           String scanBuckets,
-                                           String joinBuckets,
-                                           String filterBuckets,
-                                           String sortBuckets,
-                                           String aggregateBuckets,
-                                           String hintFilters,
-                                           String postgresqlScanBuckets,
-                                           String postgresqlJoinBuckets,
-                                           String postgresqlFilterBuckets,
-                                           String postgresqlSortBuckets,
-                                           String postgresqlAggregateBuckets,
-                                           String postgresqlHintFilters,
-                                           String mysqlScanBuckets,
-                                           String mysqlJoinBuckets,
-                                           String mysqlFilterBuckets,
-                                           String mysqlSortBuckets,
-                                           String mysqlAggregateBuckets,
-                                           String mysqlHintFilters) {
-        DbmsType dbmsType = resolveDbmsType(dbms);
-        JudgeFilter judgeFilter = resolveJudgeFilter(judge);
+    /**
+     * 제출 이력 검색 입력에 맞는 제출 이력 페이지를 생성한다.
+     *
+     * <ol>
+     *   <li>DBMS, 채점 결과, 실행 계획 필터 확정
+     *   <li>제출 이력 필터링과 정렬
+     *   <li>문제 번호 목록과 페이징 응답 생성
+     * </ol>
+     *
+     * @param input 제출 이력 검색 조건
+     */
+    public SubmitHistoryPageOutput execute(SubmitHistorySearchInput input) {
+        DbmsType dbmsType = resolveDbmsType(input.getDbms());
+        JudgeFilter judgeFilter = resolveJudgeFilter(input.getJudge());
         PlanFilterSelectionsByDbms planFilterSelections = resolvePlanFilterSelections(
-                planMatchMode,
-                scanBuckets,
-                joinBuckets,
-                filterBuckets,
-                sortBuckets,
-                aggregateBuckets,
-                hintFilters,
-                postgresqlScanBuckets,
-                postgresqlJoinBuckets,
-                postgresqlFilterBuckets,
-                postgresqlSortBuckets,
-                postgresqlAggregateBuckets,
-                postgresqlHintFilters,
-                mysqlScanBuckets,
-                mysqlJoinBuckets,
-                mysqlFilterBuckets,
-                mysqlSortBuckets,
-                mysqlAggregateBuckets,
-                mysqlHintFilters
+                input.getPlanMatchMode(),
+                input.getScanBuckets(),
+                input.getJoinBuckets(),
+                input.getFilterBuckets(),
+                input.getSortBuckets(),
+                input.getAggregateBuckets(),
+                input.getHintFilters(),
+                input.getPostgresqlScanBuckets(),
+                input.getPostgresqlJoinBuckets(),
+                input.getPostgresqlFilterBuckets(),
+                input.getPostgresqlSortBuckets(),
+                input.getPostgresqlAggregateBuckets(),
+                input.getPostgresqlHintFilters(),
+                input.getMysqlScanBuckets(),
+                input.getMysqlJoinBuckets(),
+                input.getMysqlFilterBuckets(),
+                input.getMysqlSortBuckets(),
+                input.getMysqlAggregateBuckets(),
+                input.getMysqlHintFilters()
         );
 
         List<ProblemSubmitHistory> histories = problemSubmitHistoryRepository.findAll(
@@ -92,19 +79,19 @@ public class GetSubmitHistories {
                 .toList();
 
         List<SubmitHistoryListItemOutput> filteredHistories = histories.stream()
-                .filter(history -> matchesSubmitId(history, submitId))
-                .filter(history -> matchesHandle(history, query))
+                .filter(history -> matchesSubmitId(history, input.getSubmitId()))
+                .filter(history -> matchesHandle(history, input.getQuery()))
                 .filter(history -> matchesDbms(history, dbmsType))
-                .filter(history -> matchesProblemId(history, problemId))
+                .filter(history -> matchesProblemId(history, input.getProblemId()))
                 .filter(history -> matchesJudge(history, judgeFilter))
                 .filter(history -> matchesPlanFilter(history, planFilterSelections))
-                .sorted(createSubmitHistoryComparator(costSort))
+                .sorted(createSubmitHistoryComparator(input.getCostSort()))
                 .map(this::toSubmitHistoryListItemOutput)
                 .toList();
 
         int totalCount = filteredHistories.size();
         int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) SUBMIT_HISTORY_PAGE_SIZE));
-        int currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
+        int currentPage = Math.min(Math.max(input.getRequestedPage(), 1), totalPages);
         int fromIndex = Math.min((currentPage - 1) * SUBMIT_HISTORY_PAGE_SIZE, totalCount);
         int toIndex = Math.min(fromIndex + SUBMIT_HISTORY_PAGE_SIZE, totalCount);
 
@@ -139,7 +126,7 @@ public class GetSubmitHistories {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
-        // DBMS 유형 결정
+        // 요청 DBMS 값을 내부 유형으로 맞춘다
         if (dbms == null || dbms.isBlank() || dbms.equalsIgnoreCase("all")) {
             return null;
         }
@@ -416,7 +403,10 @@ public class GetSubmitHistories {
                 case "joinBucket" -> List.of("NONE", "NESTED_LOOP", "MERGE_JOIN", "HASH_JOIN", "OTHERS");
                 case "filterBucket" -> List.of("NONE", "ACCESS_FILTER", "POST_FILTER", "JOIN_FILTER", "OTHERS");
                 case "sortBucket" -> List.of("NONE", "PLAIN_SORT", "INCREMENTAL_SORT", "OTHERS");
-                case "aggregateBucket" -> List.of("NONE", "PLAIN_AGG", "GROUP_AGG", "HASH_AGG", "MIXED_AGG", "WINDOW_AGG", "UNIQUE_AGG", "SET_AGG", "OTHERS");
+                case "aggregateBucket" -> List.of(
+                        "NONE", "PLAIN_AGG", "GROUP_AGG", "HASH_AGG", "MIXED_AGG",
+                        "WINDOW_AGG", "UNIQUE_AGG", "SET_AGG", "OTHERS"
+                );
                 default -> List.of();
             };
         };
@@ -436,7 +426,10 @@ public class GetSubmitHistories {
             case "scanBucket" -> switch (value) {
                 case "FULL_SCAN" -> new int[]{PostgreSqlExecutionPlanElementIndex.FULL_SCAN, PostgreSqlExecutionPlanElementIndex.SEQ_SCAN};
                 case "INDEX_SCAN" -> new int[]{PostgreSqlExecutionPlanElementIndex.INDEX_SCAN, PostgreSqlExecutionPlanElementIndex.INDEX_ONLY_SCAN};
-                case "BITMAP_SCAN" -> new int[]{PostgreSqlExecutionPlanElementIndex.BITMAP_INDEX_SCAN, PostgreSqlExecutionPlanElementIndex.BITMAP_HEAP_SCAN};
+                case "BITMAP_SCAN" -> new int[]{
+                        PostgreSqlExecutionPlanElementIndex.BITMAP_INDEX_SCAN,
+                        PostgreSqlExecutionPlanElementIndex.BITMAP_HEAP_SCAN
+                };
                 case "TID_SCAN" -> new int[]{PostgreSqlExecutionPlanElementIndex.TID_SCAN};
                 case "DERIVED_SCAN" -> new int[]{
                         PostgreSqlExecutionPlanElementIndex.SUBQUERY_SCAN,

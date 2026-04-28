@@ -7,7 +7,9 @@ import com.quertimizer.user.domain.entity.User;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.NEW_PROBLEM_SET_PERMISSION_REQUIRED;
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_ACCESS_DENIED;
@@ -17,6 +19,9 @@ import static com.quertimizer.problem.domain.model.ProblemPermissionKey.NEW;
 
 @Component
 public class ProblemManagementPolicy {
+
+    private static final Pattern RAW_SCOPED_PROBLEM_ID_PATTERN = Pattern.compile("^\\d{5}-\\d{5}$");
+    private static final Pattern RAW_SCOPED_PROBLEM_SET_ID_PATTERN = Pattern.compile("^\\d{5}$");
 
     public void validateProblemManagementUser(User user) {
         // 문제 관리 사용자 검증
@@ -31,8 +36,9 @@ public class ProblemManagementPolicy {
             return;
         }
 
-        if (permissionKeys.contains(scopedProblemSetId)
-                || permissionKeys.stream().anyMatch(permissionKey -> isScopedProblemId(permissionKey) && permissionKey.startsWith(scopedProblemSetId + "-"))) {
+        boolean hasProblemAccess = permissionKeys.stream()
+                .anyMatch(permissionKey -> isScopedProblemId(permissionKey) && permissionKey.startsWith(scopedProblemSetId + "-"));
+        if (permissionKeys.contains(scopedProblemSetId) || hasProblemAccess) {
             return;
         }
 
@@ -75,12 +81,16 @@ public class ProblemManagementPolicy {
             return "";
         }
 
-        String normalizedPermissionKey = permissionKey.trim().toUpperCase();
-        if (normalizedPermissionKey.matches("^\\d{5}-\\d{5}$")) {
+        String normalizedPermissionKey = permissionKey.trim().toUpperCase(Locale.ROOT);
+        if (NEW.getValue().equals(normalizedPermissionKey)) {
+            return NEW.getValue();
+        }
+
+        if (RAW_SCOPED_PROBLEM_ID_PATTERN.matcher(normalizedPermissionKey).matches()) {
             return "P" + normalizedPermissionKey;
         }
 
-        if (normalizedPermissionKey.matches("^\\d{5}$")) {
+        if (RAW_SCOPED_PROBLEM_SET_ID_PATTERN.matcher(normalizedPermissionKey).matches()) {
             return "P" + normalizedPermissionKey;
         }
 
