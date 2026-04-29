@@ -55,9 +55,15 @@ public class Problem {
     @Column(name = "sample_data_sql", columnDefinition = "TEXT")
     private String sampleDataSql;
 
+    @Column(name = "sample_dataset_id", length = 80)
+    private String sampleDatasetId;
+
+    @Column(name = "judge_reference_id", length = 80)
+    private String judgeReferenceId;
+
     public static Problem create(String problemId, String title, String description, DbmsType dbmsType) {
         // 문제 생성
-        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "");
+        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "", "", "");
     }
 
     public static Problem create(String problemId,
@@ -72,9 +78,29 @@ public class Problem {
                                  String sampleOutput,
                                  String answerHash,
                                  String answerSql) {
+        return create(
+                problemId, problemSetId, title, description, ddl, dbmsType,
+                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql, "", ""
+        );
+    }
+
+    public static Problem create(String problemId,
+                                 String problemSetId,
+                                 String title,
+                                 String description,
+                                 String ddl,
+                                 DbmsType dbmsType,
+                                 String condition,
+                                 String output,
+                                 String sampleDataSql,
+                                 String sampleOutput,
+                                 String answerHash,
+                                 String answerSql,
+                                 String sampleDatasetId,
+                                 String judgeReferenceId) {
         return new Problem(
                 problemId, problemSetId, title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql, sampleDatasetId, judgeReferenceId
         );
     }
 
@@ -88,6 +114,21 @@ public class Problem {
                               String sampleOutput,
                               String answerHash,
                               String answerSql) {
+        changeContent(title, description, ddl, dbmsType, condition, output, sampleDataSql, sampleOutput, answerHash, answerSql, sampleDatasetId, judgeReferenceId);
+    }
+
+    public void changeContent(String title,
+                              String description,
+                              String ddl,
+                              DbmsType dbmsType,
+                              String condition,
+                              String output,
+                              String sampleDataSql,
+                              String sampleOutput,
+                              String answerHash,
+                              String answerSql,
+                              String sampleDatasetId,
+                              String judgeReferenceId) {
         this.title = title;
         this.description = description;
         this.ddl = ddl;
@@ -98,6 +139,8 @@ public class Problem {
         this.sampleOutput = sampleOutput;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
+        this.sampleDatasetId = sampleDatasetId;
+        this.judgeReferenceId = judgeReferenceId;
     }
 
     public String getOutputSample() {
@@ -161,7 +204,9 @@ public class Problem {
                     String sampleDataSql,
                     String sampleOutput,
                     String answerHash,
-                    String answerSql) {
+                    String answerSql,
+                    String sampleDatasetId,
+                    String judgeReferenceId) {
         this.problemId = problemId;
         this.problemSetId = problemSetId;
         this.title = title;
@@ -174,6 +219,8 @@ public class Problem {
         this.sampleOutput = sampleOutput;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
+        this.sampleDatasetId = sampleDatasetId;
+        this.judgeReferenceId = judgeReferenceId;
     }
 
 }

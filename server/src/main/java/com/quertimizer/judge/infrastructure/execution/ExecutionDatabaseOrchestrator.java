@@ -1,7 +1,6 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.judge.application.input.GenerateAnswerHashInput;
 import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
 import com.quertimizer.judge.application.output.ProblemOutputPreviewOutput;
 import com.quertimizer.judge.application.port.DbmsSqlDialect;
@@ -31,12 +30,6 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
     public ProblemOutputPreviewOutput executeProblemOutputPreview(ProblemOutputPreviewInput input) {
         // 문제 생성 화면의 출력 예시 preview를 임시 execution schema에서 생성
         return executePreviewQuery(input.dbmsType(), input.ddl(), input.sampleDataSql(), input.answerSql(), "preview");
-    }
-
-    @Override
-    public ProblemOutputPreviewOutput executeAnswerHashSource(GenerateAnswerHashInput input) {
-        // 실제 채점 데이터셋의 answerSql 결과를 임시 execution schema에서 생성
-        return executePreviewQuery(input.dbmsType(), input.ddl(), input.actualDataSql(), input.answerSql(), "hash");
     }
 
     private ProblemOutputPreviewOutput executePreviewQuery(DbmsType dbmsType,

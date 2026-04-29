@@ -30,6 +30,9 @@ public class ProblemSet {
     @Column(name = "template_version", length = 64)
     private String templateVersion;
 
+    @Column(name = "judge_dataset_id", length = 80)
+    private String judgeDatasetId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "dbms_type", nullable = false, length = 20)
     private DbmsType dbmsType;
@@ -39,17 +42,35 @@ public class ProblemSet {
                                     String actualDataSql,
                                     String templateVersion,
                                     DbmsType dbmsType) {
-        return new ProblemSet(problemSetId, ddl, actualDataSql, templateVersion, dbmsType);
+        return create(problemSetId, ddl, actualDataSql, templateVersion, dbmsType, "");
+    }
+
+    public static ProblemSet create(String problemSetId,
+                                    String ddl,
+                                    String actualDataSql,
+                                    String templateVersion,
+                                    DbmsType dbmsType,
+                                    String judgeDatasetId) {
+        return new ProblemSet(problemSetId, ddl, actualDataSql, templateVersion, dbmsType, judgeDatasetId);
     }
 
     public void changeContent(String ddl,
                               String actualDataSql,
                               String templateVersion,
                               DbmsType dbmsType) {
+        changeContent(ddl, actualDataSql, templateVersion, dbmsType, judgeDatasetId);
+    }
+
+    public void changeContent(String ddl,
+                              String actualDataSql,
+                              String templateVersion,
+                              DbmsType dbmsType,
+                              String judgeDatasetId) {
         this.ddl = ddl;
         this.actualDataSql = actualDataSql;
         this.templateVersion = templateVersion;
         this.dbmsType = dbmsType;
+        this.judgeDatasetId = judgeDatasetId;
     }
 
     public String getData() {
@@ -81,12 +102,14 @@ public class ProblemSet {
                        String ddl,
                        String actualDataSql,
                        String templateVersion,
-                       DbmsType dbmsType) {
+                       DbmsType dbmsType,
+                       String judgeDatasetId) {
         this.problemSetId = problemSetId;
         this.ddl = ddl;
         this.actualDataSql = actualDataSql;
         this.templateVersion = templateVersion;
         this.dbmsType = dbmsType;
+        this.judgeDatasetId = judgeDatasetId;
     }
 
 }

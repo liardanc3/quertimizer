@@ -5,15 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.global.constant.UserRole;
-import com.quertimizer.judge.application.input.GenerateAnswerHashInput;
-import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
-import com.quertimizer.judge.application.input.RefreshTemplateDatasetInput;
-import com.quertimizer.judge.application.output.ProblemOutputPreviewOutput;
-import com.quertimizer.judge.application.usecase.GenerateProblemAnswerHash;
-import com.quertimizer.judge.application.usecase.RefreshTemplateDataset;
-import com.quertimizer.judge.application.usecase.BuildProblemOutputPreview;
-import com.quertimizer.judge.domain.service.JudgeTemplateVersionSupport;
 import com.quertimizer.problem.application.input.ProblemCreateInput;
+import com.quertimizer.problem.application.input.ProblemSqlDatasetInput;
+import com.quertimizer.problem.application.input.ProblemSqlExecutionInput;
+import com.quertimizer.problem.application.input.ProblemSqlReferenceInput;
 import com.quertimizer.problem.application.output.AdminProblemOptionOutput;
 import com.quertimizer.problem.application.output.ProblemCreateOutput;
 import com.quertimizer.problem.application.output.ProblemDetailOutput;
@@ -21,6 +16,9 @@ import com.quertimizer.problem.application.output.ProblemListItemOutput;
 import com.quertimizer.problem.application.output.ProblemPageOutput;
 import com.quertimizer.problem.application.output.ProblemSetDetailOutput;
 import com.quertimizer.problem.application.output.ProblemSetSummaryOutput;
+import com.quertimizer.problem.application.output.ProblemSqlDatasetOutput;
+import com.quertimizer.problem.application.output.ProblemSqlExecutionOutput;
+import com.quertimizer.problem.application.output.ProblemSqlReferenceOutput;
 import com.quertimizer.problem.application.output.ProblemSubmittedHistoryOutput;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
@@ -31,12 +29,16 @@ import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.application.port.ProblemGeneratorPermissionRepository;
 import com.quertimizer.problem.application.port.ProblemRepository;
 import com.quertimizer.problem.application.port.ProblemSetRepository;
+import com.quertimizer.problem.application.port.ProblemSqlJudgePort;
 import com.quertimizer.problem.application.store.ProblemStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
@@ -64,9 +66,7 @@ public class ProblemService {
     private final ProblemGeneratorPermissionRepository problemGeneratorPermissionRepository;
     private final AuthService authService;
     private final ProblemManagementPolicy problemManagementPolicy;
-    private final BuildProblemOutputPreview buildProblemOutputPreview;
-    private final GenerateProblemAnswerHash generateProblemAnswerHash;
-    private final RefreshTemplateDataset refreshTemplateDataset;
+    private final ProblemSqlJudgePort problemSqlJudgePort;
     private final ObjectMapper objectMapper;
 
     public ProblemPageOutput getProblems(int page,
@@ -216,10 +216,10 @@ public class ProblemService {
 
         validateProblemWriteAccess(currentUser, useExistingProblemSet, useExistingProblem, scopedProblemSetId, request.getProblemId());
 
+        ProblemSet existingProblemSet = useExistingProblemSet ? requireExistingProblemSet(scopedProblemSetId) : null;
         String canonicalDdl;
         String actualDataSql;
         if (useExistingProblemSet) {
-            ProblemSet existingProblemSet = requireExistingProblemSet(scopedProblemSetId);
             canonicalDdl = normalizeOptionalText(existingProblemSet.getDdl());
             actualDataSql = normalizeOptionalText(existingProblemSet.getActualDataSql());
         } else {
@@ -228,35 +228,24 @@ public class ProblemService {
         }
 
         String sampleDataSql = resolveScopedSampleData(request, dbmsType, useExistingProblemSet ? actualDataSql : "");
-        String normalizedAnswerSql = requireText(request.getAnswerSql(), "정답 SQL이 필요하다.");
-        String templateVersion = JudgeTemplateVersionSupport.createVersion(canonicalDdl, actualDataSql);
-        ProblemOutputPreviewOutput sampleOutput = buildProblemOutputPreview.execute(new ProblemOutputPreviewInput(
-                dbmsType,
-                scopedDdl,
-                sampleDataSql,
-                normalizedAnswerSql
-        ));
-        String answerHash = generateProblemAnswerHash.execute(new GenerateAnswerHashInput(
-                dbmsType,
-                canonicalDdl,
-                actualDataSql,
-                normalizedAnswerSql
-        ));
+        String normalizedReferenceSql = requireText(request.getAnswerSql(), "기준 SQL이 필요하다.");
+        ProblemSqlDatasetOutput sampleDataset = problemSqlJudgePort.createDataset(new ProblemSqlDatasetInput(dbmsType, scopedDdl, sampleDataSql, List.of()));
+        ProblemSqlExecutionOutput sampleOutput = problemSqlJudgePort.execute(new ProblemSqlExecutionInput(sampleDataset.getDatasetId(), normalizedReferenceSql));
+        ProblemSqlDatasetOutput judgeDataset = resolveProblemSetDataset(existingProblemSet, dbmsType, canonicalDdl, actualDataSql);
+        ProblemSqlReferenceOutput reference = problemSqlJudgePort.createReference(new ProblemSqlReferenceInput(judgeDataset.getDatasetId(), normalizedReferenceSql));
+        String templateVersion = createDatasetVersion(canonicalDdl, actualDataSql);
 
         if (useExistingProblemSet) {
-            refreshTemplateDataset.execute(new RefreshTemplateDatasetInput(
-                    scopedProblemSetId,
-                    dbmsType,
-                    canonicalDdl,
-                    actualDataSql,
-                    templateVersion
-            ));
+            existingProblemSet.changeContent(canonicalDdl, actualDataSql, templateVersion, dbmsType, judgeDataset.getDatasetId());
         } else {
-            createProblemSet(scopedProblemSetId, canonicalDdl, actualDataSql, templateVersion, dbmsType);
+            createProblemSet(scopedProblemSetId, canonicalDdl, actualDataSql, templateVersion, dbmsType, judgeDataset.getDatasetId());
         }
 
         if (useExistingProblem) {
-            return updateProblem(request, scopedProblemSetId, scopedDdl, dbmsType, sampleDataSql, sampleOutput, answerHash, normalizedAnswerSql);
+            return updateProblem(
+                    request, scopedProblemSetId, scopedDdl, dbmsType,
+                    sampleDataSql, sampleOutput, sampleDataset.getDatasetId(), reference
+            );
         }
 
         String baseProblemSetId = extractBaseProblemSetId(scopedProblemSetId);
@@ -273,8 +262,10 @@ public class ProblemService {
                 request.getOutput().trim(),
                 sampleDataSql,
                 serializeSampleOutput(sampleOutput),
-                answerHash,
-                normalizedAnswerSql
+                reference.getResultHash(),
+                "",
+                sampleDataset.getDatasetId(),
+                reference.getReferenceId()
         ));
 
         addCreatedProblemPermissionIfNeeded(currentUser, problemId);
@@ -328,21 +319,37 @@ public class ProblemService {
                 .orElseThrow(() -> new BusinessException(PROBLEM_SET_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST));
     }
 
+    private ProblemSqlDatasetOutput resolveProblemSetDataset(ProblemSet existingProblemSet,
+                                                             DbmsType dbmsType,
+                                                             String canonicalDdl,
+                                                             String actualDataSql) {
+        // 문제 테이블셋의 sql-judge 데이터셋 키를 준비
+        if (!canonicalDdl.isBlank() && !actualDataSql.isBlank()) {
+            return problemSqlJudgePort.createDataset(new ProblemSqlDatasetInput(dbmsType, canonicalDdl, actualDataSql, List.of()));
+        }
+
+        if (existingProblemSet != null && existingProblemSet.getJudgeDatasetId() != null && !existingProblemSet.getJudgeDatasetId().isBlank()) {
+            return new ProblemSqlDatasetOutput(existingProblemSet.getJudgeDatasetId());
+        }
+
+        return problemSqlJudgePort.createDataset(new ProblemSqlDatasetInput(dbmsType, canonicalDdl, actualDataSql, List.of()));
+    }
+
     private ProblemSet createProblemSet(String problemSetId,
                                         String canonicalDdl,
                                         String actualDataSql,
                                         String templateVersion,
-                                        DbmsType dbmsType) {
+                                        DbmsType dbmsType,
+                                        String judgeDatasetId) {
         // 문제 테이블셋 생성
-        ProblemSet createdProblemSet = problemSetRepository.save(ProblemSet.create(
+        return problemSetRepository.save(ProblemSet.create(
                 problemSetId,
                 canonicalDdl,
                 actualDataSql,
                 templateVersion,
-                dbmsType
+                dbmsType,
+                judgeDatasetId
         ));
-        refreshTemplateDataset.execute(new RefreshTemplateDatasetInput(problemSetId, dbmsType, canonicalDdl, actualDataSql, templateVersion));
-        return createdProblemSet;
     }
 
     private ProblemCreateOutput updateProblem(ProblemCreateInput request,
@@ -350,9 +357,9 @@ public class ProblemService {
                                               String scopedDdl,
                                               DbmsType dbmsType,
                                               String sampleDataSql,
-                                              ProblemOutputPreviewOutput sampleOutput,
-                                              String answerHash,
-                                              String answerSql) {
+                                              ProblemSqlExecutionOutput sampleOutput,
+                                              String sampleDatasetId,
+                                              ProblemSqlReferenceOutput reference) {
         String problemId = requireText(request.getProblemId(), EXISTING_PROBLEM_ID_REQUIRED.getMessage());
         Problem problem = problemRepository.findById(problemId)
                 .orElseThrow(() -> new BusinessException(PROBLEM_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST));
@@ -370,8 +377,10 @@ public class ProblemService {
                 request.getOutput().trim(),
                 sampleDataSql,
                 serializeSampleOutput(sampleOutput),
-                answerHash,
-                answerSql
+                reference.getResultHash(),
+                "",
+                sampleDatasetId,
+                reference.getReferenceId()
         );
 
         problemStore.loadProblems();
@@ -648,7 +657,30 @@ public class ProblemService {
         return value != null ? value.trim() : "";
     }
 
-    private String serializeSampleOutput(ProblemOutputPreviewOutput sampleOutput) {
+    private String createDatasetVersion(String canonicalDdl, String actualDataSql) {
+        // 데이터셋 버전 해시 생성
+        try {
+            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+            messageDigest.update(normalizeOptionalText(canonicalDdl).getBytes(StandardCharsets.UTF_8));
+            messageDigest.update((byte) 0);
+            messageDigest.update(normalizeOptionalText(actualDataSql).getBytes(StandardCharsets.UTF_8));
+            return toHex(messageDigest.digest());
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("데이터셋 버전 해시를 생성할 수 없다.", exception);
+        }
+    }
+
+    private String toHex(byte[] bytes) {
+        // 바이트 배열을 hex 문자열로 변환
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            builder.append("%02x".formatted(value & 0xff));
+        }
+
+        return builder.toString();
+    }
+
+    private String serializeSampleOutput(ProblemSqlExecutionOutput sampleOutput) {
         // sample output 구조를 JSON 문자열로 저장
         try {
             return objectMapper.writeValueAsString(sampleOutput);
@@ -657,8 +689,14 @@ public class ProblemService {
         }
     }
 
-    private record ProblemSetGroup(Map<DbmsType, ProblemSet> problemSetsByDbms) {
+    private static final class ProblemSetGroup {
         // DBMS별 문제 테이블셋 묶음 처리
+
+        private final Map<DbmsType, ProblemSet> problemSetsByDbms;
+
+        private ProblemSetGroup(Map<DbmsType, ProblemSet> problemSetsByDbms) {
+            this.problemSetsByDbms = problemSetsByDbms;
+        }
 
         private boolean isEmpty() {
             // Empty 여부 확인
