@@ -1,0 +1,54 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+
+  datasource:
+    url: jdbc:h2:mem:quertimizer-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+
+  session:
+    store-type: none
+
+  task:
+    scheduling:
+      enabled: false
+
+  mail:
+    host: localhost
+    port: 2525
+    username: test
+    password: test
+
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: test-client
+            client-secret: test-secret
+            scope: read:user,user:email
+        provider:
+          github:
+            authorization-uri: https://github.com/login/oauth/authorize
+            token-uri: https://github.com/login/oauth/access_token
+            user-info-uri: https://api.github.com/user
+            user-name-attribute: id
+
+app:
+  frontend-base-url: http://localhost:5173
+  mail:
+    from: test@quertimizer.local
+  community:
+    image-storage-path: build/test-community-images
+
+judge:
+  dataset-provisioning:
+    strategy: sql-replay
+  databases: []

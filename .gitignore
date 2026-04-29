@@ -1,3 +1,6 @@
 .agents/
 .gradle/
 .codex
+logs/
+*.log
+*.log.gz
