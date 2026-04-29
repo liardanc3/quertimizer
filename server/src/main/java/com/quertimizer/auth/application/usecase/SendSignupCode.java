@@ -17,6 +17,6 @@ public class SendSignupCode {
      * @param input 인증코드 전송 입력
      */
     public void execute(SendCodeInput input) {
-        authService.sendSignupCode(input.getEmail());
+        authService.sendSignupCode(input);
     }
 }

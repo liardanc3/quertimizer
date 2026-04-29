@@ -7,6 +7,7 @@ import com.quertimizer.auth.application.input.VerifyCodeInput;
 import com.quertimizer.auth.application.port.AuthMailSender;
 import com.quertimizer.auth.application.port.VerificationCodeRepository;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
+import com.quertimizer.auth.domain.policy.AuthRateLimitPolicy;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
@@ -57,6 +58,7 @@ public class AuthService {
     private final VerificationCodeRepository verificationCodeRepository;
     private final LoginService loginService;
     private final LoginPolicy loginPolicy;
+    private final AuthRateLimitPolicy authRateLimitPolicy;
     private final SignupPolicy signupPolicy;
 
     /**
@@ -77,7 +79,9 @@ public class AuthService {
      *
      * @param targetEmail 인증코드를 받을 이메일
      */
-    public void sendSignupCode(String targetEmail) {
+    public void sendSignupCode(SendCodeInput input) {
+        authRateLimitPolicy.recordCodeIssue("signup", input.getEmail(), input.getClientIp());
+        String targetEmail = input.getEmail();
         String code = issueVerificationCode(targetEmail);
 
         try {
@@ -153,7 +157,8 @@ public class AuthService {
         // 회원가입 가능 이메일, 인증코드 유효성 확인 후 verify 완료 상태 기록
         signupPolicy.validateAvailableEmail(input.getEmail());
         String email = input.getEmail();
-        validateVerificationCode(email, input.getCode());
+        validateVerificationCode(email, input.getCode(), input.getClientIp(), "signup");
+        authRateLimitPolicy.clearCodeVerificationFailures("signup", email, input.getClientIp());
         verificationCodeRepository.markVerified(email);
     }
 
@@ -168,8 +173,13 @@ public class AuthService {
      * @param input 인증코드를 받을 이메일 입력
      */
     public void sendFindPasswordCode(SendCodeInput input) {
-        User user = userRepository.findByEmailIgnoreCase(input.getEmail())
-                .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        authRateLimitPolicy.recordCodeIssue("find-password", input.getEmail(), input.getClientIp());
+        Optional<User> userOptional = userRepository.findByEmailIgnoreCase(input.getEmail());
+        if (userOptional.isEmpty()) {
+            return;
+        }
+
+        User user = userOptional.get();
         String email = user.getEmail().toLowerCase(Locale.ROOT);
         String code = issueVerificationCode(email);
 
@@ -187,11 +197,14 @@ public class AuthService {
         userRepository.findByEmailIgnoreCase(input.getEmail())
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
         String email = input.getEmail();
-        validateVerificationCode(email, input.getCode());
+        validateVerificationCode(email, input.getCode(), input.getClientIp(), "find-password");
+        authRateLimitPolicy.clearCodeVerificationFailures("find-password", email, input.getClientIp());
         verificationCodeRepository.markVerified(email);
     }
 
     public void resetPassword(ResetPasswordInput input) {
+        authRateLimitPolicy.recordPasswordReset(input.getEmail(), input.getClientIp());
+
         // 인증코드 검사여부 검증 후 인증코드 파기
         validateVerifiedEmail(input.getEmail(), PASSWORD_RESET_VERIFICATION_REQUIRED.getMessage());
         clearVerificationCode(input.getEmail());
@@ -214,12 +227,16 @@ public class AuthService {
         clearVerificationCode(email);
     }
 
-    private void validateVerificationCode(String email, String code) {
+    private void validateVerificationCode(String email, String code, String clientIp, String purpose) {
         // 인증코드 유효성 검증
         String savedCode = verificationCodeRepository.findCode(email).orElse(null);
         LocalDateTime expiredAt = verificationCodeRepository.findExpiredAt(email).orElse(null);
 
         if (savedCode == null || expiredAt == null || !savedCode.equals(code)) {
+            if (authRateLimitPolicy.recordCodeVerificationFailure(purpose, email, clientIp)) {
+                clearVerificationCode(email);
+                throw new BusinessException("인증코드 실패 횟수를 초과했습니다. 인증코드를 다시 요청해 주세요.", HttpStatus.TOO_MANY_REQUESTS);
+            }
             throw new BusinessException(INVALID_VERIFICATION_CODE.getMessage(), HttpStatus.BAD_REQUEST);
         }
         if (expiredAt.isBefore(LocalDateTime.now())) {

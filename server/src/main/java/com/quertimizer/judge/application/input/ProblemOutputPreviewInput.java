@@ -5,5 +5,7 @@ import com.quertimizer.global.constant.DbmsType;
 public record ProblemOutputPreviewInput(DbmsType dbmsType,
                                         String ddl,
                                         String sampleDataSql,
-                                        String answerSql) {
+                                        String answerSql,
+                                        String requester,
+                                        String clientIp) {
 }

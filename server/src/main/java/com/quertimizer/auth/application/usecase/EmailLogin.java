@@ -2,7 +2,9 @@ package com.quertimizer.auth.application.usecase;
 
 import com.quertimizer.auth.application.input.EmailLoginInput;
 import com.quertimizer.auth.application.service.LoginService;
+import com.quertimizer.auth.domain.policy.AuthRateLimitPolicy;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
+import com.quertimizer.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,7 @@ public class EmailLogin {
 
     private final LoginService loginService;
     private final LoginPolicy loginPolicy;
+    private final AuthRateLimitPolicy authRateLimitPolicy;
 
     /**
      * 이메일 로그인 인증 결과를 생성하고 계정 상태와 접속 정보를 반영한다.
@@ -26,7 +29,16 @@ public class EmailLogin {
      * @param input 이메일 로그인 입력
      */
     public Authentication execute(EmailLoginInput input) {
-        Authentication authentication = loginService.getAuthentication(input.getEmail(), input.getPassword());
+        authRateLimitPolicy.validateLoginAllowed(input.getEmail(), input.getAccessIp());
+
+        Authentication authentication;
+        try {
+            authentication = loginService.getAuthentication(input.getEmail(), input.getPassword());
+            authRateLimitPolicy.clearLoginFailures(input.getEmail(), input.getAccessIp());
+        } catch (BusinessException exception) {
+            authRateLimitPolicy.recordLoginFailure(input.getEmail(), input.getAccessIp());
+            throw exception;
+        }
 
         loginPolicy.validateBlockedUser(authentication.getName());
 

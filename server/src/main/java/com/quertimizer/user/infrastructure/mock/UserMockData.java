@@ -96,7 +96,6 @@ public class UserMockData {
     }
 
     private User createUser(String handle, String email, UserRole role, String bio, DbmsType defaultDbms) {
-        // 실제 로그인 흐름과 같은 이중 해시 비밀번호 형식을 사용해야 mock 계정으로도 로그인할 수 있다.
         User user = User.create(handle, encodeForClientLogin(RAW_PASSWORD), email);
 
         user.changeRole(role);
@@ -105,7 +104,6 @@ public class UserMockData {
     }
 
     private String encodeForClientLogin(String rawPassword) {
-        // 클라이언트 1차 해시 + 서버 2차 해시 구조를 mock 데이터에도 동일하게 적용한다.
         return passwordEncoder.encode(Sha512DigestUtils.shaHex(rawPassword));
     }
 

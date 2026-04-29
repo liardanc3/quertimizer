@@ -1,6 +1,7 @@
 package com.quertimizer.auth.presentation.support;
 
 import com.quertimizer.global.realtime.sender.SessionSocketSender;
+import com.quertimizer.global.support.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class AuthSupport {
     private final TokenBasedRememberMeServices rememberMeServices;
     private final SecurityContextRepository securityContextRepository;
     private final SessionSocketSender sessionSocketSender;
+    private final ClientIpResolver clientIpResolver;
 
     @Value("${app.frontend-base-url}")
     private String frontendBaseUrl;
@@ -112,11 +114,6 @@ public class AuthSupport {
      * @param httpRequest 클라이언트 IP를 확인할 HTTP 요청
      */
     public String resolveClientIp(HttpServletRequest httpRequest) {
-        String forwardedFor = httpRequest.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-
-        return httpRequest.getRemoteAddr();
+        return clientIpResolver.resolve(httpRequest);
     }
 }

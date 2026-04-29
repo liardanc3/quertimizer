@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -85,7 +86,7 @@ class FavoriteTabControllerIntegrationTest {
                     user(userEmail).roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(put("/profile/me/favorites")
+            var result = mockMvc.perform(put("/profile/me/favorites").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -114,7 +115,7 @@ class FavoriteTabControllerIntegrationTest {
                     """;
 
             // when
-            var result = mockMvc.perform(put("/profile/me/favorites")
+            var result = mockMvc.perform(put("/profile/me/favorites").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));

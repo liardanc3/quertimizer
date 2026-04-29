@@ -1,12 +1,12 @@
 package com.quertimizer.ranking.presentation.controller;
 
-import com.quertimizer.ranking.application.input.RankSearchInput;
 import com.quertimizer.ranking.application.usecase.GetRanks;
+import com.quertimizer.ranking.presentation.dto.request.RankSearchReq;
 import com.quertimizer.ranking.presentation.dto.response.RankPageRes;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -30,14 +30,8 @@ public class RankController {
      * @param sortKey 랭킹 정렬 기준
      */
     @GetMapping("/ranks")
-    public ResponseEntity<RankPageRes> getRanks(@RequestParam(defaultValue = "1") int page,
-                                                @RequestParam(required = false) Integer pageSize,
-                                                @RequestParam(defaultValue = "postgresql") String dbms,
-                                                @RequestParam(required = false) String query,
-                                                @RequestParam(defaultValue = "solvedCount") String sortKey) {
-        RankSearchInput input = new RankSearchInput(page, pageSize, dbms, query, sortKey);
-
-        return ResponseEntity.ok(RankPageRes.from(getRanks.execute(input)));
+    public ResponseEntity<RankPageRes> getRanks(@Valid RankSearchReq request) {
+        return ResponseEntity.ok(RankPageRes.from(getRanks.execute(request.toInput())));
     }
 
 }

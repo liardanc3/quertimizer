@@ -2,7 +2,6 @@ package com.quertimizer.community.presentation.controller;
 
 import com.quertimizer.community.application.input.AddCommunityCommentInput;
 import com.quertimizer.community.application.input.CommunityPostDetailInput;
-import com.quertimizer.community.application.input.CommunityPostSearchInput;
 import com.quertimizer.community.application.input.CreateCommunityPostInput;
 import com.quertimizer.community.application.input.DeleteCommunityPostInput;
 import com.quertimizer.community.application.input.ToggleCommunityCommentLikeInput;
@@ -21,6 +20,8 @@ import com.quertimizer.community.application.usecase.UpdateCommunityPost;
 import com.quertimizer.community.application.usecase.UploadCommunityImage;
 import com.quertimizer.community.presentation.dto.request.CommunityCommentCreateReq;
 import com.quertimizer.community.presentation.dto.request.CommunityPostSaveReq;
+import com.quertimizer.community.presentation.dto.request.CommunityPostSearchReq;
+import com.quertimizer.community.presentation.dto.request.CommunityTagSuggestionReq;
 import com.quertimizer.community.presentation.dto.response.CommunityCommentRes;
 import com.quertimizer.community.presentation.dto.response.CommunityImageUploadRes;
 import com.quertimizer.community.presentation.dto.response.CommunityPostDetailRes;
@@ -28,6 +29,8 @@ import com.quertimizer.community.presentation.dto.response.CommunityPostPageRes;
 import com.quertimizer.community.presentation.dto.response.CommunityReactionRes;
 import com.quertimizer.community.presentation.dto.response.CommunityTagSuggestionRes;
 import com.quertimizer.community.presentation.support.CommunitySupport;
+import com.quertimizer.global.support.ClientIpResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -64,6 +67,7 @@ public class CommunityController {
     private final GetCommunityImage getCommunityImage;
 
     private final CommunitySupport communitySupport;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 커뮤니티 게시글 목록을 검색, 필터, 정렬 조건에 맞게 반환한다.
@@ -80,15 +84,9 @@ public class CommunityController {
      * @param sortKey 정렬 기준
      */
     @GetMapping("/community/posts")
-    public ResponseEntity<CommunityPostPageRes> getPosts(@RequestParam(defaultValue = "1") int page,
-                                                         @RequestParam(required = false) String search,
-                                                         @RequestParam(required = false) String tag,
-                                                         @RequestParam(defaultValue = "all") String category,
-                                                         @RequestParam(defaultValue = "default") String sortKey) {
-        CommunityPostSearchInput input = new CommunityPostSearchInput(page, search, tag, category, sortKey);
-
+    public ResponseEntity<CommunityPostPageRes> getPosts(@Valid CommunityPostSearchReq request) {
         return ResponseEntity.ok(CommunityPostPageRes.from(
-                getCommunityPosts.execute(input)
+                getCommunityPosts.execute(request.toInput())
         ));
     }
 
@@ -105,10 +103,14 @@ public class CommunityController {
      */
     @GetMapping("/community/posts/{postId}")
     public ResponseEntity<CommunityPostDetailRes> getPostDetail(@PathVariable Long postId,
-                                                                Authentication authentication) {
+                                                                Authentication authentication,
+                                                                HttpServletRequest httpRequest) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String viewerKey = currentHandle != null
+                ? "user:" + currentHandle
+                : "ip:" + clientIpResolver.resolve(httpRequest);
 
-        CommunityPostDetailInput input = new CommunityPostDetailInput(postId, currentHandle);
+        CommunityPostDetailInput input = new CommunityPostDetailInput(postId, currentHandle, viewerKey);
         return ResponseEntity.of(getCommunityPostDetail.execute(input).map(CommunityPostDetailRes::from));
     }
 
@@ -116,7 +118,6 @@ public class CommunityController {
      * 현재 사용자의 커뮤니티 게시글을 생성하고 Location을 반환한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>게시글 생성 후 Location 응답 생성
      * </ol>
      *
@@ -127,9 +128,6 @@ public class CommunityController {
     public ResponseEntity<Void> createPost(@Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         CreateCommunityPostInput input = new CreateCommunityPostInput(currentHandle, request.toCommunityPostInput());
         Long createdPostId = createCommunityPost.execute(input);
@@ -140,21 +138,13 @@ public class CommunityController {
      * 커뮤니티 게시글 작성용 이미지를 업로드한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>이미지 업로드 응답 생성
      * </ol>
      *
      * @param file 업로드할 이미지 파일
-     * @param authentication 현재 요청의 인증 정보
      */
     @PostMapping("/community/images")
-    public ResponseEntity<CommunityImageUploadRes> uploadImage(@RequestParam("file") MultipartFile file,
-                                                               Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
+    public ResponseEntity<CommunityImageUploadRes> uploadImage(@RequestParam("file") MultipartFile file) {
         return ResponseEntity.ok(CommunityImageUploadRes.from(uploadCommunityImage.execute(file)));
     }
 
@@ -176,7 +166,6 @@ public class CommunityController {
      * 현재 사용자의 커뮤니티 게시글을 수정한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>게시글 수정 결과 응답 생성
      * </ol>
      *
@@ -189,9 +178,6 @@ public class CommunityController {
                                            @Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         UpdateCommunityPostInput input = new UpdateCommunityPostInput(postId, currentHandle, request.toCommunityPostInput());
         if (updateCommunityPost.execute(input).isPresent()) {
@@ -205,7 +191,6 @@ public class CommunityController {
      * 현재 사용자의 커뮤니티 게시글을 삭제한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>게시글 삭제 결과 응답 생성
      * </ol>
      *
@@ -215,9 +200,6 @@ public class CommunityController {
     @DeleteMapping("/community/posts/{postId}")
     public ResponseEntity<Void> deletePost(@PathVariable Long postId, Authentication authentication) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         return deleteCommunityPost.execute(new DeleteCommunityPostInput(postId, currentHandle))
                 ? ResponseEntity.noContent().build()
@@ -228,7 +210,6 @@ public class CommunityController {
      * 현재 사용자의 게시글 좋아요 상태를 토글한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>게시글 좋아요 결과 응답 생성
      * </ol>
      *
@@ -239,9 +220,6 @@ public class CommunityController {
     public ResponseEntity<CommunityReactionRes> togglePostLike(@PathVariable Long postId,
                                                                Authentication authentication) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         ToggleCommunityPostLikeInput input = new ToggleCommunityPostLikeInput(postId, currentHandle);
         return ResponseEntity.of(toggleCommunityPostLike.execute(input).map(CommunityReactionRes::from));
@@ -251,7 +229,6 @@ public class CommunityController {
      * 현재 사용자의 댓글 또는 대댓글을 생성한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>댓글 생성 결과 응답 생성
      * </ol>
      *
@@ -264,9 +241,6 @@ public class CommunityController {
                                                           @Valid @RequestBody CommunityCommentCreateReq request,
                                                           Authentication authentication) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         AddCommunityCommentInput input = new AddCommunityCommentInput(postId, currentHandle, request.toCommunityCommentInput());
         return ResponseEntity.of(addCommunityComment.execute(input)
@@ -277,7 +251,6 @@ public class CommunityController {
      * 현재 사용자의 댓글 좋아요 상태를 토글한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
      *   <li>댓글 좋아요 결과 응답 생성
      * </ol>
      *
@@ -288,9 +261,6 @@ public class CommunityController {
     public ResponseEntity<CommunityReactionRes> toggleCommentLike(@PathVariable Long commentId,
                                                                   Authentication authentication) {
         String currentHandle = communitySupport.resolveCurrentHandle(authentication);
-        if (currentHandle == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         ToggleCommunityCommentLikeInput input = new ToggleCommunityCommentLikeInput(commentId, currentHandle);
         return ResponseEntity.of(toggleCommunityCommentLike.execute(input).map(CommunityReactionRes::from));
@@ -302,8 +272,8 @@ public class CommunityController {
      * @param query 태그 검색어
      */
     @GetMapping("/community/tags/suggestions")
-    public ResponseEntity<List<CommunityTagSuggestionRes>> getTagSuggestions(@RequestParam(required = false) String query) {
-        return ResponseEntity.ok(getCommunityTagSuggestions.execute(query).stream()
+    public ResponseEntity<List<CommunityTagSuggestionRes>> getTagSuggestions(@Valid CommunityTagSuggestionReq request) {
+        return ResponseEntity.ok(getCommunityTagSuggestions.execute(request.getQuery()).stream()
                 .map(CommunityTagSuggestionRes::from)
                 .toList());
     }

@@ -55,6 +55,8 @@ public class JudgeQueryService {
     private static final int CONNECTION_RETRY_COUNT = 3;
     private static final long CONNECTION_RETRY_DELAY_MS = 2_000L;
     private static final int DEFAULT_SELECT_PAGE_SIZE = 10;
+    private static final int MAX_RESULT_COLUMNS = 100;
+    private static final int MAX_SUBMIT_RESULT_ROWS = 10_000;
 
     private static final Pattern PLAN_TOTAL_COST_PATTERN =
             Pattern.compile("cost=[0-9]+(?:\\.[0-9]+)?\\.\\.([0-9]+(?:\\.[0-9]+)?)", Pattern.CASE_INSENSITIVE);
@@ -447,6 +449,7 @@ public class JudgeQueryService {
                 }
 
                 ResultSetMetaData metaData = resultSet.getMetaData();
+                validateColumnLimit(metaData);
                 List<String> columns = new ArrayList<>();
                 for (int columnIndex = 1; columnIndex <= metaData.getColumnCount(); columnIndex++) {
                     columns.add(metaData.getColumnLabel(columnIndex));
@@ -456,6 +459,9 @@ public class JudgeQueryService {
                 long rowCount = 0;
                 while (resultSet.next()) {
                     rowCount++;
+                    if (rowCount > MAX_SUBMIT_RESULT_ROWS) {
+                        throw new IllegalArgumentException("SQL 실행 결과 행 수가 너무 많습니다.");
+                    }
 
                     List<String> row = new ArrayList<>();
                     for (int columnIndex = 1; columnIndex <= metaData.getColumnCount(); columnIndex++) {
@@ -514,6 +520,7 @@ public class JudgeQueryService {
                 }
 
                 ResultSetMetaData metaData = resultSet.getMetaData();
+                validateColumnLimit(metaData);
                 List<String> columns = new ArrayList<>();
                 for (int columnIndex = 1; columnIndex <= metaData.getColumnCount(); columnIndex++) {
                     columns.add(metaData.getColumnLabel(columnIndex));
@@ -972,6 +979,7 @@ public class JudgeQueryService {
     private List<String> readPlanLines(ResultSet resultSet) throws SQLException {
         // DBMS별 EXPLAIN 결과를 문자열 목록으로 변환
         ResultSetMetaData metaData = resultSet.getMetaData();
+        validateColumnLimit(metaData);
         List<String> planLines = new ArrayList<>();
 
         while (resultSet.next()) {
@@ -989,6 +997,12 @@ public class JudgeQueryService {
         }
 
         return planLines;
+    }
+
+    private void validateColumnLimit(ResultSetMetaData metaData) throws SQLException {
+        if (metaData.getColumnCount() > MAX_RESULT_COLUMNS) {
+            throw new IllegalArgumentException("SQL 실행 결과 컬럼 수가 너무 많습니다.");
+        }
     }
 
     private boolean isCorrectAnswer(String problemId, List<String> columns, List<List<String>> rows) {

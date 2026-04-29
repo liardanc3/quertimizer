@@ -1,11 +1,15 @@
 package com.quertimizer.judge.infrastructure.execution;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.judge.application.port.JudgeDatabaseClusterPort;
 import com.quertimizer.judge.application.port.JudgeDatabaseNodePort;
 import com.quertimizer.judge.infrastructure.config.JudgeDatabaseProperties;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -18,11 +22,13 @@ public class JudgeDatabaseCluster implements JudgeDatabaseClusterPort {
     private final Map<DbmsType, List<JudgeDatabaseNode>> nodesByEngine = new EnumMap<>(DbmsType.class);
     private final Map<String, JudgeDatabaseNode> nodesById = new HashMap<>();
     private final RoundRobinJudgeDatabaseSelector judgeDatabaseSelector;
+    private final Duration leaseAcquireTimeout;
 
     public JudgeDatabaseCluster(JudgeDatabaseProperties judgeDatabaseProperties,
                                 JudgeDatabaseConnectionProvider connectionProvider,
                                 RoundRobinJudgeDatabaseSelector judgeDatabaseSelector) {
         this.judgeDatabaseSelector = judgeDatabaseSelector;
+        this.leaseAcquireTimeout = judgeDatabaseProperties.getLeaseAcquireTimeout();
 
         int nodeIndex = 0;
         for (JudgeDatabaseProperties.DatabaseProperties properties : judgeDatabaseProperties.getDatabases()) {
@@ -77,6 +83,7 @@ public class JudgeDatabaseCluster implements JudgeDatabaseClusterPort {
     }
 
     private JudgeDatabaseLease waitAndAcquire(List<JudgeDatabaseNode> nodes, String interruptedMessage) {
+        Instant deadline = Instant.now().plus(leaseAcquireTimeout);
         while (true) {
             int startIndex = judgeDatabaseSelector.selectStartIndex(nodes);
             for (int offset = 0; offset < nodes.size(); offset++) {
@@ -86,8 +93,12 @@ public class JudgeDatabaseCluster implements JudgeDatabaseClusterPort {
                 }
             }
 
+            if (!Instant.now().isBefore(deadline)) {
+                throw new BusinessException("사용 가능한 judge 실행 환경이 없습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.SERVICE_UNAVAILABLE);
+            }
+
             try {
-                wait(200L);
+                wait(Math.min(200L, Math.max(1L, Duration.between(Instant.now(), deadline).toMillis())));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(interruptedMessage, exception);

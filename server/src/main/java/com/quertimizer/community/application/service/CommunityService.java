@@ -19,23 +19,21 @@ import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostLike;
 import com.quertimizer.community.domain.entity.CommunityPostLikeId;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
+import com.quertimizer.community.domain.policy.CommunityContentPolicy;
+import com.quertimizer.community.domain.policy.CommunityNoticePolicy;
 import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
+import com.quertimizer.community.domain.policy.CommunityViewPolicy;
 import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
 import com.quertimizer.community.application.port.CommunityCommentRepository;
 import com.quertimizer.community.application.port.CommunityPostLikeRepository;
 import com.quertimizer.community.application.port.CommunityPostRepository;
 import com.quertimizer.community.application.port.CommunityPostSearchPort;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
-import com.quertimizer.global.exception.BusinessException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -50,7 +48,6 @@ import java.util.Optional;
 public class CommunityService {
 
     private static final int COMMUNITY_PAGE_SIZE = 10;
-    private static final int COMMUNITY_POST_CONTENT_MAX_BYTES = 500_000;
 
     private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
@@ -59,7 +56,9 @@ public class CommunityService {
     private final CommunityCommentLikeRepository communityCommentLikeRepository;
     private final CommunityPostSearchPort communityPostSearchPort;
     private final AlarmService alarmService;
-    private final ObjectMapper objectMapper;
+    private final CommunityContentPolicy communityContentPolicy;
+    private final CommunityNoticePolicy communityNoticePolicy;
+    private final CommunityViewPolicy communityViewPolicy;
 
     @Transactional(readOnly = true)
     public CommunityPostPageOutput getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
@@ -80,12 +79,13 @@ public class CommunityService {
         );
     }
 
-    public Optional<CommunityPostDetailOutput> getPostDetail(Long postId, String currentHandle) {
+    public Optional<CommunityPostDetailOutput> getPostDetail(Long postId, String currentHandle, String viewerKey) {
         // 게시글 상세를 조회
         return communityPostRepository.findById(postId)
                 .map(post -> {
-                    // 상세 조회 시 조회수 증가
-                    post.increaseViewCount();
+                    if (communityViewPolicy.shouldIncreaseViewCount(postId, viewerKey)) {
+                        post.increaseViewCount();
+                    }
 
                     List<String> tags = createTags(postId);
                     List<CommunityComment> comments = communityCommentRepository.findAllByPostIdOrderByCreatedAtAsc(postId);
@@ -110,8 +110,6 @@ public class CommunityService {
                             createCommentTree(comments, likedCommentById)
                     );
 
-                    // 조회수 변경 후 검색 인덱스 반영
-                    communityPostSearchPort.syncPost(post, tags);
                     return detailResponse;
                 });
     }
@@ -120,11 +118,12 @@ public class CommunityService {
         // 게시글을 생성
         String normalizedTitle = input.getTitle().trim();
         String normalizedContentJson = normalizeContentJson(input.getContentJson());
-        validateContentJson(normalizedContentJson);
+        communityContentPolicy.validate(normalizedContentJson);
         String normalizedPlainTextSummary = normalizePlainTextSummary(input.getPlainTextSummary());
         String normalizedImageIds = normalizeImageIds(input.getImageIds());
         List<String> normalizedTags = normalizeTags(input.getTags());
         String normalizedCategory = normalizePostCategory(input.getCategory());
+        communityNoticePolicy.validateNoticeWritable(handle, "", normalizedCategory);
         Long nextPostId = communityPostRepository.findTopPostId()
                 .map(postId -> postId + 1)
                 .orElse(1L);
@@ -148,11 +147,12 @@ public class CommunityService {
                 .map(post -> {
                     String normalizedTitle = input.getTitle().trim();
                     String normalizedContentJson = normalizeContentJson(input.getContentJson());
-                    validateContentJson(normalizedContentJson);
+                    communityContentPolicy.validate(normalizedContentJson);
                     String normalizedPlainTextSummary = normalizePlainTextSummary(input.getPlainTextSummary());
                     String normalizedImageIds = normalizeImageIds(input.getImageIds());
                     List<String> normalizedTags = normalizeTags(input.getTags());
                     String normalizedCategory = normalizePostCategory(input.getCategory());
+                    communityNoticePolicy.validateNoticeWritable(handle, normalizePostCategory(post.getCategory()), normalizedCategory);
 
                     // 게시글 본문, 태그, 검색 인덱스 갱신
                     post.changeContent(normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory);
@@ -428,19 +428,6 @@ public class CommunityService {
     private String normalizeContentJson(String contentJson) {
         // 본문 JSON 정규화
         return StringUtils.hasText(contentJson) ? contentJson.trim() : "";
-    }
-
-    private void validateContentJson(String contentJson) {
-        // 본문 JSON 형식과 Byte 길이를 검증
-        if (contentJson.getBytes(StandardCharsets.UTF_8).length > COMMUNITY_POST_CONTENT_MAX_BYTES) {
-            throw new BusinessException("본문은 최대 500000 Byte까지 입력할 수 있습니다.", HttpStatus.BAD_REQUEST);
-        }
-
-        try {
-            objectMapper.readTree(contentJson);
-        } catch (JsonProcessingException exception) {
-            throw new BusinessException("본문 형식이 올바르지 않습니다.", HttpStatus.BAD_REQUEST);
-        }
     }
 
     private String normalizePlainTextSummary(String plainTextSummary) {

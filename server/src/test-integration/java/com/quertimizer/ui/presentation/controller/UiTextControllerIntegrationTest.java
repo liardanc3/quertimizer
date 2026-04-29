@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -140,7 +141,7 @@ class UiTextControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/ui-texts")
+            var result = mockMvc.perform(post("/admin/ui-texts").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -160,7 +161,7 @@ class UiTextControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/ui-texts")
+            var result = mockMvc.perform(post("/admin/ui-texts").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -186,7 +187,7 @@ class UiTextControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/ui-texts/{key}/{language}", key, language)
+            var result = mockMvc.perform(put("/admin/ui-texts/{key}/{language}", key, language).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -208,7 +209,7 @@ class UiTextControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/ui-texts/{key}/{language}", key, language)
+            var result = mockMvc.perform(put("/admin/ui-texts/{key}/{language}", key, language).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -233,7 +234,7 @@ class UiTextControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(delete("/admin/ui-texts/{key}/{language}", key, language).with(user));
+            var result = mockMvc.perform(delete("/admin/ui-texts/{key}/{language}", key, language).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isOk());
@@ -250,7 +251,7 @@ class UiTextControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(delete("/admin/ui-texts/{key}/{language}", key, language).with(user));
+            var result = mockMvc.perform(delete("/admin/ui-texts/{key}/{language}", key, language).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNotFound());

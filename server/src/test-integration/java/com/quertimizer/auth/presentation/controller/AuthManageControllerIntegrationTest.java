@@ -21,6 +21,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -82,12 +83,12 @@ class AuthManageControllerIntegrationTest {
             String email = uniqueEmail();
             String handle = uniqueHandle();
             userRepository.save(User.create(handle, passwordEncoder.encode("a".repeat(128)), email));
-            String requestBody = "{\"role\":\"problem_generator\"}";
+            String requestBody = "{\"role\":\"problem_generator\",\"confirmationText\":\"ROLE_CHANGE_CONFIRMED\"}";
             SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle)
+            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -102,12 +103,12 @@ class AuthManageControllerIntegrationTest {
         void badRequestWhenRoleBlank() throws Exception {
             // given
             String handle = "beginner01";
-            String requestBody = "{\"role\":\"\"}";
+            String requestBody = "{\"role\":\"\",\"confirmationText\":\"ROLE_CHANGE_CONFIRMED\"}";
             SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle)
+            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -117,16 +118,55 @@ class AuthManageControllerIntegrationTest {
         }
 
         @Test
-        @DisplayName("실패 (대상 없음)")
-        void notFoundWhenHandleMissing() throws Exception {
+        @DisplayName("실패 (민감 작업 확인 누락)")
+        void badRequestWhenSensitiveConfirmationInvalid() throws Exception {
             // given
-            String handle = uniqueHandle();
-            String requestBody = "{\"role\":\"user\"}";
+            String handle = "beginner01";
+            String requestBody = "{\"role\":\"admin\",\"confirmationText\":\"WRONG\"}";
             SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle)
+            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle).with(csrf())
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody));
+
+            // then
+            result.andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("실패 (자기 ADMIN 권한 제거)")
+        void badRequestWhenSelfAdminRemovalRequested() throws Exception {
+            // given
+            String handle = "admin";
+            String requestBody = "{\"role\":\"user\",\"confirmationText\":\"ROLE_CHANGE_CONFIRMED\"}";
+            SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
+                    user("admin@example.com").roles(UserRole.ADMIN.name());
+
+            // when
+            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle).with(csrf())
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody));
+
+            // then
+            result.andExpect(status().isBadRequest());
+            assertThat(userRepository.findByHandle(handle).orElseThrow().getResolvedRole()).isEqualTo(UserRole.ADMIN);
+        }
+
+        @Test
+        @DisplayName("실패 (대상 없음)")
+        void notFoundWhenHandleMissing() throws Exception {
+            // given
+            String handle = uniqueHandle();
+            String requestBody = "{\"role\":\"user\",\"confirmationText\":\"ROLE_CHANGE_CONFIRMED\"}";
+            SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
+                    user("admin@example.com").roles(UserRole.ADMIN.name());
+
+            // when
+            var result = mockMvc.perform(put("/admin/auth-manage/users/{handle}/role", handle).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -150,7 +190,7 @@ class AuthManageControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/auth-manage/problem-generators/{handle}/permissions", handle)
+            var result = mockMvc.perform(put("/admin/auth-manage/problem-generators/{handle}/permissions", handle).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -172,7 +212,7 @@ class AuthManageControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/auth-manage/problem-generators/{handle}/permissions", handle)
+            var result = mockMvc.perform(put("/admin/auth-manage/problem-generators/{handle}/permissions", handle).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));

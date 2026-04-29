@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -261,7 +262,7 @@ class UserProfileControllerIntegrationTest {
                     user(email).roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(put("/profile/me")
+            var result = mockMvc.perform(put("/profile/me").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -281,7 +282,7 @@ class UserProfileControllerIntegrationTest {
                     user("beginner01@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(put("/profile/me")
+            var result = mockMvc.perform(put("/profile/me").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));

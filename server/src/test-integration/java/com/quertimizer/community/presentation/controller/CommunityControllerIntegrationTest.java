@@ -24,9 +24,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -114,7 +116,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner07@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/posts")
+            var result = mockMvc.perform(post("/community/posts").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -134,7 +136,7 @@ class CommunityControllerIntegrationTest {
             String requestBody = communityPostJson("새 게시글", "새 게시글 요약");
 
             // when
-            var result = mockMvc.perform(post("/community/posts")
+            var result = mockMvc.perform(post("/community/posts").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -151,13 +153,89 @@ class CommunityControllerIntegrationTest {
                     user("beginner07@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/posts")
+            var result = mockMvc.perform(post("/community/posts").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
             // then
             result.andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("실패 (CSRF 토큰 없음)")
+        void forbiddenWhenCsrfMissing() throws Exception {
+            // given
+            String requestBody = communityPostJson("새 게시글", "새 게시글 요약");
+            SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
+                    user("beginner07@example.com").roles(UserRole.USER.name());
+
+            // when
+            var result = mockMvc.perform(post("/community/posts")
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody));
+
+            // then
+            result.andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("실패 (본문 허용 목록 위반)")
+        void badRequestWhenContentJsonUnsafe() throws Exception {
+            // given
+            String unsafeContentJson = """
+                    {"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"본문","marks":[{"type":"link","attrs":{"href":"javascript:alert(1)"}}]}]}]}
+                    """.trim();
+            String requestBody = communityPostJson("새 게시글", "새 게시글 요약", unsafeContentJson, "discussion");
+            SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
+                    user("beginner07@example.com").roles(UserRole.USER.name());
+
+            // when
+            var result = mockMvc.perform(post("/community/posts").with(csrf())
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody));
+
+            // then
+            result.andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("실패 (일반 사용자 공지 작성)")
+        void forbiddenWhenUserCreatesNotice() throws Exception {
+            // given
+            String requestBody = communityPostJson("공지", "공지 요약", validContentJson(), "notice");
+            SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
+                    user("beginner07@example.com").roles(UserRole.USER.name());
+
+            // when
+            var result = mockMvc.perform(post("/community/posts").with(csrf())
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody));
+
+            // then
+            result.andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("성공 (관리자 공지 작성)")
+        void successWhenAdminCreatesNotice() throws Exception {
+            // given
+            String requestBody = communityPostJson("공지", "공지 요약", validContentJson(), "notice");
+            SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
+                    user("admin@example.com").roles(UserRole.ADMIN.name());
+
+            // when
+            var result = mockMvc.perform(post("/community/posts").with(csrf())
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody));
+
+            // then
+            result.andExpect(status().isCreated())
+                    .andExpect(header().exists("Location"));
         }
     }
 
@@ -169,13 +247,14 @@ class CommunityControllerIntegrationTest {
         @DisplayName("성공 (이미지 업로드)")
         void successWhenImageValid() throws Exception {
             // given
-            MockMultipartFile file = new MockMultipartFile("file", "test.png", "image/png", new byte[]{1, 2, 3});
+            MockMultipartFile file = new MockMultipartFile("file", "test.png", "image/png", tinyPngBytes());
             SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
                     user("beginner08@example.com").roles(UserRole.USER.name());
 
             // when
             var result = mockMvc.perform(multipart("/community/images")
                     .file(file)
+                    .with(csrf())
                     .with(user));
 
             // then
@@ -195,6 +274,7 @@ class CommunityControllerIntegrationTest {
             // when
             var result = mockMvc.perform(multipart("/community/images")
                     .file(file)
+                    .with(csrf())
                     .with(user));
 
             // then
@@ -219,7 +299,8 @@ class CommunityControllerIntegrationTest {
             var result = mockMvc.perform(get("/community/images/{imageId}", imageId));
 
             // then
-            result.andExpect(status().isOk());
+            result.andExpect(status().isOk())
+                    .andExpect(header().string("X-Content-Type-Options", "nosniff"));
         }
 
         @Test
@@ -254,7 +335,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner09@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(put("/community/posts/{postId}", postId)
+            var result = mockMvc.perform(put("/community/posts/{postId}", postId).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -279,7 +360,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner10@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(put("/community/posts/{postId}", requestedPostId)
+            var result = mockMvc.perform(put("/community/posts/{postId}", requestedPostId).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -307,7 +388,7 @@ class CommunityControllerIntegrationTest {
                     user("advanced01@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(delete("/community/posts/{postId}", requestedPostId).with(user));
+            var result = mockMvc.perform(delete("/community/posts/{postId}", requestedPostId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNoContent());
@@ -328,7 +409,7 @@ class CommunityControllerIntegrationTest {
                     user("advanced02@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(delete("/community/posts/{postId}", requestedPostId).with(user));
+            var result = mockMvc.perform(delete("/community/posts/{postId}", requestedPostId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isForbidden());
@@ -349,7 +430,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner05@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/posts/{postId}/likes", postId).with(user));
+            var result = mockMvc.perform(post("/community/posts/{postId}/likes", postId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isOk())
@@ -366,10 +447,37 @@ class CommunityControllerIntegrationTest {
                     user("beginner05@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/posts/{postId}/likes", postId).with(user));
+            var result = mockMvc.perform(post("/community/posts/{postId}/likes", postId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("성공 (동일 IP 조회수 중복 방지)")
+        void successWhenDuplicateAnonymousViewSuppressed() throws Exception {
+            // given
+            long postId = 909020L;
+            communityPostRepository.save(CommunityPost.create(
+                    postId, "beginner09", "조회수 대상", validContentJson(), "조회수 대상", "", "discussion", LocalDateTime.now()
+            ));
+
+            // when
+            mockMvc.perform(get("/community/posts/{postId}", postId)
+                    .with(request -> {
+                        request.setRemoteAddr("203.0.113.10");
+                        return request;
+                    }))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get("/community/posts/{postId}", postId)
+                    .with(request -> {
+                        request.setRemoteAddr("203.0.113.10");
+                        return request;
+                    }))
+                    .andExpect(status().isOk());
+
+            // then
+            assertThat(communityPostRepository.findById(postId).orElseThrow().getViewCount()).isEqualTo(1);
         }
     }
 
@@ -387,7 +495,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner06@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/posts/{postId}/comments", postId)
+            var result = mockMvc.perform(post("/community/posts/{postId}/comments", postId).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -410,7 +518,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner06@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/posts/{postId}/comments", postId)
+            var result = mockMvc.perform(post("/community/posts/{postId}/comments", postId).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -435,7 +543,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner07@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/comments/{commentId}/likes", commentId).with(user));
+            var result = mockMvc.perform(post("/community/comments/{commentId}/likes", commentId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isOk())
@@ -452,7 +560,7 @@ class CommunityControllerIntegrationTest {
                     user("beginner07@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/community/comments/{commentId}/likes", commentId).with(user));
+            var result = mockMvc.perform(post("/community/comments/{commentId}/likes", commentId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNotFound());
@@ -480,15 +588,33 @@ class CommunityControllerIntegrationTest {
     }
 
     private static String communityPostJson(String title, String summary) {
+        return communityPostJson(title, summary, validContentJson(), "discussion");
+    }
+
+    private static String communityPostJson(String title, String summary, String contentJson, String category) {
         return """
                 {
                   "title": "%s",
-                  "contentJson": "{}",
+                  "contentJson": "%s",
                   "plainTextSummary": "%s",
                   "imageIds": [],
                   "tags": ["integration"],
-                  "category": "discussion"
+                  "category": "%s"
                 }
-                """.formatted(title, summary);
+                """.formatted(title, jsonString(contentJson), summary, category);
+    }
+
+    private static String validContentJson() {
+        return "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"본문\"}]}]}";
+    }
+
+    private static String jsonString(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static byte[] tinyPngBytes() {
+        return Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        );
     }
 }

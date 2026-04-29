@@ -13,4 +13,7 @@ public class AuthManageRoleUpdateReq {
     @Size(max = 30)
     private String role;
 
+    @NotBlank
+    @Size(max = 64)
+    private String confirmationText;
 }

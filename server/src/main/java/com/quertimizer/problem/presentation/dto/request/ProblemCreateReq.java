@@ -24,14 +24,19 @@ public class ProblemCreateReq {
     private String output;
 
     @NotBlank
+    @Size(max = 20000)
     private String answerSql;
 
+    @Size(max = 200000)
     private String sampleDataPostgresql;
 
+    @Size(max = 200000)
     private String sampleDataMysql;
 
+    @Size(max = 500000)
     private String actualDataPostgresql;
 
+    @Size(max = 500000)
     private String actualDataMysql;
 
     @NotBlank
@@ -46,8 +51,10 @@ public class ProblemCreateReq {
 
     private String dbms;
 
+    @Size(max = 100000)
     private String ddlPostgresql;
 
+    @Size(max = 100000)
     private String ddlMysql;
 
     public ProblemCreateInput toProblemCreateInput() {

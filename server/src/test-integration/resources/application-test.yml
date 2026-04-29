@@ -47,8 +47,21 @@ app:
     from: test@quertimizer.local
   community:
     image-storage-path: build/test-community-images
+  security:
+    remember-me:
+      key: test-remember-me-key
+      validity: 14d
+      secure: false
+      same-site: Lax
+    client-ip:
+      trust-forwarded-headers: false
+      trusted-proxies: []
+  logging:
+    api:
+      include-bodies: true
 
 judge:
+  lease-acquire-timeout: 100ms
   dataset-provisioning:
     strategy: sql-replay
   databases: []

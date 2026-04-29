@@ -160,7 +160,7 @@ public class ProblemService {
         if (problemManagementPolicy.isScopedProblemSetId(normalizedProblemSetId)) {
             validateProblemSetAccess(currentUser, normalizedProblemSetId);
             return problemSetRepository.findById(normalizedProblemSetId)
-                    .map(problemSet -> createScopedProblemSetDetail(problemSet));
+                    .map(this::createScopedProblemSetDetail);
         }
 
         ProblemSetGroup problemSetGroup = findProblemSetGroup(normalizedProblemSetId);
@@ -204,7 +204,7 @@ public class ProblemService {
 
     @Transactional
     public ProblemCreateOutput createProblem(ProblemCreateInput request, String authenticatedEmail) {
-        // 문제 생성 또는 수정을 수행
+        // 요청자 권한과 생성 모드를 해석해 이번 요청이 다룰 DBMS, 문제셋, DDL 범위를 확정한다.
         User currentUser = requireProblemManagementUser(authenticatedEmail);
         boolean useExistingProblemSet = "existing".equalsIgnoreCase(request.getProblemSetMode());
         boolean useExistingProblem = "existing".equalsIgnoreCase(request.getProblemMode());
@@ -216,6 +216,7 @@ public class ProblemService {
 
         validateProblemWriteAccess(currentUser, useExistingProblemSet, useExistingProblem, scopedProblemSetId, request.getProblemId());
 
+        // 기존 문제셋은 이미 저장된 기준 DDL과 데이터 SQL을 재사용하고, 신규 문제셋은 요청 본문에서 기준 자료를 만든다.
         ProblemSet existingProblemSet = useExistingProblemSet ? requireExistingProblemSet(scopedProblemSetId) : null;
         String canonicalDdl;
         String actualDataSql;
@@ -227,20 +228,25 @@ public class ProblemService {
             actualDataSql = resolveScopedActualData(request, dbmsType);
         }
 
+        // 예시 데이터셋은 관리자 화면에 보여 줄 출력 예시를 만들기 위한 실행 대상이다.
         String sampleDataSql = resolveScopedSampleData(request, dbmsType, useExistingProblemSet ? actualDataSql : "");
         String normalizedReferenceSql = requireText(request.getAnswerSql(), "기준 SQL이 필요하다.");
         ProblemSqlDatasetOutput sampleDataset = problemSqlJudgePort.createDataset(new ProblemSqlDatasetInput(dbmsType, scopedDdl, sampleDataSql, List.of()));
         ProblemSqlExecutionOutput sampleOutput = problemSqlJudgePort.execute(new ProblemSqlExecutionInput(sampleDataset.getDatasetId(), normalizedReferenceSql));
+
+        // 실제 채점 데이터셋과 기준 SQL은 sql-judge에 등록하고, 문제 도메인은 데이터셋 키와 기준 SQL 키, 결과 해시만 받는다.
         ProblemSqlDatasetOutput judgeDataset = resolveProblemSetDataset(existingProblemSet, dbmsType, canonicalDdl, actualDataSql);
         ProblemSqlReferenceOutput reference = problemSqlJudgePort.createReference(new ProblemSqlReferenceInput(judgeDataset.getDatasetId(), normalizedReferenceSql));
         String templateVersion = createDatasetVersion(canonicalDdl, actualDataSql);
 
+        // 문제셋 저장소에는 Quertimizer가 관리하는 문제셋 메타데이터와 sql-judge 데이터셋 키만 반영한다.
         if (useExistingProblemSet) {
             existingProblemSet.changeContent(canonicalDdl, actualDataSql, templateVersion, dbmsType, judgeDataset.getDatasetId());
         } else {
             createProblemSet(scopedProblemSetId, canonicalDdl, actualDataSql, templateVersion, dbmsType, judgeDataset.getDatasetId());
         }
 
+        // 기존 문제 수정은 문제 식별자를 유지하면서 예시 데이터셋 키, 기준 SQL 키, 화면 출력값만 최신 상태로 교체한다.
         if (useExistingProblem) {
             return updateProblem(
                     request, scopedProblemSetId, scopedDdl, dbmsType,
@@ -251,6 +257,7 @@ public class ProblemService {
         String baseProblemSetId = extractBaseProblemSetId(scopedProblemSetId);
         String problemId = createProblemId(dbmsType, baseProblemSetId, createNextProblemSequence(baseProblemSetId));
 
+        // 신규 문제에는 기준 SQL 원문을 저장하지 않고, sql-judge 기준 SQL 키와 결과 해시만 저장한다.
         problemRepository.save(Problem.create(
                 problemId,
                 scopedProblemSetId,
@@ -323,15 +330,17 @@ public class ProblemService {
                                                              DbmsType dbmsType,
                                                              String canonicalDdl,
                                                              String actualDataSql) {
-        // 문제 테이블셋의 sql-judge 데이터셋 키를 준비
+        // 현재 sql-judge 정의 저장소가 인메모리일 수 있으므로 원본 SQL이 있으면 매번 최신 데이터셋 키를 발급한다.
         if (!canonicalDdl.isBlank() && !actualDataSql.isBlank()) {
             return problemSqlJudgePort.createDataset(new ProblemSqlDatasetInput(dbmsType, canonicalDdl, actualDataSql, List.of()));
         }
 
+        // 원본 SQL이 없는 기존 데이터 상태에서는 이미 저장된 키가 있으면 그대로 이어 쓴다.
         if (existingProblemSet != null && existingProblemSet.getJudgeDatasetId() != null && !existingProblemSet.getJudgeDatasetId().isBlank()) {
             return new ProblemSqlDatasetOutput(existingProblemSet.getJudgeDatasetId());
         }
 
+        // 키와 원본 SQL이 모두 부족한 경우에는 sql-judge 검증 단계에서 명확한 실패를 받도록 동일 경로로 위임한다.
         return problemSqlJudgePort.createDataset(new ProblemSqlDatasetInput(dbmsType, canonicalDdl, actualDataSql, List.of()));
     }
 
@@ -360,6 +369,7 @@ public class ProblemService {
                                               ProblemSqlExecutionOutput sampleOutput,
                                               String sampleDatasetId,
                                               ProblemSqlReferenceOutput reference) {
+        // 수정 대상 문제가 요청한 문제셋 안에 있는지 확인해 교차 문제셋 수정을 막는다.
         String problemId = requireText(request.getProblemId(), EXISTING_PROBLEM_ID_REQUIRED.getMessage());
         Problem problem = problemRepository.findById(problemId)
                 .orElseThrow(() -> new BusinessException(PROBLEM_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST));
@@ -368,6 +378,7 @@ public class ProblemService {
             throw new BusinessException(PROBLEM_NOT_IN_PROBLEM_SET.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
+        // 기준 SQL 원문은 저장하지 않고, 예시 출력과 sql-judge 키/해시만 최신 값으로 반영한다.
         problem.changeContent(
                 request.getTitle().trim(),
                 request.getDescription().trim(),
@@ -512,7 +523,7 @@ public class ProblemService {
     }
 
     private int createNextProblemSequence(String baseProblemSetId) {
-        // 다음 문제 Sequence 생성
+        // 다음 문제 순번 생성
         return problemRepository.findAll().stream()
                 .map(Problem::getProblemId)
                 .filter(problemId -> extractBaseProblemSetId(problemId).equals(baseProblemSetId))
@@ -585,7 +596,7 @@ public class ProblemService {
     }
 
     private String formatFiveDigits(int value) {
-        // Five Digits 포맷
+        // 다섯 자리 문자열 포맷
         return "%05d".formatted(value);
     }
 
@@ -628,7 +639,7 @@ public class ProblemService {
     }
 
     private void addCreatedProblemPermissionIfNeeded(User currentUser, String problemId) {
-        // Created 문제 권한 If Needed 추가
+        // 생성한 문제 권한이 필요하면 추가
         if (currentUser.getResolvedRole() != UserRole.PROBLEM_GENERATOR) {
             return;
         }
@@ -653,7 +664,7 @@ public class ProblemService {
     }
 
     private String normalizeOptionalText(String value) {
-        // Optional 텍스트 정규화
+        // 선택 텍스트 정규화
         return value != null ? value.trim() : "";
     }
 
@@ -671,7 +682,7 @@ public class ProblemService {
     }
 
     private String toHex(byte[] bytes) {
-        // 바이트 배열을 hex 문자열로 변환
+        // 바이트 배열을 16진수 문자열로 변환
         StringBuilder builder = new StringBuilder(bytes.length * 2);
         for (byte value : bytes) {
             builder.append("%02x".formatted(value & 0xff));
@@ -681,11 +692,11 @@ public class ProblemService {
     }
 
     private String serializeSampleOutput(ProblemSqlExecutionOutput sampleOutput) {
-        // sample output 구조를 JSON 문자열로 저장
+        // 예시 출력 구조를 JSON 문자열로 저장
         try {
             return objectMapper.writeValueAsString(sampleOutput);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("sample output 직렬화에 실패했다.", exception);
+            throw new IllegalStateException("예시 출력 직렬화에 실패했다.", exception);
         }
     }
 
@@ -699,7 +710,7 @@ public class ProblemService {
         }
 
         private boolean isEmpty() {
-            // Empty 여부 확인
+            // 비어 있는지 확인
             return problemSetsByDbms.isEmpty();
         }
 

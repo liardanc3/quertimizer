@@ -25,10 +25,13 @@ public class LogFormatter {
     private static final String ARRAY_OMITTED_MESSAGE = "... %d more truncated";
     private static final List<String> SENSITIVE_KEYS = List.of(
             "password",
+            "code",
+            "email",
             "token",
             "authorization",
             "cookie",
-            "secret"
+            "secret",
+            "remember"
     );
 
     private final ObjectMapper objectMapper;
@@ -93,7 +96,7 @@ public class LogFormatter {
             return prefix(actor) + label;
         }
 
-        return prefix(actor) + label + " : " + message;
+        return prefix(actor) + label + " : " + sanitizeControlCharacters(message);
     }
 
     private String tryFormatJson(String body, int maxFieldLength, String truncatedSuffix) {
@@ -157,10 +160,10 @@ public class LogFormatter {
         }
 
         if (value.length() <= maxFieldLength) {
-            return value;
+            return sanitizeControlCharacters(value);
         }
 
-        return value.substring(0, maxFieldLength) + truncatedSuffix;
+        return sanitizeControlCharacters(value.substring(0, maxFieldLength) + truncatedSuffix);
     }
 
     private boolean isSensitiveKey(String fieldName) {
@@ -176,7 +179,7 @@ public class LogFormatter {
             return truncateText(null, queryParameter, REQUEST_FIELD_MAX_LENGTH, REQUEST_TRUNCATED_SUFFIX);
         }
 
-        String parameterName = queryParameter.substring(0, separatorIndex);
+        String parameterName = sanitizeControlCharacters(queryParameter.substring(0, separatorIndex));
         String parameterValue = queryParameter.substring(separatorIndex + 1);
         return parameterName + "=" + truncateText(parameterName, parameterValue, REQUEST_FIELD_MAX_LENGTH, REQUEST_TRUNCATED_SUFFIX);
     }
@@ -187,7 +190,7 @@ public class LogFormatter {
             return "unknown";
         }
 
-        String normalizedActor = actor.split("%", 2)[0];
+        String normalizedActor = sanitizeControlCharacters(actor).split("%", 2)[0];
 
         // localhost loopback 주소 통일
         if ("::1".equals(normalizedActor) || "0:0:0:0:0:0:0:1".equals(normalizedActor)) {
@@ -206,6 +209,33 @@ public class LogFormatter {
         return Arrays.stream(value.split("\\R", -1))
                 .map(line -> prefix + line)
                 .toList();
+    }
+
+    private String sanitizeControlCharacters(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        StringBuilder builder = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (character == '\r') {
+                builder.append("\\r");
+                continue;
+            }
+            if (character == '\n') {
+                builder.append("\\n");
+                continue;
+            }
+            if (Character.isISOControl(character) && character != '\t') {
+                builder.append('?');
+                continue;
+            }
+
+            builder.append(character);
+        }
+
+        return builder.toString();
     }
 
 }

@@ -87,7 +87,7 @@ export async function updateUserRole(handle: string, role: AuthManageRoleValue) 
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, confirmationText: 'ROLE_CHANGE_CONFIRMED' }),
     });
   } catch {
     throw new Error(getUiTextValue('AUTH_MANAGE_ROLE_SAVE_FAIL_MESSAGE', '역할을 저장하지 못했습니다.'));

@@ -17,6 +17,7 @@ import com.quertimizer.problem.domain.policy.ProblemManagementPolicy;
 import com.quertimizer.user.application.port.UserRepository;
 import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ import static com.quertimizer.problem.domain.model.ProblemPermissionKey.NEW;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class AuthManageService {
 
     private final UserRepository userRepository;
@@ -75,15 +77,20 @@ public class AuthManageService {
         // 변경 대상 사용자와 다음 역할을 확정
         User user = findUser(input.getHandle());
         UserRole nextRole = normalizeRole(input.getRole());
+        UserRole currentRole = user.getResolvedRole();
 
-        // 마지막 Admin 역할 해제를 차단
-        authManagePolicy.validateAdminRoleChange(user.getResolvedRole(), nextRole);
+        authManagePolicy.validateSensitiveConfirmation(input.getConfirmationText());
+        authManagePolicy.validateSelfAdminRemoval(input.getActorEmail(), user.getEmail(), currentRole, nextRole);
+        authManagePolicy.validateAdminRoleChange(currentRole, nextRole);
 
         // 사용자 역할을 수정하고 불필요한 권한을 정리
         user.changeRole(nextRole);
         if (nextRole != UserRole.PROBLEM_GENERATOR) {
             problemGeneratorPermissionRepository.deleteAllByIdHandle(input.getHandle());
         }
+
+        log.info("Auth role changed actor={} target={} before={} after={}",
+                input.getActorEmail(), input.getHandle(), currentRole, nextRole);
     }
 
     @Transactional

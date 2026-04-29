@@ -1,11 +1,11 @@
 package com.quertimizer.problem.presentation.controller;
 
+import com.quertimizer.auth.presentation.support.AuthSupport;
 import com.quertimizer.global.constant.DbmsType;
 import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
 import com.quertimizer.judge.application.usecase.BuildProblemOutputPreview;
 import com.quertimizer.problem.application.input.CreateProblemInput;
 import com.quertimizer.problem.application.input.ProblemOptionsInput;
-import com.quertimizer.problem.application.input.ProblemSearchInput;
 import com.quertimizer.problem.application.input.ProblemSetAccessInput;
 import com.quertimizer.problem.application.usecase.CreateProblem;
 import com.quertimizer.problem.application.usecase.GetProblem;
@@ -15,6 +15,7 @@ import com.quertimizer.problem.application.usecase.GetProblemSets;
 import com.quertimizer.problem.application.usecase.GetProblems;
 import com.quertimizer.problem.presentation.dto.request.ProblemCreateReq;
 import com.quertimizer.problem.presentation.dto.request.ProblemOutputPreviewReq;
+import com.quertimizer.problem.presentation.dto.request.ProblemSearchReq;
 import com.quertimizer.problem.presentation.dto.response.AdminProblemOptionRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemCreateRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemDetailRes;
@@ -23,6 +24,7 @@ import com.quertimizer.problem.presentation.dto.response.ProblemPageRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemSetDetailRes;
 import com.quertimizer.problem.presentation.dto.response.ProblemSetSummaryRes;
 import com.quertimizer.problem.presentation.support.ProblemSupport;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +33,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -50,6 +51,7 @@ public class ProblemController {
     private final BuildProblemOutputPreview buildProblemOutputPreview;
 
     private final ProblemSupport problemSupport;
+    private final AuthSupport authSupport;
 
     /**
      * 문제 목록 필터와 정렬 조건에 맞는 문제 페이지를 반환한다.
@@ -62,26 +64,11 @@ public class ProblemController {
      * @param authentication 현재 요청의 인증 정보
      */
     @GetMapping("/problems")
-    public ResponseEntity<ProblemPageRes> getProblems(@RequestParam(defaultValue = "1") int page,
-                                                      @RequestParam(required = false) String query,
-                                                      @RequestParam(defaultValue = "postgresql") String dbms,
-                                                      @RequestParam(defaultValue = "all") String solveState,
-                                                      @RequestParam(defaultValue = "desc") String solvedCountSort,
-                                                      @RequestParam(defaultValue = "none") String totalSubmitSort,
-                                                      @RequestParam(defaultValue = "none") String successSubmitSort,
-                                                      @RequestParam(defaultValue = "none") String spreadRateSort,
-                                                      @RequestParam(required = false) Double spreadRateMin,
-                                                      @RequestParam(required = false) Double spreadRateMax,
-                                                      Authentication authentication) {
+    public ResponseEntity<ProblemPageRes> getProblems(@Valid ProblemSearchReq request, Authentication authentication) {
         String currentHandle = problemSupport.resolveCurrentHandle(authentication);
-        ProblemSearchInput input = new ProblemSearchInput(
-                page, query, dbms, solveState, currentHandle,
-                solvedCountSort, totalSubmitSort, successSubmitSort, spreadRateSort,
-                spreadRateMin, spreadRateMax
-        );
 
         return ResponseEntity.ok(ProblemPageRes.from(getProblems.execute(
-                input
+                request.toInput(currentHandle)
         )));
     }
 
@@ -190,12 +177,16 @@ public class ProblemController {
      * @param request 출력 예시 생성을 위한 SQL 요청
      */
     @PostMapping("/admin/problems/output-preview")
-    public ResponseEntity<ProblemOutputPreviewRes> previewProblemOutput(@Valid @RequestBody ProblemOutputPreviewReq request) {
+    public ResponseEntity<ProblemOutputPreviewRes> previewProblemOutput(@Valid @RequestBody ProblemOutputPreviewReq request,
+                                                                        Authentication authentication,
+                                                                        HttpServletRequest httpRequest) {
         ProblemOutputPreviewInput input = new ProblemOutputPreviewInput(
                 DbmsType.fromValueOrDefault(request.getDbms(), DbmsType.POSTGRESQL),
                 request.getDdl(),
                 request.getSampleDataSql(),
-                request.getAnswerSql()
+                request.getAnswerSql(),
+                authentication.getName(),
+                authSupport.resolveClientIp(httpRequest)
         );
 
         return ResponseEntity.ok(ProblemOutputPreviewRes.from(buildProblemOutputPreview.execute(input)));

@@ -205,6 +205,12 @@ export function AuthManageContent() {
     setSavingRoleHandle(user.handle);
     setOpenRoleMenuHandle(null);
 
+    const confirmed = window.confirm(text('AUTH_MANAGE_ROLE_CHANGE_CONFIRM', '선택한 계정의 역할을 변경할까요?'));
+    if (!confirmed) {
+      setSavingRoleHandle(null);
+      return;
+    }
+
     try {
       await updateUserRole(user.handle, nextRole);
       setReloadSequence((value) => value + 1);

@@ -74,8 +74,8 @@ public class AuthController {
      * @param request 인증코드를 받을 이메일 요청
      */
     @PostMapping("/signup/send-code")
-    public ResponseEntity<Void> sendSignupCode(@Valid @RequestBody SendCodeReq request) {
-        sendSignupCode.execute(SendCodeInput.of(request.getEmail()));
+    public ResponseEntity<Void> sendSignupCode(@Valid @RequestBody SendCodeReq request, HttpServletRequest httpRequest) {
+        sendSignupCode.execute(SendCodeInput.of(request.getEmail(), authSupport.resolveClientIp(httpRequest)));
         return ResponseEntity.ok().build();
     }
 
@@ -85,8 +85,8 @@ public class AuthController {
      * @param request 인증코드 검증 요청
      */
     @PostMapping("/signup/verify-code")
-    public ResponseEntity<Void> verifySignupCode(@Valid @RequestBody VerifyCodeReq request) {
-        verifySignupCode.execute(VerifyCodeInput.of(request.getEmail(), request.getCode()));
+    public ResponseEntity<Void> verifySignupCode(@Valid @RequestBody VerifyCodeReq request, HttpServletRequest httpRequest) {
+        verifySignupCode.execute(VerifyCodeInput.of(request.getEmail(), request.getCode(), authSupport.resolveClientIp(httpRequest)));
         return ResponseEntity.ok().build();
     }
 
@@ -281,8 +281,8 @@ public class AuthController {
      * @param request 인증코드를 받을 이메일 요청
      */
     @PostMapping("/find-password/send-code")
-    public ResponseEntity<Void> sendFindPasswordCode(@Valid @RequestBody SendCodeReq request) {
-        sendFindPasswordCode.execute(SendCodeInput.of(request.getEmail()));
+    public ResponseEntity<Void> sendFindPasswordCode(@Valid @RequestBody SendCodeReq request, HttpServletRequest httpRequest) {
+        sendFindPasswordCode.execute(SendCodeInput.of(request.getEmail(), authSupport.resolveClientIp(httpRequest)));
         return ResponseEntity.ok().build();
     }
 
@@ -292,8 +292,8 @@ public class AuthController {
      * @param request 인증코드 검증 요청
      */
     @PostMapping("/find-password/verify-code")
-    public ResponseEntity<Void> verifyFindPasswordCode(@Valid @RequestBody VerifyCodeReq request) {
-        verifyFindPasswordCode.execute(VerifyCodeInput.of(request.getEmail(), request.getCode()));
+    public ResponseEntity<Void> verifyFindPasswordCode(@Valid @RequestBody VerifyCodeReq request, HttpServletRequest httpRequest) {
+        verifyFindPasswordCode.execute(VerifyCodeInput.of(request.getEmail(), request.getCode(), authSupport.resolveClientIp(httpRequest)));
         return ResponseEntity.ok().build();
     }
 
@@ -303,8 +303,8 @@ public class AuthController {
      * @param request 비밀번호 재설정 요청
      */
     @PostMapping("/find-password/reset")
-    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordReq request) {
-        resetPassword.execute(ResetPasswordInput.of(request.getEmail(), request.getPassword()));
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordReq request, HttpServletRequest httpRequest) {
+        resetPassword.execute(ResetPasswordInput.of(request.getEmail(), request.getPassword(), authSupport.resolveClientIp(httpRequest)));
         return ResponseEntity.ok().build();
     }
 }

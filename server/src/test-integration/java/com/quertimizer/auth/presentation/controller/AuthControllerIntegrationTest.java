@@ -37,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -75,7 +76,7 @@ class AuthControllerIntegrationTest {
             String requestBody = emailJson(email);
 
             // when
-            var result = mockMvc.perform(post("/signup/send-code")
+            var result = mockMvc.perform(post("/signup/send-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -92,7 +93,7 @@ class AuthControllerIntegrationTest {
             String requestBody = "{\"email\":\"bad\"}";
 
             // when
-            var result = mockMvc.perform(post("/signup/send-code")
+            var result = mockMvc.perform(post("/signup/send-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -113,7 +114,7 @@ class AuthControllerIntegrationTest {
             };
 
             // when
-            var result = mockMvc.perform(post("/signup/send-code")
+            var result = mockMvc.perform(post("/signup/send-code").with(csrf())
                     .with(remoteAddress)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -131,7 +132,7 @@ class AuthControllerIntegrationTest {
             String requestBody = emailJson(email);
 
             // when
-            var result = mockMvc.perform(post("/signup/send-code")
+            var result = mockMvc.perform(post("/signup/send-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -154,7 +155,7 @@ class AuthControllerIntegrationTest {
             String requestBody = verifyCodeJson(email, "ABC123");
 
             // when
-            var result = mockMvc.perform(post("/signup/verify-code")
+            var result = mockMvc.perform(post("/signup/verify-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -172,7 +173,7 @@ class AuthControllerIntegrationTest {
             String requestBody = verifyCodeJson(email, "ZZ9999");
 
             // when
-            var result = mockMvc.perform(post("/signup/verify-code")
+            var result = mockMvc.perform(post("/signup/verify-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -196,7 +197,7 @@ class AuthControllerIntegrationTest {
             String requestBody = signupJson(email, "a".repeat(128), "ABC123");
 
             // when
-            var result = mockMvc.perform(post("/signup")
+            var result = mockMvc.perform(post("/signup").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -217,7 +218,7 @@ class AuthControllerIntegrationTest {
             String requestBody = signupJson(email, "a".repeat(128), "ABC123");
 
             // when
-            var result = mockMvc.perform(post("/signup")
+            var result = mockMvc.perform(post("/signup").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -237,7 +238,7 @@ class AuthControllerIntegrationTest {
             String requestBody = signupJson(email, "a".repeat(128), "ABC123");
 
             // when
-            var result = mockMvc.perform(post("/signup")
+            var result = mockMvc.perform(post("/signup").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -261,7 +262,7 @@ class AuthControllerIntegrationTest {
             String rememberMe = "true";
 
             // when
-            var result = mockMvc.perform(post("/login")
+            var result = mockMvc.perform(post("/login").with(csrf())
                     .param("remember-me", rememberMe)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -284,12 +285,34 @@ class AuthControllerIntegrationTest {
             String requestBody = loginJson(email, "b".repeat(128));
 
             // when
-            var result = mockMvc.perform(post("/login")
+            var result = mockMvc.perform(post("/login").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
             // then
             result.andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("실패 (로그인 rate limit)")
+        void tooManyRequestsWhenLoginFailuresExceedLimit() throws Exception {
+            // given
+            String email = uniqueEmail();
+            saveUser(email, uniqueHandle(), "a".repeat(128));
+            String requestBody = loginJson(email, "b".repeat(128));
+
+            // when & then
+            for (int attempt = 0; attempt < 9; attempt++) {
+                mockMvc.perform(post("/login").with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody))
+                        .andExpect(status().isUnauthorized());
+            }
+
+            mockMvc.perform(post("/login").with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(requestBody))
+                    .andExpect(status().isTooManyRequests());
         }
 
         @Test
@@ -299,7 +322,7 @@ class AuthControllerIntegrationTest {
             String requestBody = "{\"email\":\"" + uniqueEmail() + "\"}";
 
             // when
-            var result = mockMvc.perform(post("/login")
+            var result = mockMvc.perform(post("/login").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -348,7 +371,7 @@ class AuthControllerIntegrationTest {
             String requestBody = handleJson(handle);
 
             // when
-            var result = mockMvc.perform(post("/duplicate-check/handle")
+            var result = mockMvc.perform(post("/duplicate-check/handle").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -365,7 +388,7 @@ class AuthControllerIntegrationTest {
             String requestBody = handleJson(handle);
 
             // when
-            var result = mockMvc.perform(post("/duplicate-check/handle")
+            var result = mockMvc.perform(post("/duplicate-check/handle").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -386,7 +409,7 @@ class AuthControllerIntegrationTest {
             String requestBody = emailJson(email);
 
             // when
-            var result = mockMvc.perform(post("/duplicate-check/email")
+            var result = mockMvc.perform(post("/duplicate-check/email").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -403,7 +426,7 @@ class AuthControllerIntegrationTest {
             String requestBody = emailJson(email);
 
             // when
-            var result = mockMvc.perform(post("/duplicate-check/email")
+            var result = mockMvc.perform(post("/duplicate-check/email").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -428,7 +451,7 @@ class AuthControllerIntegrationTest {
                     user(email).roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/signup/handle")
+            var result = mockMvc.perform(post("/signup/handle").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -453,7 +476,7 @@ class AuthControllerIntegrationTest {
                     user(email).roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/signup/handle")
+            var result = mockMvc.perform(post("/signup/handle").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -477,7 +500,7 @@ class AuthControllerIntegrationTest {
                     user(email).roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/logout").with(user));
+            var result = mockMvc.perform(post("/logout").with(csrf()).with(user));
 
             // then
             result.andExpect(status().isOk())
@@ -500,7 +523,7 @@ class AuthControllerIntegrationTest {
                     user(email).roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/session/me").with(user));
+            var result = mockMvc.perform(post("/session/me").with(csrf()).with(user));
 
             // then
             result.andExpect(status().isOk())
@@ -514,7 +537,7 @@ class AuthControllerIntegrationTest {
             // given
 
             // when
-            var result = mockMvc.perform(post("/session/me"));
+            var result = mockMvc.perform(post("/session/me").with(csrf()));
 
             // then
             result.andExpect(status().isOk())
@@ -555,7 +578,7 @@ class AuthControllerIntegrationTest {
             String requestBody = emailJson(email);
 
             // when
-            var result = mockMvc.perform(post("/find-password/send-code")
+            var result = mockMvc.perform(post("/find-password/send-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -566,18 +589,18 @@ class AuthControllerIntegrationTest {
         }
 
         @Test
-        @DisplayName("실패 (대상 없음)")
-        void notFoundWhenEmailMissing() throws Exception {
+        @DisplayName("성공 (대상 없음)")
+        void successWhenEmailMissing() throws Exception {
             // given
             String requestBody = emailJson(uniqueEmail());
 
             // when
-            var result = mockMvc.perform(post("/find-password/send-code")
+            var result = mockMvc.perform(post("/find-password/send-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
             // then
-            result.andExpect(status().isNotFound());
+            result.andExpect(status().isOk());
         }
     }
 
@@ -595,7 +618,7 @@ class AuthControllerIntegrationTest {
             String requestBody = verifyCodeJson(email, "ABC123");
 
             // when
-            var result = mockMvc.perform(post("/find-password/verify-code")
+            var result = mockMvc.perform(post("/find-password/verify-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -614,7 +637,7 @@ class AuthControllerIntegrationTest {
             String requestBody = verifyCodeJson(email, "ZZ9999");
 
             // when
-            var result = mockMvc.perform(post("/find-password/verify-code")
+            var result = mockMvc.perform(post("/find-password/verify-code").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
@@ -638,14 +661,14 @@ class AuthControllerIntegrationTest {
             String requestBody = loginJson(email, "b".repeat(128));
 
             // when
-            var result = mockMvc.perform(post("/find-password/reset")
+            var result = mockMvc.perform(post("/find-password/reset").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 
             // then
             result.andExpect(status().isOk());
             User savedUser = userRepository.findByEmailIgnoreCase(email).orElseThrow();
-            assertThat(savedUser.getPassword()).isEqualTo(passwordEncoder.encode("b".repeat(128)));
+            assertThat(passwordEncoder.matches("b".repeat(128), savedUser.getPassword())).isTrue();
             assertThat(verificationCodeRepository.findCode(email)).isEmpty();
         }
 
@@ -658,7 +681,7 @@ class AuthControllerIntegrationTest {
             String requestBody = loginJson(email, "b".repeat(128));
 
             // when
-            var result = mockMvc.perform(post("/find-password/reset")
+            var result = mockMvc.perform(post("/find-password/reset").with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
 

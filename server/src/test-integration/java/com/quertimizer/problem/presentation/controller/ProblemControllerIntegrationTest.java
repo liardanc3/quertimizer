@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -230,7 +231,7 @@ class ProblemControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/problems")
+            var result = mockMvc.perform(post("/admin/problems").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -248,7 +249,7 @@ class ProblemControllerIntegrationTest {
                     user("beginner01@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/problems")
+            var result = mockMvc.perform(post("/admin/problems").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -278,7 +279,7 @@ class ProblemControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/problems/output-preview")
+            var result = mockMvc.perform(post("/admin/problems/output-preview").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -296,7 +297,7 @@ class ProblemControllerIntegrationTest {
                     user("beginner01@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/problems/output-preview")
+            var result = mockMvc.perform(post("/admin/problems/output-preview").with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));

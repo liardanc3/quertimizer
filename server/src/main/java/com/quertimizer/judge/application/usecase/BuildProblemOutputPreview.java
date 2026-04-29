@@ -3,6 +3,7 @@ package com.quertimizer.judge.application.usecase;
 import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
 import com.quertimizer.judge.application.output.ProblemOutputPreviewOutput;
 import com.quertimizer.judge.application.port.JudgeExecutionOrchestratorPort;
+import com.quertimizer.judge.domain.policy.JudgeExecutionRateLimitPolicy;
 import com.quertimizer.judge.domain.policy.ProblemDefinitionSqlPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ public class BuildProblemOutputPreview {
 
     private final JudgeExecutionOrchestratorPort judgeExecutionOrchestratorPort;
     private final ProblemDefinitionSqlPolicy problemDefinitionSqlPolicy;
+    private final JudgeExecutionRateLimitPolicy judgeExecutionRateLimitPolicy;
 
     /**
      * 문제 생성용 출력 예시를 judge 실행 환경에서 생성한다.
@@ -25,6 +27,7 @@ public class BuildProblemOutputPreview {
      * @param input 출력 예시 생성 입력
      */
     public ProblemOutputPreviewOutput execute(ProblemOutputPreviewInput input) {
+        judgeExecutionRateLimitPolicy.validate(input.requester(), input.clientIp());
         problemDefinitionSqlPolicy.validateDdl(input.ddl());
         problemDefinitionSqlPolicy.validateSampleDataSql(input.sampleDataSql());
         problemDefinitionSqlPolicy.validateAnswerSql(input.answerSql());

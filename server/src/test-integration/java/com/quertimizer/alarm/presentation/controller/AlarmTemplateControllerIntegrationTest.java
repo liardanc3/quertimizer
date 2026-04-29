@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -78,7 +79,7 @@ class AlarmTemplateControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/alarm-templates/{alarmType}", alarmType)
+            var result = mockMvc.perform(put("/admin/alarm-templates/{alarmType}", alarmType).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -99,7 +100,7 @@ class AlarmTemplateControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/alarm-templates/{alarmType}", alarmType)
+            var result = mockMvc.perform(put("/admin/alarm-templates/{alarmType}", alarmType).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));
@@ -118,7 +119,7 @@ class AlarmTemplateControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(put("/admin/alarm-templates/{alarmType}", alarmType)
+            var result = mockMvc.perform(put("/admin/alarm-templates/{alarmType}", alarmType).with(csrf())
                     .with(user)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(requestBody));

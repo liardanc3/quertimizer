@@ -20,6 +20,6 @@ public class GetCommunityPostDetail {
      * @param input 조회할 게시글과 현재 사용자 입력
      */
     public Optional<CommunityPostDetailOutput> execute(CommunityPostDetailInput input) {
-        return communityService.getPostDetail(input.getPostId(), input.getCurrentHandle());
+        return communityService.getPostDetail(input.getPostId(), input.getCurrentHandle(), input.getViewerKey());
     }
 }

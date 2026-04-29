@@ -11,6 +11,7 @@ import com.quertimizer.auth.presentation.dto.response.AuthManageRes;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -41,8 +42,9 @@ public class AuthManageController {
      */
     @PutMapping("/admin/auth-manage/users/{handle}/role")
     public ResponseEntity<Void> updateUserRole(@PathVariable String handle,
-                                               @Valid @RequestBody AuthManageRoleUpdateReq request) {
-        updateUserRole.execute(UpdateUserRoleInput.of(handle, request.getRole()));
+                                               @Valid @RequestBody AuthManageRoleUpdateReq request,
+                                               Authentication authentication) {
+        updateUserRole.execute(UpdateUserRoleInput.of(handle, request.getRole(), authentication.getName(), request.getConfirmationText()));
         return ResponseEntity.ok().build();
     }
 
@@ -54,7 +56,7 @@ public class AuthManageController {
      */
     @PutMapping("/admin/auth-manage/problem-generators/{handle}/permissions")
     public ResponseEntity<Void> updateProblemGeneratorPermissions(@PathVariable String handle,
-                                                                  @RequestBody AuthManageProblemPermissionUpdateReq request) {
+                                                                  @Valid @RequestBody AuthManageProblemPermissionUpdateReq request) {
         updateProblemGeneratorPermissions.execute(
                 UpdateProblemGeneratorPermissionsInput.of(handle, request.getPermissionKeys())
         );

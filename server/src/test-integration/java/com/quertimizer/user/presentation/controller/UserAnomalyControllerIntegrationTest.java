@@ -21,6 +21,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -132,7 +133,7 @@ class UserAnomalyControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/anomaly-accounts/users/{handle}/block", handle).with(user));
+            var result = mockMvc.perform(post("/admin/anomaly-accounts/users/{handle}/block", handle).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNoContent());
@@ -149,7 +150,7 @@ class UserAnomalyControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(post("/admin/anomaly-accounts/users/{handle}/block", handle).with(user));
+            var result = mockMvc.perform(post("/admin/anomaly-accounts/users/{handle}/block", handle).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNotFound());
@@ -174,7 +175,7 @@ class UserAnomalyControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(delete("/admin/anomaly-accounts/users/{handle}/block", handle).with(user));
+            var result = mockMvc.perform(delete("/admin/anomaly-accounts/users/{handle}/block", handle).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNoContent());
@@ -197,7 +198,7 @@ class UserAnomalyControllerIntegrationTest {
                     user("admin@example.com").roles(UserRole.ADMIN.name());
 
             // when
-            var result = mockMvc.perform(delete("/admin/anomaly-accounts/ips/{ipAddress}/block", ipAddress).with(user));
+            var result = mockMvc.perform(delete("/admin/anomaly-accounts/ips/{ipAddress}/block", ipAddress).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNoContent());

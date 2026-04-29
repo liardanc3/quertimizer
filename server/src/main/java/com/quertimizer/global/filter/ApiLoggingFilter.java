@@ -1,6 +1,7 @@
 package com.quertimizer.global.filter;
 
 import com.quertimizer.global.log.LogFormatter;
+import com.quertimizer.global.support.ClientIpResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,6 +30,10 @@ import java.util.List;
 public class ApiLoggingFilter extends OncePerRequestFilter {
 
     private final LogFormatter logFormatter;
+    private final ClientIpResolver clientIpResolver;
+
+    @Value("${app.logging.api.include-bodies:false}")
+    private boolean includeBodies;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -53,9 +59,13 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
         } finally {
 
             // 요청 본문과 응답 결과 로그 기록
-            logLines(logFormatter.formatRequestBodyLines(prefix, extractRequestBody(requestWrapper)));
+            if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), requestWrapper.getContentType(), requestWrapper.getContentLengthLong())) {
+                logLines(logFormatter.formatRequestBodyLines(prefix, extractRequestBody(requestWrapper)));
+            }
             log.info("{}", logFormatter.formatHttpLine(actor, "API Response", responseStatus(responseWrapper)));
-            logLines(logFormatter.formatResponseBodyLines(prefix, extractResponseBody(responseWrapper)));
+            if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), responseWrapper.getContentType(), responseWrapper.getContentAsByteArray().length)) {
+                logLines(logFormatter.formatResponseBodyLines(prefix, extractResponseBody(responseWrapper)));
+            }
             responseWrapper.copyBodyToResponse();
         }
     }
@@ -86,7 +96,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
             }
         }
 
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 
     private String requestPath(HttpServletRequest request) {
@@ -144,6 +154,27 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
                 || normalizedContentType.contains("text")
                 || normalizedContentType.contains("javascript")
                 || normalizedContentType.contains("x-www-form-urlencoded");
+    }
+
+    private boolean shouldLogBody(String requestUri, String contentType, long contentLength) {
+        if (isSensitiveEndpoint(requestUri)) {
+            return false;
+        }
+
+        if (contentLength > 1024 * 64L) {
+            return false;
+        }
+
+        return contentType == null || !contentType.toLowerCase().startsWith("multipart/");
+    }
+
+    private boolean isSensitiveEndpoint(String requestUri) {
+        return requestUri != null && (
+                requestUri.equals("/login")
+                        || requestUri.startsWith("/signup")
+                        || requestUri.startsWith("/find-password")
+                        || requestUri.startsWith("/duplicate-check")
+        );
     }
 
     private Charset resolveCharset(String contentType, String characterEncoding) {

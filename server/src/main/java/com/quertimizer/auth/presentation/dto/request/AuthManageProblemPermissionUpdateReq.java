@@ -1,5 +1,6 @@
 package com.quertimizer.auth.presentation.dto.request;
 
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -9,6 +10,7 @@ import java.util.List;
 @NoArgsConstructor
 public class AuthManageProblemPermissionUpdateReq {
 
-    private List<String> permissionKeys;
+    @Size(max = 200)
+    private List<@Size(max = 40) String> permissionKeys;
 
 }

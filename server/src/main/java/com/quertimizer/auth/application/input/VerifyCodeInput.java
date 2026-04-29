@@ -12,10 +12,11 @@ public class VerifyCodeInput {
 
     private final String email;
     private final String code;
+    private final String clientIp;
 
-    public static VerifyCodeInput of(String email, String code) {
+    public static VerifyCodeInput of(String email, String code, String clientIp) {
         // 정규화된 인증코드 확인 입력 생성
-        return new VerifyCodeInput(normalizeEmail(email), normalizeCode(code));
+        return new VerifyCodeInput(normalizeEmail(email), normalizeCode(code), normalizeClientIp(clientIp));
     }
 
     private static String normalizeEmail(String email) {
@@ -31,6 +32,12 @@ public class VerifyCodeInput {
         return Optional.ofNullable(code)
                 .map(String::trim)
                 .map(value -> value.toUpperCase(Locale.ROOT))
+                .orElse("");
+    }
+
+    private static String normalizeClientIp(String clientIp) {
+        return Optional.ofNullable(clientIp)
+                .map(String::trim)
                 .orElse("");
     }
 }

@@ -3,11 +3,15 @@ package com.quertimizer.global.config;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.filter.AccountRestrictionFilter;
 import com.quertimizer.global.filter.ApiLoggingFilter;
+import com.quertimizer.global.filter.CsrfCookieFilter;
+import com.quertimizer.global.properties.AppSecurityProperties;
 import com.quertimizer.user.application.port.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -15,17 +19,22 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.token.Sha512DigestUtils;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
-import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
 @RequiredArgsConstructor
@@ -34,19 +43,24 @@ public class SecurityConfig {
     private final UserRepository userRepository;
     private final AccountRestrictionFilter accountRestrictionFilter;
     private final ApiLoggingFilter apiLoggingFilter;
+    private final CsrfCookieFilter csrfCookieFilter;
+    private final AppSecurityProperties appSecurityProperties;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    SecurityContextRepository securityContextRepository,
                                                    TokenBasedRememberMeServices rememberMeServices) throws Exception {
-        // 세션, remember-me, API 로그 필터 구성
-        return http.csrf(AbstractHttpConfigurer::disable)
+        return http.csrf(csrf -> csrf
+                           .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
                    .cors(Customizer.withDefaults())
                    .httpBasic(AbstractHttpConfigurer::disable)
                    .formLogin(AbstractHttpConfigurer::disable)
                    .logout(AbstractHttpConfigurer::disable)
+                   .exceptionHandling(exceptionHandling -> exceptionHandling
+                           .authenticationEntryPoint((request, response, exception) -> response.sendError(401))
+                           .accessDeniedHandler((request, response, exception) -> response.sendError(403)))
+                   .headers(headers -> headers.contentTypeOptions(Customizer.withDefaults()))
                    .oauth2Login(oauth2 -> oauth2
-                           // 소셜 로그인 완료 후에는 controller에서 세션 저장, 접근 기록, redirect를 한 번에 처리한다.
                            .redirectionEndpoint(redirection -> redirection.baseUri("/login/*"))
                            .successHandler((request, response, authentication) -> response.sendRedirect("/login/social/success"))
                            .failureHandler((request, response, exception) ->
@@ -54,16 +68,45 @@ public class SecurityConfig {
                    )
                    .securityContext(context -> context.securityContextRepository(securityContextRepository))
                    .rememberMe(rememberMe -> rememberMe.rememberMeServices(rememberMeServices))
+                   .addFilterAfter(csrfCookieFilter, CsrfFilter.class)
                    .addFilterAfter(accountRestrictionFilter, SecurityContextHolderFilter.class)
                    .addFilterAfter(apiLoggingFilter, AccountRestrictionFilter.class)
                    .authorizeHttpRequests(auth -> auth
-                           // 로그인, 회원가입, OAuth2 진입점은 비로그인 상태에서도 접근 가능해야 한다.
-                           .requestMatchers("/login", "/login/*", "/logout", "/signup", "/signup/*", "/oauth2/**").permitAll()
+                           .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                           .requestMatchers(HttpMethod.GET,
+                                   "/problems",
+                                   "/problems/*",
+                                   "/community/posts",
+                                   "/community/posts/*",
+                                   "/community/images/*",
+                                   "/community/tags/suggestions",
+                                   "/dashboard",
+                                   "/submit-histories",
+                                   "/ui-texts",
+                                   "/ui-texts/*",
+                                   "/ranks",
+                                   "/profiles/**",
+                                   "/login/social/**",
+                                   "/oauth2/**"
+                           ).permitAll()
+                           .requestMatchers(HttpMethod.POST,
+                                   "/login",
+                                   "/signup",
+                                   "/signup/send-code",
+                                   "/signup/verify-code",
+                                   "/duplicate-check/handle",
+                                   "/duplicate-check/email",
+                                   "/find-password/send-code",
+                                   "/find-password/verify-code",
+                                   "/find-password/reset",
+                                   "/session/me"
+                           ).permitAll()
+                           .requestMatchers("/oauth2/**", "/login/*").permitAll()
                            .requestMatchers("/admin/auth-manage/**").hasRole(UserRole.ADMIN.name())
                            .requestMatchers("/admin/problem-sets/**", "/admin/problems", "/admin/problems/output-preview")
                            .hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
                            .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
-                           .anyRequest().permitAll())
+                           .anyRequest().authenticated())
                    .build();
     }
 
@@ -98,14 +141,19 @@ public class SecurityConfig {
 
     @Bean
     public TokenBasedRememberMeServices rememberMeServices(UserDetailsService userDetailsService) {
-        // remember-me 서비스 생성
         TokenBasedRememberMeServices rememberMeServices =
-                new TokenBasedRememberMeServices("quertimizer-remember-me-key", userDetailsService);
+                new TokenBasedRememberMeServices(appSecurityProperties.getRememberMe().getKey(), userDetailsService);
 
-        // 로그인 유지 쿠키 설정
         rememberMeServices.setCookieName("quertimizer-remember-me");
-        rememberMeServices.setTokenValiditySeconds((int) Duration.ofDays(180).toSeconds());
+        rememberMeServices.setTokenValiditySeconds((int) appSecurityProperties.getRememberMe().getValidity().toSeconds());
+        rememberMeServices.setUseSecureCookie(appSecurityProperties.getRememberMe().isSecure());
         return rememberMeServices;
+    }
+
+    @Bean
+    public CookieSameSiteSupplier rememberMeCookieSameSiteSupplier() {
+        return CookieSameSiteSupplier.of(appSecurityProperties.getRememberMe().getSameSite())
+                .whenHasName("quertimizer-remember-me");
     }
 
     @Bean
@@ -117,20 +165,11 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // 비밀번호 인코더 생성
-        return new PasswordEncoder() {
-            @Override
-            public String encode(CharSequence rawPassword) {
-                // 클라이언트에서 1차 SHA-512 처리한 값을 서버에서 한 번 더 SHA-512로 감싸 저장한다.
-                return Sha512DigestUtils.shaHex(rawPassword.toString());
-            }
+        Map<String, PasswordEncoder> encoders = new HashMap<>();
+        encoders.put("pbkdf2", Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8());
+        encoders.put("bcrypt", new BCryptPasswordEncoder());
 
-            @Override
-            public boolean matches(CharSequence rawPassword, String encodedPassword) {
-                // 비밀번호 일치 여부 확인
-                return encode(rawPassword).equals(encodedPassword);
-            }
-        };
+        return new DelegatingPasswordEncoder("pbkdf2", encoders);
     }
 
     @Bean

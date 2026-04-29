@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.Duration;
 
 @Getter
 @Setter
@@ -17,6 +18,7 @@ public class JudgeDatabaseProperties {
 
     private DatasetProvisioning datasetProvisioning = new DatasetProvisioning();
     private List<DatabaseProperties> databases = List.of();
+    private Duration leaseAcquireTimeout = Duration.ofSeconds(3);
 
     public String getProvisioningStrategy() {
         return datasetProvisioning != null && datasetProvisioning.getStrategy() != null && !datasetProvisioning.getStrategy().isBlank()
@@ -26,6 +28,10 @@ public class JudgeDatabaseProperties {
 
     public List<DatabaseProperties> getDatabases() {
         return databases != null ? databases : List.of();
+    }
+
+    public Duration getLeaseAcquireTimeout() {
+        return leaseAcquireTimeout != null ? leaseAcquireTimeout : Duration.ofSeconds(3);
     }
 
     public List<DatabaseProperties> getDatabases(DbmsType dbmsType) {

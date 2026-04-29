@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -79,7 +80,7 @@ class AlarmControllerIntegrationTest {
                     user("beginner03@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/alarms/read-all").with(user));
+            var result = mockMvc.perform(post("/alarms/read-all").with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNoContent());
@@ -92,7 +93,7 @@ class AlarmControllerIntegrationTest {
             // given
 
             // when
-            var result = mockMvc.perform(post("/alarms/read-all"));
+            var result = mockMvc.perform(post("/alarms/read-all").with(csrf()));
 
             // then
             result.andExpect(status().isUnauthorized());
@@ -114,7 +115,7 @@ class AlarmControllerIntegrationTest {
                     user("beginner04@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/alarms/{alarmId}/read", alarmId).with(user));
+            var result = mockMvc.perform(post("/alarms/{alarmId}/read", alarmId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNoContent());
@@ -130,7 +131,7 @@ class AlarmControllerIntegrationTest {
                     user("beginner04@example.com").roles(UserRole.USER.name());
 
             // when
-            var result = mockMvc.perform(post("/alarms/{alarmId}/read", alarmId).with(user));
+            var result = mockMvc.perform(post("/alarms/{alarmId}/read", alarmId).with(csrf()).with(user));
 
             // then
             result.andExpect(status().isNotFound());

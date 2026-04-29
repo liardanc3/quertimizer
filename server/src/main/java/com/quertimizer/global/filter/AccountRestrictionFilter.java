@@ -3,6 +3,7 @@ package com.quertimizer.global.filter;
 import com.quertimizer.auth.application.service.AccountRestrictionService;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
 import com.quertimizer.global.exception.BusinessException;
+import com.quertimizer.global.support.ClientIpResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,12 +24,13 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
 
     private final AccountRestrictionService accountRestrictionService;
     private final LoginPolicy loginPolicy;
+    private final ClientIpResolver clientIpResolver;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         // 차단된 IP는 인증 여부와 상관없이 즉시 요청을 거부한다.
-        String clientIp = resolveClientIp(request);
+        String clientIp = clientIpResolver.resolve(request);
         if (accountRestrictionService.isBlockedIp(clientIp)) {
             response.sendError(HttpStatus.FORBIDDEN.value());
             return;
@@ -64,16 +66,6 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
         } catch (BusinessException exception) {
             return true;
         }
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        // 프록시 환경에서는 X-Forwarded-For의 첫 번째 IP를 실제 클라이언트 IP로 간주한다.
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-
-        return request.getRemoteAddr();
     }
 
 }

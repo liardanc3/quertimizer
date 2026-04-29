@@ -20,6 +20,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestratorPort {
 
+    private static final int MAX_RESULT_ROWS = 100;
+    private static final int MAX_RESULT_COLUMNS = 50;
+
     private final JudgeDatabaseProperties judgeDatabaseProperties;
     private final ExecutionDatabaseQueue executionDatabaseQueue;
     private final SqlReplayProvisioningStrategy sqlReplayProvisioningStrategy;
@@ -81,6 +84,7 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
             for (String useSchemaSql : dialect.useSchemaSqls(schemaName)) {
                 statement.execute(useSchemaSql);
             }
+            statement.setMaxRows(MAX_RESULT_ROWS + 1);
             statement.execute(sql);
 
             try (ResultSet resultSet = statement.getResultSet()) {
@@ -89,6 +93,10 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
                 }
 
                 ResultSetMetaData metaData = resultSet.getMetaData();
+                if (metaData.getColumnCount() > MAX_RESULT_COLUMNS) {
+                    throw new IllegalArgumentException("SQL 실행 결과 컬럼 수가 너무 많습니다.");
+                }
+
                 List<String> columns = new ArrayList<>();
                 for (int columnIndex = 1; columnIndex <= metaData.getColumnCount(); columnIndex++) {
                     columns.add(metaData.getColumnLabel(columnIndex));
@@ -96,6 +104,10 @@ public class ExecutionDatabaseOrchestrator implements JudgeExecutionOrchestrator
 
                 List<List<String>> rows = new ArrayList<>();
                 while (resultSet.next()) {
+                    if (rows.size() >= MAX_RESULT_ROWS) {
+                        throw new IllegalArgumentException("SQL 실행 결과 행 수가 너무 많습니다.");
+                    }
+
                     List<String> row = new ArrayList<>();
                     for (int columnIndex = 1; columnIndex <= metaData.getColumnCount(); columnIndex++) {
                         Object value = resultSet.getObject(columnIndex);

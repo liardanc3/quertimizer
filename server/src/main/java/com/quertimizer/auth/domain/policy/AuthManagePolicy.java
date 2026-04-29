@@ -9,12 +9,20 @@ import org.springframework.stereotype.Component;
 
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.LAST_ADMIN_PROTECTION;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.PROBLEM_GENERATOR_REQUIRED;
+import static com.quertimizer.auth.domain.model.AuthManageFailReason.SELF_ADMIN_REMOVAL_DENIED;
+import static com.quertimizer.auth.domain.model.AuthManageFailReason.SENSITIVE_CONFIRMATION_REQUIRED;
 
 @Component
 @RequiredArgsConstructor
 public class AuthManagePolicy {
 
     private final UserRepository userRepository;
+
+    public void validateSensitiveConfirmation(String confirmationText) {
+        if (!"ROLE_CHANGE_CONFIRMED".equals(confirmationText)) {
+            throw new BusinessException(SENSITIVE_CONFIRMATION_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
 
     /**
      * 마지막 Admin 역할 해제를 차단한다.
@@ -37,6 +45,15 @@ public class AuthManagePolicy {
                 .count();
         if (adminCount <= 1) {
             throw new BusinessException(LAST_ADMIN_PROTECTION.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    public void validateSelfAdminRemoval(String actorEmail, String targetEmail, UserRole currentRole, UserRole nextRole) {
+        if (currentRole == UserRole.ADMIN
+                && nextRole != UserRole.ADMIN
+                && actorEmail != null
+                && actorEmail.equalsIgnoreCase(targetEmail)) {
+            throw new BusinessException(SELF_ADMIN_REMOVAL_DENIED.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
 

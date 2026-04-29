@@ -28,7 +28,7 @@ public class User {
     @Column(name = "handle", unique = true, length = 50)
     private String handle;
 
-    @Column(nullable = false, length = 128)
+    @Column(nullable = false, length = 255)
     private String password;
 
     @Column(columnDefinition = "TEXT")

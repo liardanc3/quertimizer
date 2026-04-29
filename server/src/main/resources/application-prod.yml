@@ -95,8 +95,21 @@ app:
   frontend-base-url: ${FRONTEND_BASE_URL}
   mail:
     from: ${MAIL_FROM}
+  security:
+    remember-me:
+      key: ${QUERTIMIZER_REMEMBER_ME_KEY}
+      validity: ${QUERTIMIZER_REMEMBER_ME_VALIDITY:90d}
+      secure: ${QUERTIMIZER_REMEMBER_ME_SECURE:true}
+      same-site: Lax
+    client-ip:
+      trust-forwarded-headers: ${QUERTIMIZER_TRUST_FORWARDED_HEADERS:false}
+      trusted-proxies: ${QUERTIMIZER_TRUSTED_PROXIES:}
+  logging:
+    api:
+      include-bodies: ${QUERTIMIZER_API_LOGGING_INCLUDE_BODIES:false}
 
 judge:
+  lease-acquire-timeout: ${JUDGE_LEASE_ACQUIRE_TIMEOUT:3s}
   dataset-provisioning:
     strategy: ${JUDGE_DATASET_PROVISIONING_STRATEGY:sql-replay}
   databases:
