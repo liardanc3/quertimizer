@@ -1,0 +1,123 @@
+package com.quertimizer.auth.domain.policy;
+
+import com.quertimizer.auth.application.port.AuthRateLimitRepository;
+import com.quertimizer.global.exception.BusinessException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Locale;
+
+@Component
+@RequiredArgsConstructor
+public class AuthRateLimitPolicy {
+
+    private static final Duration LOGIN_LOCK_WINDOW = Duration.ofMinutes(10);
+    private static final int LOGIN_FAILURE_LIMIT = 10;
+    private static final Duration CODE_MINUTE_WINDOW = Duration.ofMinutes(1);
+    private static final Duration CODE_HOUR_WINDOW = Duration.ofHours(1);
+    private static final int CODE_MINUTE_LIMIT = 20;
+    private static final int CODE_HOUR_LIMIT = 100;
+    private static final Duration CODE_VERIFY_WINDOW = Duration.ofMinutes(10);
+    private static final int CODE_VERIFY_FAILURE_LIMIT = 5;
+    private static final Duration PASSWORD_RESET_WINDOW = Duration.ofMinutes(10);
+    private static final int PASSWORD_RESET_LIMIT = 3;
+
+    private final AuthRateLimitRepository authRateLimitRepository;
+
+    public void validateLoginAllowed(String email, String clientIp) {
+        Instant now = Instant.now();
+        if (authRateLimitRepository.count(loginKey(email, clientIp), LOGIN_LOCK_WINDOW, now) >= LOGIN_FAILURE_LIMIT) {
+            throw tooManyRequests("로그인 실패 횟수가 많습니다. 잠시 후 다시 시도해 주세요.");
+        }
+    }
+
+    public void recordLoginFailure(String email, String clientIp) {
+        String key = loginKey(email, clientIp);
+        Instant now = Instant.now();
+        authRateLimitRepository.add(key, now);
+        if (authRateLimitRepository.count(key, LOGIN_LOCK_WINDOW, now) >= LOGIN_FAILURE_LIMIT) {
+            throw tooManyRequests("로그인 실패 횟수가 많습니다. 잠시 후 다시 시도해 주세요.");
+        }
+    }
+
+    public void clearLoginFailures(String email, String clientIp) {
+        authRateLimitRepository.clear(loginKey(email, clientIp));
+    }
+
+    public void recordCodeIssue(String purpose, String email, String clientIp) {
+        String emailKey = codeIssueEmailKey(purpose, email);
+        String ipKey = codeIssueIpKey(purpose, clientIp);
+        Instant now = Instant.now();
+        if (isCodeIssueLimited(emailKey, now) || isCodeIssueLimited(ipKey, now)) {
+            throw tooManyRequests("인증코드 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
+        }
+
+        authRateLimitRepository.add(emailKey, now);
+        authRateLimitRepository.add(ipKey, now);
+    }
+
+    public boolean recordCodeVerificationFailure(String purpose, String email, String clientIp) {
+        String key = codeVerifyKey(purpose, email, clientIp);
+        Instant now = Instant.now();
+        authRateLimitRepository.add(key, now);
+        return authRateLimitRepository.count(key, CODE_VERIFY_WINDOW, now) >= CODE_VERIFY_FAILURE_LIMIT;
+    }
+
+    public void clearCodeVerificationFailures(String purpose, String email, String clientIp) {
+        authRateLimitRepository.clear(codeVerifyKey(purpose, email, clientIp));
+    }
+
+    public void recordPasswordReset(String email, String clientIp) {
+        String key = passwordResetKey(email, clientIp);
+        Instant now = Instant.now();
+        if (authRateLimitRepository.count(key, PASSWORD_RESET_WINDOW, now) >= PASSWORD_RESET_LIMIT) {
+            throw tooManyRequests("비밀번호 재설정 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
+        }
+
+        authRateLimitRepository.add(key, now);
+    }
+
+    private boolean isCodeIssueLimited(String key, Instant now) {
+        return authRateLimitRepository.count(key, CODE_MINUTE_WINDOW, now) >= CODE_MINUTE_LIMIT
+                || authRateLimitRepository.count(key, CODE_HOUR_WINDOW, now) >= CODE_HOUR_LIMIT;
+    }
+
+    private BusinessException tooManyRequests(String message) {
+        return new BusinessException(message, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    private String loginKey(String email, String clientIp) {
+        return "login:" + normalizeEmail(email) + ":" + normalizeIp(clientIp);
+    }
+
+    private String codeIssueEmailKey(String purpose, String email) {
+        return "code-issue:email:" + normalizePurpose(purpose) + ":" + normalizeEmail(email);
+    }
+
+    private String codeIssueIpKey(String purpose, String clientIp) {
+        return "code-issue:ip:" + normalizePurpose(purpose) + ":" + normalizeIp(clientIp);
+    }
+
+    private String codeVerifyKey(String purpose, String email, String clientIp) {
+        return "code-verify:" + normalizePurpose(purpose) + ":" + normalizeEmail(email) + ":" + normalizeIp(clientIp);
+    }
+
+    private String passwordResetKey(String email, String clientIp) {
+        return "password-reset:" + normalizeEmail(email) + ":" + normalizeIp(clientIp);
+    }
+
+    private String normalizePurpose(String purpose) {
+        return purpose == null || purpose.isBlank() ? "default" : purpose.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null || email.isBlank() ? "unknown" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeIp(String clientIp) {
+        return clientIp == null || clientIp.isBlank() ? "unknown" : clientIp.trim();
+    }
+}
