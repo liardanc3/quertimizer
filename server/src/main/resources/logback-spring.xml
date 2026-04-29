@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<property name="QUERTIMIZER_LOG_DIR" value="${LOG_DIR:-/home/quertimizer/apps/server/logs}"/>
+	<property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n%ex"/>
+
+	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+			<charset>UTF-8</charset>
+			<pattern>${LOG_PATTERN}</pattern>
+		</encoder>
+	</appender>
+
+	<springProfile name="prod">
+		<appender name="PROD_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+			<append>true</append>
+			<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+				<charset>UTF-8</charset>
+				<pattern>${LOG_PATTERN}</pattern>
+			</encoder>
+			<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+				<fileNamePattern>${QUERTIMIZER_LOG_DIR}/%d{yyyy-MM, aux}/%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+				<maxHistory>90</maxHistory>
+				<totalSizeCap>3GB</totalSizeCap>
+				<cleanHistoryOnStart>true</cleanHistoryOnStart>
+			</rollingPolicy>
+		</appender>
+	</springProfile>
+
+	<logger name="com.quertimizer" level="INFO"/>
+	<logger name="org.springframework" level="INFO"/>
+	<logger name="org.hibernate" level="WARN"/>
+	<logger name="org.hibernate.SQL" level="WARN"/>
+	<logger name="org.hibernate.orm.jdbc.bind" level="WARN"/>
+	<logger name="org.elasticsearch" level="WARN"/>
+	<logger name="co.elastic.clients" level="WARN"/>
+
+	<springProfile name="prod">
+		<root level="INFO">
+			<appender-ref ref="CONSOLE"/>
+			<appender-ref ref="PROD_FILE"/>
+		</root>
+	</springProfile>
+
+	<springProfile name="!prod">
+		<root level="INFO">
+			<appender-ref ref="CONSOLE"/>
+		</root>
+	</springProfile>
+</configuration>
