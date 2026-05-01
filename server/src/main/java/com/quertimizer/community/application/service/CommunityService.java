@@ -1,34 +1,21 @@
 package com.quertimizer.community.application.service;
 
 import com.quertimizer.alarm.application.service.AlarmService;
-import com.quertimizer.alarm.domain.model.CommunityPostLikeAlarm;
-import com.quertimizer.alarm.domain.model.CommunityPostCommentAlarm;
-import com.quertimizer.alarm.domain.model.CommunityCommentReplyAlarm;
 import com.quertimizer.alarm.domain.model.CommunityCommentLikeAlarm;
-import com.quertimizer.community.application.input.CommunityCommentInput;
-import com.quertimizer.community.application.input.CommunityPostInput;
+import com.quertimizer.alarm.domain.model.CommunityCommentReplyAlarm;
+import com.quertimizer.alarm.domain.model.CommunityPostCommentAlarm;
+import com.quertimizer.alarm.domain.model.CommunityPostLikeAlarm;
 import com.quertimizer.community.application.output.CommunityCommentOutput;
-import com.quertimizer.community.application.output.CommunityPostDetailOutput;
-import com.quertimizer.community.application.output.CommunityPostPageOutput;
-import com.quertimizer.community.application.output.CommunityReactionOutput;
-import com.quertimizer.community.application.output.CommunityTagSuggestionOutput;
-import com.quertimizer.community.domain.entity.CommunityComment;
-import com.quertimizer.community.domain.entity.CommunityCommentLike;
-import com.quertimizer.community.domain.entity.CommunityCommentLikeId;
-import com.quertimizer.community.domain.entity.CommunityPost;
-import com.quertimizer.community.domain.entity.CommunityPostLike;
-import com.quertimizer.community.domain.entity.CommunityPostLikeId;
-import com.quertimizer.community.domain.entity.CommunityPostTag;
-import com.quertimizer.community.domain.policy.CommunityContentPolicy;
-import com.quertimizer.community.domain.policy.CommunityNoticePolicy;
-import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
-import com.quertimizer.community.domain.policy.CommunityViewPolicy;
 import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
-import com.quertimizer.community.application.port.CommunityCommentRepository;
 import com.quertimizer.community.application.port.CommunityPostLikeRepository;
-import com.quertimizer.community.application.port.CommunityPostRepository;
-import com.quertimizer.community.application.port.CommunityPostSearchPort;
 import com.quertimizer.community.application.port.CommunityPostTagRepository;
+import com.quertimizer.community.domain.entity.CommunityComment;
+import com.quertimizer.community.domain.entity.CommunityPost;
+import com.quertimizer.community.domain.entity.CommunityPostTag;
+import com.quertimizer.community.domain.entity.ids.CommunityCommentLikeId;
+import com.quertimizer.community.domain.entity.ids.CommunityPostLikeId;
+import com.quertimizer.community.domain.model.CommunityPostConstant;
+import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,334 +34,57 @@ import java.util.Optional;
 @Transactional
 public class CommunityService {
 
-    private static final int COMMUNITY_PAGE_SIZE = 10;
-
-    private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
-    private final CommunityCommentRepository communityCommentRepository;
     private final CommunityPostLikeRepository communityPostLikeRepository;
     private final CommunityCommentLikeRepository communityCommentLikeRepository;
-    private final CommunityPostSearchPort communityPostSearchPort;
     private final AlarmService alarmService;
-    private final CommunityContentPolicy communityContentPolicy;
-    private final CommunityNoticePolicy communityNoticePolicy;
-    private final CommunityViewPolicy communityViewPolicy;
 
-    @Transactional(readOnly = true)
-    public CommunityPostPageOutput getPosts(int requestedPage, String searchKeyword, String tag, String category, String sortKey) {
-        // 게시글 목록 페이지를 조회
-        List<CommunityPost> posts = communityPostRepository.findAll();
-        Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
-
-        // 게시글 목록 검색, 필터, 정렬, 페이징
-        return communityPostSearchPort.searchPosts(
-                requestedPage,
-                COMMUNITY_PAGE_SIZE,
-                searchKeyword,
-                tag,
-                category,
-                sortKey,
-                posts,
-                tagsByPostId
-        );
-    }
-
-    public Optional<CommunityPostDetailOutput> getPostDetail(Long postId, String currentHandle, String viewerKey) {
-        // 게시글 상세를 조회
-        return communityPostRepository.findById(postId)
-                .map(post -> {
-                    if (communityViewPolicy.shouldIncreaseViewCount(postId, viewerKey)) {
-                        post.increaseViewCount();
-                    }
-
-                    List<String> tags = createTags(postId);
-                    List<CommunityComment> comments = communityCommentRepository.findAllByPostIdOrderByCreatedAtAsc(postId);
-                    Map<Long, Boolean> likedCommentById = createLikedCommentById(comments, currentHandle);
-                    boolean likedByCurrentUser = isPostLiked(postId, currentHandle);
-
-                    CommunityPostDetailOutput detailResponse = new CommunityPostDetailOutput(
-                            CommunityPostIdPolicy.format(post.getPostId()),
-                            post.getTitle(),
-                            post.getHandle(),
-                            post.getContentJson(),
-                            createImageIds(post.getImageIds()),
-                            tags,
-                            resolveCategory(post),
-                            post.getCreatedAt(),
-                            post.getUpdatedAt(),
-                            post.getViewCount(),
-                            post.getLikeCount(),
-                            post.getCommentCount(),
-                            likedByCurrentUser,
-                            currentHandle != null && currentHandle.equals(post.getHandle()),
-                            createCommentTree(comments, likedCommentById)
-                    );
-
-                    return detailResponse;
-                });
-    }
-
-    public Long createPost(String handle, CommunityPostInput input) {
-        // 게시글을 생성
-        String normalizedTitle = input.getTitle().trim();
-        String normalizedContentJson = normalizeContentJson(input.getContentJson());
-        communityContentPolicy.validate(normalizedContentJson);
-        String normalizedPlainTextSummary = normalizePlainTextSummary(input.getPlainTextSummary());
-        String normalizedImageIds = normalizeImageIds(input.getImageIds());
-        List<String> normalizedTags = normalizeTags(input.getTags());
-        String normalizedCategory = normalizePostCategory(input.getCategory());
-        communityNoticePolicy.validateNoticeWritable(handle, "", normalizedCategory);
-        Long nextPostId = communityPostRepository.findTopPostId()
-                .map(postId -> postId + 1)
-                .orElse(1L);
-
-        // 게시글 저장 후 태그와 검색 인덱스 동기화
-        CommunityPost post = communityPostRepository.save(
-                CommunityPost.create(
-                        nextPostId, handle, normalizedTitle, normalizedContentJson,
-                        normalizedPlainTextSummary, normalizedImageIds, normalizedCategory
-                )
-        );
-        replaceTags(post.getPostId(), normalizedTags);
-        communityPostSearchPort.syncPost(post, normalizedTags);
-        return post.getPostId();
-    }
-
-    public Optional<Long> updatePost(Long postId, String handle, CommunityPostInput input) {
-        // 게시글을 수정
-        return communityPostRepository.findById(postId)
-                .filter(post -> post.getHandle().equals(handle))
-                .map(post -> {
-                    String normalizedTitle = input.getTitle().trim();
-                    String normalizedContentJson = normalizeContentJson(input.getContentJson());
-                    communityContentPolicy.validate(normalizedContentJson);
-                    String normalizedPlainTextSummary = normalizePlainTextSummary(input.getPlainTextSummary());
-                    String normalizedImageIds = normalizeImageIds(input.getImageIds());
-                    List<String> normalizedTags = normalizeTags(input.getTags());
-                    String normalizedCategory = normalizePostCategory(input.getCategory());
-                    communityNoticePolicy.validateNoticeWritable(handle, normalizePostCategory(post.getCategory()), normalizedCategory);
-
-                    // 게시글 본문, 태그, 검색 인덱스 갱신
-                    post.changeContent(normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory);
-                    replaceTags(postId, normalizedTags);
-                    communityPostSearchPort.syncPost(post, normalizedTags);
-                    return postId;
-                });
-    }
-
-    public boolean deletePost(Long postId, String handle) {
-        // 게시글을 삭제
-        Optional<CommunityPost> post = communityPostRepository.findById(postId)
-                .filter(currentPost -> currentPost.getHandle().equals(handle));
-
-        if (post.isEmpty()) {
-            return false;
-        }
-
-        // 게시글 삭제 시 댓글, 좋아요, 태그까지 함께 제거
-        List<Long> commentIds = communityCommentRepository.findAllByPostIdOrderByCreatedAtAsc(postId).stream()
-                .map(CommunityComment::getCommentId)
-                .toList();
-
-        if (!commentIds.isEmpty()) {
-            communityCommentLikeRepository.deleteAllByIdCommentIdIn(commentIds);
-        }
-
-        communityCommentRepository.deleteAllByPostId(postId);
-        communityPostLikeRepository.deleteAllByIdPostId(postId);
-        communityPostTagRepository.deleteAllByPostId(postId);
-        communityPostRepository.delete(post.get());
-        communityPostSearchPort.deletePost(postId);
-        return true;
-    }
-
-    public Optional<CommunityReactionOutput> togglePostLike(Long postId, String handle) {
-        // 게시글 좋아요를 토글
-        return communityPostRepository.findById(postId)
-                .map(post -> {
-                    CommunityPostLikeId postLikeId = new CommunityPostLikeId(postId, handle);
-
-                    // 게시글 좋아요 토글 후 카운트, 검색 인덱스 갱신
-                    if (communityPostLikeRepository.existsById(postLikeId)) {
-                        communityPostLikeRepository.deleteById(postLikeId);
-                        post.decreaseLikeCount();
-                        communityPostSearchPort.syncPost(post, createTags(postId));
-                        return new CommunityReactionOutput(false, post.getLikeCount());
-                    }
-
-                    communityPostLikeRepository.save(CommunityPostLike.create(postId, handle));
-                    post.increaseLikeCount();
-                    communityPostSearchPort.syncPost(post, createTags(postId));
-                    publishPostLikeAlarm(post, handle);
-                    return new CommunityReactionOutput(true, post.getLikeCount());
-                });
-    }
-
-    public Optional<CommunityCommentOutput> addComment(Long postId, String handle, CommunityCommentInput input) {
-        // 댓글을 추가
-        return communityPostRepository.findById(postId)
-                .map(post -> {
-                    Optional<CommunityComment> parentComment = Optional.ofNullable(input.getParentCommentId())
-                            .flatMap(communityCommentRepository::findById)
-                            .filter(currentComment -> currentComment.getPostId().equals(postId));
-
-                    // 댓글 저장 후 댓글 수, 검색 인덱스 갱신
-                    CommunityComment comment = communityCommentRepository.save(
-                            CommunityComment.create(
-                                    postId,
-                                    handle,
-                                    input.getParentCommentId(),
-                                    input.getContent().trim()
-                            )
-                    );
-                    post.increaseCommentCount();
-                    communityPostSearchPort.syncPost(post, createTags(postId));
-                    publishCommentAlarms(post, comment, parentComment, handle);
-                    return new CommunityCommentOutput(
-                            comment.getCommentId(),
-                            comment.getHandle(),
-                            comment.getContent(),
-                            comment.getCreatedAt(),
-                            comment.getLikeCount(),
-                            false,
-                            List.of()
-                    );
-                });
-    }
-
-    public Optional<CommunityReactionOutput> toggleCommentLike(Long commentId, String handle) {
-        // 댓글 좋아요를 토글
-        return communityCommentRepository.findById(commentId)
-                .map(comment -> {
-                    CommunityCommentLikeId commentLikeId = new CommunityCommentLikeId(commentId, handle);
-
-                    // 댓글 좋아요 토글 후 카운트 갱신
-                    if (communityCommentLikeRepository.existsById(commentLikeId)) {
-                        communityCommentLikeRepository.deleteById(commentLikeId);
-                        comment.decreaseLikeCount();
-                        return new CommunityReactionOutput(false, comment.getLikeCount());
-                    }
-
-                    communityCommentLikeRepository.save(CommunityCommentLike.create(commentId, handle));
-                    comment.increaseLikeCount();
-                    publishCommentLikeAlarm(comment, handle);
-                    return new CommunityReactionOutput(true, comment.getLikeCount());
-                });
-    }
-
-    @Transactional(readOnly = true)
-    public List<CommunityTagSuggestionOutput> getTagSuggestions(String query) {
-        // 태그 자동완성 목록을 조회
-        if (!StringUtils.hasText(query)) {
-            return List.of();
-        }
-
-        Map<String, Long> usageCountByTag = new LinkedHashMap<>();
-
-        // 기존 게시글 태그 기준 자동완성 목록 구성
-        for (CommunityPostTag postTag : communityPostTagRepository.findAllByTagContainingIgnoreCaseOrderByTagAsc(query.trim())) {
-            usageCountByTag.merge(postTag.getTag(), 1L, Long::sum);
-        }
-
-        return usageCountByTag.entrySet().stream()
-                .sorted(Map.Entry.<String, Long>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
-                .limit(10)
-                .map(entry -> new CommunityTagSuggestionOutput(entry.getKey(), entry.getValue()))
-                .toList();
-    }
-
-    private void publishPostLikeAlarm(CommunityPost post, String actorHandle) {
-        // 게시글 좋아요 알람 발행
-        if (post.getHandle().equals(actorHandle)) {
-            return;
-        }
-
-        alarmService.publish(new CommunityPostLikeAlarm(
-                post.getHandle(),
-                actorHandle,
-                CommunityPostIdPolicy.format(post.getPostId()),
-                post.getTitle()
-        ));
-    }
-
-    private void publishCommentAlarms(CommunityPost post,
-                                      CommunityComment comment,
-                                      Optional<CommunityComment> parentComment,
-                                      String actorHandle) {
-        boolean isReplyAlarmDelivered = false;
-
-        if (parentComment.isPresent() && !parentComment.get().getHandle().equals(actorHandle)) {
-            alarmService.publish(new CommunityCommentReplyAlarm(
-                    parentComment.get().getHandle(),
-                    actorHandle,
-                    CommunityPostIdPolicy.format(post.getPostId()),
-                    comment.getContent(),
-                    comment.getCommentId()
-            ));
-            isReplyAlarmDelivered = true;
-        }
-
-        if (post.getHandle().equals(actorHandle)) {
-            return;
-        }
-
-        if (isReplyAlarmDelivered && parentComment.map(currentComment -> currentComment.getHandle().equals(post.getHandle())).orElse(false)) {
-            return;
-        }
-
-        alarmService.publish(new CommunityPostCommentAlarm(
-                post.getHandle(),
-                actorHandle,
-                CommunityPostIdPolicy.format(post.getPostId()),
-                comment.getContent(),
-                comment.getCommentId()
-        ));
-    }
-
-    private void publishCommentLikeAlarm(CommunityComment comment, String actorHandle) {
-        // 댓글 좋아요 알람 발행
-        if (comment.getHandle().equals(actorHandle)) {
-            return;
-        }
-
-        alarmService.publish(new CommunityCommentLikeAlarm(
-                comment.getHandle(),
-                actorHandle,
-                CommunityPostIdPolicy.format(comment.getPostId()),
-                comment.getContent(),
-                comment.getCommentId()
-        ));
-    }
-
-    private Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
-        // 게시글 번호별 태그 목록 생성
+    public Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
+        // 게시글 번호별 태그 저장소 준비
         Map<Long, List<String>> tagsByPostId = new HashMap<>();
 
+        // 조회 대상 게시글 번호 없으면 빈 결과 반환
         if (postIds.isEmpty()) {
             return tagsByPostId;
         }
 
         // 게시글별 태그 목록 구성
         for (CommunityPostTag postTag : communityPostTagRepository.findAllByPostIdInOrderByPostIdAscTagOrderAsc(postIds)) {
-            tagsByPostId.computeIfAbsent(postTag.getPostId(), key -> new ArrayList<>())
-                    .add(postTag.getTag());
+            tagsByPostId.computeIfAbsent(postTag.getPostId(), key -> new ArrayList<>()).add(postTag.getTag());
         }
 
         return tagsByPostId;
     }
 
-    private List<String> createTags(Long postId) {
-        // 태그 목록 생성
+    public List<String> createTags(Long postId) {
+        // 게시글 번호 기준 태그 목록 조회
         return communityPostTagRepository.findAllByPostIdOrderByTagOrderAsc(postId).stream()
                 .map(CommunityPostTag::getTag)
                 .toList();
     }
 
-    private List<String> normalizeTags(List<String> tags) {
-        // 태그 목록 정규화
+    public void replaceTags(Long postId, List<String> tags) {
+        // 기존 태그 삭제
+        communityPostTagRepository.deleteAllByPostId(postId);
+
+        // 신규 태그 없으면 종료
+        if (tags.isEmpty()) {
+            return;
+        }
+
+        // 태그 순서와 함께 신규 태그 저장
+        List<CommunityPostTag> postTags = new ArrayList<>();
+        for (int tagIndex = 0; tagIndex < tags.size(); tagIndex++) {
+            postTags.add(CommunityPostTag.create(postId, tags.get(tagIndex), tagIndex));
+        }
+        communityPostTagRepository.saveAll(postTags);
+    }
+
+    public List<String> normalizeTags(List<String> tags) {
+        // 태그 정규화 결과 저장소 준비
         Map<String, String> tagByNormalizedValue = new LinkedHashMap<>();
 
-        // 공백, 중복 태그 제거 후 최대 10개 유지
+        // 공백, 중복 태그 제거 후 최대 태그 수 유지
         for (String tag : tags) {
             if (!StringUtils.hasText(tag)) {
                 continue;
@@ -383,7 +93,7 @@ public class CommunityService {
             String normalizedTag = tag.trim();
             tagByNormalizedValue.putIfAbsent(normalizedTag.toLowerCase(), normalizedTag);
 
-            if (tagByNormalizedValue.size() == 10) {
+            if (tagByNormalizedValue.size() == CommunityPostConstant.MAX_TAG_COUNT) {
                 break;
             }
         }
@@ -391,46 +101,31 @@ public class CommunityService {
         return new ArrayList<>(tagByNormalizedValue.values());
     }
 
-    private String normalizePostCategory(String category) {
-        // 게시글 구분 정규화
+    public String normalizePostCategory(String category) {
+        // 게시글 구분 없으면 기본 구분 반환
         if (!StringUtils.hasText(category)) {
-            return "discussion";
+            return CommunityPostConstant.DEFAULT_CATEGORY;
         }
 
+        // 허용 구분만 유지하고 나머지는 기본 구분 대체
         String normalizedCategory = category.trim().toLowerCase();
         return switch (normalizedCategory) {
             case "notice", "question" -> normalizedCategory;
-            default -> "discussion";
+            default -> CommunityPostConstant.DEFAULT_CATEGORY;
         };
     }
 
-    private String resolveCategory(CommunityPost post) {
-        // 게시글 구분 조회
+    public String resolveCategory(CommunityPost post) {
+        // 게시글 구분 정규화
         return normalizePostCategory(post.getCategory());
     }
 
-    private void replaceTags(Long postId, List<String> tags) {
-        // 태그 목록 교체
-        communityPostTagRepository.deleteAllByPostId(postId);
-
-        if (tags.isEmpty()) {
-            return;
-        }
-
-        List<CommunityPostTag> postTags = new ArrayList<>();
-        for (int tagIndex = 0; tagIndex < tags.size(); tagIndex++) {
-            postTags.add(CommunityPostTag.create(postId, tags.get(tagIndex), tagIndex));
-        }
-
-        communityPostTagRepository.saveAll(postTags);
-    }
-
-    private String normalizeContentJson(String contentJson) {
+    public String normalizeContentJson(String contentJson) {
         // 본문 JSON 정규화
         return StringUtils.hasText(contentJson) ? contentJson.trim() : "";
     }
 
-    private String normalizePlainTextSummary(String plainTextSummary) {
+    public String normalizePlainTextSummary(String plainTextSummary) {
         // 본문 요약 텍스트 정규화
         return StringUtils.hasText(plainTextSummary)
                 ? plainTextSummary.trim()
@@ -440,45 +135,49 @@ public class CommunityService {
                 : "";
     }
 
-    private String normalizeImageIds(List<String> imageIds) {
-        // 이미지 번호 목록 정규화
+    public String normalizeImageIds(List<String> imageIds) {
+        // 이미지 번호 목록 없으면 빈 문자열 반환
         if (imageIds == null || imageIds.isEmpty()) {
             return "";
         }
 
+        // 이미지 번호 목록 공백 제거와 중복 제거
         return imageIds.stream()
                 .filter(StringUtils::hasText)
                 .map(String::trim)
                 .distinct()
-                .limit(100)
+                .limit(CommunityPostConstant.MAX_IMAGE_ID_COUNT)
                 .reduce((left, right) -> left + "," + right)
                 .orElse("");
     }
 
-    private List<String> createImageIds(String imageIds) {
-        // 이미지 번호 목록 생성
+    public List<String> createImageIds(String imageIds) {
+        // 이미지 번호 문자열 없으면 빈 목록 반환
         if (!StringUtils.hasText(imageIds)) {
             return List.of();
         }
 
+        // 이미지 번호 문자열 분리
         return List.of(imageIds.split(",")).stream()
                 .filter(StringUtils::hasText)
                 .toList();
     }
 
-    private boolean isPostLiked(Long postId, String currentHandle) {
-        // 게시글 좋아요한 여부 확인
+    public boolean isPostLiked(Long postId, String currentHandle) {
+        // 현재 사용자 없으면 좋아요 여부 false 반환
         if (currentHandle == null) {
             return false;
         }
 
+        // 게시글 좋아요 여부 조회
         return communityPostLikeRepository.existsById(new CommunityPostLikeId(postId, currentHandle));
     }
 
-    private Map<Long, Boolean> createLikedCommentById(List<CommunityComment> comments, String currentHandle) {
-        // 번호별 좋아요한 댓글 생성
+    public Map<Long, Boolean> createLikedCommentById(List<CommunityComment> comments, String currentHandle) {
+        // 댓글 좋아요 여부 저장소 준비
         Map<Long, Boolean> likedCommentById = new HashMap<>();
 
+        // 현재 사용자 없으면 빈 결과 반환
         if (currentHandle == null) {
             return likedCommentById;
         }
@@ -494,45 +193,104 @@ public class CommunityService {
         return likedCommentById;
     }
 
-    private List<CommunityCommentOutput> createCommentTree(List<CommunityComment> comments, Map<Long, Boolean> likedCommentById) {
-        // 댓글 트리 생성
+    public List<CommunityCommentOutput> createCommentTree(List<CommunityComment> comments, Map<Long, Boolean> likedCommentById) {
+        // 댓글 트리 구성 저장소 준비
         Map<Long, List<CommunityComment>> childCommentsByParentId = new HashMap<>();
         List<CommunityComment> rootComments = new ArrayList<>();
 
-        // 루트 댓글과 대댓글을 분리해 트리 구성 준비
+        // 루트 댓글과 대댓글 분리
         for (CommunityComment comment : comments) {
             if (comment.getParentCommentId() == null) {
                 rootComments.add(comment);
                 continue;
             }
 
-            childCommentsByParentId.computeIfAbsent(comment.getParentCommentId(), key -> new ArrayList<>())
-                    .add(comment);
+            childCommentsByParentId.computeIfAbsent(comment.getParentCommentId(), key -> new ArrayList<>()).add(comment);
         }
 
+        // 루트 댓글 생성일 정렬 후 응답 변환
         rootComments.sort(Comparator.comparing(CommunityComment::getCreatedAt));
         return rootComments.stream()
                 .map(comment -> createCommentResponse(comment, childCommentsByParentId, likedCommentById))
                 .toList();
     }
 
+    public void publishPostLikeAlarm(CommunityPost post, String actorHandle) {
+        // 본인 게시글 좋아요면 알람 생략
+        if (post.getHandle().equals(actorHandle)) {
+            return;
+        }
+
+        // 게시글 좋아요 알람 발행
+        alarmService.publish(new CommunityPostLikeAlarm(
+                post.getHandle(), actorHandle,
+                CommunityPostIdPolicy.format(post.getPostId()), post.getTitle()
+        ));
+    }
+
+    public void publishCommentAlarms(CommunityPost post, CommunityComment comment,
+                                     Optional<CommunityComment> parentComment, String actorHandle) {
+        // 대댓글 대상 댓글 작성자에게 알람 발행
+        boolean replyAlarmDelivered = publishReplyAlarmIfNeeded(post, comment, parentComment, actorHandle);
+
+        // 본인 게시글 댓글이면 게시글 댓글 알람 생략
+        if (post.getHandle().equals(actorHandle)) {
+            return;
+        }
+
+        // 대댓글 알람 수신자가 게시글 작성자와 같으면 중복 알람 생략
+        if (replyAlarmDelivered && parentComment.map(currentComment -> currentComment.getHandle().equals(post.getHandle())).orElse(false)) {
+            return;
+        }
+
+        // 게시글 댓글 알람 발행
+        alarmService.publish(new CommunityPostCommentAlarm(
+                post.getHandle(), actorHandle,
+                CommunityPostIdPolicy.format(post.getPostId()), comment.getContent(), comment.getCommentId()
+        ));
+    }
+
+    public void publishCommentLikeAlarm(CommunityComment comment, String actorHandle) {
+        // 본인 댓글 좋아요면 알람 생략
+        if (comment.getHandle().equals(actorHandle)) {
+            return;
+        }
+
+        // 댓글 좋아요 알람 발행
+        alarmService.publish(new CommunityCommentLikeAlarm(
+                comment.getHandle(), actorHandle,
+                CommunityPostIdPolicy.format(comment.getPostId()), comment.getContent(), comment.getCommentId()
+        ));
+    }
+
     private CommunityCommentOutput createCommentResponse(CommunityComment comment,
                                                          Map<Long, List<CommunityComment>> childCommentsByParentId,
                                                          Map<Long, Boolean> likedCommentById) {
+        // 대댓글 응답 재귀 생성
         List<CommunityCommentOutput> replies = childCommentsByParentId.getOrDefault(comment.getCommentId(), List.of()).stream()
                 .sorted(Comparator.comparing(CommunityComment::getCreatedAt))
                 .map(reply -> createCommentResponse(reply, childCommentsByParentId, likedCommentById))
                 .toList();
 
+        // 댓글 응답 변환
         return new CommunityCommentOutput(
-                comment.getCommentId(),
-                comment.getHandle(),
-                comment.getContent(),
-                comment.getCreatedAt(),
-                comment.getLikeCount(),
-                likedCommentById.getOrDefault(comment.getCommentId(), false),
-                replies
+                comment.getCommentId(), comment.getHandle(), comment.getContent(), comment.getCreatedAt(),
+                comment.getLikeCount(), likedCommentById.getOrDefault(comment.getCommentId(), false), replies
         );
     }
 
+    private boolean publishReplyAlarmIfNeeded(CommunityPost post, CommunityComment comment,
+                                              Optional<CommunityComment> parentComment, String actorHandle) {
+        // 대댓글 알람 대상 없으면 발행 생략
+        if (parentComment.isEmpty() || parentComment.get().getHandle().equals(actorHandle)) {
+            return false;
+        }
+
+        // 대댓글 알람 발행
+        alarmService.publish(new CommunityCommentReplyAlarm(
+                parentComment.get().getHandle(), actorHandle,
+                CommunityPostIdPolicy.format(post.getPostId()), comment.getContent(), comment.getCommentId()
+        ));
+        return true;
+    }
 }

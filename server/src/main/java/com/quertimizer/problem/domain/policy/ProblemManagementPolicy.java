@@ -23,15 +23,30 @@ public class ProblemManagementPolicy {
     private static final Pattern RAW_SCOPED_PROBLEM_ID_PATTERN = Pattern.compile("^\\d{5}-\\d{5}$");
     private static final Pattern RAW_SCOPED_PROBLEM_SET_ID_PATTERN = Pattern.compile("^\\d{5}$");
 
+    /**
+     * 문제 관리 기능을 사용할 수 있는 사용자 역할인지 검증한다.
+     *
+     * @param user 검증할 사용자
+     */
     public void validateProblemManagementUser(User user) {
-        // 문제 관리 사용자 검증
         if (user.getResolvedRole() != UserRole.ADMIN && user.getResolvedRole() != UserRole.PROBLEM_GENERATOR) {
             throw new BusinessException(PROBLEM_MANAGEMENT_ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN);
         }
     }
 
+    /**
+     * 문제 테이블셋 접근 권한을 검증한다.
+     *
+     * <ol>
+     *   <li>관리자 권한 확인
+     *   <li>테이블셋 또는 하위 문제 권한 확인
+     * </ol>
+     *
+     * @param currentUser 현재 인증 사용자
+     * @param permissionKeys 현재 사용자가 가진 문제 관리 권한 키
+     * @param scopedProblemSetId 접근할 문제 테이블셋 번호
+     */
     public void validateProblemSetAccess(User currentUser, Set<String> permissionKeys, String scopedProblemSetId) {
-        // 문제 테이블셋 접근 검증
         if (currentUser.getResolvedRole() == UserRole.ADMIN) {
             return;
         }
@@ -45,6 +60,22 @@ public class ProblemManagementPolicy {
         throw new BusinessException(PROBLEM_SET_ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * 문제 또는 문제셋 생성/수정 권한을 검증한다.
+     *
+     * <ol>
+     *   <li>관리자 권한 확인
+     *   <li>신규 문제셋 생성 권한 확인
+     *   <li>기존 문제 또는 기존 문제셋 권한 확인
+     * </ol>
+     *
+     * @param currentUser 현재 인증 사용자
+     * @param permissionKeys 현재 사용자가 가진 문제 관리 권한 키
+     * @param useExistingProblemSet 기존 문제셋 사용 여부
+     * @param useExistingProblem 기존 문제 수정 여부
+     * @param scopedProblemSetId 생성 또는 수정 대상 문제셋 번호
+     * @param problemId 수정 대상 문제 번호
+     */
     public void validateProblemWriteAccess(User currentUser,
                                            Set<String> permissionKeys,
                                            boolean useExistingProblemSet,
@@ -75,8 +106,13 @@ public class ProblemManagementPolicy {
         }
     }
 
+    /**
+     * 문제 관리 권한 키를 저장 형식으로 정규화한다.
+     *
+     * @param permissionKey 정규화할 권한 키
+     * @return 저장 형식 권한 키
+     */
     public String normalizePermissionKey(String permissionKey) {
-        // 권한 키 정규화
         if (permissionKey == null || permissionKey.isBlank()) {
             return "";
         }
@@ -97,13 +133,23 @@ public class ProblemManagementPolicy {
         return normalizedPermissionKey;
     }
 
+    /**
+     * 스코프가 포함된 문제 테이블셋 번호인지 확인한다.
+     *
+     * @param problemSetId 확인할 문제 테이블셋 번호
+     * @return 스코프 문제 테이블셋 번호 여부
+     */
     public boolean isScopedProblemSetId(String problemSetId) {
-        // 스코프 문제 테이블셋 번호 여부 확인
         return DbmsType.isScopedProblemSetId(problemSetId);
     }
 
+    /**
+     * 스코프가 포함된 문제 번호인지 확인한다.
+     *
+     * @param permissionKey 확인할 권한 키 또는 문제 번호
+     * @return 스코프 문제 번호 여부
+     */
     public boolean isScopedProblemId(String permissionKey) {
-        // 스코프 문제 번호 여부 확인
         return DbmsType.isScopedProblemId(permissionKey);
     }
 

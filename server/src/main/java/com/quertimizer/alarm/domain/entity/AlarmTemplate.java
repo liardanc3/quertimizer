@@ -3,10 +3,15 @@ package com.quertimizer.alarm.domain.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "alarm_template")
@@ -23,6 +28,10 @@ public class AlarmTemplate {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
+
+    @BatchSize(size = 50)
+    @OneToMany(mappedBy = "alarmTemplate")
+    private List<UserAlarm> alarms = new ArrayList<>();
 
     public static AlarmTemplate create(String alarmType, String sentence, String description) {
         return new AlarmTemplate(alarmType, sentence, description);

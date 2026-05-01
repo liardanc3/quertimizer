@@ -1,6 +1,6 @@
 package com.quertimizer.auth.presentation.support;
 
-import com.quertimizer.global.realtime.sender.SessionSocketSender;
+import com.quertimizer.global.realtime.sender.SessionStompSender;
 import com.quertimizer.global.support.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,99 +21,61 @@ public class AuthSupport {
 
     private final TokenBasedRememberMeServices rememberMeServices;
     private final SecurityContextRepository securityContextRepository;
-    private final SessionSocketSender sessionSocketSender;
+    private final SessionStompSender sessionStompSender;
     private final ClientIpResolver clientIpResolver;
 
     @Value("${app.frontend-base-url}")
     private String frontendBaseUrl;
 
-    /**
-     * 로그인 성공 인증 결과로 remember-me 쿠키를 저장한다.
-     *
-     * @param authentication 쿠키에 반영할 인증 결과
-     * @param httpRequest remember-me 처리에 사용하는 HTTP 요청
-     * @param httpResponse remember-me 쿠키를 기록할 HTTP 응답
-     */
     public void saveRememberMeCookie(Authentication authentication,
                                      HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        // 로그인 성공 인증 결과로 remember-me 쿠키 저장
         rememberMeServices.loginSuccess(httpRequest, httpResponse, authentication);
     }
 
-    /**
-     * remember-me 쿠키와 SecurityContext 로그아웃 상태를 함께 정리한다.
-     *
-     * @param authentication 정리할 인증 정보
-     * @param httpRequest 로그아웃 처리에 사용하는 HTTP 요청
-     * @param httpResponse remember-me 쿠키 삭제에 사용하는 HTTP 응답
-     */
     public void deleteRememberMeCookie(Authentication authentication,
                                        HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        // remember-me 쿠키와 SecurityContext 로그아웃 상태 정리
         rememberMeServices.logout(httpRequest, httpResponse, authentication);
         new SecurityContextLogoutHandler().logout(httpRequest, httpResponse, authentication);
     }
 
-    /**
-     * HTTP 세션에 연결된 WebSocket 연결을 종료한다.
-     *
-     * @param sessionId 종료할 HTTP 세션 ID
-     */
-    public void closeSessionSocket(String sessionId) {
-        sessionSocketSender.closeSessionSockets(sessionId);
+    public void closeSessionStomp(String sessionId) {
+        // HTTP 세션에 연결된 STOMP 세션 종료
+        sessionStompSender.closeHttpSessionStompSessions(sessionId);
     }
 
-    /**
-     * 인증 결과를 현재 스레드와 Spring Security 인증 저장소에 반영한다.
-     *
-     * <ol>
-     *   <li>SecurityContext 생성
-     *   <li>현재 스레드의 SecurityContextHolder에 반영
-     *   <li>SecurityContextRepository에 저장
-     * </ol>
-     *
-     * @param authentication 저장할 인증 결과
-     * @param httpRequest 인증 저장소 저장에 사용하는 HTTP 요청
-     * @param httpResponse 인증 저장소 저장에 사용하는 HTTP 응답
-     */
     public void saveAuthenticationToRepository(Authentication authentication,
                                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        // SecurityContext 생성과 인증 결과 반영
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(authentication);
 
+        // 현재 스레드의 SecurityContextHolder 반영
         SecurityContextHolder.setContext(securityContext);
 
+        // SecurityContextRepository 저장
         securityContextRepository.saveContext(securityContext, httpRequest, httpResponse);
     }
 
-    /**
-     * provider 정보를 포함한 소셜 로그인 성공 URL을 만든다.
-     *
-     * @param provider 성공한 소셜 로그인 provider
-     */
     public String buildSocialLoginSuccessUrl(String provider) {
+        // provider 정보를 포함한 소셜 로그인 성공 URL 생성
         return UriComponentsBuilder.fromUriString(frontendBaseUrl)
                 .replaceQueryParam("socialLoginSuccess", provider)
                 .build()
                 .toUriString();
     }
 
-    /**
-     * provider 정보를 포함한 소셜 로그인 실패 URL을 만든다.
-     *
-     * @param provider 실패한 소셜 로그인 provider
-     */
     public String buildSocialLoginFailureUrl(String provider) {
+        // provider 정보를 포함한 소셜 로그인 실패 URL 생성
         return UriComponentsBuilder.fromUriString(frontendBaseUrl)
                 .replaceQueryParam("socialLoginError", provider == null || provider.isBlank() ? "oauth2" : provider)
                 .build()
                 .toUriString();
     }
 
-    /**
-     * 프록시 헤더와 remote address에서 클라이언트 IP를 결정한다.
-     *
-     * @param httpRequest 클라이언트 IP를 확인할 HTTP 요청
-     */
     public String resolveClientIp(HttpServletRequest httpRequest) {
+        // 프록시 헤더와 remote address 기준 클라이언트 IP 결정
         return clientIpResolver.resolve(httpRequest);
     }
 }

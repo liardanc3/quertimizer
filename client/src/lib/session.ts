@@ -216,7 +216,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
   }
 }
 
-export function loginMock() {
+export function markAuthenticatedSession() {
   if (typeof window === 'undefined') {
     return;
   }
@@ -317,7 +317,7 @@ export async function syncSession() {
   return syncSessionPromise;
 }
 
-export function logoutMock() {
+export function clearAuthenticatedSession() {
   if (typeof window === 'undefined') {
     return;
   }
@@ -347,7 +347,7 @@ export function prepareLogoutReload() {
   syncSessionPromise = null;
 }
 
-export function useMockSession() {
+export function useSession() {
   const { isAuthenticated, isReady, handle, defaultDbms, role, handleSetupRequired } = useSyncExternalStore(subscribe, getSnapshot, () => ({
     isAuthenticated: false,
     isReady: false,
@@ -366,8 +366,8 @@ export function useMockSession() {
     handleSetupRequired,
     isAdmin: role === 'admin',
     isProblemGenerator: role === 'problemGenerator',
-    login: loginMock,
-    logout: logoutMock,
+    login: markAuthenticatedSession,
+    logout: clearAuthenticatedSession,
   };
 }
 

@@ -12,7 +12,7 @@ import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../li
 import CommunityWritePage from './CommunityWritePage';
 import { fetchCommunityPosts, type CommunityPostPage } from '../lib/communityApi';
 import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
-import { useMockSession } from '../lib/session';
+import { useSession } from '../lib/session';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import { formatBoardDate, formatInteger } from '../lib/formatters';
 import './HomePage.css';
@@ -137,7 +137,7 @@ const emptyPage: CommunityPostPage = {
 
 export default function CommunityPage() {
   const { text } = useUiText();
-  const { isAuthenticated } = useMockSession();
+  const { isAuthenticated } = useSession();
   const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityPageFavoriteSnapshot>('community'), []);
   const didApplyFavoriteRestoreRef = useRef(false);

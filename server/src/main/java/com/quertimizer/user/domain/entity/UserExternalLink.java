@@ -1,7 +1,11 @@
 package com.quertimizer.user.domain.entity;
 
+import com.quertimizer.user.domain.entity.ids.UserExternalLinkId;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -15,6 +19,10 @@ public class UserExternalLink {
 
     @EmbeddedId
     private UserExternalLinkId id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User user;
 
     public static UserExternalLink create(String handle, String type, String link) {
         // 외부 링크 생성

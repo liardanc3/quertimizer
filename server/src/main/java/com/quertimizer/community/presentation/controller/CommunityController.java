@@ -18,16 +18,16 @@ import com.quertimizer.community.application.usecase.ToggleCommunityCommentLike;
 import com.quertimizer.community.application.usecase.ToggleCommunityPostLike;
 import com.quertimizer.community.application.usecase.UpdateCommunityPost;
 import com.quertimizer.community.application.usecase.UploadCommunityImage;
-import com.quertimizer.community.presentation.dto.request.CommunityCommentCreateReq;
-import com.quertimizer.community.presentation.dto.request.CommunityPostSaveReq;
-import com.quertimizer.community.presentation.dto.request.CommunityPostSearchReq;
-import com.quertimizer.community.presentation.dto.request.CommunityTagSuggestionReq;
-import com.quertimizer.community.presentation.dto.response.CommunityCommentRes;
-import com.quertimizer.community.presentation.dto.response.CommunityImageUploadRes;
-import com.quertimizer.community.presentation.dto.response.CommunityPostDetailRes;
-import com.quertimizer.community.presentation.dto.response.CommunityPostPageRes;
-import com.quertimizer.community.presentation.dto.response.CommunityReactionRes;
-import com.quertimizer.community.presentation.dto.response.CommunityTagSuggestionRes;
+import com.quertimizer.community.presentation.controller.dto.request.CommunityCommentCreateReq;
+import com.quertimizer.community.presentation.controller.dto.request.CommunityPostSaveReq;
+import com.quertimizer.community.presentation.controller.dto.request.CommunityPostSearchReq;
+import com.quertimizer.community.presentation.controller.dto.request.CommunityTagSuggestionReq;
+import com.quertimizer.community.presentation.controller.dto.response.CommunityCommentRes;
+import com.quertimizer.community.presentation.controller.dto.response.CommunityImageUploadRes;
+import com.quertimizer.community.presentation.controller.dto.response.CommunityPostDetailRes;
+import com.quertimizer.community.presentation.controller.dto.response.CommunityPostPageRes;
+import com.quertimizer.community.presentation.controller.dto.response.CommunityReactionRes;
+import com.quertimizer.community.presentation.controller.dto.response.CommunityTagSuggestionRes;
 import com.quertimizer.community.presentation.support.CommunitySupport;
 import com.quertimizer.global.support.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,6 +40,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -77,14 +78,10 @@ public class CommunityController {
      *   <li>게시글 목록 페이지 응답 생성
      * </ol>
      *
-     * @param page 요청 페이지 번호
-     * @param search 검색어
-     * @param tag 태그 필터
-     * @param category 카테고리 필터
-     * @param sortKey 정렬 기준
+     * @param request 게시글 목록 검색 조건
      */
     @GetMapping("/community/posts")
-    public ResponseEntity<CommunityPostPageRes> getPosts(@Valid CommunityPostSearchReq request) {
+    public ResponseEntity<CommunityPostPageRes> getPosts(@Valid @ModelAttribute CommunityPostSearchReq request) {
         return ResponseEntity.ok(CommunityPostPageRes.from(
                 getCommunityPosts.execute(request.toInput())
         ));
@@ -94,7 +91,7 @@ public class CommunityController {
      * 게시글 상세를 현재 사용자 반응 정보와 함께 반환한다.
      *
      * <ol>
-     *   <li>현재 사용자 handle 확인
+     *   <li>현재 사용자와 조회자 식별자 확인
      *   <li>게시글 상세 응답 생성
      * </ol>
      *
@@ -118,6 +115,8 @@ public class CommunityController {
      * 현재 사용자의 커뮤니티 게시글을 생성하고 Location을 반환한다.
      *
      * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 생성 입력 생성
      *   <li>게시글 생성 후 Location 응답 생성
      * </ol>
      *
@@ -166,6 +165,8 @@ public class CommunityController {
      * 현재 사용자의 커뮤니티 게시글을 수정한다.
      *
      * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 수정 입력 생성
      *   <li>게시글 수정 결과 응답 생성
      * </ol>
      *
@@ -191,6 +192,7 @@ public class CommunityController {
      * 현재 사용자의 커뮤니티 게시글을 삭제한다.
      *
      * <ol>
+     *   <li>현재 사용자 handle 확인
      *   <li>게시글 삭제 결과 응답 생성
      * </ol>
      *
@@ -210,6 +212,8 @@ public class CommunityController {
      * 현재 사용자의 게시글 좋아요 상태를 토글한다.
      *
      * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>게시글 좋아요 입력 생성
      *   <li>게시글 좋아요 결과 응답 생성
      * </ol>
      *
@@ -229,6 +233,8 @@ public class CommunityController {
      * 현재 사용자의 댓글 또는 대댓글을 생성한다.
      *
      * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>댓글 생성 입력 생성
      *   <li>댓글 생성 결과 응답 생성
      * </ol>
      *
@@ -251,6 +257,8 @@ public class CommunityController {
      * 현재 사용자의 댓글 좋아요 상태를 토글한다.
      *
      * <ol>
+     *   <li>현재 사용자 handle 확인
+     *   <li>댓글 좋아요 입력 생성
      *   <li>댓글 좋아요 결과 응답 생성
      * </ol>
      *
@@ -269,10 +277,10 @@ public class CommunityController {
     /**
      * 게시글 작성용 태그 자동완성 후보를 반환한다.
      *
-     * @param query 태그 검색어
+     * @param request 태그 자동완성 검색 조건
      */
     @GetMapping("/community/tags/suggestions")
-    public ResponseEntity<List<CommunityTagSuggestionRes>> getTagSuggestions(@Valid CommunityTagSuggestionReq request) {
+    public ResponseEntity<List<CommunityTagSuggestionRes>> getTagSuggestions(@Valid @ModelAttribute CommunityTagSuggestionReq request) {
         return ResponseEntity.ok(getCommunityTagSuggestions.execute(request.getQuery()).stream()
                 .map(CommunityTagSuggestionRes::from)
                 .toList());

@@ -1,7 +1,7 @@
 package com.quertimizer.problem.application.port;
 
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import com.quertimizer.problem.domain.entity.ProblemSolveHistoryId;
+import com.quertimizer.problem.domain.entity.ids.ProblemSolveHistoryId;
 
 import java.util.List;
 import java.util.Optional;

@@ -11,6 +11,8 @@ import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
 import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
+import lombok.experimental.Accessors;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.data.domain.PageRequest;
@@ -41,9 +43,17 @@ public class CommunitySearchService implements CommunityPostSearchPort {
     private final CommunityPostRepository communityPostRepository;
     private final CommunityPostTagRepository communityPostTagRepository;
 
+    /**
+     * 서버 기동 시 게시글 검색 인덱스를 동기화한다.
+     *
+     * <ol>
+     *   <li>Elasticsearch 사용 가능 여부 확인
+     *   <li>게시글과 태그 목록 조회
+     *   <li>게시글별 검색 인덱스 동기화
+     * </ol>
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void syncAllPosts() {
-        // 서버 기동 시 게시글 검색 인덱스를 동기화
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -53,38 +63,28 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         List<CommunityPost> posts = communityPostRepository.findAll();
         Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
 
-        // 서버 시작 시 기존 게시글 검색 인덱스 동기화
         for (CommunityPost post : posts) {
             syncPost(post, tagsByPostId.getOrDefault(post.getPostId(), List.of()));
         }
     }
 
     @Override
-    public CommunityPostPageOutput searchPosts(int requestedPage,
-                                               int pageSize,
-                                               String searchKeyword,
-                                               String tag,
-                                               String category,
-                                               String sortKey,
-                                               List<CommunityPost> posts,
+    public CommunityPostPageOutput searchPosts(int requestedPage, int pageSize, String searchKeyword, String tag,
+                                               String category, String sortKey, List<CommunityPost> posts,
                                                Map<Long, List<String>> tagsByPostId) {
+        // Elasticsearch 사용 가능 여부 확인
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
+        // Elasticsearch 미사용 시 메모리 검색으로 대체
         if (elasticsearchOperations == null) {
             return searchPostsInMemory(requestedPage, pageSize, searchKeyword, tag, category, sortKey, posts, tagsByPostId);
         }
 
+        // Elasticsearch 검색 실패 시 메모리 검색으로 대체
         try {
             return searchPostsInElasticsearch(
-                    elasticsearchOperations,
-                    requestedPage,
-                    pageSize,
-                    searchKeyword,
-                    tag,
-                    category,
-                    sortKey,
-                    posts,
-                    tagsByPostId
+                    elasticsearchOperations, requestedPage, pageSize, searchKeyword,
+                    tag, category, sortKey, posts, tagsByPostId
             );
         } catch (RuntimeException ignored) {
             return searchPostsInMemory(requestedPage, pageSize, searchKeyword, tag, category, sortKey, posts, tagsByPostId);
@@ -132,7 +132,7 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         try {
             elasticsearchOperations.delete(CommunityPostIdPolicy.format(postId), CommunityPostDocument.class);
         } catch (RuntimeException ignored) {
-            // 검색 인덱스 정리 실패는 후속 동기화에서 다시 맞춘다
+            // 검색 인덱스 정리 실패는 후속 동기화에서 보정
         }
     }
 
@@ -526,8 +526,13 @@ public class CommunitySearchService implements CommunityPostSearchPort {
                 : normalizedContentText;
     }
 
-    private record RankedPost(CommunityPost post, List<String> tags, double score) {
+    @Value
+    @Accessors(fluent = true)
+    private static class RankedPost {
         // Ranked 게시글 처리
+        CommunityPost post;
+        List<String> tags;
+        double score;
     }
 
 }

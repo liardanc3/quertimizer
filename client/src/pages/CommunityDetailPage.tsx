@@ -21,7 +21,7 @@ import { COMMUNITY_POST_CONTENT_MAX_BYTES } from '../lib/communityContent';
 import { createCommunityEditorSnapshotFromJson, type CommunityEditorSnapshot } from '../lib/communityTiptap';
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
-import { showSessionToast, useMockSession } from '../lib/session';
+import { showSessionToast, useSession } from '../lib/session';
 import { formatBoardDate, formatInteger } from '../lib/formatters';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import './CommunityPage.css';
@@ -193,7 +193,7 @@ function SaveEditIcon() {
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
   const { text } = useUiText();
-  const { isAuthenticated, isAdmin } = useMockSession();
+  const { isAuthenticated, isAdmin } = useSession();
   const locationHash = useSyncExternalStore(subscribeLocationHash, getLocationHashSnapshot, () => '');
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);

@@ -61,7 +61,6 @@ app:
       include-bodies: true
 
 judge:
-  lease-acquire-timeout: 100ms
-  dataset-provisioning:
-    strategy: sql-replay
+  runtime:
+    provisioner: sql-replay
   databases: []

@@ -22,7 +22,7 @@ import { COMMUNITY_POST_CONTENT_MAX_BYTES } from '../lib/communityContent';
 import { type CommunityEditorSnapshot } from '../lib/communityTiptap';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '../lib/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '../lib/authOverlay';
-import { showSessionToast, useMockSession } from '../lib/session';
+import { showSessionToast, useSession } from '../lib/session';
 import { formatInteger } from '../lib/formatters';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import type { CommunityPostCategory } from '../types/domain';
@@ -127,7 +127,7 @@ function createEmptyValues(category: EditableCommunityCategory): EditorValues {
 
 export default function CommunityWritePage({ postId, embedded = false }: CommunityWritePageProps) {
   const { text } = useUiText();
-  const { isAuthenticated, isAdmin, isReady } = useMockSession();
+  const { isAuthenticated, isAdmin, isReady } = useSession();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<CommunityWriteFavoriteSnapshot>('communityWrite'), []);
   const draftKey = postId ? `community-edit-${postId}` : 'community-write';
   const initialCategory = useMemo(readWriteCategoryFromSearch, []);

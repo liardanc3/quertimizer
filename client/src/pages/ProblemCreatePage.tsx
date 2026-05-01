@@ -18,8 +18,6 @@ import { navigate } from '../lib/navigation';
 import { getUiText, getUiTextValue, useUiText } from '../lib/uiText';
 import './ProblemCreatePage.css';
 
-type ProblemSetMode = 'existing' | 'new';
-type ProblemMode = 'existing' | 'new';
 type SectionKey = 'condition' | 'output' | 'ddl' | 'actualData' | 'sampleData' | 'outputPreview' | 'answerSql';
 type MissingFieldKey = 'title' | 'description' | 'condition' | 'output' | 'ddl' | 'actualData' | 'sampleData' | 'answerSql';
 
@@ -127,12 +125,12 @@ function getProblemLabel(problemId: string) {
   return getUiText('PROBLEM_CREATE_PROBLEM_LABEL', { problemId }, `문제 ${problemId}`);
 }
 
-function getProblemNumberLabel(problemSetMode: ProblemSetMode, problemMode: ProblemMode, problemSetId: string | null, problemId: string | null) {
-  if (problemSetMode === 'existing' && problemMode === 'existing' && problemId) {
+function getProblemNumberLabel(existingProblemSet: boolean, existingProblem: boolean, problemSetId: string | null, problemId: string | null) {
+  if (existingProblemSet && existingProblem && problemId) {
     return problemId;
   }
 
-  if (problemSetMode === 'existing' && problemSetId) {
+  if (existingProblemSet && problemSetId) {
     return getUiText('PROBLEM_CREATE_NEW_SET_NUMBER_LABEL', { problemSetId }, `${problemSetId}-신규`);
   }
 
@@ -564,8 +562,8 @@ export function ProblemCreateContent() {
   const sampleDataState = useEditableDraft('');
   const answerSqlState = useEditableDraft('');
 
-  const [problemSetMode, setProblemSetMode] = useState<ProblemSetMode>('existing');
-  const [problemMode, setProblemMode] = useState<ProblemMode>('new');
+  const [existingProblemSet, setExistingProblemSet] = useState(true);
+  const [existingProblem, setExistingProblem] = useState(false);
   const [problemSets, setProblemSets] = useState<ProblemSetSummary[]>([]);
   const [problemOptions, setProblemOptions] = useState<string[]>([]);
   const [selectedProblemSetId, setSelectedProblemSetId] = useState<string | null>(null);
@@ -594,12 +592,12 @@ export function ProblemCreateContent() {
   });
 
   const currentDbms = useMemo<DbmsType>(() => {
-    if (problemSetMode === 'new') {
+    if (!existingProblemSet) {
       return selectedDbms;
     }
 
     return resolveScopedDbms(selectedProblemId ?? selectedProblemSetId);
-  }, [problemSetMode, selectedDbms, selectedProblemId, selectedProblemSetId]);
+  }, [existingProblemSet, selectedDbms, selectedProblemId, selectedProblemSetId]);
 
   const currentFullProblemSetDdl = useMemo(
     () => (currentDbms === 'mysql' ? loadedProblemSetDetail.ddlMysql : loadedProblemSetDetail.ddlPostgresql),
@@ -611,12 +609,12 @@ export function ProblemCreateContent() {
   );
 
   const availableTableNames = useMemo(() => {
-    if (problemSetMode !== 'existing') {
+    if (!existingProblemSet) {
       return [];
     }
 
     return getTableNamesFromDdl(currentFullProblemSetDdl);
-  }, [currentFullProblemSetDdl, problemSetMode]);
+  }, [currentFullProblemSetDdl, existingProblemSet]);
 
   useEffect(() => {
     if (availableTableNames.length === 0) {
@@ -624,7 +622,7 @@ export function ProblemCreateContent() {
       return;
     }
 
-    if (problemSetMode === 'existing' && problemMode === 'existing' && loadedProblemDetail) {
+    if (existingProblemSet && existingProblem && loadedProblemDetail) {
       const problemDdl = currentDbms === 'mysql' ? loadedProblemDetail.ddlMysql : loadedProblemDetail.ddlPostgresql;
       const nextIncludedTableNames = getTableNamesFromDdl(problemDdl).filter((tableName) => availableTableNames.includes(tableName));
       const normalizedIncludedTableNames = nextIncludedTableNames.length > 0 ? nextIncludedTableNames : availableTableNames;
@@ -637,23 +635,23 @@ export function ProblemCreateContent() {
       const nextIncludedTableNames = filtered.length > 0 ? filtered : availableTableNames;
       return arraysEqual(current, nextIncludedTableNames) ? current : nextIncludedTableNames;
     });
-  }, [availableTableNames, currentDbms, loadedProblemDetail, problemMode, problemSetMode]);
+  }, [availableTableNames, currentDbms, loadedProblemDetail, existingProblem, existingProblemSet]);
 
   const scopedProblemSetDdl = useMemo(() => {
-    if (problemSetMode === 'new') {
+    if (!existingProblemSet) {
       return currentDbms === 'mysql' ? ddlState.appliedValue.mysql : ddlState.appliedValue.postgresql;
     }
 
     return filterDdlByTableNames(currentFullProblemSetDdl, includedTableNames);
-  }, [currentDbms, currentFullProblemSetDdl, ddlState.appliedValue.mysql, ddlState.appliedValue.postgresql, includedTableNames, problemSetMode]);
+  }, [currentDbms, currentFullProblemSetDdl, ddlState.appliedValue.mysql, ddlState.appliedValue.postgresql, includedTableNames, existingProblemSet]);
 
   const currentActualData = useMemo(() => {
-    if (problemSetMode === 'new') {
+    if (!existingProblemSet) {
       return currentDbms === 'mysql' ? actualDataState.appliedValue.mysql : actualDataState.appliedValue.postgresql;
     }
 
     return currentFullActualData;
-  }, [actualDataState.appliedValue.mysql, actualDataState.appliedValue.postgresql, currentDbms, currentFullActualData, problemSetMode]);
+  }, [actualDataState.appliedValue.mysql, actualDataState.appliedValue.postgresql, currentDbms, currentFullActualData, existingProblemSet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -665,7 +663,7 @@ export function ProblemCreateContent() {
 
         setProblemSets(nextProblemSets);
         if (nextProblemSets.length === 0) {
-          setProblemSetMode('new');
+          setExistingProblemSet(false);
           setSelectedProblemSetId(null);
           return;
         }
@@ -673,7 +671,7 @@ export function ProblemCreateContent() {
         setSelectedProblemSetId((current) => current ?? nextProblemSets[0].problemSetId);
       } catch (error) {
         if (!cancelled) {
-          setProblemSetMode('new');
+          setExistingProblemSet(false);
           setSelectedProblemSetId(null);
           setProblemSetErrorMessage(error instanceof Error ? error.message : text('COMMON_PAGE_LOAD_FAILURE_MESSAGE', '잠시 후 다시 시도해주세요.'));
         }
@@ -687,12 +685,12 @@ export function ProblemCreateContent() {
   }, []);
 
   useEffect(() => {
-    if (problemSetMode !== 'existing' || !selectedProblemSetId) {
+    if (!existingProblemSet || !selectedProblemSetId) {
       setProblemOptions([]);
       setSelectedProblemId(null);
       setLoadedProblemSetDetail(EMPTY_PROBLEM_SET_DETAIL);
       setLoadedProblemDetail(null);
-      setProblemMode('new');
+      setExistingProblem(false);
       setProblemSetErrorMessage('');
       setProblemErrorMessage('');
       return;
@@ -718,19 +716,19 @@ export function ProblemCreateContent() {
         setProblemOptions(nextProblemOptions);
 
         if (nextProblemOptions.length === 0) {
-          setProblemMode('new');
+          setExistingProblem(false);
           setSelectedProblemId(null);
           resetProblemDrafts(targetProblemSetDbms === 'mysql' ? nextDetail.dataMysql : nextDetail.dataPostgresql);
           return;
         }
 
-        setProblemMode('existing');
+        setExistingProblem(true);
         setSelectedProblemId((current) => (current != null && nextProblemOptions.includes(current) ? current : nextProblemOptions[0]));
       } catch (error) {
         if (!cancelled) {
           setLoadedProblemSetDetail(EMPTY_PROBLEM_SET_DETAIL);
           setProblemOptions([]);
-          setProblemMode('new');
+          setExistingProblem(false);
           setSelectedProblemId(null);
           setProblemSetErrorMessage(error instanceof Error ? error.message : text('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));
         }
@@ -745,10 +743,10 @@ export function ProblemCreateContent() {
     return () => {
       cancelled = true;
     };
-  }, [problemSetMode, selectedProblemSetId]);
+  }, [existingProblemSet, selectedProblemSetId]);
 
   useEffect(() => {
-    if (problemSetMode !== 'existing' || problemMode !== 'existing' || !selectedProblemId) {
+    if (!existingProblemSet || !existingProblem || !selectedProblemId) {
       setLoadedProblemDetail(null);
       setProblemErrorMessage('');
       return;
@@ -789,18 +787,18 @@ export function ProblemCreateContent() {
     return () => {
       cancelled = true;
     };
-  }, [problemMode, problemSetMode, selectedProblemId]);
+  }, [existingProblem, existingProblemSet, selectedProblemId]);
 
   useEffect(() => {
-    if (problemSetMode !== 'new') {
+    if (existingProblemSet) {
       return;
     }
 
     resetProblemDrafts('');
-  }, [problemSetMode]);
+  }, [existingProblemSet]);
 
   useEffect(() => {
-    if (problemSetMode !== 'existing' || problemMode === 'existing') {
+    if (!existingProblemSet || existingProblem) {
       return;
     }
 
@@ -812,10 +810,10 @@ export function ProblemCreateContent() {
     if (nextSampleData.trim() !== '') {
       sampleDataState.replaceValue(nextSampleData);
     }
-  }, [currentFullActualData, includedTableNames, problemMode, problemSetMode, sampleDataState.appliedValue]);
+  }, [currentFullActualData, includedTableNames, existingProblem, existingProblemSet, sampleDataState.appliedValue]);
 
-  const selectedProblemSetValue = problemSetMode === 'existing' && selectedProblemSetId != null ? selectedProblemSetId : NEW_PROBLEM_SET_OPTION_VALUE;
-  const selectedProblemValue = problemMode === 'existing' && selectedProblemId != null ? selectedProblemId : NEW_PROBLEM_OPTION_VALUE;
+  const selectedProblemSetValue = existingProblemSet && selectedProblemSetId != null ? selectedProblemSetId : NEW_PROBLEM_SET_OPTION_VALUE;
+  const selectedProblemValue = existingProblem && selectedProblemId != null ? selectedProblemId : NEW_PROBLEM_OPTION_VALUE;
 
   const missingFields = buildMissingFields({
     title: heroState.appliedValue.title,
@@ -889,26 +887,26 @@ export function ProblemCreateContent() {
 
   function handleProblemSetSelectChange(nextValue: string) {
     if (nextValue === NEW_PROBLEM_SET_OPTION_VALUE) {
-      setProblemSetMode('new');
-      setProblemMode('new');
+      setExistingProblemSet(false);
+      setExistingProblem(false);
       setSelectedProblemSetId(null);
       setSelectedProblemId(null);
       return;
     }
 
-    setProblemSetMode('existing');
+    setExistingProblemSet(true);
     setSelectedProblemSetId(nextValue);
   }
 
   function handleProblemSelectChange(nextValue: string) {
     if (nextValue === NEW_PROBLEM_OPTION_VALUE) {
-      setProblemMode('new');
+      setExistingProblem(false);
       setSelectedProblemId(null);
       resetProblemDrafts(filterDataSqlByTableNames(currentFullActualData, includedTableNames));
       return;
     }
 
-    setProblemMode('existing');
+    setExistingProblem(true);
     setSelectedProblemId(nextValue);
   }
 
@@ -963,16 +961,16 @@ export function ProblemCreateContent() {
         output: outputState.appliedValue.trim(),
         ddlPostgresql: currentDbms === 'postgresql' ? scopedProblemSetDdl : undefined,
         ddlMysql: currentDbms === 'mysql' ? scopedProblemSetDdl : undefined,
-        actualDataPostgresql: problemSetMode === 'new' && currentDbms === 'postgresql' ? currentActualData.trim() : undefined,
-        actualDataMysql: problemSetMode === 'new' && currentDbms === 'mysql' ? currentActualData.trim() : undefined,
+        actualDataPostgresql: !existingProblemSet && currentDbms === 'postgresql' ? currentActualData.trim() : undefined,
+        actualDataMysql: !existingProblemSet && currentDbms === 'mysql' ? currentActualData.trim() : undefined,
         sampleDataPostgresql: currentDbms === 'postgresql' ? sampleDataState.appliedValue.trim() : undefined,
         sampleDataMysql: currentDbms === 'mysql' ? sampleDataState.appliedValue.trim() : undefined,
         answerSql: answerSqlState.appliedValue.trim(),
-        problemSetMode,
-        problemMode,
-        problemSetId: problemSetMode === 'existing' ? selectedProblemSetId ?? undefined : undefined,
-        problemId: problemMode === 'existing' ? selectedProblemId ?? undefined : undefined,
-        dbms: problemSetMode === 'new' ? selectedDbms : undefined,
+        existingProblemSet,
+        existingProblem,
+        problemSetId: existingProblemSet ? selectedProblemSetId ?? undefined : undefined,
+        problemId: existingProblem ? selectedProblemId ?? undefined : undefined,
+        dbms: !existingProblemSet ? selectedDbms : undefined,
       });
 
       navigate(`/problems/${encodeURIComponent(createdProblemId)}`);
@@ -993,7 +991,7 @@ export function ProblemCreateContent() {
         <section ref={heroSectionRef} className="solve-page-hero solve-surface-section problem-create-hero">
           <div className="solve-page-hero-copy solve-page-hero-copy-wide">
             <div className="problem-create-number-row">
-              <span className="solve-problem-number">{getProblemNumberLabel(problemSetMode, problemMode, selectedProblemSetId, selectedProblemId)}</span>
+              <span className="solve-problem-number">{getProblemNumberLabel(existingProblemSet, existingProblem, selectedProblemSetId, selectedProblemId)}</span>
               <ProblemCreateSelectMenu
                 value={selectedProblemSetValue}
                 className="problem-create-select"
@@ -1006,7 +1004,7 @@ export function ProblemCreateContent() {
                 ]}
                 onChange={handleProblemSetSelectChange}
               />
-              {problemSetMode === 'new' ? (
+              {!existingProblemSet ? (
                 <ProblemCreateSelectMenu
                   value={selectedDbms}
                   className="problem-create-select problem-create-problem-select"
@@ -1064,12 +1062,12 @@ export function ProblemCreateContent() {
           </div>
         </section>
 
-        {problemSetMode === 'existing' && isProblemSetLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_SET_LOADING_LABEL', '테이블셋 정보를 불러오는 중입니다.')}</p> : null}
-        {problemSetMode === 'existing' && problemSetErrorMessage ? <p className="problem-create-error">{problemSetErrorMessage}</p> : null}
-        {problemMode === 'existing' && isProblemLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_PROBLEM_LOADING_LABEL', '문제 정보를 불러오는 중입니다.')}</p> : null}
-        {problemMode === 'existing' && problemErrorMessage ? <p className="problem-create-error">{problemErrorMessage}</p> : null}
+        {existingProblemSet && isProblemSetLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_SET_LOADING_LABEL', '테이블셋 정보를 불러오는 중입니다.')}</p> : null}
+        {existingProblemSet && problemSetErrorMessage ? <p className="problem-create-error">{problemSetErrorMessage}</p> : null}
+        {existingProblem && isProblemLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_PROBLEM_LOADING_LABEL', '문제 정보를 불러오는 중입니다.')}</p> : null}
+        {existingProblem && problemErrorMessage ? <p className="problem-create-error">{problemErrorMessage}</p> : null}
 
-        {problemSetMode === 'existing' && availableTableNames.length > 0 ? (
+        {existingProblemSet && availableTableNames.length > 0 ? (
           <section className="problem-create-table-selector-card">
             <div className="problem-create-table-selector-header">
               <h2>{text('PROBLEM_CREATE_SET_SCOPE_TITLE', '테이블 범위')}</h2>
@@ -1137,7 +1135,7 @@ export function ProblemCreateContent() {
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'ddl')}
           actions={
-            problemSetMode === 'new' ? (
+            !existingProblemSet ? (
               <InlineEditActions isEditing={ddlState.isEditing} onEdit={ddlState.startEditing} onCancel={ddlState.cancelEditing} onConfirm={ddlState.confirmEditing} />
             ) : null
           }
@@ -1145,7 +1143,7 @@ export function ProblemCreateContent() {
             sectionRefs.current.ddl = node;
           }}
         >
-          {problemSetMode === 'new' && ddlState.isEditing ? (
+          {!existingProblemSet && ddlState.isEditing ? (
             <textarea
               className="text-field problem-create-code-textarea"
               value={currentDbms === 'mysql' ? ddlState.draftValue.mysql : ddlState.draftValue.postgresql}
@@ -1168,7 +1166,7 @@ export function ProblemCreateContent() {
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'actualData')}
           actions={
-            problemSetMode === 'new' ? (
+            !existingProblemSet ? (
               <InlineEditActions isEditing={actualDataState.isEditing} onEdit={actualDataState.startEditing} onCancel={actualDataState.cancelEditing} onConfirm={actualDataState.confirmEditing} />
             ) : null
           }
@@ -1176,7 +1174,7 @@ export function ProblemCreateContent() {
             sectionRefs.current.actualData = node;
           }}
         >
-          {problemSetMode === 'new' && actualDataState.isEditing ? (
+          {!existingProblemSet && actualDataState.isEditing ? (
             <textarea
               className="text-field problem-create-code-textarea"
               value={currentDbms === 'mysql' ? actualDataState.draftValue.mysql : actualDataState.draftValue.postgresql}

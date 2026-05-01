@@ -1,15 +1,22 @@
 package com.quertimizer.problem.domain.entity;
 
 import com.quertimizer.global.constant.DbmsType;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "problem_set")
@@ -36,6 +43,11 @@ public class ProblemSet {
     @Enumerated(EnumType.STRING)
     @Column(name = "dbms_type", nullable = false, length = 20)
     private DbmsType dbmsType;
+
+    @BatchSize(size = 50)
+    @OrderBy("problemId ASC")
+    @OneToMany(mappedBy = "problemSet", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Problem> problems = new ArrayList<>();
 
     public static ProblemSet create(String problemSetId,
                                     String ddl,
@@ -79,17 +91,17 @@ public class ProblemSet {
     }
 
     public boolean supportsDbms(DbmsType dbmsType) {
-        // 이 테이블셋이 요청 DBMS에서 사용할 수 있는지 판단한다.
+        // 이 테이블셋의 요청 DBMS 사용 가능 여부 판단
         return this.dbmsType == dbmsType;
     }
 
     public boolean hasSupportedDbms() {
-        // DBMS가 지정된 최신 테이블셋인지 판단한다.
+        // DBMS가 지정된 최신 테이블셋 여부 판단
         return dbmsType != null;
     }
 
     public DbmsType getDbmsType() {
-        // 이 테이블셋이 속한 DBMS 유형을 반환한다.
+        // 이 테이블셋이 속한 DBMS 유형 반환
         return dbmsType;
     }
 

@@ -18,7 +18,7 @@ import { logout as requestLogout } from '../../lib/authApi';
 import { fetchAlarms, markAlarmRead, markAllAlarmsRead, type AlarmEntry, type AlarmPageData } from '../../lib/alarmApi';
 import { subscribeSessionSocketMessages, type SessionSocketMessage } from '../../lib/sessionSocket';
 import logoImage from '../../assets/logo.png';
-import { prepareLogoutReload, useMockSession } from '../../lib/session';
+import { prepareLogoutReload, useSession } from '../../lib/session';
 import { getLoginOverlayDescription, OPEN_LOGIN_OVERLAY_EVENT, type OpenLoginOverlayEventDetail } from '../../lib/authOverlay';
 import {
   TITLE_UI_TEXT_KEY,
@@ -90,7 +90,7 @@ function resolveLogoutRedirectPath(pathname: string, search: string, currentHand
 }
 
 export default function Header() {
-  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handle: currentHandle } = useMockSession();
+  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handle: currentHandle } = useSession();
   const { text } = useUiText();
   const pathname = useLocationPathname();
   const [isAlarmOpen, setIsAlarmOpen] = useState(false);

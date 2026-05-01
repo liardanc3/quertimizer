@@ -1,26 +1,63 @@
 package com.quertimizer.global.config;
 
-import com.quertimizer.global.realtime.handler.SessionWebSocketHandler;
 import com.quertimizer.global.realtime.interceptor.SessionHandshakeInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.socket.config.annotation.EnableWebSocket;
-import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
-import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
+
+import java.security.Principal;
+import java.util.Map;
 
 @Configuration
-@EnableWebSocket
+@EnableWebSocketMessageBroker
 @RequiredArgsConstructor
-public class WebSocketConfig implements WebSocketConfigurer {
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final SessionWebSocketHandler sessionWebSocketHandler;
+    private static final String[] ALLOWED_ORIGIN_PATTERNS = {
+            "http://localhost:*", "http://127.0.0.1:*",
+            "https://quertimizer.com", "https://www.quertimizer.com"
+    };
+
     private final SessionHandshakeInterceptor sessionHandshakeInterceptor;
 
     @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // WebSocket 핸들러 등록
-        registry.addHandler(sessionWebSocketHandler, "/ws/session")
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        // STOMP application destination과 사용자별 응답 queue 구성
+        registry.setApplicationDestinationPrefixes("/app");
+        registry.setUserDestinationPrefix("/user");
+        registry.enableSimpleBroker("/queue");
+    }
+
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // 기존 세션 WebSocket endpoint를 STOMP endpoint로 등록
+        registry.addEndpoint("/ws/session")
                 .addInterceptors(sessionHandshakeInterceptor)
-                .setAllowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*");
+                .setHandshakeHandler(sessionPrincipalHandshakeHandler())
+                .setAllowedOriginPatterns(ALLOWED_ORIGIN_PATTERNS);
+    }
+
+    private DefaultHandshakeHandler sessionPrincipalHandshakeHandler() {
+        // WebSocket session attribute의 handle을 STOMP Principal로 연결
+        return new DefaultHandshakeHandler() {
+
+            @Override
+            protected Principal determineUser(ServerHttpRequest request,
+                                              WebSocketHandler wsHandler,
+                                              Map<String, Object> attributes) {
+                String handle = (String) attributes.get("handle");
+                if (handle == null || handle.isBlank()) {
+                    return super.determineUser(request, wsHandler, attributes);
+                }
+
+                return () -> handle;
+            }
+        };
     }
 }

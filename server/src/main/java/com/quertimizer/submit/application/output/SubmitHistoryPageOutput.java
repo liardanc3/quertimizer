@@ -1,11 +1,20 @@
 package com.quertimizer.submit.application.output;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
 import java.util.List;
 
-public record SubmitHistoryPageOutput(int currentPage,
-                                      int pageSize,
-                                      int totalCount,
-                                      int totalPages,
-                                      List<String> problemIds,
-                                      List<SubmitHistoryListItemOutput> histories) {
+@Getter
+@Accessors(fluent = true)
+@AllArgsConstructor
+public class SubmitHistoryPageOutput {
+
+    private final int currentPage;
+    private final int pageSize;
+    private final int totalCount;
+    private final int totalPages;
+    private final List<String> problemIds;
+    private final List<SubmitHistoryListItemOutput> histories;
 }

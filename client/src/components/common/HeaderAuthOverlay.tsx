@@ -23,6 +23,11 @@ import {
   sanitizeVerificationCode,
   type AuthSocialProvider,
 } from '../../lib/authUi';
+import {
+  SOCIAL_LOGIN_ERROR_MESSAGE,
+  SOCIAL_LOGIN_SUCCESS_MESSAGE,
+  isTrustedSocialLoginCallbackOrigin,
+} from '../../lib/socialLoginCallback';
 import { useUiText } from '../../lib/uiText';
 import logoImage from '../../assets/logo.png';
 import './HeaderAuthOverlay.css';
@@ -289,17 +294,17 @@ export default function HeaderAuthOverlay({
     };
 
     const handlePopupMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.data == null || typeof event.data !== 'object') {
+      if (!isTrustedSocialLoginCallbackOrigin(event.origin) || event.data == null || typeof event.data !== 'object') {
         return;
       }
 
       const message = event.data as { type?: string; provider?: HeaderAuthSocialProvider | 'oauth2' | null };
-      if (message.type !== 'quertimizer-social-login-success' && message.type !== 'quertimizer-social-login-error') {
+      if (message.type !== SOCIAL_LOGIN_SUCCESS_MESSAGE && message.type !== SOCIAL_LOGIN_ERROR_MESSAGE) {
         return;
       }
 
       void (async () => {
-        if (message.type === 'quertimizer-social-login-error') {
+        if (message.type === SOCIAL_LOGIN_ERROR_MESSAGE) {
           popup.close();
           stopPolling();
           setLoginErrors([getAuthSocialLoginErrorMessage(message.provider ?? null)]);

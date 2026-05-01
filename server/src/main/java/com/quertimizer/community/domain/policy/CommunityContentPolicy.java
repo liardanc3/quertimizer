@@ -52,6 +52,17 @@ public class CommunityContentPolicy {
 
     private final ObjectMapper objectMapper;
 
+    /**
+     * 커뮤니티 본문 JSON을 허용된 문서 구조로 검증한다.
+     *
+     * <ol>
+     *   <li>본문 존재 여부와 크기 검증
+     *   <li>JSON 파싱
+     *   <li>노드 구조와 속성 검증
+     * </ol>
+     *
+     * @param contentJson 검증할 커뮤니티 본문 JSON
+     */
     public void validate(String contentJson) {
         if (contentJson == null || contentJson.isBlank()) {
             throw badContent();

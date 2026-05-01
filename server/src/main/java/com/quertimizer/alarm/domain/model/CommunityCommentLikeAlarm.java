@@ -1,12 +1,31 @@
 package com.quertimizer.alarm.domain.model;
 
+import lombok.Value;
+
 import java.util.Map;
 
-public record CommunityCommentLikeAlarm(String recipientHandle,
-                                        String actorHandle,
-                                        String postId,
-                                        String commentContent,
-                                        Long commentId) implements AlarmSpec {
+@Value
+public class CommunityCommentLikeAlarm implements AlarmSpec {
+
+    String recipientHandle;
+    String actorHandle;
+    String postId;
+    String commentContent;
+    Long commentId;
+
+    public CommunityCommentLikeAlarm(String recipientHandle, String actorHandle,
+                                     String postId, String commentContent, Long commentId) {
+        this.recipientHandle = recipientHandle;
+        this.actorHandle = actorHandle;
+        this.postId = postId;
+        this.commentContent = commentContent;
+        this.commentId = commentId;
+    }
+
+    @Override
+    public String recipientHandle() {
+        return recipientHandle;
+    }
 
     @Override
     public String alarmType() {

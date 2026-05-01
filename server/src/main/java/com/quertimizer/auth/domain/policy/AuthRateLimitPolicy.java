@@ -27,6 +27,12 @@ public class AuthRateLimitPolicy {
 
     private final AuthRateLimitRepository authRateLimitRepository;
 
+    /**
+     * 로그인 시도 가능 여부를 검증한다.
+     *
+     * @param email 로그인 대상 이메일
+     * @param clientIp 로그인 요청 IP
+     */
     public void validateLoginAllowed(String email, String clientIp) {
         Instant now = Instant.now();
         if (authRateLimitRepository.count(loginKey(email, clientIp), LOGIN_LOCK_WINDOW, now) >= LOGIN_FAILURE_LIMIT) {
@@ -34,6 +40,12 @@ public class AuthRateLimitPolicy {
         }
     }
 
+    /**
+     * 로그인 실패를 기록하고 한도 초과 여부를 검증한다.
+     *
+     * @param email 로그인 대상 이메일
+     * @param clientIp 로그인 요청 IP
+     */
     public void recordLoginFailure(String email, String clientIp) {
         String key = loginKey(email, clientIp);
         Instant now = Instant.now();
@@ -43,10 +55,23 @@ public class AuthRateLimitPolicy {
         }
     }
 
+    /**
+     * 로그인 실패 기록을 제거한다.
+     *
+     * @param email 로그인 대상 이메일
+     * @param clientIp 로그인 요청 IP
+     */
     public void clearLoginFailures(String email, String clientIp) {
         authRateLimitRepository.clear(loginKey(email, clientIp));
     }
 
+    /**
+     * 인증코드 발급 시도 횟수를 기록하고 한도 초과 여부를 검증한다.
+     *
+     * @param purpose 인증코드 발급 목적
+     * @param email 인증코드 발급 대상 이메일
+     * @param clientIp 인증코드 발급 요청 IP
+     */
     public void recordCodeIssue(String purpose, String email, String clientIp) {
         String emailKey = codeIssueEmailKey(purpose, email);
         String ipKey = codeIssueIpKey(purpose, clientIp);
@@ -59,6 +84,14 @@ public class AuthRateLimitPolicy {
         authRateLimitRepository.add(ipKey, now);
     }
 
+    /**
+     * 인증코드 검증 실패를 기록하고 실패 한도 도달 여부를 반환한다.
+     *
+     * @param purpose 인증코드 검증 목적
+     * @param email 인증코드 검증 대상 이메일
+     * @param clientIp 인증코드 검증 요청 IP
+     * @return 실패 한도 도달 여부
+     */
     public boolean recordCodeVerificationFailure(String purpose, String email, String clientIp) {
         String key = codeVerifyKey(purpose, email, clientIp);
         Instant now = Instant.now();
@@ -66,10 +99,23 @@ public class AuthRateLimitPolicy {
         return authRateLimitRepository.count(key, CODE_VERIFY_WINDOW, now) >= CODE_VERIFY_FAILURE_LIMIT;
     }
 
+    /**
+     * 인증코드 검증 실패 기록을 제거한다.
+     *
+     * @param purpose 인증코드 검증 목적
+     * @param email 인증코드 검증 대상 이메일
+     * @param clientIp 인증코드 검증 요청 IP
+     */
     public void clearCodeVerificationFailures(String purpose, String email, String clientIp) {
         authRateLimitRepository.clear(codeVerifyKey(purpose, email, clientIp));
     }
 
+    /**
+     * 비밀번호 재설정 시도 횟수를 기록하고 한도 초과 여부를 검증한다.
+     *
+     * @param email 비밀번호 재설정 대상 이메일
+     * @param clientIp 비밀번호 재설정 요청 IP
+     */
     public void recordPasswordReset(String email, String clientIp) {
         String key = passwordResetKey(email, clientIp);
         Instant now = Instant.now();

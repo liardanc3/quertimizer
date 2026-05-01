@@ -1,10 +1,5 @@
 package com.quertimizer.auth.application.service;
 
-import com.quertimizer.auth.application.input.UpdateProblemGeneratorPermissionsInput;
-import com.quertimizer.auth.application.input.UpdateUserRoleInput;
-import com.quertimizer.auth.application.output.AuthManageOutput;
-import com.quertimizer.auth.application.output.AuthManageUserRowOutput;
-import com.quertimizer.auth.domain.policy.AuthManagePolicy;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.application.port.ProblemGeneratorPermissionRepository;
@@ -17,7 +12,6 @@ import com.quertimizer.problem.domain.policy.ProblemManagementPolicy;
 import com.quertimizer.user.application.port.UserRepository;
 import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -39,7 +32,6 @@ import static com.quertimizer.problem.domain.model.ProblemPermissionKey.NEW;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@Slf4j
 public class AuthManageService {
 
     private final UserRepository userRepository;
@@ -47,78 +39,14 @@ public class AuthManageService {
     private final ProblemSetRepository problemSetRepository;
     private final ProblemGeneratorPermissionRepository problemGeneratorPermissionRepository;
     private final ProblemManagementPolicy problemManagementPolicy;
-    private final AuthManagePolicy authManagePolicy;
 
-    public AuthManageOutput getAuthManage() {
-        // 권한 설정 화면에 필요한 사용자와 권한 목록을 조회
-        List<User> users = userRepository.findAllByOrderByHandleAsc();
-        Map<String, List<String>> permissionMap = problemGeneratorPermissionRepository.findAllByOrderByIdHandleAscIdProblemIdAsc().stream()
-                .collect(Collectors.groupingBy(
-                        ProblemGeneratorPermission::getHandle,
-                        Collectors.mapping(permission -> normalizeStoredPermissionKey(permission.getProblemId()), Collectors.toList())
-                ));
-
-        List<AuthManageUserRowOutput> members = users.stream()
-                .filter(User::hasHandle)
-                .map(user -> new AuthManageUserRowOutput(
-                        user.getHandle(),
-                        resolveRoleValue(user.getResolvedRole()),
-                        user.getResolvedRole() == UserRole.PROBLEM_GENERATOR
-                                ? sortPermissionKeys(permissionMap.getOrDefault(user.getHandle(), List.of()))
-                                : List.of()
-                ))
-                .toList();
-
-        return new AuthManageOutput(members);
-    }
-
-    @Transactional
-    public void updateUserRole(UpdateUserRoleInput input) {
-        // 변경 대상 사용자와 다음 역할을 확정
-        User user = findUser(input.getHandle());
-        UserRole nextRole = normalizeRole(input.getRole());
-        UserRole currentRole = user.getResolvedRole();
-
-        authManagePolicy.validateSensitiveConfirmation(input.getConfirmationText());
-        authManagePolicy.validateSelfAdminRemoval(input.getActorEmail(), user.getEmail(), currentRole, nextRole);
-        authManagePolicy.validateAdminRoleChange(currentRole, nextRole);
-
-        // 사용자 역할을 수정하고 불필요한 권한을 정리
-        user.changeRole(nextRole);
-        if (nextRole != UserRole.PROBLEM_GENERATOR) {
-            problemGeneratorPermissionRepository.deleteAllByIdHandle(input.getHandle());
-        }
-
-        log.info("Auth role changed actor={} target={} before={} after={}",
-                input.getActorEmail(), input.getHandle(), currentRole, nextRole);
-    }
-
-    @Transactional
-    public void updateProblemGeneratorPermissions(UpdateProblemGeneratorPermissionsInput input) {
-        // ProblemGenerator 사용자만 문제 권한을 수정
-        User user = findUser(input.getHandle());
-        authManagePolicy.validateProblemGeneratorRole(user.getResolvedRole());
-
-        // 저장할 권한 키를 정규화하고 유효성을 검증
-        List<String> normalizedPermissionKeys = normalizePermissionKeys(input.getPermissionKeys());
-        validatePermissionKeys(normalizedPermissionKeys);
-
-        // 기존 권한을 교체하고 새 권한을 저장
-        problemGeneratorPermissionRepository.deleteAllByIdHandle(input.getHandle());
-        if (!normalizedPermissionKeys.isEmpty()) {
-            problemGeneratorPermissionRepository.saveAll(normalizedPermissionKeys.stream()
-                    .map(permissionKey -> ProblemGeneratorPermission.create(input.getHandle(), permissionKey))
-                    .toList());
-        }
-    }
-
-    private User findUser(String handle) {
-        // handle 기준으로 변경 대상 사용자를 찾는다
+    public User findUser(String handle) {
+        // handle 기준 변경 대상 사용자 조회
         return userRepository.findByHandle(handle)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
     }
 
-    private UserRole normalizeRole(String role) {
+    public UserRole normalizeRole(String role) {
         // 요청 역할 문자열을 내부 역할 값으로 정규화
         String normalizedRole = Optional.ofNullable(role)
                 .map(String::trim)
@@ -134,7 +62,7 @@ public class AuthManageService {
         };
     }
 
-    private List<String> normalizePermissionKeys(List<String> permissionKeys) {
+    public List<String> normalizePermissionKeys(List<String> permissionKeys) {
         // 중복과 공백을 제거한 권한 키 목록으로 정리
         return Optional.ofNullable(permissionKeys)
                 .orElse(List.of())
@@ -145,7 +73,7 @@ public class AuthManageService {
                 .toList();
     }
 
-    private void validatePermissionKeys(List<String> permissionKeys) {
+    public void validatePermissionKeys(List<String> permissionKeys) {
         // 저장할 권한이 없으면 추가 검증 없이 종료
         if (permissionKeys.isEmpty()) {
             return;
@@ -178,7 +106,7 @@ public class AuthManageService {
         return problemManagementPolicy.normalizePermissionKey(permissionKey);
     }
 
-    private String normalizeStoredPermissionKey(String permissionKey) {
+    public String normalizeStoredPermissionKey(String permissionKey) {
         // 저장된 권한 키도 화면 표시에 맞는 형식으로 정리
         String normalizedPermissionKey = normalizePermissionKey(permissionKey);
         return normalizedPermissionKey.isEmpty()
@@ -196,7 +124,7 @@ public class AuthManageService {
         return problemManagementPolicy.isScopedProblemSetId(permissionKey);
     }
 
-    private List<String> sortPermissionKeys(List<String> permissionKeys) {
+    public List<String> sortPermissionKeys(List<String> permissionKeys) {
         // NEW, 테이블셋, 문제 순으로 권한 키를 정렬
         return permissionKeys.stream()
                 .filter(permissionKey -> !permissionKey.isBlank())
@@ -222,7 +150,7 @@ public class AuthManageService {
         return 3;
     }
 
-    private String resolveRoleValue(UserRole role) {
+    public String resolveRoleValue(UserRole role) {
         // 화면에서 사용하는 역할 문자열로 변환
         return switch (role) {
             case ADMIN -> "admin";

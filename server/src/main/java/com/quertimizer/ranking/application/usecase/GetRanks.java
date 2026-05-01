@@ -9,7 +9,10 @@ import com.quertimizer.ranking.application.input.RankSearchInput;
 import com.quertimizer.ranking.application.output.RankListItemOutput;
 import com.quertimizer.ranking.application.output.RankMonthlyDeltaOutput;
 import com.quertimizer.ranking.application.output.RankPageOutput;
+import com.quertimizer.ranking.domain.model.RankPageConstant;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
+import lombok.experimental.Accessors;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,11 +28,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class GetRanks {
-
-    private static final int DEFAULT_RANK_PAGE_SIZE = 10;
-    private static final int MAX_RANK_PAGE_SIZE = 100;
-    private static final RankMonthlyDeltaOutput EMPTY_MONTHLY_DELTA = new RankMonthlyDeltaOutput(0, 0);
-    private static final SubmitMetrics EMPTY_SUBMIT_METRICS = new SubmitMetrics(0, 0);
 
     private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
     private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
@@ -53,38 +51,31 @@ public class GetRanks {
         List<ProblemSolveHistory> histories = problemSolveHistoryRepository.findAll();
         List<ProblemSubmitHistory> submitHistories = problemSubmitHistoryRepository.findAll();
 
-        // 현재 기준 최고 제출 이력 추출
         List<ProblemSolveHistory> currentBestHistories = createBestHistories(histories, dbmsType, null);
-
-        // 이번달 1일 기준 최고 제출 이력 추출
         List<ProblemSolveHistory> baselineBestHistories = createBestHistories(histories, dbmsType, monthStart);
 
-        // 사용자별 랭킹 지표 계산
         Map<String, RankMetrics> currentMetricsByHandle = createRankMetricsByHandle(currentBestHistories);
         Map<String, RankMetrics> baselineMetricsByHandle = createRankMetricsByHandle(baselineBestHistories);
         Map<String, SubmitMetrics> submitMetricsByHandle = createSubmitMetricsByHandle(submitHistories, dbmsType);
 
-        // 이번달 1일 대비 순위 변화 계산
         Map<String, RankMonthlyDeltaOutput> monthlyDeltaByHandle = createMonthlyDeltaByHandle(
                 currentMetricsByHandle,
                 baselineMetricsByHandle
         );
 
-        // 검색, 정렬 반영 랭킹 목록 구성
         List<RankListItemOutput> filteredRanks = currentMetricsByHandle.values().stream()
-                .map(metrics -> new RankListItemOutput(
-                        metrics.handle(),
-                        metrics.solvedCount(),
-                        metrics.avgExecutionPercentile(),
-                        submitMetricsByHandle.getOrDefault(metrics.handle(), EMPTY_SUBMIT_METRICS).totalSubmitCount(),
-                        submitMetricsByHandle.getOrDefault(metrics.handle(), EMPTY_SUBMIT_METRICS).successSubmitCount(),
-                        monthlyDeltaByHandle.getOrDefault(metrics.handle(), EMPTY_MONTHLY_DELTA)
-                ))
+                .map(metrics -> {
+                    SubmitMetrics submitMetrics = resolveSubmitMetrics(submitMetricsByHandle, metrics.handle());
+                    return new RankListItemOutput(
+                            metrics.handle(), metrics.solvedCount(), metrics.avgExecutionPercentile(),
+                            submitMetrics.totalSubmitCount(), submitMetrics.successSubmitCount(),
+                            resolveMonthlyDelta(monthlyDeltaByHandle, metrics.handle())
+                    );
+                })
                 .filter(rank -> matchesHandle(rank, input.getQuery()))
                 .sorted(createRankComparator(rankSortKey))
                 .toList();
 
-        // 페이지 경계 계산
         int totalCount = filteredRanks.size();
         int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) pageSize));
         int currentPage = Math.min(Math.max(input.getRequestedPage(), 1), totalPages);
@@ -92,10 +83,7 @@ public class GetRanks {
         int toIndex = Math.min(fromIndex + pageSize, totalCount);
 
         return new RankPageOutput(
-                currentPage,
-                pageSize,
-                totalCount,
-                totalPages,
+                currentPage, pageSize, totalCount, totalPages,
                 filteredRanks.subList(fromIndex, toIndex)
         );
     }
@@ -103,10 +91,10 @@ public class GetRanks {
     private int resolvePageSize(Integer requestedPageSize) {
         // 랭킹 페이지 크기를 보정
         if (requestedPageSize == null || requestedPageSize < 1) {
-            return DEFAULT_RANK_PAGE_SIZE;
+            return RankPageConstant.DEFAULT_PAGE_SIZE;
         }
 
-        return Math.min(requestedPageSize, MAX_RANK_PAGE_SIZE);
+        return Math.min(requestedPageSize, RankPageConstant.MAX_PAGE_SIZE);
     }
 
     private List<ProblemSolveHistory> createBestHistories(List<ProblemSolveHistory> histories,
@@ -173,8 +161,7 @@ public class GetRanks {
             metricsByHandle.put(
                     handle,
                     new RankMetrics(
-                            handle,
-                            solvedCountEntry.getValue(),
+                            handle, solvedCountEntry.getValue(),
                             Math.round(averageExecutionPercentile * 10d) / 10d
                     )
             );
@@ -205,7 +192,7 @@ public class GetRanks {
                 continue;
             }
 
-            SubmitMetrics currentMetrics = submitMetricsByHandle.getOrDefault(history.getHandle(), EMPTY_SUBMIT_METRICS);
+            SubmitMetrics currentMetrics = submitMetricsByHandle.getOrDefault(history.getHandle(), new SubmitMetrics(0, 0));
             submitMetricsByHandle.put(
                     history.getHandle(),
                     new SubmitMetrics(
@@ -216,6 +203,16 @@ public class GetRanks {
         }
 
         return submitMetricsByHandle;
+    }
+
+    private SubmitMetrics resolveSubmitMetrics(Map<String, SubmitMetrics> submitMetricsByHandle, String handle) {
+        // 사용자별 제출 지표가 없으면 빈 제출 지표 반환
+        return submitMetricsByHandle.getOrDefault(handle, new SubmitMetrics(0, 0));
+    }
+
+    private RankMonthlyDeltaOutput resolveMonthlyDelta(Map<String, RankMonthlyDeltaOutput> monthlyDeltaByHandle, String handle) {
+        // 월간 순위 변동 지표가 없으면 빈 변동 지표 반환
+        return monthlyDeltaByHandle.getOrDefault(handle, new RankMonthlyDeltaOutput(0, 0));
     }
 
     private Map<UserSolvedHistoryKey, Integer> createExecutionPercentileByHistoryKey(
@@ -277,14 +274,8 @@ public class GetRanks {
             monthlyDeltaByHandle.put(
                     handle,
                     new RankMonthlyDeltaOutput(
-                            calculateRankDelta(
-                                    currentSolvedCountRankByHandle.get(handle),
-                                    baselineSolvedCountRankByHandle.get(handle)
-                            ),
-                            calculateRankDelta(
-                                    currentExecutionPercentileRankByHandle.get(handle),
-                                    baselineExecutionPercentileRankByHandle.get(handle)
-                            )
+                            calculateRankDelta(currentSolvedCountRankByHandle.get(handle), baselineSolvedCountRankByHandle.get(handle)),
+                            calculateRankDelta(currentExecutionPercentileRankByHandle.get(handle), baselineExecutionPercentileRankByHandle.get(handle))
                     )
             );
         }
@@ -380,17 +371,17 @@ public class GetRanks {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
-        // 랭킹 조회 기준 DBMS를 기본값까지 포함해 확정한다.
+        // 랭킹 조회 기준 DBMS를 기본값까지 포함해 확정
         return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 
     private DbmsType resolveDbmsType(ProblemSolveHistory history) {
-        // 오래된 해결 이력은 PostgreSQL 기록으로 간주한다.
+        // 오래된 해결 이력은 PostgreSQL 기록으로 간주
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
     private DbmsType resolveDbmsType(ProblemSubmitHistory history) {
-        // 오래된 제출 이력은 PostgreSQL 기록으로 간주한다.
+        // 오래된 제출 이력은 PostgreSQL 기록으로 간주
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
@@ -403,16 +394,29 @@ public class GetRanks {
         return RankSortKey.SOLVED_COUNT;
     }
 
-    private record UserSolvedHistoryKey(String handle, String problemId) {
-        // 사용자와 문제 조합으로 최고 해결 기록을 식별한다.
+    @Value
+    @Accessors(fluent = true)
+    private static class UserSolvedHistoryKey {
+        // 사용자와 문제 조합으로 최고 해결 기록 식별
+        String handle;
+        String problemId;
     }
 
-    private record RankMetrics(String handle, int solvedCount, double avgExecutionPercentile) {
-        // 랭킹 정렬과 응답에 필요한 사용자별 지표를 담는다.
+    @Value
+    @Accessors(fluent = true)
+    private static class RankMetrics {
+        // 랭킹 정렬과 응답에 필요한 사용자별 지표 보관
+        String handle;
+        int solvedCount;
+        double avgExecutionPercentile;
     }
 
-    private record SubmitMetrics(int totalSubmitCount, int successSubmitCount) {
-        // 랭킹 보조 정보로 표시할 제출 집계를 담는다.
+    @Value
+    @Accessors(fluent = true)
+    private static class SubmitMetrics {
+        // 랭킹 보조 정보로 표시할 제출 집계 보관
+        int totalSubmitCount;
+        int successSubmitCount;
     }
 
     private enum RankSortKey {

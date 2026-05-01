@@ -7,6 +7,8 @@ import com.quertimizer.auth.domain.entity.BlockedIp;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.user.application.port.UserRepository;
 import com.quertimizer.user.domain.entity.User;
+import lombok.Value;
+import lombok.experimental.Accessors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -784,6 +786,13 @@ class AuthControllerIntegrationTest {
         }
     }
 
-    record SentMail(String to, String subject, String title, String description, String code) {
+    @Value
+    @Accessors(fluent = true)
+    static class SentMail {
+        String to;
+        String subject;
+        String title;
+        String description;
+        String code;
     }
 }

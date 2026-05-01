@@ -10,7 +10,7 @@ import useRequestState from '../hooks/useRequestState';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../lib/favoriteTabs';
 import { PROBLEMS_PATH } from '../lib/navigation';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
-import { useMockSession } from '../lib/session';
+import { useSession } from '../lib/session';
 import { useHomeSiteTitle, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './HomePage.css';
@@ -122,7 +122,7 @@ function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: bool
 export default function HomePage() {
   useHomeSiteTitle();
   const { text } = useUiText();
-  const { isAuthenticated, isReady, handle } = useMockSession();
+  const { isAuthenticated, isReady, handle } = useSession();
   const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<HomePageFavoriteSnapshot>('home'), []);
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search));

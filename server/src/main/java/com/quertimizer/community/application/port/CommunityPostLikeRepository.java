@@ -1,7 +1,7 @@
 package com.quertimizer.community.application.port;
 
 import com.quertimizer.community.domain.entity.CommunityPostLike;
-import com.quertimizer.community.domain.entity.CommunityPostLikeId;
+import com.quertimizer.community.domain.entity.ids.CommunityPostLikeId;
 
 import java.util.List;
 

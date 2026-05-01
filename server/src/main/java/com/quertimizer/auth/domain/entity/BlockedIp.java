@@ -1,8 +1,12 @@
 package com.quertimizer.auth.domain.entity;
 
+import com.quertimizer.user.domain.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -23,16 +27,20 @@ public class BlockedIp {
     @Column(name = "blocked_handle", length = 50)
     private String blockedHandle;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "blocked_handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User blockedUser;
+
     @Column(name = "blocked_at", nullable = false)
     private LocalDateTime blockedAt;
 
     public static BlockedIp create(String ipAddress, String blockedHandle) {
-        // 차단된 IP를 새로 저장할 때 사용한다.
+        // 차단 IP 신규 저장용 엔티티 생성
         return new BlockedIp(ipAddress.trim(), blockedHandle, LocalDateTime.now());
     }
 
     public void refresh(String blockedHandle) {
-        // 같은 IP가 다시 차단되면 대상 handle과 시각을 최신 상태로 갱신한다.
+        // 같은 IP 재차단 시 대상 handle과 시각 최신화
         this.blockedHandle = blockedHandle;
         this.blockedAt = LocalDateTime.now();
     }

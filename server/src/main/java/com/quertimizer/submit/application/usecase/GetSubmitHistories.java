@@ -9,7 +9,10 @@ import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
 import com.quertimizer.submit.application.input.SubmitHistorySearchInput;
 import com.quertimizer.submit.application.output.SubmitHistoryListItemOutput;
 import com.quertimizer.submit.application.output.SubmitHistoryPageOutput;
+import com.quertimizer.submit.domain.model.SubmitHistoryPageConstant;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
+import lombok.experimental.Accessors;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,10 +29,6 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class GetSubmitHistories {
-
-    private static final int SUBMIT_HISTORY_PAGE_SIZE = 10;
-    private static final int HINT_INDEX = 30;
-    private static final int SUBMIT_ID_LENGTH = 8;
 
     private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
 
@@ -70,7 +69,8 @@ public class GetSubmitHistories {
         );
 
         List<ProblemSubmitHistory> histories = problemSubmitHistoryRepository.findAll(
-                Sort.by(Sort.Direction.DESC, "submittedAt").and(Sort.by(Sort.Direction.DESC, "submitId"))
+                Sort.by(Sort.Direction.DESC, "submittedAt")
+                        .and(Sort.by(Sort.Direction.DESC, "submitId"))
         );
         List<String> problemIds = histories.stream()
                 .map(ProblemSubmitHistory::getProblemId)
@@ -90,17 +90,13 @@ public class GetSubmitHistories {
                 .toList();
 
         int totalCount = filteredHistories.size();
-        int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) SUBMIT_HISTORY_PAGE_SIZE));
+        int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) SubmitHistoryPageConstant.PAGE_SIZE));
         int currentPage = Math.min(Math.max(input.getRequestedPage(), 1), totalPages);
-        int fromIndex = Math.min((currentPage - 1) * SUBMIT_HISTORY_PAGE_SIZE, totalCount);
-        int toIndex = Math.min(fromIndex + SUBMIT_HISTORY_PAGE_SIZE, totalCount);
+        int fromIndex = Math.min((currentPage - 1) * SubmitHistoryPageConstant.PAGE_SIZE, totalCount);
+        int toIndex = Math.min(fromIndex + SubmitHistoryPageConstant.PAGE_SIZE, totalCount);
 
         return new SubmitHistoryPageOutput(
-                currentPage,
-                SUBMIT_HISTORY_PAGE_SIZE,
-                totalCount,
-                totalPages,
-                problemIds,
+                currentPage, SubmitHistoryPageConstant.PAGE_SIZE, totalCount, totalPages, problemIds,
                 filteredHistories.subList(fromIndex, toIndex)
         );
     }
@@ -126,7 +122,7 @@ public class GetSubmitHistories {
     }
 
     private DbmsType resolveDbmsType(String dbms) {
-        // 요청 DBMS 값을 내부 유형으로 맞춘다
+        // 요청 DBMS 값을 내부 유형으로 맞춤
         if (dbms == null || dbms.isBlank() || dbms.equalsIgnoreCase("all")) {
             return null;
         }
@@ -163,51 +159,30 @@ public class GetSubmitHistories {
     }
 
     private PlanFilterSelectionsByDbms resolvePlanFilterSelections(String planMatchMode,
-                                                                   String scanBuckets,
-                                                                   String joinBuckets,
-                                                                   String filterBuckets,
-                                                                   String sortBuckets,
-                                                                   String aggregateBuckets,
-                                                                   String hintFilters,
-                                                                   String postgresqlScanBuckets,
-                                                                   String postgresqlJoinBuckets,
-                                                                   String postgresqlFilterBuckets,
-                                                                   String postgresqlSortBuckets,
-                                                                   String postgresqlAggregateBuckets,
-                                                                   String postgresqlHintFilters,
-                                                                   String mysqlScanBuckets,
-                                                                   String mysqlJoinBuckets,
-                                                                   String mysqlFilterBuckets,
-                                                                   String mysqlSortBuckets,
-                                                                   String mysqlAggregateBuckets,
-                                                                   String mysqlHintFilters) {
+                                                                   String scanBuckets, String joinBuckets,
+                                                                   String filterBuckets, String sortBuckets,
+                                                                   String aggregateBuckets, String hintFilters,
+                                                                   String postgresqlScanBuckets, String postgresqlJoinBuckets,
+                                                                   String postgresqlFilterBuckets, String postgresqlSortBuckets,
+                                                                   String postgresqlAggregateBuckets, String postgresqlHintFilters,
+                                                                   String mysqlScanBuckets, String mysqlJoinBuckets,
+                                                                   String mysqlFilterBuckets, String mysqlSortBuckets,
+                                                                   String mysqlAggregateBuckets, String mysqlHintFilters) {
         PlanMatchMode matchMode = resolvePlanMatchMode(planMatchMode);
         PlanFilterSelection legacySelection = createPlanFilterSelection(
-                matchMode,
-                scanBuckets,
-                joinBuckets,
-                filterBuckets,
-                sortBuckets,
-                aggregateBuckets,
-                hintFilters
+                matchMode, scanBuckets, joinBuckets,
+                filterBuckets, sortBuckets,
+                aggregateBuckets, hintFilters
         );
         PlanFilterSelection postgresqlSelection = createPlanFilterSelection(
-                matchMode,
-                postgresqlScanBuckets,
-                postgresqlJoinBuckets,
-                postgresqlFilterBuckets,
-                postgresqlSortBuckets,
-                postgresqlAggregateBuckets,
-                postgresqlHintFilters
+                matchMode, postgresqlScanBuckets, postgresqlJoinBuckets,
+                postgresqlFilterBuckets, postgresqlSortBuckets,
+                postgresqlAggregateBuckets, postgresqlHintFilters
         );
         PlanFilterSelection mysqlSelection = createPlanFilterSelection(
-                matchMode,
-                mysqlScanBuckets,
-                mysqlJoinBuckets,
-                mysqlFilterBuckets,
-                mysqlSortBuckets,
-                mysqlAggregateBuckets,
-                mysqlHintFilters
+                matchMode, mysqlScanBuckets, mysqlJoinBuckets,
+                mysqlFilterBuckets, mysqlSortBuckets,
+                mysqlAggregateBuckets, mysqlHintFilters
         );
 
         return postgresqlSelection.hasFilters() || mysqlSelection.hasFilters()
@@ -216,20 +191,13 @@ public class GetSubmitHistories {
     }
 
     private PlanFilterSelection createPlanFilterSelection(PlanMatchMode matchMode,
-                                                          String scanBuckets,
-                                                          String joinBuckets,
-                                                          String filterBuckets,
-                                                          String sortBuckets,
-                                                          String aggregateBuckets,
-                                                          String hintFilters) {
+                                                          String scanBuckets, String joinBuckets,
+                                                          String filterBuckets, String sortBuckets,
+                                                          String aggregateBuckets, String hintFilters) {
         return new PlanFilterSelection(
-                matchMode,
-                parseFilterValues(scanBuckets),
-                parseFilterValues(joinBuckets),
-                parseFilterValues(filterBuckets),
-                parseFilterValues(sortBuckets),
-                parseFilterValues(aggregateBuckets),
-                parseFilterValues(hintFilters)
+                matchMode, parseFilterValues(scanBuckets), parseFilterValues(joinBuckets),
+                parseFilterValues(filterBuckets), parseFilterValues(sortBuckets),
+                parseFilterValues(aggregateBuckets), parseFilterValues(hintFilters)
         );
     }
 
@@ -264,7 +232,7 @@ public class GetSubmitHistories {
     private String formatSubmitId(Long submitId) {
         // 제출 번호 포맷
         long resolvedSubmitId = submitId != null ? submitId : 0L;
-        return String.format("%0" + SUBMIT_ID_LENGTH + "d", resolvedSubmitId);
+        return String.format("%0" + SubmitHistoryPageConstant.SUBMIT_ID_LENGTH + "d", resolvedSubmitId);
     }
 
     private boolean matchesHandle(ProblemSubmitHistory history, String query) {
@@ -351,11 +319,11 @@ public class GetSubmitHistories {
     private boolean matchesHintFilter(long executionPlanElement, String value) {
         // Hint 필터 일치 여부 확인
         if ("USED".equals(value)) {
-            return hasPlanElement(executionPlanElement, HINT_INDEX);
+            return hasPlanElement(executionPlanElement, ExecutionPlanElementIndexes.HINT_INDEX);
         }
 
         if ("UNUSED".equals(value)) {
-            return !hasPlanElement(executionPlanElement, HINT_INDEX);
+            return !hasPlanElement(executionPlanElement, ExecutionPlanElementIndexes.HINT_INDEX);
         }
 
         return false;
@@ -531,13 +499,17 @@ public class GetSubmitHistories {
         OR
     }
 
-    private record PlanFilterSelection(PlanMatchMode matchMode,
-                                       List<String> scanBuckets,
-                                       List<String> joinBuckets,
-                                       List<String> filterBuckets,
-                                       List<String> sortBuckets,
-                                       List<String> aggregateBuckets,
-                                       List<String> hintFilters) {
+    @Value
+    @Accessors(fluent = true)
+    private static class PlanFilterSelection {
+        PlanMatchMode matchMode;
+        List<String> scanBuckets;
+        List<String> joinBuckets;
+        List<String> filterBuckets;
+        List<String> sortBuckets;
+        List<String> aggregateBuckets;
+        List<String> hintFilters;
+
         private boolean hasFilters() {
             // 필터 목록 여부 확인
             return !scanBuckets.isEmpty()
@@ -549,8 +521,12 @@ public class GetSubmitHistories {
         }
     }
 
-    private record PlanFilterSelectionsByDbms(PlanFilterSelection postgresql,
-                                              PlanFilterSelection mysql) {
+    @Value
+    @Accessors(fluent = true)
+    private static class PlanFilterSelectionsByDbms {
+        PlanFilterSelection postgresql;
+        PlanFilterSelection mysql;
+
         private PlanFilterSelection get(DbmsType dbmsType) {
             // get 조회
             return dbmsType == DbmsType.MYSQL ? mysql : postgresql;

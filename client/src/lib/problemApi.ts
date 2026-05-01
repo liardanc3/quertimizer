@@ -117,8 +117,8 @@ export interface CreateProblemPayload {
   sampleDataPostgresql?: string;
   sampleDataMysql?: string;
   answerSql: string;
-  problemSetMode: 'existing' | 'new';
-  problemMode: 'existing' | 'new';
+  existingProblemSet: boolean;
+  existingProblem: boolean;
   problemSetId?: string;
   problemId?: string;
   dbms?: DbmsType;

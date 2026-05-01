@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AuthApiError, SignupApiError, setupHandle } from '../../lib/authApi';
 import { completeAuthentication } from '../../lib/authSession';
-import { useMockSession } from '../../lib/session';
+import { useSession } from '../../lib/session';
 import { useUiText } from '../../lib/uiText';
 
 const HANDLE_PATTERN = /^[A-Za-z0-9_-]{1,15}$/;
@@ -12,7 +12,7 @@ function sanitizeHandle(value: string) {
 
 export default function HandleSetupGate() {
   const { text } = useUiText();
-  const { handleSetupRequired } = useMockSession();
+  const { handleSetupRequired } = useSession();
   const [handleValue, setHandleValue] = useState('');
   const [errorReasons, setErrorReasons] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);

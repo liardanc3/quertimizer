@@ -1,11 +1,15 @@
 package com.quertimizer.alarm.domain.entity;
 
 import com.quertimizer.alarm.domain.model.AlarmSpec;
+import com.quertimizer.user.domain.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -27,8 +31,16 @@ public class UserAlarm {
     @Column(name = "handle", nullable = false, length = 50)
     private String handle;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User user;
+
     @Column(name = "alarm_type", nullable = false, length = 100)
     private String alarmType;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "alarm_type", insertable = false, updatable = false)
+    private AlarmTemplate alarmTemplate;
 
     @Column(nullable = false, length = 120)
     private String title;

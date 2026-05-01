@@ -5,9 +5,6 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
-/**
- * 문제 SQL 실행 결과다.
- */
 @Getter
 @RequiredArgsConstructor
 public class ProblemSqlExecutionOutput {

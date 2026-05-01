@@ -16,8 +16,8 @@ public class ProblemCreateInput {
     private final String sampleDataMysql;
     private final String actualDataPostgresql;
     private final String actualDataMysql;
-    private final String problemSetMode;
-    private final String problemMode;
+    private final boolean existingProblemSet;
+    private final boolean existingProblem;
     private final String problemSetId;
     private final String problemId;
     private final String dbms;

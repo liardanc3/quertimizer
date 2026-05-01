@@ -95,37 +95,86 @@ app:
   frontend-base-url: ${FRONTEND_BASE_URL}
   mail:
     from: ${MAIL_FROM}
+  community:
+    image-storage-path: /home/quertimizer/apps/server/image
   security:
     remember-me:
       key: ${QUERTIMIZER_REMEMBER_ME_KEY}
-      validity: ${QUERTIMIZER_REMEMBER_ME_VALIDITY:90d}
-      secure: ${QUERTIMIZER_REMEMBER_ME_SECURE:true}
+      validity: 90d
+      secure: true
       same-site: Lax
     client-ip:
-      trust-forwarded-headers: ${QUERTIMIZER_TRUST_FORWARDED_HEADERS:false}
-      trusted-proxies: ${QUERTIMIZER_TRUSTED_PROXIES:}
+      trust-forwarded-headers: false
+      trusted-proxies: []
   logging:
     api:
-      include-bodies: ${QUERTIMIZER_API_LOGGING_INCLUDE_BODIES:false}
+      include-bodies: false
+
+server:
+  forward-headers-strategy: framework
 
 judge:
-  lease-acquire-timeout: ${JUDGE_LEASE_ACQUIRE_TIMEOUT:3s}
-  dataset-provisioning:
-    strategy: ${JUDGE_DATASET_PROVISIONING_STRATEGY:sql-replay}
+  runtime:
+    provisioner: lvm-snapshot
+    lvm-snapshot:
+      mount-root: /mnt/sqljudge
+      volume-group: vg_sqljudge
+      thin-pool: pool
+      base-template-version: base
+      command-timeout-seconds: 60
+      startup-timeout-seconds: 30
   databases:
-    - id: ${JUDGE_POSTGRESQL_WORKER_1_ID:pg-worker-1}
-      name: ${JUDGE_POSTGRESQL_WORKER_1_NAME:pg-worker-1}
+    - id: pg-worker-1
+      name: pg-worker-1
       engine: postgresql
-      url: ${JUDGE_POSTGRESQL_WORKER_1_URL:}
-      username: ${JUDGE_POSTGRESQL_WORKER_1_USERNAME:}
-      password: ${JUDGE_POSTGRESQL_WORKER_1_PASSWORD:}
-      enabled: ${JUDGE_POSTGRESQL_WORKER_1_ENABLED:true}
-      max-concurrency: ${JUDGE_POSTGRESQL_WORKER_1_MAX_CONCURRENCY:1}
-    - id: ${JUDGE_MYSQL_WORKER_1_ID:mysql-worker-1}
-      name: ${JUDGE_MYSQL_WORKER_1_NAME:mysql-worker-1}
+      url: ${SQL_JUDGE_POSTGRESQL_WORKER_1_URL:}
+      username: ${SQL_JUDGE_POSTGRESQL_WORKER_1_USERNAME:}
+      password: ${SQL_JUDGE_POSTGRESQL_WORKER_1_PASSWORD:}
+      runner-container: judge-postgres-1
+      runtime-host: 127.0.0.1
+      runtime-port-start: 56000
+      runtime-port-end: 56049
+      runtime-database-name: postgres
+      enabled: true
+      max-concurrency: 1
+    - id: pg-worker-2
+      name: pg-worker-2
+      engine: postgresql
+      url: ${SQL_JUDGE_POSTGRESQL_WORKER_2_URL:}
+      username: ${SQL_JUDGE_POSTGRESQL_WORKER_2_USERNAME:}
+      password: ${SQL_JUDGE_POSTGRESQL_WORKER_2_PASSWORD:}
+      runner-container: judge-postgres-2
+      runtime-host: 127.0.0.1
+      runtime-port-start: 56050
+      runtime-port-end: 56099
+      runtime-database-name: postgres
+      enabled: true
+      max-concurrency: 1
+    - id: mysql-worker-1
+      name: mysql-worker-1
       engine: mysql
-      url: ${JUDGE_MYSQL_WORKER_1_URL:}
-      username: ${JUDGE_MYSQL_WORKER_1_USERNAME:}
-      password: ${JUDGE_MYSQL_WORKER_1_PASSWORD:}
-      enabled: ${JUDGE_MYSQL_WORKER_1_ENABLED:true}
-      max-concurrency: ${JUDGE_MYSQL_WORKER_1_MAX_CONCURRENCY:1}
+      url: ${SQL_JUDGE_MYSQL_WORKER_1_URL:}
+      username: ${SQL_JUDGE_MYSQL_WORKER_1_USERNAME:}
+      password: ${SQL_JUDGE_MYSQL_WORKER_1_PASSWORD:}
+      runner-container: judge-mysql-1
+      runtime-host: 127.0.0.1
+      runtime-port-start: 57000
+      runtime-port-end: 57049
+      runtime-database-name:
+      root-password: ${SQL_JUDGE_MYSQL_WORKER_1_ROOT_PASSWORD:${SQL_JUDGE_MYSQL_WORKER_1_PASSWORD:}}
+      enabled: true
+      max-concurrency: 1
+    - id: mysql-worker-2
+      name: mysql-worker-2
+      engine: mysql
+      url: ${SQL_JUDGE_MYSQL_WORKER_2_URL:}
+      username: ${SQL_JUDGE_MYSQL_WORKER_2_USERNAME:}
+      password: ${SQL_JUDGE_MYSQL_WORKER_2_PASSWORD:}
+      runner-container: judge-mysql-2
+      runtime-host: 127.0.0.1
+      runtime-port-start: 57050
+      runtime-port-end: 57099
+      runtime-database-name:
+      root-password: ${SQL_JUDGE_MYSQL_WORKER_2_ROOT_PASSWORD:${SQL_JUDGE_MYSQL_WORKER_2_PASSWORD:}}
+      enabled: true
+      max-concurrency: 1

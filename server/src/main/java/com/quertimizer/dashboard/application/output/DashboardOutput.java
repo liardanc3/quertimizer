@@ -1,9 +1,18 @@
 package com.quertimizer.dashboard.application.output;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
 import java.util.List;
 
-public record DashboardOutput(boolean authenticated,
-                              String currentHandle,
-                              List<DashboardCommunityPostOutput> communityPosts,
-                              List<DashboardProblemRecommendationOutput> problems) {
+@Getter
+@Accessors(fluent = true)
+@AllArgsConstructor
+public class DashboardOutput {
+
+    private final boolean authenticated;
+    private final String currentHandle;
+    private final List<DashboardCommunityPostOutput> communityPosts;
+    private final List<DashboardProblemRecommendationOutput> problems;
 }

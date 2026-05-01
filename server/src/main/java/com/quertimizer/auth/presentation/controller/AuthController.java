@@ -19,15 +19,15 @@ import com.quertimizer.auth.application.usecase.ValidateAvailableEmail;
 import com.quertimizer.auth.application.usecase.ValidateAvailableHandle;
 import com.quertimizer.auth.application.usecase.VerifyFindPasswordCode;
 import com.quertimizer.auth.application.usecase.VerifySignupCode;
-import com.quertimizer.auth.presentation.dto.request.DuplicateCheckEmailReq;
-import com.quertimizer.auth.presentation.dto.request.DuplicateCheckHandleReq;
-import com.quertimizer.auth.presentation.dto.request.LoginReq;
-import com.quertimizer.auth.presentation.dto.request.ResetPasswordReq;
-import com.quertimizer.auth.presentation.dto.request.SendCodeReq;
-import com.quertimizer.auth.presentation.dto.request.SetupHandleReq;
-import com.quertimizer.auth.presentation.dto.request.SignupReq;
-import com.quertimizer.auth.presentation.dto.request.VerifyCodeReq;
-import com.quertimizer.auth.presentation.dto.response.UserBootstrapInfoRes;
+import com.quertimizer.auth.presentation.controller.dto.request.DuplicateCheckEmailReq;
+import com.quertimizer.auth.presentation.controller.dto.request.DuplicateCheckHandleReq;
+import com.quertimizer.auth.presentation.controller.dto.request.LoginReq;
+import com.quertimizer.auth.presentation.controller.dto.request.ResetPasswordReq;
+import com.quertimizer.auth.presentation.controller.dto.request.SendCodeReq;
+import com.quertimizer.auth.presentation.controller.dto.request.SetupHandleReq;
+import com.quertimizer.auth.presentation.controller.dto.request.SignupReq;
+import com.quertimizer.auth.presentation.controller.dto.request.VerifyCodeReq;
+import com.quertimizer.auth.presentation.controller.dto.response.UserBootstrapInfoRes;
 import com.quertimizer.auth.presentation.support.AuthSupport;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -215,10 +215,10 @@ public class AuthController {
     }
 
     /**
-     * 현재 세션의 소켓, remember-me 쿠키, 인증 정보를 정리한다.
+     * 현재 세션의 STOMP 연결, remember-me 쿠키, 인증 정보를 정리한다.
      *
      * <ol>
-     *   <li>HttpSession에 연결된 WebSocket 종료
+     *   <li>HttpSession에 연결된 STOMP 세션 종료
      *   <li>remember-me 쿠키와 SecurityContext 정리
      * </ol>
      *
@@ -231,7 +231,7 @@ public class AuthController {
                                        HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         Optional.ofNullable(httpRequest.getSession(false))
                 .map(HttpSession::getId)
-                .ifPresent(authSupport::closeSessionSocket);
+                .ifPresent(authSupport::closeSessionStomp);
 
         authSupport.deleteRememberMeCookie(authentication, httpRequest, httpResponse);
         return ResponseEntity.ok().build();

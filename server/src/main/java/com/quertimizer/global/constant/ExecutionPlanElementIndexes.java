@@ -2,6 +2,8 @@ package com.quertimizer.global.constant;
 
 public final class ExecutionPlanElementIndexes {
 
+    public static final int HINT_INDEX = PostgreSqlExecutionPlanElementIndex.HINT;
+
     private static final int[] POSTGRESQL_INDEXES = {
             PostgreSqlExecutionPlanElementIndex.FULL_SCAN,
             PostgreSqlExecutionPlanElementIndex.INDEX_SCAN,
@@ -65,8 +67,7 @@ public final class ExecutionPlanElementIndexes {
     }
 
     public static long normalize(DbmsType dbmsType, long executionPlanElement) {
-
-        // DBMS별로 정의된 실행계획 요소 비트만 남기고, 다른 DBMS 전용 비트는 응답에서 제거합니다.
+        // DBMS별 정의 실행계획 요소 비트만 응답에 유지
         long normalizedExecutionPlanElement = 0L;
         for (int index : getIndexes(dbmsType)) {
             if ((executionPlanElement & (1L << index)) != 0) {

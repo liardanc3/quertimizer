@@ -219,8 +219,8 @@ class ProblemControllerIntegrationTest {
                       "condition": "조건",
                       "output": "출력",
                       "answerSql": "SELECT 1",
-                      "problemSetMode": "new",
-                      "problemMode": "new",
+                      "existingProblemSet": false,
+                      "existingProblem": false,
                       "dbms": "postgresql",
                       "ddlPostgresql": "CREATE TABLE t(id int);",
                       "actualDataPostgresql": "INSERT INTO t VALUES (1);",
@@ -261,7 +261,7 @@ class ProblemControllerIntegrationTest {
 
     @Nested
     @DisplayName("POST /admin/problems/output-preview")
-    class PreviewProblemOutput {
+    class PreviewProblem {
 
         @Test
         @DisplayName("실패 (요청값 오류)")

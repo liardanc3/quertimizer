@@ -13,6 +13,13 @@ public class CommunityNoticePolicy {
 
     private final UserRepository userRepository;
 
+    /**
+     * 공지 카테고리 게시글 작성 또는 수정 권한을 검증한다.
+     *
+     * @param handle 게시글 작성 또는 수정 사용자 handle
+     * @param currentCategory 현재 게시글 카테고리
+     * @param nextCategory 변경하려는 게시글 카테고리
+     */
     public void validateNoticeWritable(String handle, String currentCategory, String nextCategory) {
         if (!"notice".equals(currentCategory) && !"notice".equals(nextCategory)) {
             return;

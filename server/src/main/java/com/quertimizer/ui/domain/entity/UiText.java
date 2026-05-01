@@ -1,5 +1,6 @@
 package com.quertimizer.ui.domain.entity;
 
+import com.quertimizer.ui.domain.entity.ids.UiTextId;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;

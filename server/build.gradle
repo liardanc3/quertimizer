@@ -130,7 +130,7 @@ tasks.register('integrationTest', Test) {
 
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 def npmCmd = isWindows ? 'npm.cmd' : 'npm'
-def deployTarget = 'quertimizer@server.quertimizer.com'
+def deployTarget = findProperty('deployTarget') ?: 'quertimizer@quertimizer.com'
 
 ext {
 	remoteServerBase = '/home/quertimizer/apps/server'

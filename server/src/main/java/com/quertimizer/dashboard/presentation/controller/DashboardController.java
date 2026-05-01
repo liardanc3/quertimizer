@@ -2,7 +2,7 @@ package com.quertimizer.dashboard.presentation.controller;
 
 import com.quertimizer.dashboard.application.usecase.GetDashboard;
 import com.quertimizer.dashboard.presentation.support.DashboardSupport;
-import com.quertimizer.dashboard.presentation.dto.response.DashboardRes;
+import com.quertimizer.dashboard.presentation.controller.dto.response.DashboardRes;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

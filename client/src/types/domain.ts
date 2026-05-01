@@ -85,23 +85,6 @@ export interface SubmitHistoryPageData {
   histories: SubmitHistoryEntry[];
 }
 
-export type JudgeStatus = 'success' | 'fail';
-
-export interface ResultRow {
-  columns: string[];
-}
-
-export interface MockResult {
-  status: JudgeStatus;
-  message: string;
-  executionTimeMs: number;
-  scanRows: number;
-  cost: number;
-  indexUsed: boolean;
-  fullScan: boolean;
-  rows: ResultRow[];
-}
-
 export interface RuntimeBucket {
   startMs: number;
   count: number;
@@ -194,7 +177,6 @@ export interface ProblemDetail extends ProblemSummary {
   starterSql: string;
   dbmsOptions: DbmsType[];
   disabledDbms: DbmsType[];
-  mockResult: MockResult;
 }
 
 export interface DbmsOption {

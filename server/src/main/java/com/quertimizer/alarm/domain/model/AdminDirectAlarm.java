@@ -1,8 +1,29 @@
 package com.quertimizer.alarm.domain.model;
 
+import lombok.Value;
+
 import java.util.Map;
 
-public record AdminDirectAlarm(String recipientHandle, String message) implements AlarmSpec {
+@Value
+public class AdminDirectAlarm implements AlarmSpec {
+
+    String recipientHandle;
+    String message;
+
+    public AdminDirectAlarm(String recipientHandle, String message) {
+        this.recipientHandle = recipientHandle;
+        this.message = message;
+    }
+
+    @Override
+    public String recipientHandle() {
+        return recipientHandle;
+    }
+
+    @Override
+    public String message() {
+        return message;
+    }
 
     @Override
     public String alarmType() {

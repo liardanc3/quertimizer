@@ -78,7 +78,6 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     }
 
     private String resolveActor(HttpServletRequest request) {
-
         // 현재 SecurityContext 인증정보 우선 사용
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {

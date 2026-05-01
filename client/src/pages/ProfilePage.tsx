@@ -39,7 +39,7 @@ import {
   type UserProfileSummary,
 } from '../lib/profileApi';
 import PageStatePanel from '../components/common/PageStatePanel';
-import { patchSessionSnapshot, showSessionErrorToast, showSessionToast, useMockSession } from '../lib/session';
+import { patchSessionSnapshot, showSessionErrorToast, showSessionToast, useSession } from '../lib/session';
 import { fetchAlarms, markAlarmRead, type AlarmEntry, type AlarmPageData, type AlarmSortDirection } from '../lib/alarmApi';
 import { formatBoardDate, formatInteger } from '../lib/formatters';
 import { getUiTextValue, useUiText } from '../lib/uiText';
@@ -487,7 +487,7 @@ function ProfileLoadingShell({ label }: { label: string }) {
 
 export default function ProfilePage({ handle: profileHandle }: ProfilePageProps) {
   const { text } = useUiText();
-  const { isAuthenticated, isReady, handle: currentHandle } = useMockSession();
+  const { isAuthenticated, isReady, handle: currentHandle } = useSession();
   const profileHeroCoverRef = useRef<HTMLDivElement | null>(null);
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);

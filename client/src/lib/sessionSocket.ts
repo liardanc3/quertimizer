@@ -1,10 +1,25 @@
+import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import { getApiBaseUrl } from './authApi';
 
 const SESSION_SOCKET_PATH = '/ws/session';
+const SESSION_REPLY_DESTINATION = '/user/queue/session';
 
-let sessionSocket: WebSocket | null = null;
+export const SESSION_SOCKET_DESTINATION = {
+  problemExecute: '/app/problem.execute',
+  problemExecutePage: '/app/problem.execute.page',
+  problemExecuteStop: '/app/problem.execute.stop',
+  problemSubmit: '/app/problem.submit',
+  problemLeave: '/app/problem.leave',
+  judgeExecute: '/app/judge.execute',
+  judgeExecutePage: '/app/judge.execute.page',
+  judgeExecuteStop: '/app/judge.execute.stop',
+  judgeSubmit: '/app/judge.submit',
+  judgeLeave: '/app/judge.leave',
+} as const;
+
+let sessionSocketClient: Client | null = null;
+let sessionSocketSubscription: StompSubscription | null = null;
 let connectPromise: Promise<void> | null = null;
-const manualCloseSockets = new WeakSet<WebSocket>();
 const messageListeners = new Set<(message: SessionSocketMessage) => void>();
 
 export interface SessionSocketMessage {
@@ -35,24 +50,40 @@ export function connectSessionSocket() {
     return Promise.resolve();
   }
 
-  if (sessionSocket?.readyState === WebSocket.OPEN) {
+  if (sessionSocketClient?.connected) {
     return Promise.resolve();
   }
 
-  if (sessionSocket?.readyState === WebSocket.CONNECTING && connectPromise) {
+  if (connectPromise) {
     return connectPromise;
   }
 
-  if (sessionSocket) {
-    manualCloseSockets.add(sessionSocket);
-    sessionSocket.close();
+  if (sessionSocketClient) {
+    void sessionSocketClient.deactivate();
   }
-
-  const socket = new WebSocket(getSessionSocketUrl());
-  sessionSocket = socket;
 
   connectPromise = new Promise<void>((resolve, reject) => {
     let isSettled = false;
+    const client = new Client({
+      brokerURL: getSessionSocketUrl(),
+      reconnectDelay: 0,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      onConnect: () => {
+        sessionSocketSubscription = client.subscribe(SESSION_REPLY_DESTINATION, handleSessionMessage);
+        resolveConnection();
+      },
+      onStompError: () => rejectConnection(),
+      onWebSocketError: () => rejectConnection(),
+      onWebSocketClose: () => {
+        if (sessionSocketClient === client) {
+          sessionSocketClient = null;
+          sessionSocketSubscription = null;
+        }
+
+        rejectConnection();
+      },
+    });
 
     function resolveConnection() {
       if (isSettled) {
@@ -70,55 +101,43 @@ export function connectSessionSocket() {
       }
 
       isSettled = true;
-      if (sessionSocket === socket) {
-        sessionSocket = null;
+      if (sessionSocketClient === client) {
+        sessionSocketClient = null;
+        sessionSocketSubscription = null;
       }
       connectPromise = null;
       reject(new SessionSocketError());
     }
 
-    socket.addEventListener('open', resolveConnection, { once: true });
-    socket.addEventListener('error', rejectConnection, { once: true });
-    socket.addEventListener('message', (event) => {
-      try {
-        notifyMessageListeners(JSON.parse(event.data) as SessionSocketMessage);
-      } catch {
-      }
-    });
-    socket.addEventListener(
-      'close',
-      () => {
-        if (sessionSocket === socket) {
-          sessionSocket = null;
-        }
-
-        if (!manualCloseSockets.has(socket)) {
-          rejectConnection();
-        }
-      },
-      { once: true }
-    );
+    sessionSocketClient = client;
+    client.activate();
   });
 
   return connectPromise;
 }
 
-export async function sendSessionSocketMessage(payload: object) {
+export async function sendSessionSocketMessage(destination: string, payload: object = {}) {
   await connectSessionSocket();
 
-  if (sessionSocket?.readyState !== WebSocket.OPEN) {
+  if (!sessionSocketClient?.connected) {
     throw new SessionSocketError();
   }
 
-  sessionSocket.send(JSON.stringify(payload));
+  sessionSocketClient.publish({
+    destination,
+    body: JSON.stringify(payload),
+  });
 }
 
-export function sendSessionSocketMessageIfOpen(payload: object) {
-  if (sessionSocket?.readyState !== WebSocket.OPEN) {
+export function sendSessionSocketMessageIfOpen(destination: string, payload: object = {}) {
+  if (!sessionSocketClient?.connected) {
     return false;
   }
 
-  sessionSocket.send(JSON.stringify(payload));
+  sessionSocketClient.publish({
+    destination,
+    body: JSON.stringify(payload),
+  });
   return true;
 }
 
@@ -131,18 +150,30 @@ export function subscribeSessionSocketMessages(listener: (message: SessionSocket
 }
 
 export function disconnectSessionSocket() {
-  if (!sessionSocket) {
+  if (!sessionSocketClient) {
     return;
   }
 
-  manualCloseSockets.add(sessionSocket);
-  sessionSocket.close();
-  sessionSocket = null;
+  sessionSocketSubscription?.unsubscribe();
+  sessionSocketSubscription = null;
+  void sessionSocketClient.deactivate();
+  sessionSocketClient = null;
   connectPromise = null;
 }
 
 export function isSessionSocketOpen() {
-  return sessionSocket?.readyState === WebSocket.OPEN;
+  return sessionSocketClient?.connected === true;
+}
+
+function handleSessionMessage(message: IMessage) {
+  try {
+    const sessionMessage = JSON.parse(message.body) as SessionSocketMessage;
+    notifyMessageListeners(sessionMessage);
+    if (sessionMessage.type === 'session.closed') {
+      disconnectSessionSocket();
+    }
+  } catch {
+  }
 }
 
 function notifyMessageListeners(message: SessionSocketMessage) {

@@ -1,5 +1,9 @@
-import { mockDbmsOptions } from '../../mocks/dbms';
 import type { DbmsType } from '../../types/domain';
+
+const DBMS_OPTIONS: Array<{ id: DbmsType; label: string }> = [
+  { id: 'postgresql', label: 'PostgreSQL' },
+  { id: 'mysql', label: 'MySQL' },
+];
 
 interface DbmsSelectorProps {
   selectedDbms: DbmsType;
@@ -13,7 +17,7 @@ export default function DbmsSelector({
   onChange,
   supportedDbms,
 }: DbmsSelectorProps) {
-  const visibleDbms = mockDbmsOptions.filter((dbms) => supportedDbms.includes(dbms.id));
+  const visibleDbms = DBMS_OPTIONS.filter((dbms) => supportedDbms.includes(dbms.id));
   const availableCount = visibleDbms.length;
 
   return (

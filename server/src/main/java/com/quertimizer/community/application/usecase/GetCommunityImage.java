@@ -5,6 +5,7 @@ import com.quertimizer.community.application.service.CommunityImageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Path;
 import java.util.Optional;
 
 @Component
@@ -16,9 +17,24 @@ public class GetCommunityImage {
     /**
      * 커뮤니티 이미지를 조회한다.
      *
+     * <ol>
+     *   <li>이미지 번호 경로 안전성 검사
+     *   <li>이미지 저장 경로와 존재 여부 확인
+     *   <li>저장 이미지 응답 생성
+     * </ol>
+     *
      * @param imageId 조회할 이미지 ID
      */
     public Optional<CommunityImageOutput> execute(String imageId) {
-        return communityImageService.getImage(imageId);
+        if (!communityImageService.isSafeImageId(imageId)) {
+            return Optional.empty();
+        }
+
+        Path imagePath = communityImageService.resolveImagePath(imageId);
+        if (!communityImageService.existsInStorage(imagePath)) {
+            return Optional.empty();
+        }
+
+        return communityImageService.createStoredImageOutput(imageId, imagePath);
     }
 }

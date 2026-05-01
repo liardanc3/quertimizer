@@ -1,7 +1,12 @@
 package com.quertimizer.problem.domain.entity;
 
+import com.quertimizer.problem.domain.entity.ids.ProblemGeneratorPermissionId;
+import com.quertimizer.user.domain.entity.User;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,13 +21,17 @@ public class ProblemGeneratorPermission {
     @EmbeddedId
     private ProblemGeneratorPermissionId id;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User user;
+
     public static ProblemGeneratorPermission create(String handle, String problemId) {
         // 문제 생성 권한 항목 생성
         return new ProblemGeneratorPermission(ProblemGeneratorPermissionId.create(handle, problemId));
     }
 
     public String getHandle() {
-        // Handle 조회
+        // 사용자 handle 조회
         return id.getHandle();
     }
 

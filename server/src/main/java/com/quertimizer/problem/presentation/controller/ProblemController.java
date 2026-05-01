@@ -1,9 +1,6 @@
 package com.quertimizer.problem.presentation.controller;
 
 import com.quertimizer.auth.presentation.support.AuthSupport;
-import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.judge.application.input.ProblemOutputPreviewInput;
-import com.quertimizer.judge.application.usecase.BuildProblemOutputPreview;
 import com.quertimizer.problem.application.input.CreateProblemInput;
 import com.quertimizer.problem.application.input.ProblemOptionsInput;
 import com.quertimizer.problem.application.input.ProblemSetAccessInput;
@@ -13,16 +10,17 @@ import com.quertimizer.problem.application.usecase.GetProblemOptions;
 import com.quertimizer.problem.application.usecase.GetProblemSet;
 import com.quertimizer.problem.application.usecase.GetProblemSets;
 import com.quertimizer.problem.application.usecase.GetProblems;
-import com.quertimizer.problem.presentation.dto.request.ProblemCreateReq;
-import com.quertimizer.problem.presentation.dto.request.ProblemOutputPreviewReq;
-import com.quertimizer.problem.presentation.dto.request.ProblemSearchReq;
-import com.quertimizer.problem.presentation.dto.response.AdminProblemOptionRes;
-import com.quertimizer.problem.presentation.dto.response.ProblemCreateRes;
-import com.quertimizer.problem.presentation.dto.response.ProblemDetailRes;
-import com.quertimizer.problem.presentation.dto.response.ProblemOutputPreviewRes;
-import com.quertimizer.problem.presentation.dto.response.ProblemPageRes;
-import com.quertimizer.problem.presentation.dto.response.ProblemSetDetailRes;
-import com.quertimizer.problem.presentation.dto.response.ProblemSetSummaryRes;
+import com.quertimizer.problem.application.usecase.PreviewProblem;
+import com.quertimizer.problem.presentation.controller.dto.request.ProblemCreateReq;
+import com.quertimizer.problem.presentation.controller.dto.request.ProblemOutputPreviewReq;
+import com.quertimizer.problem.presentation.controller.dto.request.ProblemSearchReq;
+import com.quertimizer.problem.presentation.controller.dto.response.AdminProblemOptionRes;
+import com.quertimizer.problem.presentation.controller.dto.response.ProblemCreateRes;
+import com.quertimizer.problem.presentation.controller.dto.response.ProblemDetailRes;
+import com.quertimizer.problem.presentation.controller.dto.response.ProblemOutputPreviewRes;
+import com.quertimizer.problem.presentation.controller.dto.response.ProblemPageRes;
+import com.quertimizer.problem.presentation.controller.dto.response.ProblemSetDetailRes;
+import com.quertimizer.problem.presentation.controller.dto.response.ProblemSetSummaryRes;
 import com.quertimizer.problem.presentation.support.ProblemSupport;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -48,7 +46,7 @@ public class ProblemController {
     private final GetProblemSet getProblemSet;
     private final GetProblemOptions getProblemOptions;
     private final CreateProblem createProblem;
-    private final BuildProblemOutputPreview buildProblemOutputPreview;
+    private final PreviewProblem previewProblem;
 
     private final ProblemSupport problemSupport;
     private final AuthSupport authSupport;
@@ -67,9 +65,7 @@ public class ProblemController {
     public ResponseEntity<ProblemPageRes> getProblems(@Valid ProblemSearchReq request, Authentication authentication) {
         String currentHandle = problemSupport.resolveCurrentHandle(authentication);
 
-        return ResponseEntity.ok(ProblemPageRes.from(getProblems.execute(
-                request.toInput(currentHandle)
-        )));
+        return ResponseEntity.ok(ProblemPageRes.from(getProblems.execute(request.toInput(currentHandle))));
     }
 
     /**
@@ -160,14 +156,14 @@ public class ProblemController {
                                                           Authentication authentication) {
         String authenticatedEmail = problemSupport.resolveAuthenticatedEmail(authentication);
 
-        CreateProblemInput input = new CreateProblemInput(request.toProblemCreateInput(), authenticatedEmail);
+        CreateProblemInput input = new CreateProblemInput(request.toInput(), authenticatedEmail);
         ProblemCreateRes response = ProblemCreateRes.from(createProblem.execute(input));
 
         return ResponseEntity.created(URI.create("/problems/" + response.getProblemId())).body(response);
     }
 
     /**
-     * 문제 생성용 출력 예시를 judge 임시 실행 환경에서 생성한다.
+     * 문제 생성용 출력 예시를 judge 경로에서 생성한다.
      *
      * <ol>
      *   <li>출력 예시 입력 생성
@@ -175,20 +171,15 @@ public class ProblemController {
      * </ol>
      *
      * @param request 출력 예시 생성을 위한 SQL 요청
+     * @param authentication 현재 요청의 인증 정보
+     * @param httpRequest 클라이언트 IP 확인에 사용하는 HTTP 요청
      */
     @PostMapping("/admin/problems/output-preview")
-    public ResponseEntity<ProblemOutputPreviewRes> previewProblemOutput(@Valid @RequestBody ProblemOutputPreviewReq request,
-                                                                        Authentication authentication,
-                                                                        HttpServletRequest httpRequest) {
-        ProblemOutputPreviewInput input = new ProblemOutputPreviewInput(
-                DbmsType.fromValueOrDefault(request.getDbms(), DbmsType.POSTGRESQL),
-                request.getDdl(),
-                request.getSampleDataSql(),
-                request.getAnswerSql(),
-                authentication.getName(),
-                authSupport.resolveClientIp(httpRequest)
-        );
-
-        return ResponseEntity.ok(ProblemOutputPreviewRes.from(buildProblemOutputPreview.execute(input)));
+    public ResponseEntity<ProblemOutputPreviewRes> previewProblem(@Valid @RequestBody ProblemOutputPreviewReq request,
+                                                                  Authentication authentication,
+                                                                  HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(ProblemOutputPreviewRes.from(
+                previewProblem.execute(request.toInput(authentication.getName(), authSupport.resolveClientIp(httpRequest)))
+        ));
     }
 }

@@ -16,7 +16,7 @@ import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { getCommunityPostPath, getProfilePath, navigate } from '../lib/navigation';
 import PageLoadFailureState from '../components/common/PageLoadFailureState';
 import { openLoginOverlay } from '../lib/authOverlay';
-import { useMockSession } from '../lib/session';
+import { useSession } from '../lib/session';
 import { formatCompactBoardDate, formatInteger } from '../lib/formatters';
 import { useUiText } from '../lib/uiText';
 
@@ -36,7 +36,7 @@ function readActiveTab(): ActivityTab {
 
 export default function ProfileActivityPage({ handle: profileHandle }: ProfileActivityPageProps) {
   const { text } = useUiText();
-  const { handle: currentHandle } = useMockSession();
+  const { handle: currentHandle } = useSession();
   const resolvedHandle = profileHandle ?? currentHandle;
   const [activeTab, setActiveTab] = useState<ActivityTab>(readActiveTab());
   const [posts, setPosts] = useState<ProfileCommunityPost[]>([]);

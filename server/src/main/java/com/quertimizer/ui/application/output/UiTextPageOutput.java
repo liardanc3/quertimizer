@@ -1,10 +1,19 @@
 package com.quertimizer.ui.application.output;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
 import java.util.List;
 
-public record UiTextPageOutput(int currentPage,
-                               int pageSize,
-                               int totalCount,
-                               int totalPages,
-                               List<UiTextOutput> uiTexts) {
+@Getter
+@Accessors(fluent = true)
+@AllArgsConstructor
+public class UiTextPageOutput {
+
+    private final int currentPage;
+    private final int pageSize;
+    private final int totalCount;
+    private final int totalPages;
+    private final List<UiTextOutput> uiTexts;
 }

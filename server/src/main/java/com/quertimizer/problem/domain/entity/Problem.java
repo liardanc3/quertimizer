@@ -1,15 +1,25 @@
 package com.quertimizer.problem.domain.entity;
 
 import com.quertimizer.global.constant.DbmsType;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "problem")
@@ -23,6 +33,20 @@ public class Problem {
 
     @Column(name = "problem_set_id", nullable = false, length = 6)
     private String problemSetId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "problem_set_id", insertable = false, updatable = false)
+    private ProblemSet problemSet;
+
+    @BatchSize(size = 50)
+    @OrderBy("submittedAt DESC")
+    @OneToMany(mappedBy = "problem", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProblemSubmitHistory> submitHistories = new ArrayList<>();
+
+    @BatchSize(size = 50)
+    @OrderBy("submittedAt DESC")
+    @OneToMany(mappedBy = "problem", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProblemSolveHistory> solveHistories = new ArrayList<>();
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -149,7 +173,7 @@ public class Problem {
     }
 
     public String getAnswer() {
-        // 기존 answer 접근 코드를 위한 호환 getter
+        // 기존 정답 접근 코드를 위한 호환 getter
         return answerHash;
     }
 
@@ -164,7 +188,7 @@ public class Problem {
     }
 
     public DbmsType getDbmsType() {
-        // DBMS 유형을 반환한다
+        // DBMS 유형 반환
         return dbmsType;
     }
 

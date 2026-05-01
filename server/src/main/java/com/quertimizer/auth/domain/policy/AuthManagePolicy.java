@@ -18,6 +18,11 @@ public class AuthManagePolicy {
 
     private final UserRepository userRepository;
 
+    /**
+     * 민감한 권한 변경 확인 문구를 검증한다.
+     *
+     * @param confirmationText 사용자가 입력한 확인 문구
+     */
     public void validateSensitiveConfirmation(String confirmationText) {
         if (!"ROLE_CHANGE_CONFIRMED".equals(confirmationText)) {
             throw new BusinessException(SENSITIVE_CONFIRMATION_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
@@ -48,6 +53,14 @@ public class AuthManagePolicy {
         }
     }
 
+    /**
+     * 본인의 Admin 역할 해제를 차단한다.
+     *
+     * @param actorEmail 권한 변경을 요청한 사용자 이메일
+     * @param targetEmail 권한 변경 대상 사용자 이메일
+     * @param currentRole 변경 대상 사용자의 현재 역할
+     * @param nextRole 변경하려는 다음 역할
+     */
     public void validateSelfAdminRemoval(String actorEmail, String targetEmail, UserRole currentRole, UserRole nextRole) {
         if (currentRole == UserRole.ADMIN
                 && nextRole != UserRole.ADMIN

@@ -1,8 +1,13 @@
 package com.quertimizer.community.domain.entity;
 
+import com.quertimizer.community.domain.entity.ids.CommunityPostLikeId;
+import com.quertimizer.user.domain.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,6 +23,14 @@ public class CommunityPostLike {
 
     @EmbeddedId
     private CommunityPostLikeId id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "post_id", insertable = false, updatable = false)
+    private CommunityPost post;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User user;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

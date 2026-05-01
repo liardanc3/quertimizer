@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import FavoriteTabButton from '../components/common/FavoriteTabButton';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import { ADMIN_PATH, getLocationSearchSnapshot, navigate, subscribeLocation } from '../lib/navigation';
-import { useMockSession } from '../lib/session';
+import { useSession } from '../lib/session';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 import { AuthManageContent } from './AuthManagePage';
 import { GlobalConfigContent } from './GlobalConfigPage';
@@ -62,7 +62,7 @@ function getAdminTabLabel(tab: AdminTab) {
 
 export default function AdminPage() {
   const { text } = useUiText();
-  const { isReady, isAuthenticated, isAdmin, isProblemGenerator } = useMockSession();
+  const { isReady, isAuthenticated, isAdmin, isProblemGenerator } = useSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const requestedTab = readAdminTabFromSearch(locationSearch || window.location.search);
   const selectedTab = !isReady ? requestedTab : isProblemGenerator && !isAdmin ? 'problemCreate' : requestedTab;

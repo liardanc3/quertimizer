@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-	<property name="QUERTIMIZER_LOG_DIR" value="${LOG_DIR:-/home/quertimizer/apps/server/logs}"/>
+	<property name="QUERTIMIZER_LOG_DIR" value="/home/quertimizer/apps/server/logs"/>
 	<property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n%ex"/>
 
 	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

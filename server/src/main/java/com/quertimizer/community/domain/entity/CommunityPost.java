@@ -1,14 +1,24 @@
 package com.quertimizer.community.domain.entity;
 
+import com.quertimizer.user.domain.entity.User;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "community_post")
@@ -22,6 +32,24 @@ public class CommunityPost {
 
     @Column(name = "handle", nullable = false, length = 50)
     private String handle;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User author;
+
+    @BatchSize(size = 50)
+    @OrderBy("createdAt ASC")
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CommunityComment> comments = new ArrayList<>();
+
+    @BatchSize(size = 50)
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CommunityPostLike> likes = new ArrayList<>();
+
+    @BatchSize(size = 50)
+    @OrderBy("tagOrder ASC")
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CommunityPostTag> tags = new ArrayList<>();
 
     @Column(nullable = false, length = 200)
     private String title;

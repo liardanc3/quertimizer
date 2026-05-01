@@ -79,23 +79,23 @@ public class ApiExceptionHandler {
         }
 
         public static ExceptionResponse reasons(List<String> reasons) {
-            // 여러 실패 사유를 그대로 응답 본문에 담는다.
+            // 여러 실패 사유를 그대로 응답 본문에 반영
             return new ExceptionResponse(reasons);
         }
 
         public static ExceptionResponse reasons(String... reasons) {
-            // 가변 인자 실패 사유를 응답 목록으로 변환한다.
+            // 가변 인자 실패 사유를 응답 목록으로 변환
             return new ExceptionResponse(Arrays.asList(reasons));
         }
 
         public static ExceptionResponse reason(String reason) {
-            // 단일 실패 사유도 동일한 응답 구조로 감싼다.
+            // 단일 실패 사유도 동일한 응답 구조로 래핑
             return new ExceptionResponse(List.of(reason));
         }
     }
 
     private List<String> extractReasons(BindingResult bindingResult) {
-        // 검증 실패 필드별 메시지를 중복 없이 추출한다.
+        // 검증 실패 필드별 메시지를 중복 없이 추출
         List<String> reasons = bindingResult
                 .getFieldErrors()
                 .stream()

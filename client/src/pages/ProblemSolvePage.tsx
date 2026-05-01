@@ -35,14 +35,14 @@ import {
 import { completeAuthentication } from '../lib/authSession';
 import {
   SessionSocketError,
+  SESSION_SOCKET_DESTINATION,
   sendSessionSocketMessage,
   sendSessionSocketMessageIfOpen,
   subscribeSessionSocketMessages,
   type SessionSocketMessage,
 } from '../lib/sessionSocket';
-import { syncSession, useMockSession } from '../lib/session';
+import { syncSession, useSession } from '../lib/session';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
-import { mockProblemDetailById, mockProblemDetails } from '../mocks/problemDetail';
 import { getExecutionPlanDetailGroups } from '../lib/executionPlanFilters';
 import {
   EMAIL_PATTERN,
@@ -52,6 +52,11 @@ import {
   sanitizeVerificationCode,
   type AuthSocialProvider,
 } from '../lib/authUi';
+import {
+  SOCIAL_LOGIN_ERROR_MESSAGE,
+  SOCIAL_LOGIN_SUCCESS_MESSAGE,
+  isTrustedSocialLoginCallbackOrigin,
+} from '../lib/socialLoginCallback';
 import { formatCompactBoardDate, formatCost, formatInteger, formatSubmittedAt } from '../lib/formatters';
 import { renderHighlightedSql, type SqlHighlightRange } from '../lib/sqlHighlighter';
 import { getUiText, getUiTextValue, useUiText } from '../lib/uiText';
@@ -243,6 +248,7 @@ interface ProblemExecutionResult {
   success: boolean;
   mode: ProblemExecutionMode;
   message: string;
+  reasons?: string[];
   columns: string[];
   rows: string[][];
   planLines: string[];
@@ -257,6 +263,7 @@ interface ProblemSocketMessage extends SessionSocketMessage {
   problemId?: string | null;
   mode?: string | null;
   message?: string | null;
+  reasons?: string[] | null;
   columns?: string[];
   rows?: string[][];
   planLines?: string[];
@@ -549,26 +556,28 @@ function resolveColumnWidths(containerWidth: number, columnCount: number, initia
 
 function createFallbackProblemDetail(problemId: string): ProblemDetail {
   const scopedDbms = problemId.startsWith('M') ? 'mysql' : problemId.startsWith('P') ? 'postgresql' : null;
-  const matchedProblem = mockProblemDetailById[problemId];
-
-  if (matchedProblem) {
-    return {
-      ...matchedProblem,
-      problemNumber: matchedProblem.problemNumber ?? problemId,
-      dbmsOptions: scopedDbms ? [scopedDbms] : matchedProblem.dbmsOptions,
-      disabledDbms: [],
-    };
-  }
+  const dbmsOptions: DbmsType[] = scopedDbms ? [scopedDbms] : ['postgresql', 'mysql'];
 
   return {
-    ...mockProblemDetails[0],
     id: problemId,
+    domain: 'rdbms',
     number: toProblemSequence(problemId),
     problemNumber: problemId,
     title: '',
     preview: '',
+    tags: [],
+    difficulty: '중급',
+    solvedCount: 0,
+    totalSubmitCount: 0,
+    successSubmitCount: 0,
+    spreadRate: 0,
+    submittedHistories: [],
     description: '',
-    dbmsOptions: scopedDbms ? [scopedDbms] : mockProblemDetails[0].dbmsOptions,
+    schemaInfo: '',
+    inputExample: '',
+    outputExample: '',
+    starterSql: '',
+    dbmsOptions,
     disabledDbms: [],
   };
 }
@@ -606,11 +615,12 @@ function formatCellValue(value: string | number | boolean | null | undefined) {
   return String(value);
 }
 
-function createProblemExecutionError(message: string): ProblemExecutionResult {
+function createProblemExecutionError(message: string, reasons: string[] = []): ProblemExecutionResult {
   return {
     success: false,
     mode: 'command',
     message,
+    reasons,
     columns: [],
     rows: [],
     planLines: [],
@@ -624,6 +634,14 @@ function isAuthenticationRequiredMessage(message: string | null | undefined) {
   }
 
   return message.includes('로그인 후') || message.includes('인증') || message.includes('세션');
+}
+
+function resolveSocketFailureMessage(message: ProblemSocketMessage, fallbackMessage: string) {
+  const reasons = Array.isArray(message.reasons)
+    ? message.reasons.filter((reason): reason is string => typeof reason === 'string' && reason.trim() !== '')
+    : [];
+
+  return reasons[0] ?? message.message ?? fallbackMessage;
 }
 
 function saveSolvePageAuthReturn(problemId: string, sql: string, selectedDbms: DbmsType) {
@@ -1393,7 +1411,8 @@ function toProblemExecutionResult(message: ProblemSocketMessage): ProblemExecuti
   return {
     success: message.success ?? false,
     mode: (message.mode as ProblemExecutionMode | null) ?? 'command',
-    message: message.message ?? '',
+    message: resolveSocketFailureMessage(message, ''),
+    reasons: Array.isArray(message.reasons) ? message.reasons : [],
     columns: message.columns ?? [],
     rows: message.rows ?? [],
     planLines: message.planLines ?? [],
@@ -1993,17 +2012,17 @@ function SolvePageAuthOverlay({
     };
 
     const handlePopupMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.data == null || typeof event.data !== 'object') {
+      if (!isTrustedSocialLoginCallbackOrigin(event.origin) || event.data == null || typeof event.data !== 'object') {
         return;
       }
 
       const message = event.data as { type?: string; provider?: SolveAuthSocialProvider | 'oauth2' | null };
-      if (message.type !== 'quertimizer-social-login-success' && message.type !== 'quertimizer-social-login-error') {
+      if (message.type !== SOCIAL_LOGIN_SUCCESS_MESSAGE && message.type !== SOCIAL_LOGIN_ERROR_MESSAGE) {
         return;
       }
 
       void (async () => {
-        if (message.type === 'quertimizer-social-login-error') {
+        if (message.type === SOCIAL_LOGIN_ERROR_MESSAGE) {
           popup.close();
           stopPolling();
           setLoginErrors([getAuthSocialLoginErrorMessage(message.provider ?? null)]);
@@ -3269,7 +3288,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const executionStopRequestedRef = useRef(false);
   const ignoredExecutionResponseCountRef = useRef(0);
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
-  const { defaultDbms, isAuthenticated, isReady, handle } = useMockSession();
+  const { defaultDbms, isAuthenticated, isReady, handle } = useSession();
   const previousAuthenticationStateRef = useRef(isAuthenticated);
   const fallbackProblem = useMemo(() => createFallbackProblemDetail(problemId), [problemId]);
   const [problemDetail, setProblemDetail] = useState<ProblemDetailData | null>(null);
@@ -3911,7 +3930,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       if (message.type === 'problem.submit.result') {
-        const nextSubmitMessage = (message as ProblemSocketMessage).message ?? text('PROBLEM_SOLVE_SUBMIT_RECORD_FAIL_MESSAGE', '제출을 기록하지 못했습니다.');
+        const submitMessage = message as ProblemSocketMessage;
+        const nextSubmitMessage = resolveSocketFailureMessage(
+          submitMessage,
+          text('PROBLEM_SOLVE_SUBMIT_RECORD_FAIL_MESSAGE', '제출을 기록하지 못했습니다.'),
+        );
         if (isAuthenticationRequiredMessage(nextSubmitMessage)) {
           setIsSubmitting(false);
           setSubmitProgressSteps([]);
@@ -3922,7 +3945,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
         setIsSubmitting(false);
         setSubmitMessage(
-          (message as ProblemSocketMessage).success === false
+          submitMessage.success === false
             && nextSubmitMessage !== text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')
             ? nextSubmitMessage
             : null,
@@ -3948,10 +3971,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       if (message.type === 'problem.execute.result' || message.type === 'error') {
+        const executionMessage = message as ProblemSocketMessage;
         const nextExecutionResult =
           message.type === 'error'
-            ? createProblemExecutionError(((message as ProblemSocketMessage).message ?? getUiTextValue('PROBLEM_SOLVE_EXECUTION_FAIL_MESSAGE', '실행에 실패했습니다.')))
-            : toProblemExecutionResult(message as ProblemSocketMessage);
+            ? createProblemExecutionError(
+                resolveSocketFailureMessage(executionMessage, getUiTextValue('PROBLEM_SOLVE_EXECUTION_FAIL_MESSAGE', '실행에 실패했습니다.')),
+                Array.isArray(executionMessage.reasons) ? executionMessage.reasons : [],
+              )
+            : toProblemExecutionResult(executionMessage);
 
         if (executionResponseResolverRef.current) {
           const resolveExecution = executionResponseResolverRef.current;
@@ -3986,8 +4013,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     return () => {
       unsubscribe();
-      sendSessionSocketMessageIfOpen({
-        type: 'problem.leave',
+      sendSessionSocketMessageIfOpen(SESSION_SOCKET_DESTINATION.problemLeave, {
         problemId,
       });
     };
@@ -4005,8 +4031,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      sendSessionSocketMessageIfOpen({
-        type: 'problem.leave',
+      sendSessionSocketMessageIfOpen(SESSION_SOCKET_DESTINATION.problemLeave, {
         problemId,
       });
     };
@@ -4327,10 +4352,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const requestExecutionResult = async (statementSql: string, page = 1) =>
     new Promise<ProblemExecutionResult>(async (resolve, reject) => {
       executionResponseResolverRef.current = resolve;
+      const destination = page === 1
+        ? SESSION_SOCKET_DESTINATION.problemExecute
+        : SESSION_SOCKET_DESTINATION.problemExecutePage;
 
       try {
-        await sendSessionSocketMessage({
-          type: page === 1 ? 'problem.execute' : 'problem.execute.page',
+        await sendSessionSocketMessage(destination, {
           problemId,
           sql: statementSql,
           dbms: selectedDbms,
@@ -4590,8 +4617,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     focusPanelSection(() => submitPanelRef.current);
 
     try {
-      await sendSessionSocketMessage({
-        type: 'problem.submit',
+      await sendSessionSocketMessage(SESSION_SOCKET_DESTINATION.problemSubmit, {
         problemId,
         sql: submitSql,
         dbms: selectedDbms,
@@ -4703,8 +4729,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       ),
     );
     resolveExecution?.(createProblemExecutionError(text('PROBLEM_SOLVE_STOPPED_MESSAGE', '중지됨')));
-    void sendSessionSocketMessage({
-      type: 'problem.execute.stop',
+    void sendSessionSocketMessage(SESSION_SOCKET_DESTINATION.problemExecuteStop, {
       problemId,
       dbms: selectedDbms,
     }).catch(() => {

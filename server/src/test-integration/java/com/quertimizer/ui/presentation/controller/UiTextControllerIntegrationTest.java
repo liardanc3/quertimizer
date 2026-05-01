@@ -2,7 +2,7 @@ package com.quertimizer.ui.presentation.controller;
 
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.ui.application.port.UiTextRepository;
-import com.quertimizer.ui.domain.entity.UiTextId;
+import com.quertimizer.ui.domain.entity.ids.UiTextId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

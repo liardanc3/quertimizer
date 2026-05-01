@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { formatInteger, formatPreciseCost, formatRoundedPercent } from '../../lib/formatters';
-import { useMockSession } from '../../lib/session';
+import { useSession } from '../../lib/session';
 import { getUiText, getUiTextValue, useUiText } from '../../lib/uiText';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '../../types/domain';
 import './ProblemRuntimeChart.css';
@@ -698,7 +698,7 @@ function buildPlanSectionRatioItems(args: {
 
 export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelect }: ProblemRuntimeChartProps) {
   const { text } = useUiText();
-  const { handle, defaultDbms } = useMockSession();
+  const { handle, defaultDbms } = useSession();
   const samples = useMemo(() => toSamples(problem, handle), [problem, handle]);
   const runtimeDbmsOptions = useMemo(
     () => [

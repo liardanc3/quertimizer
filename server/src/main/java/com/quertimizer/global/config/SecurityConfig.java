@@ -4,11 +4,13 @@ import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.filter.AccountRestrictionFilter;
 import com.quertimizer.global.filter.ApiLoggingFilter;
 import com.quertimizer.global.filter.CsrfCookieFilter;
+import com.quertimizer.global.filter.CsrfCookieNormalizationFilter;
 import com.quertimizer.global.properties.AppSecurityProperties;
 import com.quertimizer.user.application.port.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -32,7 +34,10 @@ import org.springframework.security.web.authentication.rememberme.TokenBasedReme
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,14 +49,22 @@ public class SecurityConfig {
     private final AccountRestrictionFilter accountRestrictionFilter;
     private final ApiLoggingFilter apiLoggingFilter;
     private final CsrfCookieFilter csrfCookieFilter;
+    private final CsrfCookieNormalizationFilter csrfCookieNormalizationFilter;
     private final AppSecurityProperties appSecurityProperties;
+
+    @Value("${app.frontend-base-url:}")
+    private String frontendBaseUrl;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    SecurityContextRepository securityContextRepository,
-                                                   TokenBasedRememberMeServices rememberMeServices) throws Exception {
+                                                   TokenBasedRememberMeServices rememberMeServices,
+                                                   CsrfTokenRepository csrfTokenRepository) throws Exception {
         return http.csrf(csrf -> csrf
-                           .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+                           .csrfTokenRepository(csrfTokenRepository)
+                           .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                           .ignoringRequestMatchers(request ->
+                                   HttpMethod.POST.matches(request.getMethod()) && "/session/me".equals(request.getServletPath())))
                    .cors(Customizer.withDefaults())
                    .httpBasic(AbstractHttpConfigurer::disable)
                    .formLogin(AbstractHttpConfigurer::disable)
@@ -68,6 +81,7 @@ public class SecurityConfig {
                    )
                    .securityContext(context -> context.securityContextRepository(securityContextRepository))
                    .rememberMe(rememberMe -> rememberMe.rememberMeServices(rememberMeServices))
+                   .addFilterBefore(csrfCookieNormalizationFilter, CsrfFilter.class)
                    .addFilterAfter(csrfCookieFilter, CsrfFilter.class)
                    .addFilterAfter(accountRestrictionFilter, SecurityContextHolderFilter.class)
                    .addFilterAfter(apiLoggingFilter, AccountRestrictionFilter.class)
@@ -111,7 +125,7 @@ public class SecurityConfig {
     }
 
     private String resolveSocialLoginProvider(HttpServletRequest request) {
-        // failure redirect 시 프런트가 어떤 provider에서 실패했는지 표시할 수 있게 마지막 path segment를 사용한다.
+        // failure redirect 시 프런트가 provider를 표시할 수 있게 마지막 path segment 사용
         String requestUri = request.getRequestURI();
         if (requestUri == null || requestUri.isBlank()) {
             return "oauth2";
@@ -127,8 +141,7 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-
-        // 로그인 principal은 email을 사용하므로 email 기준으로 인증 사용자를 조회한다.
+        // 로그인 principal은 email을 사용하므로 email 기준 인증 사용자 조회
         return username -> userRepository.findByEmailIgnoreCase(username)
                 .map(user ->
                         new org.springframework.security.core.userdetails.User(
@@ -157,9 +170,23 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityContextRepository securityContextRepository() {
+    public CsrfTokenRepository csrfTokenRepository() {
+        // 프론트엔드와 API 서브도메인이 함께 읽고 검증할 수 있는 CSRF 쿠키 구성
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> {
+            cookie.path("/");
+            cookie.sameSite("Lax");
+            if (usesSharedQuertimizerCookieDomain()) {
+                cookie.domain("quertimizer.com");
+                cookie.secure(true);
+            }
+        });
+        return repository;
+    }
 
-        // Spring Session JDBC가 관리하는 HttpSession에 SecurityContext를 저장한다.
+    @Bean
+    public SecurityContextRepository securityContextRepository() {
+        // Spring Session JDBC가 관리하는 HttpSession에 SecurityContext 저장
         return new HttpSessionSecurityContextRepository();
     }
 
@@ -174,12 +201,21 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
-
         // DB 사용자 인증 provider 구성
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
         return new ProviderManager(provider);
+    }
+
+    private boolean usesSharedQuertimizerCookieDomain() {
+        // 운영 프론트엔드 도메인 여부에 따라 공유 쿠키 도메인 사용 여부 결정
+        try {
+            String host = URI.create(frontendBaseUrl).getHost();
+            return host != null && (host.equals("quertimizer.com") || host.endsWith(".quertimizer.com"));
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
 }

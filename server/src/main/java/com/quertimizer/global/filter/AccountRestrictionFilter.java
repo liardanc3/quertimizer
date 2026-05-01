@@ -29,7 +29,7 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        // 차단된 IP는 인증 여부와 상관없이 즉시 요청을 거부한다.
+        // 차단된 IP는 인증 여부와 상관없이 즉시 요청 거부
         String clientIp = clientIpResolver.resolve(request);
         if (accountRestrictionService.isBlockedIp(clientIp)) {
             response.sendError(HttpStatus.FORBIDDEN.value());
@@ -46,13 +46,13 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
             }
         }
 
-        // 차단 대상이 아니면 다음 필터 또는 실제 endpoint 로직으로 넘긴다.
+        // 차단 대상이 아니면 다음 필터 또는 실제 endpoint 로직으로 전달
         filterChain.doFilter(request, response);
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // 프리플라이트와 logout은 필터에서 별도 차단/기록을 하지 않는다.
+        // 프리플라이트와 logout은 필터에서 별도 차단/기록 생략
         return "OPTIONS".equalsIgnoreCase(request.getMethod())
                 || "/logout".equals(request.getRequestURI());
     }

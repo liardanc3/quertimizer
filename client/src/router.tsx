@@ -6,10 +6,12 @@ import ProfilePage from './pages/ProfilePage';
 import ProfileActivityPage from './pages/ProfileActivityPage';
 import ProblemSolvePage from './pages/ProblemSolvePage';
 import AdminPage from './pages/AdminPage';
-import { useLocationPathname } from './hooks/useLocationState';
+import SocialLoginCallbackPage from './pages/SocialLoginCallbackPage';
+import { useLocationPathname, useLocationSearch } from './hooks/useLocationState';
 import { openLoginOverlay } from './lib/authOverlay';
 import { DASHBOARD_PATH, PROBLEMS_PATH, navigate } from './lib/navigation';
-import { useMockSession } from './lib/session';
+import { useSession } from './lib/session';
+import { hasSocialLoginCallbackSearch } from './lib/socialLoginCallback';
 import { useUiText } from './lib/uiText';
 import { parseRoute, routeNeedsSession } from './routes/routeConfig';
 import { renderRouteComponent } from './routes/routeComponents';
@@ -17,16 +19,18 @@ import { renderRouteComponent } from './routes/routeComponents';
 export default function AppRouter() {
   const { text } = useUiText();
   const pathname = useLocationPathname();
+  const search = useLocationSearch();
   const route = parseRoute(pathname);
-  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handleSetupRequired } = useMockSession();
+  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handleSetupRequired } = useSession();
   const shouldRequireHandleSetup = isAuthenticated && handleSetupRequired;
   const needsSession = routeNeedsSession(route);
+  const isSocialLoginCallback = route.type === 'home' && hasSocialLoginCallbackSearch(search);
 
   useEffect(() => {
-    if (route.type === 'home') {
+    if (route.type === 'home' && !isSocialLoginCallback) {
       navigate(DASHBOARD_PATH, { replace: true });
     }
-  }, [pathname, route.type]);
+  }, [isSocialLoginCallback, pathname, route.type]);
 
   useEffect(() => {
     if (!shouldRequireHandleSetup) {
@@ -39,6 +43,10 @@ export default function AppRouter() {
 
     navigate(PROBLEMS_PATH, { replace: true });
   }, [pathname, route.type, shouldRequireHandleSetup]);
+
+  if (isSocialLoginCallback) {
+    return <SocialLoginCallbackPage />;
+  }
 
   if (needsSession && !isReady) {
     if (route.type === 'admin') {

@@ -1,13 +1,17 @@
 package com.quertimizer.problem.domain.entity;
 
 import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.user.domain.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -29,8 +33,16 @@ public class ProblemSubmitHistory {
     @Column(name = "problem_id", nullable = false, length = 12)
     private String problemId;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "problem_id", insertable = false, updatable = false)
+    private Problem problem;
+
     @Column(name = "handle", nullable = false, length = 50)
     private String handle;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
+    private User user;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "dbms_type", length = 20)

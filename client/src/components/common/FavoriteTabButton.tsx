@@ -7,7 +7,7 @@ import {
   type FavoriteTabEntry,
   type FavoriteTabSnapshot,
 } from '../../lib/favoriteTabs';
-import { useMockSession } from '../../lib/session';
+import { useSession } from '../../lib/session';
 import './FavoriteTabs.css';
 
 export function FavoriteStarIcon({ filled = false, className = '' }: { filled?: boolean; className?: string }) {
@@ -33,7 +33,7 @@ interface FavoriteTabButtonProps {
 }
 
 export default function FavoriteTabButton({ label, path, className = '', snapshot = null, getSnapshot }: FavoriteTabButtonProps) {
-  const { isAuthenticated } = useMockSession();
+  const { isAuthenticated } = useSession();
   const favoriteTabs = useSyncExternalStore(subscribeFavoriteTabs, getFavoriteTabsSnapshot, () => []);
   const isSelected = favoriteTabs.some((entry) => entry.path === path);
 

@@ -17,21 +17,34 @@ public class DashboardHotPostPolicy {
     private static final double RECENCY_WEIGHT = 0.8d;
     private static final long RECENCY_BONUS_HOURS = 72L;
 
+    /**
+     * 대시보드 인기 게시글 표시 개수를 반환한다.
+     *
+     * @return 인기 게시글 표시 개수
+     */
     public int getDisplayLimit() {
-        // 표시 개수 조회
         return DISPLAY_LIMIT;
     }
 
+    /**
+     * 인기 게시글 정렬 기준을 생성한다.
+     *
+     * @return 인기 점수와 생성 시각 기준 비교자
+     */
     public Comparator<CommunityPost> createHotPostComparator() {
-        // 인기 게시글 비교 기준 생성
         return Comparator.comparingDouble(this::calculateHotScore)
                 .reversed()
                 .thenComparing(CommunityPost::getCreatedAt, Comparator.reverseOrder())
                 .thenComparing(CommunityPost::getPostId);
     }
 
+    /**
+     * 게시글의 대시보드 인기 점수를 계산한다.
+     *
+     * @param post 인기 점수를 계산할 게시글
+     * @return 좋아요, 댓글, 조회수, 최신성 기반 인기 점수
+     */
     public double calculateHotScore(CommunityPost post) {
-        // 인기 점수 계산
         long elapsedHours = Math.max(0L, Duration.between(post.getCreatedAt(), LocalDateTime.now()).toHours());
         double recencyBonus = Math.max(0L, RECENCY_BONUS_HOURS - elapsedHours) * RECENCY_WEIGHT;
 

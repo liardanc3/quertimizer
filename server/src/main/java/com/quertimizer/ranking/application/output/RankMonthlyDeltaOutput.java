@@ -1,5 +1,14 @@
 package com.quertimizer.ranking.application.output;
 
-public record RankMonthlyDeltaOutput(int solvedCount,
-                                     int avgExecutionPercentile) {
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
+@Getter
+@Accessors(fluent = true)
+@AllArgsConstructor
+public class RankMonthlyDeltaOutput {
+
+    private final int solvedCount;
+    private final int avgExecutionPercentile;
 }
