@@ -281,6 +281,8 @@ export default function HeaderAuthOverlay({
 
     popup.focus();
     let isChecking = false;
+    let isCompleting = false;
+    let didClosedSessionCheck = false;
     let removeMessageListener = () => {};
 
     const stopPolling = () => {
@@ -291,6 +293,31 @@ export default function HeaderAuthOverlay({
 
       removeMessageListener();
       setIsSocialLoginSubmitting(false);
+    };
+
+    const completePopupAuthentication = async (shouldClosePopup: boolean) => {
+      if (isCompleting) {
+        return;
+      }
+
+      isCompleting = true;
+
+      try {
+        const session = await fetchSessionMe();
+        if (!session.authenticated) {
+          isCompleting = false;
+          return;
+        }
+
+        await completeAuthentication(session);
+        if (shouldClosePopup && !popup.closed) {
+          popup.close();
+        }
+        stopPolling();
+        onAuthenticated();
+      } catch {
+        isCompleting = false;
+      }
     };
 
     const handlePopupMessage = (event: MessageEvent) => {
@@ -311,19 +338,7 @@ export default function HeaderAuthOverlay({
           return;
         }
 
-        try {
-          const session = await fetchSessionMe();
-          if (!session.authenticated) {
-            return;
-          }
-
-          await completeAuthentication(session);
-          popup.close();
-          stopPolling();
-          onAuthenticated();
-        } catch {
-          // 팝업 세션 확인 실패는 polling 재시도로 처리
-        }
+        await completePopupAuthentication(true);
       })();
     };
 
@@ -342,6 +357,10 @@ export default function HeaderAuthOverlay({
 
       try {
         if (popup.closed) {
+          if (!didClosedSessionCheck) {
+            didClosedSessionCheck = true;
+            await completePopupAuthentication(false);
+          }
           stopPolling();
           return;
         }
@@ -356,20 +375,15 @@ export default function HeaderAuthOverlay({
               setLoginErrors([getAuthSocialLoginErrorMessage(socialLoginError)]);
               return;
             }
+
+            if (popupUrl.searchParams.has('socialLoginSuccess')) {
+              await completePopupAuthentication(true);
+              return;
+            }
           }
         } catch {
           // 크로스 오리진 팝업은 location 접근을 허용하지 않음
         }
-
-        const session = await fetchSessionMe();
-        if (!session.authenticated) {
-          return;
-        }
-
-        await completeAuthentication(session);
-        popup.close();
-        stopPolling();
-        onAuthenticated();
       } catch {
         // 팝업 상태 확인 실패는 다음 polling 주기에서 다시 확인
       } finally {
@@ -379,7 +393,7 @@ export default function HeaderAuthOverlay({
 
     socialLoginPopupPollIdRef.current = window.setInterval(() => {
       void pollPopupState();
-    }, 500);
+    }, 1500);
     void pollPopupState();
   };
 

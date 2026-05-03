@@ -128,6 +128,7 @@ html {
   background: var(--bg-body);
   scroll-behavior: smooth;
   overflow-y: scroll;
+  overscroll-behavior-x: none;
   scrollbar-gutter: stable;
 }
 
@@ -135,6 +136,8 @@ body {
   margin: 0;
   background: var(--bg-body);
   color: var(--ink-strong);
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 button,
@@ -149,6 +152,7 @@ button {
 
 #root {
   min-height: 100vh;
+  background: var(--bg-body);
 }
 
 .app-shell {
@@ -253,6 +257,7 @@ button {
   font-weight: 600;
   cursor: pointer;
   box-shadow: var(--shadow-soft);
+  white-space: nowrap;
 }
 
 .btn:not(:disabled):hover,
@@ -2032,8 +2037,14 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 0;
+  max-width: 100%;
   border-bottom: 1px solid #dbe6f2;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.solve-dbms-tab-row::-webkit-scrollbar {
+  display: none;
 }
 
 .solve-dbms-tab {
@@ -2051,6 +2062,7 @@ button {
   font-size: 0.74rem;
   font-weight: 700;
   line-height: 1.15;
+  white-space: nowrap;
   transition: color 0.16s ease, border-color 0.16s ease;
 }
 
@@ -2644,6 +2656,30 @@ button {
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
+}
+
+.solve-editor-action-button {
+  min-width: 4.4rem;
+}
+
+.solve-editor-action-button .solve-editor-statement-spinner {
+  flex: none;
+  width: 0.82em;
+  height: 0.82em;
+}
+
+.solve-action-label,
+.solve-action-shortcut {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.solve-action-shortcut {
+  color: currentColor;
+  font-size: 0.64rem;
+  font-weight: 700;
+  opacity: 0.72;
 }
 
 .solve-floating-opacity-control {
@@ -4262,6 +4298,21 @@ button {
     justify-content: flex-start;
   }
 
+  .solve-page-topbar {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .solve-content-tab-row {
+    width: 100%;
+    padding-bottom: 0.08rem;
+  }
+
+  .solve-dbms-tab {
+    flex: 0 0 auto;
+    padding-inline: 0.74rem;
+  }
+
   .solve-title-row {
     gap: 0.38rem;
   }
@@ -4298,6 +4349,27 @@ button {
 
   .solve-editor-surface {
     min-height: 16rem;
+  }
+
+  .solve-editor-toolbar-row {
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .solve-editor-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .solve-editor-actions .btn {
+    height: 1.72rem;
+    min-height: 1.72rem;
+    padding-inline: 0.58rem;
+  }
+
+  .solve-action-shortcut {
+    display: none;
   }
 
   .solve-performance-item {
@@ -6391,7 +6463,7 @@ button {
 @media (prefers-color-scheme: dark) {
   html,
   body {
-    background: var(--bg-app);
+    background: var(--bg-body);
   }
 
   .app-shell,

@@ -1,7 +1,12 @@
 import { useEffect } from 'react';
-import { connectSessionSocket, disconnectSessionSocket, isSessionSocketOpen } from './sessionSocket';
+import {
+  connectSessionSocket,
+  disconnectSessionSocket,
+  isSessionSocketOpen,
+  subscribeSessionSocketConnection,
+} from './sessionSocket';
 import type { SessionMeResult } from './authApi';
-import { applyAuthenticatedSession, clearAuthenticatedSession, useSession } from './session';
+import { applyAuthenticatedSession, clearAuthenticatedSession, syncSession, useSession } from './session';
 
 export async function completeAuthentication(session: SessionMeResult) {
   if (!session.authenticated) {
@@ -11,6 +16,11 @@ export async function completeAuthentication(session: SessionMeResult) {
 
   applyAuthenticatedSession(session);
 
+  if (session.handleSetupRequired || session.handle == null || session.handle.trim() === '') {
+    disconnectSessionSocket();
+    return;
+  }
+
   try {
     await connectSessionSocket();
   } catch {
@@ -18,7 +28,7 @@ export async function completeAuthentication(session: SessionMeResult) {
 }
 
 export function useAuthenticationSocket() {
-  const { isAuthenticated, isReady } = useSession();
+  const { isAuthenticated, isReady, handle, handleSetupRequired } = useSession();
 
   useEffect(() => {
     if (!isReady) {
@@ -30,17 +40,39 @@ export function useAuthenticationSocket() {
       return;
     }
 
-    let isDisposed = false;
+    if (handleSetupRequired || handle == null || handle.trim() === '') {
+      disconnectSessionSocket();
+      return;
+    }
 
-    async function ensureConnection() {
+    let isDisposed = false;
+    let restorePromise: Promise<void> | null = null;
+
+    function restoreSessionAndSocket() {
       if (isDisposed || isSessionSocketOpen()) {
         return;
       }
 
-      try {
-        await connectSessionSocket();
-      } catch {
+      if (restorePromise) {
+        return;
       }
+
+      restorePromise = (async () => {
+        const isSessionValid = await syncSession({
+          openLoginOnExpire: false,
+          clearOnFailure: true,
+        });
+        if (isDisposed || !isSessionValid) {
+          return;
+        }
+
+        try {
+          await connectSessionSocket();
+        } catch {
+        }
+      })().finally(() => {
+        restorePromise = null;
+      });
     }
 
     function handleReconnectTrigger() {
@@ -48,20 +80,24 @@ export function useAuthenticationSocket() {
         return;
       }
 
-      void ensureConnection();
+      restoreSessionAndSocket();
     }
 
-    void ensureConnection();
+    restoreSessionAndSocket();
 
-    const intervalId = window.setInterval(handleReconnectTrigger, 5000);
+    const unsubscribeSocketConnection = subscribeSessionSocketConnection((connected) => {
+      if (!connected) {
+        restoreSessionAndSocket();
+      }
+    });
     window.addEventListener('focus', handleReconnectTrigger);
     window.addEventListener('online', handleReconnectTrigger);
 
     return () => {
       isDisposed = true;
-      window.clearInterval(intervalId);
+      unsubscribeSocketConnection();
       window.removeEventListener('focus', handleReconnectTrigger);
       window.removeEventListener('online', handleReconnectTrigger);
     };
-  }, [isAuthenticated, isReady]);
+  }, [handle, handleSetupRequired, isAuthenticated, isReady]);
 }

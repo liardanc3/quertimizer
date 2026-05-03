@@ -1,14 +1,14 @@
 package com.quertimizer.auth.application.service;
 
-import com.quertimizer.auth.application.port.VerificationCodeRepository;
-import com.quertimizer.auth.domain.policy.AuthRateLimitPolicy;
+import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
+import com.quertimizer.auth.application.service.AuthRateLimitService;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.UserRepository;
+import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.quertimizer.auth.application.port.out.PasswordEncodingPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,14 +28,11 @@ import static com.quertimizer.auth.domain.model.SignupFailReason.SIGNUP_VERIFICA
 @Transactional
 public class AuthService {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final VerificationCodeRepository verificationCodeRepository;
-    private final AuthRateLimitPolicy authRateLimitPolicy;
+    private final UserRepositoryPort userRepository;
+    private final PasswordEncodingPort passwordEncodingPort;
+    private final VerificationCodeRepositoryPort verificationCodeRepository;
+    private final AuthRateLimitService authRateLimitPolicy;
 
-    /**
-     * 만료 인증코드를 정리한다.
-     */
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void deleteExpiredRecoveryCode() {
         verificationCodeRepository.deleteExpired(LocalDateTime.now());
@@ -133,7 +130,7 @@ public class AuthService {
         return userRepository.findById(resolvedEmail)
                 .orElseGet(() -> userRepository.save(
                         User.create(
-                                passwordEncoder.encode(UUID.randomUUID().toString()),
+                                passwordEncodingPort.encode(UUID.randomUUID().toString()),
                                 resolvedEmail
                         )
                 ));

@@ -90,7 +90,7 @@ function resolveLogoutRedirectPath(pathname: string, search: string, currentHand
 }
 
 export default function Header() {
-  const { isAuthenticated, isReady, isAdmin, isProblemGenerator, handle: currentHandle } = useSession();
+  const { isAuthenticated, isReady, isAdmin, handle: currentHandle } = useSession();
   const { text } = useUiText();
   const pathname = useLocationPathname();
   const [isAlarmOpen, setIsAlarmOpen] = useState(false);
@@ -142,15 +142,17 @@ export default function Header() {
     return favoriteTabs.slice(startIndex, startIndex + FAVORITE_PANEL_PAGE_SIZE);
   }, [favoritePage, favoriteTabs]);
   const isFloatingHeaderVisible = true;
-  const adminNavItem = isAuthenticated && (isAdmin || isProblemGenerator)
+  const adminNavItem = isAuthenticated && isAdmin
     ? {
         key: 'admin',
-        label: isAdmin ? text('HEADER_MENU_ADMIN', '관리자') : text('HEADER_MENU_PROBLEM_MANAGEMENT', '문제 관리'),
-        path: isAdmin ? ADMIN_PATH : `${ADMIN_PATH}?tab=problemCreate`,
+        label: text('HEADER_MENU_ADMIN', '관리자'),
+        path: ADMIN_PATH,
         isActive: activeNav === 'admin',
       }
     : null;
   const visibleHeaderNavItems = adminNavItem ? [...headerNavItems, adminNavItem] : headerNavItems;
+  const ownProfilePath = currentHandle != null ? getProfilePath(currentHandle) : null;
+  const ownProfileAlarmPath = ownProfilePath != null ? `${ownProfilePath}?tab=alarms` : null;
 
   useEffect(() => {
     setIsAlarmOpen(false);
@@ -162,11 +164,11 @@ export default function Header() {
 
   useEffect(() => {
     function handleOpenLoginOverlay(event: Event) {
-      if (isAuthenticated) {
+      const { description = null, force = false } = (event as CustomEvent<OpenLoginOverlayEventDetail>).detail ?? {};
+      if (isAuthenticated && !force) {
         return;
       }
 
-      const { description = null } = (event as CustomEvent<OpenLoginOverlayEventDetail>).detail ?? {};
       setHeaderAuthOverlayDescription(description);
       setIsHeaderAuthOverlayOpen(true);
     }
@@ -527,7 +529,9 @@ export default function Header() {
                           onClick={() => {
                             setIncomingAlarm(null);
                             setIsAlarmOpen(false);
-                            navigate(`${getProfilePath()}?tab=alarms`);
+                            if (ownProfileAlarmPath != null) {
+                              navigate(ownProfileAlarmPath);
+                            }
                           }}
                         >
                           <AlarmListIcon />
@@ -644,16 +648,18 @@ export default function Header() {
                   ) : null}
                 </div>
 
-                <button
-                  type="button"
-                  className="header-link-button profile-link-button"
-                  onClick={() => {
-                    closeMobileNav();
-                    navigate(getProfilePath());
-                  }}
-                >
-                  {text('HEADER_PROFILE_BUTTON', '프로필')}
-                </button>
+                {ownProfilePath != null ? (
+                  <button
+                    type="button"
+                    className="header-link-button profile-link-button"
+                    onClick={() => {
+                      closeMobileNav();
+                      navigate(ownProfilePath);
+                    }}
+                  >
+                    {text('HEADER_PROFILE_BUTTON', '프로필')}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="header-link-button is-logout"
@@ -710,10 +716,6 @@ export default function Header() {
             aria-label={text('HEADER_MOBILE_MENU_DIALOG_LABEL', '모바일 메뉴')}
           >
             <div className="header-mobile-nav-header">
-              <div className="header-mobile-nav-copy">
-                <p className="header-mobile-nav-eyebrow">{text('HEADER_MOBILE_QUICK_NAV_LABEL', '빠른 이동')}</p>
-                <h2 className="header-mobile-nav-title">{text('HEADER_MOBILE_MENU_TITLE', '메뉴')}</h2>
-              </div>
               <button
                 type="button"
                 className="header-mobile-nav-close"
@@ -746,7 +748,12 @@ export default function Header() {
                   <button
                     type="button"
                     className="header-mobile-nav-item"
-                    onClick={() => handleMobileNavigate(`${getProfilePath()}?tab=alarms`)}
+                    onClick={() => {
+                      if (ownProfileAlarmPath != null) {
+                        handleMobileNavigate(ownProfileAlarmPath);
+                      }
+                    }}
+                    disabled={ownProfileAlarmPath == null}
                   >
                     <span>{text('HEADER_ALARM_LIST_TITLE', '알림 목록')}</span>
                     <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_MY_INFO_LABEL', '내 정보')}</span>
@@ -759,14 +766,16 @@ export default function Header() {
                     <span>{text('HEADER_FAVORITES_BUTTON_LABEL', '즐겨찾기')}</span>
                     <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_SAVED_TABS_LABEL', '저장된 탭')}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="header-mobile-nav-item"
-                    onClick={() => handleMobileNavigate(getProfilePath())}
-                  >
-                    <span>{text('HEADER_PROFILE_BUTTON', '프로필')}</span>
-                    <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_MY_PAGE_LABEL', '내 페이지')}</span>
-                  </button>
+                  {ownProfilePath != null ? (
+                    <button
+                      type="button"
+                      className="header-mobile-nav-item"
+                      onClick={() => handleMobileNavigate(ownProfilePath)}
+                    >
+                      <span>{text('HEADER_PROFILE_BUTTON', '프로필')}</span>
+                      <span className="header-mobile-nav-item-meta">{text('HEADER_MOBILE_MY_PAGE_LABEL', '내 페이지')}</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="header-mobile-nav-item is-danger"

@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from 'react';
-import { fetchSessionMe, type SessionMeResult } from './authApi';
+import { AuthApiError, fetchSessionMe, type SessionMeResult } from './authApi';
+import { openLoginOverlay } from './authOverlay';
 import { handleFavoriteTabsSessionState, prepareFavoriteTabsLogoutReload } from './favoriteTabs';
 import { disconnectSessionSocket } from './sessionSocket';
+import { getUiTextValue } from './uiText';
 
 const REMEMBER_AUTH_STORAGE_KEY = 'quertimizer.remember-authenticated';
 const SESSION_SNAPSHOT_STORAGE_KEY = 'quertimizer.session-snapshot';
@@ -22,20 +24,26 @@ interface SessionSnapshot {
   isReady: boolean;
   handle: string | null;
   defaultDbms: 'postgresql' | 'mysql' | null;
-  role: 'user' | 'admin' | 'problemGenerator' | null;
+  role: 'user' | 'admin' | null;
   handleSetupRequired: boolean;
 }
 
 interface PersistedSessionSnapshot {
   handle: string | null;
   defaultDbms: 'postgresql' | 'mysql' | null;
-  role: 'user' | 'admin' | 'problemGenerator' | null;
+  role: 'user' | 'admin' | null;
   handleSetupRequired: boolean;
+}
+
+interface SyncSessionOptions {
+  openLoginOnExpire?: boolean;
+  clearOnFailure?: boolean;
 }
 
 let sessionSnapshot: SessionSnapshot = readPersistedSessionSnapshot();
 let sessionAlert: SessionAlert | null = null;
 let syncSessionPromise: Promise<boolean> | null = null;
+let sessionExpiredNoticeAt = 0;
 
 function emitAuthChange() {
   if (typeof window === 'undefined') {
@@ -189,12 +197,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
     const parsedValue = JSON.parse(rawValue) as PersistedSessionSnapshot;
     const handle = typeof parsedValue.handle === 'string' && parsedValue.handle.trim() !== '' ? parsedValue.handle : null;
     const defaultDbms = parsedValue.defaultDbms === 'mysql' || parsedValue.defaultDbms === 'postgresql' ? parsedValue.defaultDbms : null;
-    const role =
-      parsedValue.role === 'admin'
-        || parsedValue.role === 'user'
-        || parsedValue.role === 'problemGenerator'
-        ? parsedValue.role
-        : null;
+    const role = parsedValue.role === 'admin' || parsedValue.role === 'user' ? parsedValue.role : null;
 
     return {
       isAuthenticated: true,
@@ -264,7 +267,7 @@ export function patchSessionSnapshot(
   });
 }
 
-export async function syncSession() {
+export async function syncSession(options: SyncSessionOptions = {}) {
   if (typeof window === 'undefined') {
     return false;
   }
@@ -303,7 +306,21 @@ export async function syncSession() {
         handleSetupRequired: session.handleSetupRequired,
       });
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthApiError && (error.status === 401 || error.status === 403)) {
+        if (options.openLoginOnExpire === false) {
+          clearAuthenticatedSession();
+        } else {
+          expireAuthenticatedSession();
+        }
+        return false;
+      }
+
+      if (options.clearOnFailure === true) {
+        clearAuthenticatedSession();
+        return false;
+      }
+
       updateSessionSnapshot({
         ...sessionSnapshot,
         isReady: true,
@@ -315,6 +332,32 @@ export async function syncSession() {
   })();
 
   return syncSessionPromise;
+}
+
+export function expireAuthenticatedSession(message = getUiTextValue('AUTH_SESSION_EXPIRED_MESSAGE', '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.')) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  disconnectSessionSocket();
+  clearPersistedAuthentication();
+  updateSessionAlert(null);
+  updateSessionSnapshot({
+    isAuthenticated: false,
+    isReady: true,
+    handle: null,
+    defaultDbms: null,
+    role: null,
+    handleSetupRequired: false,
+  });
+
+  const now = Date.now();
+  if (now - sessionExpiredNoticeAt < 1000) {
+    return;
+  }
+
+  sessionExpiredNoticeAt = now;
+  openLoginOverlay(message, { force: true });
 }
 
 export function clearAuthenticatedSession() {
@@ -365,7 +408,6 @@ export function useSession() {
     role,
     handleSetupRequired,
     isAdmin: role === 'admin',
-    isProblemGenerator: role === 'problemGenerator',
     login: markAuthenticatedSession,
     logout: clearAuthenticatedSession,
   };

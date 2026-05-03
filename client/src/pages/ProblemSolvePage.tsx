@@ -1999,6 +1999,8 @@ function SolvePageAuthOverlay({
 
     popup.focus();
     let isChecking = false;
+    let isCompleting = false;
+    let didClosedSessionCheck = false;
 
     let removeMessageListener = () => {};
 
@@ -2009,6 +2011,31 @@ function SolvePageAuthOverlay({
       }
       removeMessageListener();
       setIsSocialLoginSubmitting(false);
+    };
+
+    const completePopupAuthentication = async (shouldClosePopup: boolean) => {
+      if (isCompleting) {
+        return;
+      }
+
+      isCompleting = true;
+
+      try {
+        const session = await fetchSessionMe();
+        if (!session.authenticated) {
+          isCompleting = false;
+          return;
+        }
+
+        await completeAuthentication(session);
+        if (shouldClosePopup && !popup.closed) {
+          popup.close();
+        }
+        stopPolling();
+        onAuthenticated();
+      } catch {
+        isCompleting = false;
+      }
     };
 
     const handlePopupMessage = (event: MessageEvent) => {
@@ -2029,19 +2056,7 @@ function SolvePageAuthOverlay({
           return;
         }
 
-        try {
-          const session = await fetchSessionMe();
-          if (!session.authenticated) {
-            return;
-          }
-
-          await completeAuthentication(session);
-          popup.close();
-          stopPolling();
-          onAuthenticated();
-        } catch {
-          // 팝업 세션 확인 실패는 polling 재시도로 처리
-        }
+        await completePopupAuthentication(true);
       })();
     };
 
@@ -2060,6 +2075,10 @@ function SolvePageAuthOverlay({
 
       try {
         if (popup.closed) {
+          if (!didClosedSessionCheck) {
+            didClosedSessionCheck = true;
+            await completePopupAuthentication(false);
+          }
           stopPolling();
           return;
         }
@@ -2074,20 +2093,15 @@ function SolvePageAuthOverlay({
               setLoginErrors([getAuthSocialLoginErrorMessage(socialLoginError)]);
               return;
             }
+
+            if (popupUrl.searchParams.has('socialLoginSuccess')) {
+              await completePopupAuthentication(true);
+              return;
+            }
           }
         } catch {
           // 크로스 오리진 팝업은 location 접근을 허용하지 않음
         }
-
-        const session = await fetchSessionMe();
-        if (!session.authenticated) {
-          return;
-        }
-
-        await completeAuthentication(session);
-        popup.close();
-        stopPolling();
-        onAuthenticated();
       } catch {
         // 팝업 상태 확인 실패는 다음 polling 주기에서 다시 확인
       } finally {
@@ -2097,7 +2111,7 @@ function SolvePageAuthOverlay({
 
     socialLoginPopupPollIdRef.current = window.setInterval(() => {
       void pollPopupState();
-    }, 500);
+    }, 1500);
     void pollPopupState();
   };
 
@@ -4605,7 +4619,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     setIsSubmitting(true);
     setSubmitMessage(null);
-    setSubmitProgressSteps([]);
+    setSubmitProgressSteps([
+      createSubmitProgressStep('validate', 'running', text('PROBLEM_SOLVE_SUBMIT_REQUESTING_MESSAGE', '제출 요청을 전송하는 중입니다.')),
+    ]);
     setCollapsedCards((current) => ({
       ...current,
       submit: false,
@@ -5092,7 +5108,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     </div>
   );
 
-  const visibleExecutionRuns = executionRuns.filter((run) => run.status === 'success' || run.status === 'error');
+  const visibleExecutionRuns = executionRuns.filter((run) => run.status !== 'idle');
 
   const renderExecutionInlineRegion = (isFloating: boolean) => {
     if (visibleExecutionRuns.length === 0) {
@@ -5160,11 +5176,19 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                   >
                     {text('PROBLEM_SOLVE_STOP_BUTTON', '중지')}
                   </button>
-                  <button type="button" className="btn secondary" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
-                    {isExecuting ? text('PROBLEM_SOLVE_EXECUTING_LABEL', '실행 중') : text('PROBLEM_SOLVE_EXECUTE_SHORTCUT_LABEL', '실행 (Ctrl + Enter)')}
+                  <button type="button" className="btn secondary solve-editor-action-button" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
+                    {isExecuting ? <span className="solve-editor-statement-spinner" aria-hidden="true" /> : null}
+                    <span className="solve-action-label">
+                      {isExecuting ? text('PROBLEM_SOLVE_EXECUTING_LABEL', '실행 중') : text('PROBLEM_SOLVE_EXECUTE_BUTTON', '실행')}
+                    </span>
+                    {!isExecuting ? <span className="solve-action-shortcut">Ctrl + Enter</span> : null}
                   </button>
-                  <button type="button" className="btn primary" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
-                    {isSubmitting ? text('PROBLEM_SOLVE_SUBMITTING_LABEL', '제출 중') : text('PROBLEM_SOLVE_SUBMIT_SHORTCUT_LABEL', '제출 (Ctrl + Shift + Enter)')}
+                  <button type="button" className="btn primary solve-editor-action-button" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
+                    {isSubmitting ? <span className="solve-editor-statement-spinner" aria-hidden="true" /> : null}
+                    <span className="solve-action-label">
+                      {isSubmitting ? text('PROBLEM_SOLVE_SUBMITTING_LABEL', '제출 중') : text('PROBLEM_SOLVE_SUBMIT_BUTTON', '제출')}
+                    </span>
+                    {!isSubmitting ? <span className="solve-action-shortcut">Ctrl + Shift + Enter</span> : null}
                   </button>
                 </div>
               </div>

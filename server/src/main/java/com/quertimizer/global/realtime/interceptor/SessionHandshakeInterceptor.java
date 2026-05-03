@@ -1,8 +1,8 @@
 package com.quertimizer.global.realtime.interceptor;
 
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.auth.domain.policy.LoginPolicy;
-import com.quertimizer.global.exception.BusinessException;
+import com.quertimizer.auth.application.port.in.ResolveAuthenticatedHandleUseCase;
+import com.quertimizer.auth.application.port.in.ValidateAuthenticatedUserAccessUseCase;
+import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.log.LogFormatter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -27,24 +27,9 @@ import java.util.Map;
 public class SessionHandshakeInterceptor implements HandshakeInterceptor {
 
     private final LogFormatter logFormatter;
-    private final AuthService authService;
-    private final LoginPolicy loginPolicy;
+    private final ResolveAuthenticatedHandleUseCase resolveAuthenticatedHandle;
+    private final ValidateAuthenticatedUserAccessUseCase validateAuthenticatedUserAccess;
 
-    /**
-     * WebSocket handshake 요청을 인증하고 세션 속성을 준비한다.
-     *
-     * <ol>
-     *   <li>handshake 요청 로그 기록
-     *   <li>HTTP 세션 또는 principal 인증 정보 확인
-     *   <li>차단 사용자 검증
-     *   <li>WebSocket 세션 속성 저장
-     * </ol>
-     *
-     * @param request handshake HTTP 요청
-     * @param response handshake HTTP 응답
-     * @param wsHandler WebSocket handler
-     * @param attributes WebSocket 세션에 전달할 속성 map
-     */
     @Override
     public boolean beforeHandshake(ServerHttpRequest request,
                                    ServerHttpResponse response,
@@ -75,29 +60,17 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
-        String resolvedHandle = authService.resolveCurrentHandle(authentication.getName());
-        if (resolvedHandle == null || resolvedHandle.isBlank()) {
-            response.setStatusCode(HttpStatus.UNAUTHORIZED);
-            return false;
-        }
+        String userIdentifier = resolveHandshakeUserIdentifier(authentication);
 
         if (session == null) {
             session = httpServletRequest.getSession(true);
         }
 
-        attributes.put("handle", resolvedHandle);
+        attributes.put("handle", userIdentifier);
         attributes.put("sessionId", session.getId());
         return true;
     }
 
-    /**
-     * WebSocket handshake 성공 로그를 기록한다.
-     *
-     * @param request handshake HTTP 요청
-     * @param response handshake HTTP 응답
-     * @param wsHandler WebSocket handler
-     * @param exception handshake 처리 예외
-     */
     @Override
     public void afterHandshake(ServerHttpRequest request,
                                ServerHttpResponse response,
@@ -151,11 +124,22 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     private boolean isBlockedUser(Authentication authentication) {
         // 차단된 사용자 여부를 확인
         try {
-            loginPolicy.validateBlockedUser(authentication.getName());
+            validateAuthenticatedUserAccess.execute(authentication.getName());
             return false;
-        } catch (BusinessException exception) {
+        } catch (DomainRuleViolationException exception) {
             return true;
         }
+    }
+
+    private String resolveHandshakeUserIdentifier(Authentication authentication) {
+        // handle 존재 시 STOMP 사용자 식별자로 사용
+        String resolvedHandle = resolveAuthenticatedHandle.execute(authentication.getName());
+        if (resolvedHandle != null && !resolvedHandle.isBlank()) {
+            return resolvedHandle;
+        }
+
+        // handle 미설정 사용자는 인증 이메일을 STOMP 사용자 식별자로 사용
+        return authentication.getName();
     }
 
     private void logLines(java.util.List<String> logLines) {

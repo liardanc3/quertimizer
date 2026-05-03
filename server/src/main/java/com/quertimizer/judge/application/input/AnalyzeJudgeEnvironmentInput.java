@@ -1,7 +1,7 @@
 package com.quertimizer.judge.application.input;
 
-import com.quertimizer.judge.domain.entity.ids.JudgeEnvironmentId;
-import com.quertimizer.judge.domain.entity.ids.JudgeExecutionId;
+import com.quertimizer.judge.domain.entity.JudgeEnvironmentId;
+import com.quertimizer.judge.domain.entity.JudgeExecutionId;
 import com.quertimizer.judge.domain.model.ExecutionOptions;
 
 import java.util.Objects;
@@ -14,9 +14,9 @@ public class AnalyzeJudgeEnvironmentInput {
 
     public AnalyzeJudgeEnvironmentInput(JudgeExecutionId executionId, JudgeEnvironmentId environmentId,
                                      ExecutionOptions options) {
-        this.executionId = Objects.requireNonNull(executionId, "executionId must not be null");
-        this.environmentId = Objects.requireNonNull(environmentId, "environmentId must not be null");
-        this.options = Objects.requireNonNull(options, "options must not be null");
+        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없다.");
+        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
     }
 
     public JudgeExecutionId getExecutionId() {

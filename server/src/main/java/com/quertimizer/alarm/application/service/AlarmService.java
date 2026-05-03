@@ -4,8 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.alarm.application.output.AlarmCreatedOutput;
 import com.quertimizer.alarm.application.output.AlarmItemOutput;
-import com.quertimizer.alarm.application.port.AlarmNotifier;
-import com.quertimizer.alarm.application.port.UserAlarmRepository;
+import com.quertimizer.alarm.application.port.out.AlarmNotifierPort;
+import com.quertimizer.alarm.application.port.out.UserAlarmRepositoryPort;
 import com.quertimizer.alarm.domain.entity.AlarmTemplate;
 import com.quertimizer.alarm.domain.entity.UserAlarm;
 import com.quertimizer.alarm.domain.model.AlarmBinding;
@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static com.quertimizer.alarm.domain.model.AlarmLogMessage.BINDING_DESERIALIZE_FAILED;
@@ -28,8 +29,8 @@ import static com.quertimizer.alarm.domain.model.AlarmLogMessage.SOCKET_SEND_FAI
 @Transactional
 public class AlarmService {
 
-    private final UserAlarmRepository userAlarmRepository;
-    private final AlarmNotifier alarmNotifier;
+    private final UserAlarmRepositoryPort userAlarmRepository;
+    private final AlarmNotifierPort alarmNotifier;
     private final AlarmTemplateService alarmTemplateService;
     private final ObjectMapper objectMapper;
 
@@ -88,8 +89,17 @@ public class AlarmService {
 
         // 바인딩 JSON 역직렬화 실패 시 빈 바인딩 대체
         try {
-            return objectMapper.readValue(bindingsJson, new TypeReference<Map<String, AlarmBinding>>() {
-            });
+            Map<String, Map<String, String>> rawBindings = objectMapper.readValue(
+                    bindingsJson, new TypeReference<Map<String, Map<String, String>>>() {
+                    }
+            );
+            Map<String, AlarmBinding> bindings = new LinkedHashMap<>();
+            for (Map.Entry<String, Map<String, String>> entry : rawBindings.entrySet()) {
+                Map<String, String> binding = entry.getValue();
+                bindings.put(entry.getKey(), new AlarmBinding(binding.get("text"), binding.get("path"), binding.get("hash")));
+            }
+
+            return bindings;
         } catch (Exception exception) {
             log.warn(BINDING_DESERIALIZE_FAILED.getMessage(), exception);
             return Map.of();

@@ -9,12 +9,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import static com.quertimizer.problem.domain.model.ProblemAnswerHashConstant.COLUMN_DELIMITER;
+import static com.quertimizer.problem.domain.model.ProblemAnswerHashConstant.HEADER_DELIMITER;
+import static com.quertimizer.problem.domain.model.ProblemAnswerHashConstant.ROW_DELIMITER;
+
 final class ProblemAnswerHashSupport {
-
-    private static final char COLUMN_DELIMITER = 0x1F;
-    private static final char ROW_DELIMITER = 0x1E;
-    private static final char HEADER_DELIMITER = 0x1D;
-
     private ProblemAnswerHashSupport() {
     }
 

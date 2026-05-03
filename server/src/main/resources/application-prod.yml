@@ -91,6 +91,11 @@ spring:
         mime:
           charset: UTF-8
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
 app:
   frontend-base-url: ${FRONTEND_BASE_URL}
   mail:

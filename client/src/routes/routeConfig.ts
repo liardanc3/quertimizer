@@ -178,7 +178,5 @@ export function parseRoute(pathname: string): AppRoute {
 export function routeNeedsSession(route: AppRoute) {
   return route.type === 'admin'
     || route.type === 'communityWrite'
-    || route.type === 'communityEdit'
-    || (route.type === 'profile' && route.handle == null)
-    || (route.type === 'profileActivity' && route.handle == null);
+    || route.type === 'communityEdit';
 }

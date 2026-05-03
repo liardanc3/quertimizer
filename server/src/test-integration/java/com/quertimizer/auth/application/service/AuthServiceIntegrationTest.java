@@ -1,6 +1,6 @@
 package com.quertimizer.auth.application.service;
 
-import com.quertimizer.auth.application.port.VerificationCodeRepository;
+import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuthServiceIntegrationTest {
 
     @Autowired private AuthService authService;
-    @Autowired private VerificationCodeRepository verificationCodeRepository;
+    @Autowired private VerificationCodeRepositoryPort verificationCodeRepository;
 
     @Nested
     @DisplayName("Scheduled deleteExpiredRecoveryCode")

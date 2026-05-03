@@ -1,66 +1,22 @@
 package com.quertimizer.alarm.domain.entity;
 
 import com.quertimizer.alarm.domain.model.AlarmSpec;
-import com.quertimizer.user.domain.entity.User;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "user_alarm")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserAlarm {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "alarm_id", nullable = false)
     private Long alarmId;
-
-    @Column(name = "handle", nullable = false, length = 50)
     private String handle;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
-    private User user;
-
-    @Column(name = "alarm_type", nullable = false, length = 100)
     private String alarmType;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "alarm_type", insertable = false, updatable = false)
-    private AlarmTemplate alarmTemplate;
-
-    @Column(nullable = false, length = 120)
     private String title;
-
-    @Column(nullable = false, length = 500)
     private String message;
-
-    @Column(name = "target_path", nullable = false, length = 255)
     private String targetPath;
-
-    @Column(name = "target_hash", length = 255)
     private String targetHash;
-
-    @Column(name = "bindings_json", columnDefinition = "TEXT")
     private String bindingsJson;
-
-    @Column(nullable = false)
     private boolean read;
-
-    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     public static UserAlarm create(AlarmSpec alarmSpec, String bindingsJson) {
@@ -75,6 +31,20 @@ public class UserAlarm {
                 false,
                 LocalDateTime.now()
         );
+    }
+
+    public static UserAlarm restore(Long alarmId, String handle,
+                                    String alarmType, String title,
+                                    String message, String targetPath,
+                                    String targetHash, String bindingsJson,
+                                    boolean read, LocalDateTime createdAt) {
+        // 저장된 사용자 알람 상태 복원
+        UserAlarm userAlarm = new UserAlarm(
+                handle, alarmType, title, message, targetPath,
+                targetHash, bindingsJson, read, createdAt
+        );
+        userAlarm.alarmId = alarmId;
+        return userAlarm;
     }
 
     public void markRead() {

@@ -24,16 +24,6 @@ public class SessionStompLifecycleListener {
     private final SessionStompRegistry sessionStompRegistry;
     private final SessionStompSender sessionStompSender;
 
-    /**
-     * STOMP 연결 시작 시 HTTP 세션과 STOMP 세션을 연결한다.
-     *
-     * <ol>
-     *   <li>STOMP header에서 인증 handle과 세션 ID 추출
-     *   <li>HTTP 세션 기준 STOMP 세션 등록
-     * </ol>
-     *
-     * @param event STOMP 연결 시작 event
-     */
     @EventListener
     public void handleSessionConnect(SessionConnectEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
@@ -44,16 +34,6 @@ public class SessionStompLifecycleListener {
         sessionStompRegistry.register(httpSessionId, handle, stompSessionId);
     }
 
-    /**
-     * STOMP 응답 queue 구독 시 연결 완료 메시지를 전송한다.
-     *
-     * <ol>
-     *   <li>세션 응답 queue 구독 여부 확인
-     *   <li>구독한 STOMP 세션으로 연결 완료 메시지 전송
-     * </ol>
-     *
-     * @param event STOMP 구독 event
-     */
     @EventListener
     public void handleSessionSubscribe(SessionSubscribeEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
@@ -74,11 +54,6 @@ public class SessionStompLifecycleListener {
         }
     }
 
-    /**
-     * STOMP 연결 종료 시 세션 registry에서 제거한다.
-     *
-     * @param event STOMP 연결 종료 event
-     */
     @EventListener
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         sessionStompRegistry.unregister(event.getSessionId());

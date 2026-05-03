@@ -30,7 +30,7 @@ import {
   hasRequiredPasswordFormat,
   sanitizeVerificationCode,
 } from '../lib/authUi';
-import { getUiTextValue, useHomeSiteTitle, useUiText } from '../lib/uiText';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 
 const DUPLICATED_EMAIL_REASON = getUiTextValue('AUTH_EMAIL_DUPLICATED_MESSAGE', '이미 사용 중인 이메일입니다.');
 
@@ -150,8 +150,6 @@ export default function PublicHomePage() {
   const signupTitle = text('PUBLIC_HOME_SIGNUP_TITLE', '회원가입');
   const resetTitle = text('AUTH_RESET_TITLE', '비밀번호 찾기');
   const overlayPageTitle = isSignupOpen ? signupTitle : isResetPasswordOpen ? resetTitle : null;
-
-  useHomeSiteTitle(overlayPageTitle);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [password, setPassword] = useState('');

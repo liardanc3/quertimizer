@@ -1,9 +1,12 @@
 package com.quertimizer.judge.application.output;
 
+import lombok.Getter;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
+@Getter
 public class SqlExecutionResult {
 
     private final ExecutionMode mode;
@@ -27,63 +30,23 @@ public class SqlExecutionResult {
                               BigDecimal cost,
                               List<String> planLines,
                               String message) {
-        this.mode = Objects.requireNonNull(mode, "mode must not be null");
-        this.columns = List.copyOf(Objects.requireNonNull(columns, "columns must not be null"));
+        this.mode = Objects.requireNonNull(mode, "필수 값이 없다.");
+        this.columns = List.copyOf(Objects.requireNonNull(columns, "필수 값이 없다."));
         this.rows = copyRows(rows);
         this.rowCount = rowCount;
         this.currentPage = currentPage;
         this.pageSize = pageSize;
         this.executionTimeMs = executionTimeMs;
         this.cost = cost;
-        this.planLines = List.copyOf(Objects.requireNonNull(planLines, "planLines must not be null"));
+        this.planLines = List.copyOf(Objects.requireNonNull(planLines, "필수 값이 없다."));
         this.message = message;
     }
 
-    public ExecutionMode getMode() {
-        return mode;
-    }
-
-    public List<String> getColumns() {
-        return columns;
-    }
-
-    public List<List<String>> getRows() {
-        return rows;
-    }
-
-    public long getRowCount() {
-        return rowCount;
-    }
-
-    public int getCurrentPage() {
-        return currentPage;
-    }
-
-    public int getPageSize() {
-        return pageSize;
-    }
-
-    public Long getExecutionTimeMs() {
-        return executionTimeMs;
-    }
-
-    public BigDecimal getCost() {
-        return cost;
-    }
-
-    public List<String> getPlanLines() {
-        return planLines;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
     private List<List<String>> copyRows(List<List<String>> rows) {
-        Objects.requireNonNull(rows, "rows must not be null");
+        Objects.requireNonNull(rows, "필수 값이 없다.");
 
         return rows.stream()
-                .map(row -> List.copyOf(Objects.requireNonNull(row, "row must not be null"))).
+                .map(row -> List.copyOf(Objects.requireNonNull(row, "필수 값이 없다."))).
                 toList();
     }
 }

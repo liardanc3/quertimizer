@@ -6,9 +6,9 @@ import com.quertimizer.alarm.domain.model.CommunityCommentReplyAlarm;
 import com.quertimizer.alarm.domain.model.CommunityPostCommentAlarm;
 import com.quertimizer.alarm.domain.model.CommunityPostLikeAlarm;
 import com.quertimizer.community.application.output.CommunityCommentOutput;
-import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
-import com.quertimizer.community.application.port.CommunityPostLikeRepository;
-import com.quertimizer.community.application.port.CommunityPostTagRepository;
+import com.quertimizer.community.application.port.out.CommunityCommentLikeRepositoryPort;
+import com.quertimizer.community.application.port.out.CommunityPostLikeRepositoryPort;
+import com.quertimizer.community.application.port.out.CommunityPostTagRepositoryPort;
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
@@ -34,11 +34,10 @@ import java.util.Optional;
 @Transactional
 public class CommunityService {
 
-    private final CommunityPostTagRepository communityPostTagRepository;
-    private final CommunityPostLikeRepository communityPostLikeRepository;
-    private final CommunityCommentLikeRepository communityCommentLikeRepository;
+    private final CommunityPostTagRepositoryPort communityPostTagRepository;
+    private final CommunityPostLikeRepositoryPort communityPostLikeRepository;
+    private final CommunityCommentLikeRepositoryPort communityCommentLikeRepository;
     private final AlarmService alarmService;
-
     public Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
         // 게시글 번호별 태그 저장소 준비
         Map<Long, List<String>> tagsByPostId = new HashMap<>();

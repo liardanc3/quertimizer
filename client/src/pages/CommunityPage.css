@@ -597,7 +597,15 @@
 }
 
 .community-page .community-empty-row {
+  grid-template-columns: minmax(0, 1fr);
   background: transparent;
+}
+
+.community-page .community-empty-row .submit-history-empty-cell {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  width: 100%;
+  text-align: center;
 }
 
 .community-page .community-error-state {

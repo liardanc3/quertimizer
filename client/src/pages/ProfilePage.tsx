@@ -5,11 +5,6 @@ import {
   fetchCommunityPostsByUser,
   fetchLikedCommentsByUser,
   fetchLikedPostsByUser,
-  fetchMyCommunityActivities,
-  fetchMyCommunityComments,
-  fetchMyCommunityPosts,
-  fetchMyLikedComments,
-  fetchMyLikedPosts,
   uploadCommunityImage,
   type ProfileCommunityActivityPage,
   type ProfileCommunityComment,
@@ -24,9 +19,6 @@ import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '../lib/navigation';
 import { createCroppedImageFile, type ImageCropAreaPixels } from '../lib/imageCrop';
 import {
-  fetchMyProfileSummary,
-  fetchMySolvedProblems,
-  fetchMySubmissionSummary,
   fetchProfileSummary,
   fetchSolvedProblems,
   fetchSubmissionSummary,
@@ -531,23 +523,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const [savingSection, setSavingSection] = useState<ProfileSaveSection | null>(null);
   const [isLinkEditingMode, setIsLinkEditingMode] = useState(false);
   const [editingLinkSnapshots, setEditingLinkSnapshots] = useState<Record<number, UserProfileLink | null>>({});
-  const shouldLoadOwnProfile = profileHandle == null && isAuthenticated;
   const resolvedProfileId = profileHandle ?? currentHandle;
   const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
     { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
     { value: 'mysql', label: text('COMMON_MYSQL_LABEL', 'MySQL') },
   ];
-  const isOwnProfile = shouldLoadOwnProfile || (isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle);
-  const profileRequestKey = profileHandle ?? (shouldLoadOwnProfile ? '__my-profile__' : resolvedProfileId ?? '__empty-profile__');
+  const isOwnProfile = isAuthenticated && currentHandle != null && resolvedProfileId === currentHandle;
+  const profileRequestKey = resolvedProfileId ?? '__empty-profile__';
   const profileTabLabel = profileSummary?.handle ?? resolvedProfileId ?? currentHandle ?? text('PROFILE_PROFILE_SECTION_TITLE', '프로필');
   const profileBasePath =
-    profileHandle != null
-      ? getProfilePath(profileHandle)
-      : isOwnProfile
-        ? getProfilePath()
-        : resolvedProfileId != null
-          ? getProfilePath(resolvedProfileId)
-          : getProfilePath();
+    resolvedProfileId != null
+      ? getProfilePath(resolvedProfileId)
+      : getProfilePath();
   const activeTopTab = readProfileTopTab(locationSearch || window.location.search, isOwnProfile);
   const isAlarmListOpen = activeTopTab === 'alarms';
   const isProfileEditorBusy = savingSection != null;
@@ -557,7 +544,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       return;
     }
 
-    if (!shouldLoadOwnProfile && !resolvedProfileId) {
+    if (!resolvedProfileId) {
       setProfileSummary(null);
       setSolvedProblems(emptySolvedProblems);
       setAuthoredPosts([]);
@@ -587,13 +574,13 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     setIsLinkEditingMode(false);
     setEditingLinkSnapshots({});
 
-    const profileSummaryRequest = isOwnProfile ? fetchMyProfileSummary() : fetchProfileSummary(resolvedProfileId!);
-    const solvedProblemsRequest = isOwnProfile ? fetchMySolvedProblems() : fetchSolvedProblems(resolvedProfileId!);
-    const postsRequest = isOwnProfile ? fetchMyCommunityPosts() : fetchCommunityPostsByUser(resolvedProfileId!);
-    const likedPostsRequest = isOwnProfile ? fetchMyLikedPosts() : fetchLikedPostsByUser(resolvedProfileId!);
-    const commentsRequest = isOwnProfile ? fetchMyCommunityComments() : fetchCommunityCommentsByUser(resolvedProfileId!);
-    const likedCommentsRequest = isOwnProfile ? fetchMyLikedComments() : fetchLikedCommentsByUser(resolvedProfileId!);
-    const submissionSummaryRequest = isOwnProfile ? fetchMySubmissionSummary() : fetchSubmissionSummary(resolvedProfileId!);
+    const profileSummaryRequest = fetchProfileSummary(resolvedProfileId);
+    const solvedProblemsRequest = fetchSolvedProblems(resolvedProfileId);
+    const postsRequest = fetchCommunityPostsByUser(resolvedProfileId);
+    const likedPostsRequest = fetchLikedPostsByUser(resolvedProfileId);
+    const commentsRequest = fetchCommunityCommentsByUser(resolvedProfileId);
+    const likedCommentsRequest = fetchLikedCommentsByUser(resolvedProfileId);
+    const submissionSummaryRequest = fetchSubmissionSummary(resolvedProfileId);
 
     Promise.allSettled([
       profileSummaryRequest,
@@ -645,7 +632,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       }
 
       setProfileSummary(summaryResult.value);
-      if (shouldLoadOwnProfile) {
+      if (isOwnProfile) {
         patchSessionSnapshot({
           handle: summaryResult.value.handle,
           defaultDbms: summaryResult.value.defaultDbms,
@@ -676,7 +663,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     return () => {
       cancelled = true;
     };
-  }, [isOwnProfile, isReady, profileReloadKey, profileRequestKey, shouldLoadOwnProfile]);
+  }, [isOwnProfile, isReady, profileReloadKey, profileRequestKey]);
 
   const heroLinks = useMemo(() => createHeroLinks(profileSummary?.links ?? []), [profileSummary?.links]);
   const editingHeroLinks = useMemo(() => createHeroLinks(editDraft?.links ?? []), [editDraft?.links]);
@@ -784,7 +771,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }, [isEditOpen, profileSummary?.handle]);
 
   useEffect(() => {
-    if (!isOwnProfile && !resolvedProfileId) {
+    if (!resolvedProfileId) {
       return;
     }
 
@@ -793,9 +780,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     setProfileCommunityActivityErrorMessage(null);
     setProfileCommunityActivityErrorStatus(null);
 
-    const request = isOwnProfile
-      ? fetchMyCommunityActivities(profileCommunityActivityPage, PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE)
-      : fetchCommunityActivitiesByUser(resolvedProfileId!, profileCommunityActivityPage, PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE);
+    const request = fetchCommunityActivitiesByUser(resolvedProfileId, profileCommunityActivityPage, PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE);
 
     request
       .then((nextCommunityActivityPage) => {
@@ -892,7 +877,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     return <ProfileLoadingShell label={profileTabLabel} />;
   }
 
-  if (!shouldLoadOwnProfile && !resolvedProfileId) {
+  if (!resolvedProfileId) {
     return (
       <ProfileStatePage
         label={text('PROFILE_PROFILE_SECTION_TITLE', '프로필')}

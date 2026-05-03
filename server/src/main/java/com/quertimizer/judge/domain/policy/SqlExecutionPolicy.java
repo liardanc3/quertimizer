@@ -1,7 +1,7 @@
 package com.quertimizer.judge.domain.policy;
 
 import com.quertimizer.judge.application.output.ExecutionMode;
-import com.quertimizer.judge.infrastructure.runtime.SqlStatementParser;
+import com.quertimizer.judge.application.service.SqlStatementParser;
 
 import java.util.List;
 import java.util.Locale;
@@ -15,17 +15,6 @@ public class SqlExecutionPolicy {
         this.statementParser = Objects.requireNonNull(statementParser, "SQL 문장 파서가 필요합니다.");
     }
 
-    /**
-     * 실행 대상 SQL 문장의 실행 모드를 결정한다.
-     *
-     * <ol>
-     *   <li>단일 SQL 문장 검증과 정규화
-     *   <li>실행 모드 분류
-     * </ol>
-     *
-     * @param sql 실행 모드를 결정할 SQL 문장
-     * @return 실행 모드
-     */
     public ExecutionMode resolveMode(String sql) {
         String normalizedSql = validateSingleStatement(sql);
 

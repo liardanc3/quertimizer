@@ -62,15 +62,15 @@ function getAdminTabLabel(tab: AdminTab) {
 
 export default function AdminPage() {
   const { text } = useUiText();
-  const { isReady, isAuthenticated, isAdmin, isProblemGenerator } = useSession();
+  const { isReady, isAuthenticated, isAdmin } = useSession();
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const requestedTab = readAdminTabFromSearch(locationSearch || window.location.search);
-  const selectedTab = !isReady ? requestedTab : isProblemGenerator && !isAdmin ? 'problemCreate' : requestedTab;
+  const selectedTab = requestedTab;
   const usesCompactContentGap = shouldUseCompactContentGap(selectedTab);
   const adminPageClassName = `page-stack admin-page ${usesCompactContentGap ? 'is-compact-content-gap ' : ''}${
     selectedTab === 'globalConfig' ? 'is-global-config-tab' : ''
   }`.trim();
-  const canAccessAdminPage = isAuthenticated && (isAdmin || isProblemGenerator);
+  const canAccessAdminPage = isAuthenticated && isAdmin;
 
   function handleTabSelect(tab: AdminTab) {
     const nextPath = buildAdminPath(tab);
@@ -163,7 +163,7 @@ export default function AdminPage() {
     return (
       <div className="page-stack">
         <section className="panel-card">
-          <p className="content-text">{text('ADMIN_ACCESS_DENIED_MESSAGE', '관리자 또는 ProblemGenerator만 접근할 수 있습니다.')}</p>
+          <p className="content-text">{text('ADMIN_ACCESS_DENIED_MESSAGE', '관리자만 접근할 수 있습니다.')}</p>
         </section>
       </div>
     );
@@ -182,62 +182,54 @@ export default function AdminPage() {
           >
             {text('ADMIN_PROBLEM_MANAGE_TAB', '문제 관리')}
           </button>
-          {isAdmin ? (
-            <>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedTab === 'globalConfig'}
-                className={`solve-dbms-tab ${selectedTab === 'globalConfig' ? 'is-selected' : ''}`}
-                onClick={() => handleTabSelect('globalConfig')}
-              >
-                {text('ADMIN_UI_TEXT_TAB', 'UI 텍스트 설정')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedTab === 'alarmManagement'}
-                className={`solve-dbms-tab ${selectedTab === 'alarmManagement' ? 'is-selected' : ''}`}
-                onClick={() => handleTabSelect('alarmManagement')}
-              >
-                {text('ADMIN_ALARM_TEMPLATE_TAB', '알람 템플릿 설정')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedTab === 'alarmSend'}
-                className={`solve-dbms-tab ${selectedTab === 'alarmSend' ? 'is-selected' : ''}`}
-                onClick={() => handleTabSelect('alarmSend')}
-              >
-                {text('ADMIN_ALARM_SEND_TAB', '알람 전송')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedTab === 'permissionManagement'}
-                className={`solve-dbms-tab ${selectedTab === 'permissionManagement' ? 'is-selected' : ''}`}
-                onClick={() => handleTabSelect('permissionManagement')}
-              >
-                {text('ADMIN_PERMISSION_TAB', '권한 설정')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedTab === 'anomalyDetection'}
-                className={`solve-dbms-tab ${selectedTab === 'anomalyDetection' ? 'is-selected' : ''}`}
-                onClick={() => handleTabSelect('anomalyDetection')}
-              >
-                {text('ADMIN_ANOMALY_TAB', '이상계정 감지')}
-              </button>
-            </>
-          ) : null}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === 'globalConfig'}
+            className={`solve-dbms-tab ${selectedTab === 'globalConfig' ? 'is-selected' : ''}`}
+            onClick={() => handleTabSelect('globalConfig')}
+          >
+            {text('ADMIN_UI_TEXT_TAB', 'UI 텍스트 설정')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === 'alarmManagement'}
+            className={`solve-dbms-tab ${selectedTab === 'alarmManagement' ? 'is-selected' : ''}`}
+            onClick={() => handleTabSelect('alarmManagement')}
+          >
+            {text('ADMIN_ALARM_TEMPLATE_TAB', '알람 템플릿 설정')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === 'alarmSend'}
+            className={`solve-dbms-tab ${selectedTab === 'alarmSend' ? 'is-selected' : ''}`}
+            onClick={() => handleTabSelect('alarmSend')}
+          >
+            {text('ADMIN_ALARM_SEND_TAB', '알람 전송')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === 'permissionManagement'}
+            className={`solve-dbms-tab ${selectedTab === 'permissionManagement' ? 'is-selected' : ''}`}
+            onClick={() => handleTabSelect('permissionManagement')}
+          >
+            {text('ADMIN_PERMISSION_TAB', '권한 설정')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === 'anomalyDetection'}
+            className={`solve-dbms-tab ${selectedTab === 'anomalyDetection' ? 'is-selected' : ''}`}
+            onClick={() => handleTabSelect('anomalyDetection')}
+          >
+            {text('ADMIN_ANOMALY_TAB', '이상계정 감지')}
+          </button>
           <FavoriteTabButton
             className="favorite-tab-toggle-end"
-            label={
-              isAdmin
-                ? text('ADMIN_FAVORITE_LABEL', { tab: getAdminTabLabel(selectedTab) }, `관리자 / ${getAdminTabLabel(selectedTab)}`)
-                : text('ADMIN_PROBLEM_GENERATOR_FAVORITE_LABEL', { tab: getAdminTabLabel(selectedTab) }, `문제 관리 / ${getAdminTabLabel(selectedTab)}`)
-            }
+            label={text('ADMIN_FAVORITE_LABEL', { tab: getAdminTabLabel(selectedTab) }, `관리자 / ${getAdminTabLabel(selectedTab)}`)}
             path={buildAdminPath(selectedTab)}
           />
         </div>
@@ -245,17 +237,17 @@ export default function AdminPage() {
 
       {selectedTab === 'problemCreate' ? (
         <ProblemCreateContent />
-      ) : isAdmin && selectedTab === 'globalConfig' ? (
+      ) : selectedTab === 'globalConfig' ? (
         <GlobalConfigContent />
-      ) : isAdmin && selectedTab === 'alarmManagement' ? (
+      ) : selectedTab === 'alarmManagement' ? (
         <AlarmManageContent />
-      ) : isAdmin && selectedTab === 'alarmSend' ? (
+      ) : selectedTab === 'alarmSend' ? (
         <AlarmSendContent />
-      ) : isAdmin && selectedTab === 'permissionManagement' ? (
+      ) : selectedTab === 'permissionManagement' ? (
         <AuthManageContent />
-      ) : isAdmin ? (
+      ) : (
         <AnomalyManageContent />
-      ) : null}
+      )}
     </div>
   );
 }

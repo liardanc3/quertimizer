@@ -1,69 +1,32 @@
 package com.quertimizer.problem.application.service;
 
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.global.constant.ExecutionPlanElementIndexes;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.application.output.ProblemDetailOutput;
+import com.quertimizer.problem.application.output.ProblemListEntry;
 import com.quertimizer.problem.application.output.ProblemListItemOutput;
 import com.quertimizer.problem.application.output.ProblemSubmittedHistoryOutput;
-import com.quertimizer.problem.application.port.ProblemGeneratorPermissionRepository;
-import com.quertimizer.problem.application.store.ProblemStore;
 import com.quertimizer.problem.domain.entity.Problem;
-import com.quertimizer.problem.domain.entity.ProblemGeneratorPermission;
 import com.quertimizer.problem.domain.entity.ProblemSet;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import com.quertimizer.problem.domain.policy.ProblemManagementPolicy;
-import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.DBMS_REQUIRED;
-import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_MANAGEMENT_ACCESS_DENIED;
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_SET_ID_REQUIRED;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProblemService {
-
-    private final ProblemGeneratorPermissionRepository problemGeneratorPermissionRepository;
-    private final AuthService authService;
-    private final ProblemManagementPolicy problemManagementPolicy;
-
     public DbmsType resolveDbmsType(String dbms) {
         // 요청 DBMS 값을 내부 유형으로 정규화
         return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
-    }
-
-    public User requireProblemManagementUser(String authenticatedEmail) {
-        // 인증 사용자 조회 후 문제 관리 검증 및 사용자 반환
-        return authService.findAuthenticatedUser(authenticatedEmail)
-                .map(user -> {
-                    problemManagementPolicy.validateProblemManagementUser(user);
-                    return user;
-                })
-                .orElseThrow(() -> new BusinessException(PROBLEM_MANAGEMENT_ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN));
-    }
-
-    public void validateProblemSetAccess(User currentUser, String scopedProblemSetId) {
-        // 문제 테이블셋 접근 권한 검증
-        problemManagementPolicy.validateProblemSetAccess(currentUser, findPermissionKeys(currentUser.getHandle()), scopedProblemSetId);
-    }
-
-    public Set<String> findPermissionKeys(String handle) {
-        // 문제 생성자 권한 키 조회와 정책 정규화
-        return problemGeneratorPermissionRepository.findAllByIdHandleOrderByIdProblemIdAsc(handle).stream()
-                .map(ProblemGeneratorPermission::getProblemId)
-                .map(problemManagementPolicy::normalizePermissionKey)
-                .filter(permissionKey -> !permissionKey.isBlank())
-                .collect(Collectors.toSet());
     }
 
     public String normalizeProblemSetId(String problemSetId) {
@@ -79,7 +42,7 @@ public class ProblemService {
         String normalizedProblemSetId = normalizeProblemSetId(problemSetId);
 
         // 이미 스코프가 포함된 문제 테이블셋 번호 여부 검사
-        if (problemManagementPolicy.isScopedProblemSetId(normalizedProblemSetId)) {
+        if (DbmsType.isScopedProblemSetId(normalizedProblemSetId)) {
             return normalizedProblemSetId;
         }
 
@@ -114,28 +77,18 @@ public class ProblemService {
         return DbmsType.extractBaseProblemSetId(scopedProblemSetId);
     }
 
-    public String requireText(String value, String message) {
-        // 필수 문자열 null 또는 공백 여부 검사
-        if (value == null || value.isBlank()) {
-            throw new BusinessException(message, HttpStatus.BAD_REQUEST);
-        }
-
-        // 필수 문자열 공백 제거 후 반환
-        return value.trim();
-    }
-
     public String normalizeOptionalText(String value) {
         // 선택 문자열 공백 제거와 null 정규화
         return value != null ? value.trim() : "";
     }
 
-    public ProblemListItemOutput toProblemListItemOutput(ProblemStore.ProblemListEntry problemEntry) {
+    public ProblemListItemOutput toProblemListItemOutput(ProblemListEntry problemEntry) {
         // 문제 목록 항목과 제출 이력 응답 변환
         return new ProblemListItemOutput(
-                problemEntry.problem().getProblemId(), problemEntry.problem().getTitle(),
-                problemEntry.problem().getDescription(), problemEntry.totalSubmitCount(),
-                problemEntry.successSubmitCount(), problemEntry.spreadRate(),
-                problemEntry.submittedHistories().stream().map(this::toProblemSubmittedHistoryOutput).toList()
+                problemEntry.getProblem().getProblemId(), problemEntry.getProblem().getTitle(),
+                problemEntry.getProblem().getDescription(), problemEntry.getTotalSubmitCount(),
+                problemEntry.getSuccessSubmitCount(), problemEntry.getSpreadRate(),
+                problemEntry.getSubmittedHistories().stream().map(this::toProblemSubmittedHistoryOutput).toList()
         );
     }
 

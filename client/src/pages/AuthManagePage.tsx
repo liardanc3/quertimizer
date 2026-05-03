@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import HttpErrorState from '../components/common/HttpErrorState';
 import { LoadingOverlay } from '../components/common/LoadingSpinner';
 import Pagination from '../components/common/Pagination';
@@ -7,7 +7,6 @@ import useDismissableLayer from '../hooks/useDismissableLayer';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '../lib/apiError';
 import {
   fetchAuthManage,
-  updateProblemGeneratorPermissions,
   updateUserRole,
   type AuthManageData,
   type AuthManageRoleValue,
@@ -15,9 +14,9 @@ import {
 } from '../lib/authManage';
 import { getUiTextValue, useUiText } from '../lib/uiText';
 
-type AuthManageSection = 'admin' | 'user' | 'problemGenerator';
+type AuthManageSection = 'admin' | 'user';
 
-const ROLE_VALUES: AuthManageRoleValue[] = ['admin', 'user', 'problemGenerator'];
+const ROLE_VALUES: AuthManageRoleValue[] = ['admin', 'user'];
 
 function RoleEditIcon() {
   return (
@@ -41,29 +40,9 @@ function RoleEditIcon() {
   );
 }
 
-function AddIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M10 4.4v11.2M4.4 10h11.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function RemoveIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m5.3 5.3 9.4 9.4m0-9.4-9.4 9.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-    </svg>
-  );
-}
-
 function resolveRoleLabel(role: AuthManageRoleValue) {
   if (role === 'admin') {
     return getUiTextValue('AUTH_MANAGE_ADMIN_LABEL', 'Admin');
-  }
-
-  if (role === 'problemGenerator') {
-    return getUiTextValue('AUTH_MANAGE_PROBLEM_GENERATOR_LABEL', 'ProblemGenerator');
   }
 
   return getUiTextValue('AUTH_MANAGE_USER_LABEL', 'User');
@@ -74,41 +53,7 @@ function resolveStaticNote(role: AuthManageRoleValue) {
     return getUiTextValue('AUTH_MANAGE_ADMIN_NOTE', '전체 권한');
   }
 
-  if (role === 'user') {
-    return getUiTextValue('AUTH_MANAGE_USER_NOTE', '일반 사용자');
-  }
-
-  return '';
-}
-
-function normalizePermissionKey(value: string) {
-  const normalizedValue = value.trim().toUpperCase();
-  if (normalizedValue === '') {
-    return '';
-  }
-
-  if (normalizedValue === 'NEW') {
-    return 'NEW';
-  }
-
-  if (/^\d{5}$/.test(normalizedValue) || /^\d{5}-\d{5}$/.test(normalizedValue)) {
-    return `P${normalizedValue}`;
-  }
-
-  return normalizedValue;
-}
-
-function sortPermissionKeys(permissionKeys: string[]) {
-  return [...permissionKeys].sort((left, right) => {
-    const leftRank = left === 'NEW' ? 0 : /^[PM]\d{5}$/.test(left) ? 1 : /^[PM]\d{5}-\d{5}$/.test(left) ? 2 : 3;
-    const rightRank = right === 'NEW' ? 0 : /^[PM]\d{5}$/.test(right) ? 1 : /^[PM]\d{5}-\d{5}$/.test(right) ? 2 : 3;
-
-    if (leftRank !== rightRank) {
-      return leftRank - rightRank;
-    }
-
-    return left.localeCompare(right);
-  });
+  return getUiTextValue('AUTH_MANAGE_USER_NOTE', '일반 사용자');
 }
 
 export function AuthManageContent() {
@@ -122,10 +67,7 @@ export function AuthManageContent() {
   const [activeSection, setActiveSection] = useState<AuthManageSection>('admin');
   const [currentPage, setCurrentPage] = useState(1);
   const [openRoleMenuHandle, setOpenRoleMenuHandle] = useState<string | null>(null);
-  const [permissionInputDrafts, setPermissionInputDrafts] = useState<Record<string, string>>({});
-  const [permissionErrorMessages, setPermissionErrorMessages] = useState<Record<string, string>>({});
   const [savingRoleHandle, setSavingRoleHandle] = useState<string | null>(null);
-  const [savingPermissionHandle, setSavingPermissionHandle] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const dismissLayerRefs = useMemo(() => [panelRef], []);
   const roleOptions = ROLE_VALUES.map((value) => ({ value, label: resolveRoleLabel(value) }));
@@ -152,8 +94,6 @@ export function AuthManageContent() {
         }
 
         setAuthManage(nextAuthManage);
-        setPermissionInputDrafts({});
-        setPermissionErrorMessages({});
         setCurrentPage(1);
       } catch (error) {
         if (!cancelled) {
@@ -221,52 +161,6 @@ export function AuthManageContent() {
     }
   }
 
-  async function handlePermissionChange(handle: string, nextPermissionKeys: string[]) {
-    setSavingPermissionHandle(handle);
-    setPermissionErrorMessages((current) => ({ ...current, [handle]: '' }));
-
-    try {
-      await updateProblemGeneratorPermissions(handle, sortPermissionKeys(nextPermissionKeys));
-      setReloadSequence((value) => value + 1);
-    } catch (error) {
-      setPermissionErrorMessages((current) => ({
-        ...current,
-        [handle]: error instanceof Error ? error.message : text('AUTH_MANAGE_PERMISSION_SAVE_FAIL_MESSAGE', '문제 권한을 저장하지 못했습니다.'),
-      }));
-    } finally {
-      setSavingPermissionHandle((current) => (current === handle ? null : current));
-    }
-  }
-
-  async function handlePermissionAdd(user: AuthManageUserRowData) {
-    const draftValue = normalizePermissionKey(permissionInputDrafts[user.handle] ?? '');
-    if (draftValue === '') {
-      return;
-    }
-
-    if (user.permissionKeys.includes(draftValue)) {
-      setPermissionInputDrafts((current) => ({ ...current, [user.handle]: '' }));
-      return;
-    }
-
-    await handlePermissionChange(user.handle, [...user.permissionKeys, draftValue]);
-    setPermissionInputDrafts((current) => ({ ...current, [user.handle]: '' }));
-  }
-
-  async function handlePermissionRemove(user: AuthManageUserRowData, permissionKey: string) {
-    await handlePermissionChange(
-      user.handle,
-      user.permissionKeys.filter((currentPermissionKey) => currentPermissionKey !== permissionKey),
-    );
-  }
-
-  function handlePermissionInputKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, user: AuthManageUserRowData) {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      void handlePermissionAdd(user);
-    }
-  }
-
   return (
     <section ref={panelRef} className="panel-card admin-auth-panel">
       {errorMessage && authManage != null ? <p className="admin-auth-feedback is-error">{errorMessage}</p> : null}
@@ -315,7 +209,6 @@ export function AuthManageContent() {
 
               {pagedUsers.map((user) => {
                 const isRoleSaving = savingRoleHandle === user.handle;
-                const isPermissionSaving = savingPermissionHandle === user.handle;
                 const staticNote = resolveStaticNote(user.role);
 
                 return (
@@ -358,51 +251,7 @@ export function AuthManageContent() {
                     </div>
 
                     <div className="admin-auth-note-cell" role="cell">
-                      {user.role !== 'problemGenerator' ? (
-                        <span className="admin-auth-note-text">{staticNote}</span>
-                      ) : (
-                        <div className="admin-auth-permission-editor">
-                          <div className="admin-auth-chip-list">
-                            {user.permissionKeys.map((permissionKey) => (
-                              <span key={permissionKey} className="admin-auth-chip">
-                                <span>{permissionKey}</span>
-                                <button
-                                  type="button"
-                                  className="admin-auth-chip-remove"
-                                  aria-label={text('AUTH_MANAGE_PERMISSION_REMOVE_LABEL', { permissionKey }, `${permissionKey} 권한 제거`)}
-                                  onClick={() => void handlePermissionRemove(user, permissionKey)}
-                                  disabled={isPermissionSaving}
-                                >
-                                  <RemoveIcon />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-
-                          <div className="admin-auth-permission-input-row">
-                            <input
-                              className="text-field admin-auth-permission-input"
-                              value={permissionInputDrafts[user.handle] ?? ''}
-                              onChange={(event) => setPermissionInputDrafts((current) => ({ ...current, [user.handle]: event.target.value }))}
-                              onKeyDown={(event) => handlePermissionInputKeyDown(event, user)}
-                              placeholder={text('AUTH_MANAGE_PERMISSION_PLACEHOLDER', 'NEW, P00001, P00001-00001')}
-                              disabled={isPermissionSaving}
-                            />
-                            <button
-                              type="button"
-                              className="admin-config-icon-button admin-auth-permission-add-button"
-                              aria-label={text('AUTH_MANAGE_PERMISSION_ADD_LABEL', '권한 추가')}
-                              onClick={() => void handlePermissionAdd(user)}
-                              disabled={isPermissionSaving}
-                            >
-                              <AddIcon />
-                            </button>
-                          </div>
-
-                          <p className="admin-auth-permission-helper">{text('AUTH_MANAGE_PERMISSION_HELPER', 'NEW, 테이블셋 번호, 문제 번호를 태그처럼 관리합니다.')}</p>
-                          {permissionErrorMessages[user.handle] ? <p className="admin-auth-row-feedback is-error">{permissionErrorMessages[user.handle]}</p> : null}
-                        </div>
-                      )}
+                      <span className="admin-auth-note-text">{staticNote}</span>
                     </div>
                   </div>
                 );

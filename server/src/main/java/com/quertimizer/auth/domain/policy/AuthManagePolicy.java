@@ -1,83 +1,40 @@
 package com.quertimizer.auth.domain.policy;
 
 import com.quertimizer.global.constant.UserRole;
-import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
+import com.quertimizer.global.exception.DomainRuleViolationException;
+import com.quertimizer.global.exception.DomainRuleViolationType;
 
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.LAST_ADMIN_PROTECTION;
-import static com.quertimizer.auth.domain.model.AuthManageFailReason.PROBLEM_GENERATOR_REQUIRED;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.SELF_ADMIN_REMOVAL_DENIED;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.SENSITIVE_CONFIRMATION_REQUIRED;
 
-@Component
-@RequiredArgsConstructor
 public class AuthManagePolicy {
 
-    private final UserRepository userRepository;
-
-    /**
-     * 민감한 권한 변경 확인 문구를 검증한다.
-     *
-     * @param confirmationText 사용자가 입력한 확인 문구
-     */
     public void validateSensitiveConfirmation(String confirmationText) {
+        // 민감 작업 확인 값 검증
         if (!"ROLE_CHANGE_CONFIRMED".equals(confirmationText)) {
-            throw new BusinessException(SENSITIVE_CONFIRMATION_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
+            throw new DomainRuleViolationException(SENSITIVE_CONFIRMATION_REQUIRED.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
         }
     }
 
-    /**
-     * 마지막 Admin 역할 해제를 차단한다.
-     *
-     * <ol>
-     *   <li>Admin 역할 해제 여부 확인
-     *   <li>현재 Admin 수 검증
-     * </ol>
-     *
-     * @param currentRole 변경 대상 사용자의 현재 역할
-     * @param nextRole 변경하려는 다음 역할
-     */
-    public void validateAdminRoleChange(UserRole currentRole, UserRole nextRole) {
+    public void validateAdminRoleChange(UserRole currentRole, UserRole nextRole, long adminCount) {
+        // 마지막 Admin 권한 제거 여부 검증
         if (currentRole != UserRole.ADMIN || nextRole == UserRole.ADMIN) {
             return;
         }
 
-        long adminCount = userRepository.findAllByOrderByHandleAsc().stream()
-                .filter(user -> user.getResolvedRole() == UserRole.ADMIN)
-                .count();
         if (adminCount <= 1) {
-            throw new BusinessException(LAST_ADMIN_PROTECTION.getMessage(), HttpStatus.BAD_REQUEST);
+            throw new DomainRuleViolationException(LAST_ADMIN_PROTECTION.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
         }
     }
 
-    /**
-     * 본인의 Admin 역할 해제를 차단한다.
-     *
-     * @param actorEmail 권한 변경을 요청한 사용자 이메일
-     * @param targetEmail 권한 변경 대상 사용자 이메일
-     * @param currentRole 변경 대상 사용자의 현재 역할
-     * @param nextRole 변경하려는 다음 역할
-     */
     public void validateSelfAdminRemoval(String actorEmail, String targetEmail, UserRole currentRole, UserRole nextRole) {
+        // 자기 자신의 Admin 권한 제거 여부 검증
         if (currentRole == UserRole.ADMIN
                 && nextRole != UserRole.ADMIN
                 && actorEmail != null
                 && actorEmail.equalsIgnoreCase(targetEmail)) {
-            throw new BusinessException(SELF_ADMIN_REMOVAL_DENIED.getMessage(), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * ProblemGenerator 역할 사용자만 문제 권한을 수정하게 한다.
-     *
-     * @param role 권한 수정 대상 사용자의 현재 역할
-     */
-    public void validateProblemGeneratorRole(UserRole role) {
-        if (role != UserRole.PROBLEM_GENERATOR) {
-            throw new BusinessException(PROBLEM_GENERATOR_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
+            throw new DomainRuleViolationException(SELF_ADMIN_REMOVAL_DENIED.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
         }
     }
 }

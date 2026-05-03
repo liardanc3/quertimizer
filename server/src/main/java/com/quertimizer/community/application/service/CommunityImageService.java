@@ -1,20 +1,19 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.community.application.input.CommunityImageUploadInput;
 import com.quertimizer.community.application.output.CommunityImageOutput;
 import com.quertimizer.community.domain.model.CommunityImageConstant;
 import com.quertimizer.community.domain.model.CommunityImageFileInfo;
 import com.quertimizer.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -33,24 +32,24 @@ public class CommunityImageService {
     @Value("${app.community.image-storage-path:build/community-images}")
     private String imageStoragePath;
 
-    public CommunityImageFileInfo validateImageFile(MultipartFile file) {
+    public CommunityImageFileInfo validateImageFile(CommunityImageUploadInput input) {
         // 업로드 이미지 파일 존재 여부 검사
-        if (file == null || file.isEmpty()) {
+        if (input == null || input.isEmpty()) {
             throw new BusinessException("이미지 파일을 첨부해 주세요.", HttpStatus.BAD_REQUEST);
         }
 
         // 업로드 이미지 파일 크기 제한 검사
-        if (file.getSize() > CommunityImageConstant.MAX_SIZE) {
+        if (input.getSize() > CommunityImageConstant.MAX_SIZE) {
             throw new BusinessException("이미지는 최대 10MB까지 업로드할 수 있습니다.", HttpStatus.BAD_REQUEST);
         }
 
         // 업로드 이미지 파일 형식과 픽셀 수 검사
-        CommunityImageFileInfo imageFileInfo = resolveImageFileInfo(file);
+        CommunityImageFileInfo imageFileInfo = resolveImageFileInfo(input.getContent());
         if (!CommunityImageConstant.ALLOWED_TYPES.contains(imageFileInfo.getExtension())) {
             throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);
         }
 
-        validateImageDimensions(file, imageFileInfo);
+        validateImageDimensions(input.getContent(), imageFileInfo);
         return imageFileInfo;
     }
 
@@ -64,9 +63,9 @@ public class CommunityImageService {
         return resolveStorageRoot().resolve(imageId).normalize();
     }
 
-    public void copyImage(MultipartFile file, Path targetPath) {
+    public void copyImage(CommunityImageUploadInput input, Path targetPath) {
         // 이미지 파일 저장소 복사
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = new ByteArrayInputStream(input.getContent())) {
             Files.createDirectories(targetPath.getParent());
             Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException exception) {
@@ -91,17 +90,16 @@ public class CommunityImageService {
     public Optional<CommunityImageOutput> createStoredImageOutput(String imageId, Path imagePath) {
         // 저장된 이미지 응답 생성
         try {
-            Resource resource = new UrlResource(imagePath.toUri());
             String contentType = Optional.ofNullable(Files.probeContentType(imagePath)).orElse("application/octet-stream");
-            return Optional.of(new CommunityImageOutput(imageId, "/community/images/" + imageId, resource, contentType));
+            return Optional.of(new CommunityImageOutput(imageId, "/community/images/" + imageId, imagePath, contentType));
         } catch (IOException exception) {
             return Optional.empty();
         }
     }
 
-    private CommunityImageFileInfo resolveImageFileInfo(MultipartFile file) {
+    private CommunityImageFileInfo resolveImageFileInfo(byte[] content) {
         // 파일 헤더 시그니처 기준 이미지 형식 판별
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = new ByteArrayInputStream(content)) {
             byte[] header = inputStream.readNBytes(32);
             if (isJpeg(header)) {
                 return new CommunityImageFileInfo("jpg", "image/jpeg");
@@ -125,13 +123,13 @@ public class CommunityImageService {
         throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);
     }
 
-    private void validateImageDimensions(MultipartFile file, CommunityImageFileInfo imageFileInfo) {
+    private void validateImageDimensions(byte[] content, CommunityImageFileInfo imageFileInfo) {
         // 디코딩 가능한 이미지 픽셀 수 제한
         if ("webp".equals(imageFileInfo.getExtension())) {
             return;
         }
 
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = new ByteArrayInputStream(content)) {
             BufferedImage image = ImageIO.read(inputStream);
             if (image == null) {
                 throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);

@@ -83,7 +83,7 @@ export interface SessionMeResult {
   authenticated: boolean;
   handle: string | null;
   defaultDbms: 'postgresql' | 'mysql' | null;
-  role: 'user' | 'admin' | 'problemGenerator' | null;
+  role: 'user' | 'admin' | null;
   handleSetupRequired: boolean;
 }
 export { getApiBaseUrl } from './apiBaseUrl';
@@ -140,14 +140,7 @@ function parseSessionMeResult(data: SessionMeResponse) {
     authenticated: data.authenticated === true,
     handle: typeof data.handle === 'string' && data.handle.trim() !== '' ? data.handle : null,
     defaultDbms: data.defaultDbms === 'mysql' ? 'mysql' : data.defaultDbms === 'postgresql' ? 'postgresql' : null,
-    role:
-      data.role === 'admin'
-        ? 'admin'
-        : data.role === 'user'
-          ? 'user'
-          : data.role === 'problem_generator'
-            ? 'problemGenerator'
-            : null,
+    role: data.role === 'admin' ? 'admin' : data.role === 'user' ? 'user' : null,
     handleSetupRequired: data.handleSetupRequired === true,
   } satisfies SessionMeResult;
 }

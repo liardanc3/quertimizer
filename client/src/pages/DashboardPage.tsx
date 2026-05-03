@@ -17,7 +17,7 @@ import {
   navigate,
 } from '../lib/navigation';
 import { formatCompactInteger, formatRoundedPercent } from '../lib/formatters';
-import { getUiTextValue, useHomeSiteTitle, useUiText } from '../lib/uiText';
+import { getUiTextValue, useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './DashboardPage.css';
 
@@ -282,7 +282,6 @@ function CommunityPostCard({
 
 export default function DashboardPage() {
   const { text } = useUiText();
-  useHomeSiteTitle('Quertimizer Dashboard');
   const [dashboard, setDashboard] = useState<DashboardData>(createEmptyDashboard);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);

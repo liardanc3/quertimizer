@@ -1,7 +1,7 @@
 package com.quertimizer.judge.domain.entity;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.judge.domain.entity.ids.JudgeDatasetId;
+import com.quertimizer.judge.domain.entity.JudgeDatasetId;
 import lombok.Getter;
 
 import java.util.List;
@@ -21,16 +21,16 @@ public class DatasetDefinition {
                              String ddl,
                              String dataSql,
                              List<String> baseIndexDdls) {
-        this.datasetId = Objects.requireNonNull(datasetId, "datasetId must not be null");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "dbmsType must not be null");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
+        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없다.");
         this.ddl = requireText(ddl, "ddl");
         this.dataSql = requireText(dataSql, "dataSql");
-        this.baseIndexDdls = List.copyOf(Objects.requireNonNull(baseIndexDdls, "baseIndexDdls must not be null"));
+        this.baseIndexDdls = List.copyOf(Objects.requireNonNull(baseIndexDdls, "필수 값이 없다."));
     }
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+            throw new IllegalArgumentException(name + "이 비어 있다.");
         }
 
         return value;

@@ -363,17 +363,6 @@ function ChevronIcon({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function RefreshIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M15.7 7.2A6.2 6.2 0 0 0 5.6 4.6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
-      <path d="M5.4 2.9v3.2h3.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
-      <path d="M4.3 12.8a6.2 6.2 0 0 0 10.1 2.6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
-      <path d="M14.6 17.1v-3.2h-3.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
 function SelectChevronIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -814,6 +803,7 @@ export function ProblemCreateContent() {
 
   const selectedProblemSetValue = existingProblemSet && selectedProblemSetId != null ? selectedProblemSetId : NEW_PROBLEM_SET_OPTION_VALUE;
   const selectedProblemValue = existingProblem && selectedProblemId != null ? selectedProblemId : NEW_PROBLEM_OPTION_VALUE;
+  const immutableProblemSql = existingProblem;
 
   const missingFields = buildMissingFields({
     title: heroState.appliedValue.title,
@@ -959,18 +949,13 @@ export function ProblemCreateContent() {
         description: heroState.appliedValue.description.trim(),
         condition: conditionState.appliedValue.trim(),
         output: outputState.appliedValue.trim(),
-        ddlPostgresql: currentDbms === 'postgresql' ? scopedProblemSetDdl : undefined,
-        ddlMysql: currentDbms === 'mysql' ? scopedProblemSetDdl : undefined,
-        actualDataPostgresql: !existingProblemSet && currentDbms === 'postgresql' ? currentActualData.trim() : undefined,
-        actualDataMysql: !existingProblemSet && currentDbms === 'mysql' ? currentActualData.trim() : undefined,
-        sampleDataPostgresql: currentDbms === 'postgresql' ? sampleDataState.appliedValue.trim() : undefined,
-        sampleDataMysql: currentDbms === 'mysql' ? sampleDataState.appliedValue.trim() : undefined,
+        ddl: scopedProblemSetDdl,
+        actualDataSql: currentActualData.trim(),
+        sampleDataSql: sampleDataState.appliedValue.trim(),
         answerSql: answerSqlState.appliedValue.trim(),
-        existingProblemSet,
-        existingProblem,
         problemSetId: existingProblemSet ? selectedProblemSetId ?? undefined : undefined,
         problemId: existingProblem ? selectedProblemId ?? undefined : undefined,
-        dbms: !existingProblemSet ? selectedDbms : undefined,
+        dbms: currentDbms,
       });
 
       navigate(`/problems/${encodeURIComponent(createdProblemId)}`);
@@ -1079,6 +1064,7 @@ export function ProblemCreateContent() {
                   <input
                     type="checkbox"
                     checked={includedTableNames.includes(tableName)}
+                    disabled={immutableProblemSql}
                     onChange={() =>
                       setIncludedTableNames((current) =>
                         current.includes(tableName) ? current.filter((item) => item !== tableName) : [...current, tableName],
@@ -1196,12 +1182,16 @@ export function ProblemCreateContent() {
           collapsed={collapsedSections.sampleData}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'sampleData')}
-          actions={<InlineEditActions isEditing={sampleDataState.isEditing} onEdit={sampleDataState.startEditing} onCancel={sampleDataState.cancelEditing} onConfirm={sampleDataState.confirmEditing} />}
+          actions={
+            !immutableProblemSql ? (
+              <InlineEditActions isEditing={sampleDataState.isEditing} onEdit={sampleDataState.startEditing} onCancel={sampleDataState.cancelEditing} onConfirm={sampleDataState.confirmEditing} />
+            ) : null
+          }
           sectionRef={(node) => {
             sectionRefs.current.sampleData = node;
           }}
         >
-          {sampleDataState.isEditing ? (
+          {!immutableProblemSql && sampleDataState.isEditing ? (
             <textarea className="text-field problem-create-code-textarea" value={sampleDataState.draftValue} onChange={(event) => sampleDataState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')} />
           ) : (
             <pre className="problem-create-code-preview">{sampleDataState.appliedValue.trim() !== '' ? sampleDataState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')}</span>}</pre>
@@ -1213,12 +1203,6 @@ export function ProblemCreateContent() {
           title={text('PROBLEM_CREATE_OUTPUT_SAMPLE_TITLE', '출력 예시')}
           collapsed={collapsedSections.outputPreview}
           onToggle={toggleSection}
-          actions={
-            <button type="button" className="problem-create-preview-action" onClick={() => void handlePreviewOutput()} disabled={isPreviewLoading}>
-              <RefreshIcon />
-              <span>{isPreviewLoading ? text('PROBLEM_CREATE_PREVIEW_GENERATING_LABEL', '생성 중') : text('PROBLEM_CREATE_PREVIEW_GENERATE_BUTTON', '생성')}</span>
-            </button>
-          }
         >
           {previewErrorMessage ? <p className="problem-create-error">{previewErrorMessage}</p> : null}
           <ProblemCreatePreviewGrid previewData={previewData} />
@@ -1230,12 +1214,16 @@ export function ProblemCreateContent() {
           collapsed={collapsedSections.answerSql}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'answerSql')}
-          actions={<InlineEditActions isEditing={answerSqlState.isEditing} onEdit={answerSqlState.startEditing} onCancel={answerSqlState.cancelEditing} onConfirm={answerSqlState.confirmEditing} />}
+          actions={
+            !immutableProblemSql ? (
+              <InlineEditActions isEditing={answerSqlState.isEditing} onEdit={answerSqlState.startEditing} onCancel={answerSqlState.cancelEditing} onConfirm={answerSqlState.confirmEditing} />
+            ) : null
+          }
           sectionRef={(node) => {
             sectionRefs.current.answerSql = node;
           }}
         >
-          {answerSqlState.isEditing ? (
+          {!immutableProblemSql && answerSqlState.isEditing ? (
             <textarea className="text-field problem-create-code-textarea problem-create-answer-textarea" value={answerSqlState.draftValue} onChange={(event) => answerSqlState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL')} />
           ) : (
             <pre className="problem-create-code-preview problem-create-answer-preview">{answerSqlState.appliedValue.trim() !== '' ? answerSqlState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL')}</span>}</pre>
@@ -1253,7 +1241,7 @@ export function ProblemCreateContent() {
         </div>
         <div className="problem-create-sticky-actions">
           <button type="button" className="btn secondary" onClick={() => void handlePreviewOutput()} disabled={isPreviewLoading}>
-            {isPreviewLoading ? text('PROBLEM_CREATE_OUTPUT_GENERATING_LABEL', '예시 출력 생성 중') : text('PROBLEM_CREATE_OUTPUT_GENERATE_BUTTON', '예시 출력 생성')}
+            {isPreviewLoading ? text('PROBLEM_CREATE_OUTPUT_GENERATING_LABEL', '출력 예시 생성 중') : text('PROBLEM_CREATE_OUTPUT_GENERATE_BUTTON', '출력 예시 생성')}
           </button>
           <button type="button" className="btn primary problem-create-submit-button" onClick={() => void handleCreateProblem()} disabled={isSaving}>
             {isSaving ? text('PROBLEM_CREATE_SAVING_LABEL', '문제 저장 중') : text('PROBLEM_CREATE_CREATE_BUTTON', '문제 생성')}

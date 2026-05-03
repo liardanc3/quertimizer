@@ -1,6 +1,6 @@
 package com.quertimizer.problem.application.input;
 
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.problem.application.output.ProblemSubmissionProgress;
 import lombok.Getter;
 

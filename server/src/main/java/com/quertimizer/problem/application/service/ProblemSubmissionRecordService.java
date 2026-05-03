@@ -1,9 +1,8 @@
 package com.quertimizer.problem.application.service;
 
-import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
-import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
-import com.quertimizer.problem.application.store.ProblemStore;
+import com.quertimizer.judge.domain.model.DbmsType;
+import com.quertimizer.problem.application.port.out.ProblemSolveHistoryRepositoryPort;
+import com.quertimizer.problem.application.port.out.ProblemSubmitHistoryRepositoryPort;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
 import com.quertimizer.problem.domain.entity.ids.ProblemSolveHistoryId;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
@@ -18,11 +17,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ProblemSubmissionRecordService {
 
-    private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
-    private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
-    private final ProblemStore problemStore;
+    private final ProblemSubmitHistoryRepositoryPort problemSubmitHistoryRepository;
+    private final ProblemSolveHistoryRepositoryPort problemSolveHistoryRepository;
     private final ProblemSolveHistoryPolicy problemSolveHistoryPolicy;
-
     public void saveSubmission(String problemId, String handle, DbmsType dbmsType, String submittedSql,
                                boolean success, String message, long executionTimeMs, Double cost,
                                long rowCount, long executionPlanElement, LocalDateTime submittedAt) {
@@ -58,7 +55,7 @@ public class ProblemSubmissionRecordService {
             return;
         }
 
-        // 최고 기록 저장 뒤 문제 캐시를 갱신해 랭킹 조회 결과와 동기화
+        // 최고 기록 저장
         problemSolveHistoryRepository.save(ProblemSolveHistory.create(
                 problemId,
                 handle,
@@ -70,6 +67,5 @@ public class ProblemSubmissionRecordService {
                 executionPlanElement,
                 submittedAt
         ));
-        problemStore.loadProblems();
     }
 }

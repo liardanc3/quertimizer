@@ -21,6 +21,7 @@ let sessionSocketClient: Client | null = null;
 let sessionSocketSubscription: StompSubscription | null = null;
 let connectPromise: Promise<void> | null = null;
 const messageListeners = new Set<(message: SessionSocketMessage) => void>();
+const connectionListeners = new Set<(connected: boolean) => void>();
 
 export interface SessionSocketMessage {
   type: string;
@@ -71,6 +72,7 @@ export function connectSessionSocket() {
       heartbeatOutgoing: 10000,
       onConnect: () => {
         sessionSocketSubscription = client.subscribe(SESSION_REPLY_DESTINATION, handleSessionMessage);
+        notifyConnectionListeners(true);
         resolveConnection();
       },
       onStompError: () => rejectConnection(),
@@ -79,6 +81,7 @@ export function connectSessionSocket() {
         if (sessionSocketClient === client) {
           sessionSocketClient = null;
           sessionSocketSubscription = null;
+          notifyConnectionListeners(false);
         }
 
         rejectConnection();
@@ -105,6 +108,7 @@ export function connectSessionSocket() {
         sessionSocketClient = null;
         sessionSocketSubscription = null;
       }
+      notifyConnectionListeners(false);
       connectPromise = null;
       reject(new SessionSocketError());
     }
@@ -149,6 +153,14 @@ export function subscribeSessionSocketMessages(listener: (message: SessionSocket
   };
 }
 
+export function subscribeSessionSocketConnection(listener: (connected: boolean) => void) {
+  connectionListeners.add(listener);
+
+  return () => {
+    connectionListeners.delete(listener);
+  };
+}
+
 export function disconnectSessionSocket() {
   if (!sessionSocketClient) {
     return;
@@ -170,6 +182,7 @@ function handleSessionMessage(message: IMessage) {
     const sessionMessage = JSON.parse(message.body) as SessionSocketMessage;
     notifyMessageListeners(sessionMessage);
     if (sessionMessage.type === 'session.closed') {
+      notifyConnectionListeners(false);
       disconnectSessionSocket();
     }
   } catch {
@@ -179,5 +192,11 @@ function handleSessionMessage(message: IMessage) {
 function notifyMessageListeners(message: SessionSocketMessage) {
   for (const messageListener of messageListeners) {
     messageListener(message);
+  }
+}
+
+function notifyConnectionListeners(connected: boolean) {
+  for (const connectionListener of connectionListeners) {
+    connectionListener(connected);
   }
 }

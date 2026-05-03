@@ -1,7 +1,7 @@
 package com.quertimizer.judge.domain.entity;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.judge.domain.entity.ids.JudgeDatasetId;
+import com.quertimizer.judge.domain.entity.JudgeDatasetId;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -17,11 +17,11 @@ public class DatasetTemplateDefinition {
     public DatasetTemplateDefinition(JudgeDatasetId datasetId, DbmsType dbmsType,
                                      String templateVersion, String environmentName,
                                      Instant createdAt) {
-        this.datasetId = Objects.requireNonNull(datasetId, "datasetId must not be null");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "dbmsType must not be null");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
+        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없다.");
         this.templateVersion = requireText(templateVersion, "templateVersion");
         this.environmentName = requireText(environmentName, "environmentName");
-        this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
+        this.createdAt = Objects.requireNonNull(createdAt, "필수 값이 없다.");
     }
 
     public JudgeDatasetId getDatasetId() {
@@ -46,7 +46,7 @@ public class DatasetTemplateDefinition {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+            throw new IllegalArgumentException(name + "이 비어 있다.");
         }
 
         return value.trim();

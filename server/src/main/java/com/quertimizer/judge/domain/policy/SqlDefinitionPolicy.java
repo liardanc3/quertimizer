@@ -1,6 +1,6 @@
 package com.quertimizer.judge.domain.policy;
 
-import com.quertimizer.judge.infrastructure.runtime.SqlStatementParser;
+import com.quertimizer.judge.application.service.SqlStatementParser;
 
 import java.util.List;
 import java.util.Locale;
@@ -14,16 +14,6 @@ public class SqlDefinitionPolicy {
         this.statementParser = Objects.requireNonNull(statementParser, "SQL 문장 파서가 필요합니다.");
     }
 
-    /**
-     * 등록 데이터셋의 스키마 DDL을 검증한다.
-     *
-     * <ol>
-     *   <li>DDL 필수 입력 검증
-     *   <li>DDL 문장별 허용 명령 검증
-     * </ol>
-     *
-     * @param ddl 검증할 스키마 DDL
-     */
     public void validateDdl(String ddl) {
         validateRequiredText(ddl, "DDL이 필요합니다.");
         List<String> statements = statementParser.splitStatements(ddl);
@@ -48,25 +38,10 @@ public class SqlDefinitionPolicy {
         }
     }
 
-    /**
-     * 등록 데이터셋의 데이터 SQL을 검증한다.
-     *
-     * @param dataSql 검증할 데이터 SQL
-     */
     public void validateDataSql(String dataSql) {
         validateInsertOnly(dataSql, "데이터 SQL이 필요합니다.");
     }
 
-    /**
-     * 등록 설정 SQL 묶음을 검증한다.
-     *
-     * <ol>
-     *   <li>설정 SQL 목록 필수 검증
-     *   <li>설정 SQL 문장별 허용 명령 검증
-     * </ol>
-     *
-     * @param setupSqls 검증할 설정 SQL 문장 목록
-     */
     public void validateSetupSqls(List<String> setupSqls) {
         Objects.requireNonNull(setupSqls, "설정 SQL 목록이 필요합니다.");
 
@@ -86,16 +61,6 @@ public class SqlDefinitionPolicy {
         }
     }
 
-    /**
-     * 기준 SQL과 실행 대상 읽기 전용 SQL을 검증한다.
-     *
-     * <ol>
-     *   <li>단일 읽기 전용 SQL 문장 검증
-     *   <li>SELECT 또는 읽기 전용 WITH 여부 검증
-     * </ol>
-     *
-     * @param sql 검증할 SQL 문장
-     */
     public void validateReadOnlySql(String sql) {
         validateRequiredText(sql, "SQL이 필요합니다.");
         List<String> statements = statementParser.splitStatements(sql);

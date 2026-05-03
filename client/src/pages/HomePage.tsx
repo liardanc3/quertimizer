@@ -11,7 +11,7 @@ import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '../li
 import { PROBLEMS_PATH } from '../lib/navigation';
 import { fetchProblems, type ProblemPage } from '../lib/problemApi';
 import { useSession } from '../lib/session';
-import { useHomeSiteTitle, useUiText } from '../lib/uiText';
+import { useUiText } from '../lib/uiText';
 import type { DbmsType } from '../types/domain';
 import './HomePage.css';
 
@@ -120,7 +120,6 @@ function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: bool
 }
 
 export default function HomePage() {
-  useHomeSiteTitle();
   const { text } = useUiText();
   const { isAuthenticated, isReady, handle } = useSession();
   const locationSearch = useLocationSearch();

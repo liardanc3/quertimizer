@@ -1,8 +1,8 @@
 package com.quertimizer.judge.application.input;
 
-import com.quertimizer.judge.domain.entity.ids.JudgeDatasetId;
-import com.quertimizer.judge.domain.entity.ids.JudgeExecutionId;
-import com.quertimizer.judge.domain.entity.ids.JudgeSetupSqlId;
+import com.quertimizer.judge.domain.entity.JudgeDatasetId;
+import com.quertimizer.judge.domain.entity.JudgeExecutionId;
+import com.quertimizer.judge.domain.entity.JudgeSetupSqlId;
 import com.quertimizer.judge.domain.model.ExecutionOptions;
 import com.quertimizer.judge.domain.model.IsolationPolicy;
 
@@ -24,12 +24,12 @@ public class ExecuteIsolatedJudgeSqlInput {
                                   String targetSql,
                                   IsolationPolicy isolationPolicy,
                                   ExecutionOptions options) {
-        this.executionId = Objects.requireNonNull(executionId, "executionId must not be null");
-        this.datasetId = Objects.requireNonNull(datasetId, "datasetId must not be null");
-        this.setupSqlIds = List.copyOf(Objects.requireNonNull(setupSqlIds, "setupSqlIds must not be null"));
+        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
+        this.setupSqlIds = List.copyOf(Objects.requireNonNull(setupSqlIds, "필수 값이 없다."));
         this.targetSql = requireText(targetSql, "targetSql");
-        this.isolationPolicy = Objects.requireNonNull(isolationPolicy, "isolationPolicy must not be null");
-        this.options = Objects.requireNonNull(options, "options must not be null");
+        this.isolationPolicy = Objects.requireNonNull(isolationPolicy, "필수 값이 없다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
     }
 
     public JudgeExecutionId getExecutionId() {
@@ -58,7 +58,7 @@ public class ExecuteIsolatedJudgeSqlInput {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+            throw new IllegalArgumentException(name + "이 비어 있다.");
         }
 
         return value;

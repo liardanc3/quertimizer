@@ -1,31 +1,22 @@
 package com.quertimizer.ui.domain.entity;
 
 import com.quertimizer.ui.domain.entity.ids.UiTextId;
-import jakarta.persistence.Column;
-import jakarta.persistence.EmbeddedId;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
-@Entity
-@Table(name = "ui_text")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UiText {
 
-    @EmbeddedId
     private UiTextId id;
-
-    @Column(name = "\"value\"", nullable = false, columnDefinition = "TEXT")
     private String value;
-
-    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
     private String description;
 
     public static UiText create(String key, String value, String language, String description) {
         // UI 텍스트 생성
+        return new UiText(UiTextId.create(key, language), value, description);
+    }
+
+    public static UiText restore(String key, String value, String language, String description) {
+        // 저장된 UI 텍스트 상태 복원
         return new UiText(UiTextId.create(key, language), value, description);
     }
 

@@ -1,6 +1,6 @@
 package com.quertimizer.user.application.input;
 
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.domain.model.DbmsType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

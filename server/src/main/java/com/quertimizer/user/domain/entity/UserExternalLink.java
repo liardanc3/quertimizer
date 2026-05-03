@@ -1,31 +1,20 @@
 package com.quertimizer.user.domain.entity;
 
 import com.quertimizer.user.domain.entity.ids.UserExternalLinkId;
-import jakarta.persistence.EmbeddedId;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
-@Entity
-@Table(name = "user_external_link")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserExternalLink {
 
-    @EmbeddedId
     private UserExternalLinkId id;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
-    private User user;
 
     public static UserExternalLink create(String handle, String type, String link) {
         // 외부 링크 생성
+        return new UserExternalLink(UserExternalLinkId.create(handle, type, link));
+    }
+
+    public static UserExternalLink restore(String handle, String type, String link) {
+        // 저장된 외부 링크 상태 복원
         return new UserExternalLink(UserExternalLinkId.create(handle, type, link));
     }
 

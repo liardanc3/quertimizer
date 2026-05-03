@@ -1,5 +1,7 @@
 package com.quertimizer.global.constant;
 
+import com.quertimizer.judge.domain.model.DbmsType;
+
 public final class ExecutionPlanElementIndexes {
 
     public static final int HINT_INDEX = PostgreSqlExecutionPlanElementIndex.HINT;

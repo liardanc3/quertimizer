@@ -10,15 +10,15 @@ public class ExecutionOptions {
 
     public ExecutionOptions(int timeoutSeconds, int page, int pageSize, boolean includeCost, boolean includePlan) {
         if (timeoutSeconds <= 0) {
-            throw new IllegalArgumentException("timeoutSeconds must be positive");
+            throw new IllegalArgumentException("값은 0보다 커야 한다.");
         }
 
         if (page <= 0) {
-            throw new IllegalArgumentException("page must be positive");
+            throw new IllegalArgumentException("값은 0보다 커야 한다.");
         }
 
         if (pageSize <= 0) {
-            throw new IllegalArgumentException("pageSize must be positive");
+            throw new IllegalArgumentException("값은 0보다 커야 한다.");
         }
 
         this.timeoutSeconds = timeoutSeconds;

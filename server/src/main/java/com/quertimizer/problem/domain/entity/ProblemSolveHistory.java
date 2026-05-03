@@ -1,67 +1,21 @@
 package com.quertimizer.problem.domain.entity;
 
-import com.quertimizer.global.constant.DbmsType;
-import com.quertimizer.problem.domain.entity.ids.ProblemSolveHistoryId;
-import com.quertimizer.user.domain.entity.User;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.IdClass;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
+import com.quertimizer.judge.domain.model.DbmsType;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-@Entity
-@IdClass(ProblemSolveHistoryId.class)
-@Table(name = "problem_top_solve_history")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProblemSolveHistory {
 
-    @Id
-    @Column(name = "problem_id", nullable = false, length = 12)
     private String problemId;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "problem_id", insertable = false, updatable = false)
-    private Problem problem;
-
-    @Id
-    @Column(name = "handle", nullable = false, length = 50)
     private String handle;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "handle", referencedColumnName = "handle", insertable = false, updatable = false)
-    private User user;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "dbms_type", length = 20)
     private DbmsType dbmsType;
-
-    @Column(name = "submitted_sql", nullable = false, columnDefinition = "TEXT")
     private String submittedSql;
-
-    @Column(name = "execution_time_ms", nullable = false)
     private long executionTimeMs;
-
-    @Column(nullable = false)
     private double cost;
-
-    @Column(name = "scan_rows", nullable = false)
     private long scanRows;
-
-    @Column(name = "execution_plan_element", nullable = false)
     private long executionPlanElement;
-
-    @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
 
     public static ProblemSolveHistory create(String problemId,
@@ -83,6 +37,18 @@ public class ProblemSolveHistory {
                 scanRows,
                 executionPlanElement,
                 submittedAt
+        );
+    }
+
+    public static ProblemSolveHistory restore(String problemId, String handle,
+                                              DbmsType dbmsType, String submittedSql,
+                                              long executionTimeMs, double cost,
+                                              long scanRows, long executionPlanElement,
+                                              LocalDateTime submittedAt) {
+        // 저장된 문제 최고 기록 상태 복원
+        return new ProblemSolveHistory(
+                problemId, handle, dbmsType, submittedSql,
+                executionTimeMs, cost, scanRows, executionPlanElement, submittedAt
         );
     }
 

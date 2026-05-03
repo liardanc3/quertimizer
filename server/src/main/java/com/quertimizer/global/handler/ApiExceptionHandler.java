@@ -2,7 +2,9 @@ package com.quertimizer.global.handler;
 
 import com.quertimizer.global.constant.GlobalFailReason;
 import com.quertimizer.global.exception.BusinessException;
+import com.quertimizer.global.exception.DomainRuleViolationException;
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
@@ -17,11 +19,6 @@ import java.util.List;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
-    /**
-     * 관리하지 않는 예외를 공용 500 응답으로 변환한다.
-     *
-     * @param exception 처리되지 않은 예외
-     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ExceptionResponse> handleUnExpectedException(Exception exception) {
         return ResponseEntity
@@ -29,11 +26,6 @@ public class ApiExceptionHandler {
                 .body(ExceptionResponse.reasons(GlobalFailReason.UNEXPECTED_ERROR.getMessage()));
     }
 
-    /**
-     * Request DTO validation 예외를 공용 400 응답으로 변환한다.
-     *
-     * @param exception request body validation 예외
-     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ExceptionResponse> handleValidationException(MethodArgumentNotValidException exception) {
         List<String> reasons = extractReasons(exception.getBindingResult());
@@ -43,11 +35,6 @@ public class ApiExceptionHandler {
                 .body(ExceptionResponse.reasons(reasons));
     }
 
-    /**
-     * Query DTO binding 예외를 공용 400 응답으로 변환한다.
-     *
-     * @param exception query binding validation 예외
-     */
     @ExceptionHandler(BindException.class)
     public ResponseEntity<ExceptionResponse> handleBindException(BindException exception) {
         List<String> reasons = extractReasons(exception.getBindingResult());
@@ -57,16 +44,18 @@ public class ApiExceptionHandler {
                 .body(ExceptionResponse.reasons(reasons));
     }
 
-    /**
-     * BusinessException을 예외가 가진 상태 코드와 사유 응답으로 변환한다.
-     *
-     * @param exception 비즈니스 예외
-     */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ExceptionResponse> handleBusinessException(BusinessException exception) {
         return ResponseEntity
                 .status(exception.getStatusCode())
                 .body(ExceptionResponse.reason(exception.getReason()));
+    }
+
+    @ExceptionHandler(DomainRuleViolationException.class)
+    public ResponseEntity<ExceptionResponse> handleDomainRuleViolationException(DomainRuleViolationException exception) {
+        return ResponseEntity
+                .status(resolveStatus(exception))
+                .body(ExceptionResponse.reason(exception.getMessage()));
     }
 
     @Getter
@@ -109,5 +98,15 @@ public class ApiExceptionHandler {
         }
 
         return reasons;
+    }
+
+    private HttpStatus resolveStatus(DomainRuleViolationException exception) {
+        // 도메인 규칙 위반 유형을 HTTP 응답 상태로 변환
+        return switch (exception.getType()) {
+            case DUPLICATED_RESOURCE -> HttpStatus.CONFLICT;
+            case ACCESS_DENIED -> HttpStatus.FORBIDDEN;
+            case REQUEST_LIMIT_EXCEEDED -> HttpStatus.TOO_MANY_REQUESTS;
+            case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
+        };
     }
 }

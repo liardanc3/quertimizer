@@ -1,28 +1,17 @@
 package com.quertimizer.auth.domain.policy;
 
-import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
+import com.quertimizer.global.exception.DomainRuleViolationException;
+import com.quertimizer.global.exception.DomainRuleViolationType;
+import com.quertimizer.user.domain.entity.User;
 
 import static com.quertimizer.auth.domain.model.LoginFailReason.BLOCKED_USER;
 
-@Component
-@RequiredArgsConstructor
 public class LoginPolicy {
 
-    private final UserRepository userRepository;
-
-    /**
-     * 차단된 사용자면 로그인을 거부한다.
-     *
-     * @param authenticatedEmail 차단 상태를 확인할 인증 이메일
-     */
-    public void validateBlockedUser(String authenticatedEmail) {
-        userRepository.findByEmailIgnoreCase(authenticatedEmail)
-                      .filter(user -> user.hasHandle() && user.isBlocked())
-                      .ifPresent(user -> { throw new BusinessException(BLOCKED_USER.getMessage(), HttpStatus.FORBIDDEN); });
+    public void validateBlockedUser(User user) {
+        // Handle 설정 사용자 차단 상태 검증
+        if (user != null && user.hasHandle() && user.isBlocked()) {
+            throw new DomainRuleViolationException(BLOCKED_USER.getMessage(), DomainRuleViolationType.ACCESS_DENIED);
+        }
     }
-
 }

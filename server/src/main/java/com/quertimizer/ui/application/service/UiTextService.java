@@ -16,7 +16,6 @@ import static com.quertimizer.ui.domain.model.UiTextFailReason.LANGUAGE_REQUIRED
 
 @Service
 public class UiTextService {
-
     public UiTextId createRequiredUiTextId(String key, String language) {
         // 필수 key와 language 기준 UI 텍스트 ID 생성
         return createRequiredUiTextId(key, language, KEY_REQUIRED.getMessage(), LANGUAGE_REQUIRED.getMessage());

@@ -1,10 +1,9 @@
 package com.quertimizer.problem.domain.policy;
 
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
 import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.model.ProblemExecutionPlanAnalysis;
-import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -14,20 +13,7 @@ import static com.quertimizer.problem.domain.model.ProblemPlanSummaryText.*;
 import static com.quertimizer.problem.domain.model.ProblemSubmitProgressText.*;
 import static com.quertimizer.problem.domain.policy.ProblemExecutionPlanTokens.*;
 
-/**
- * 문제 제출 실행 계획에서 저장과 필터링에 사용할 대표 요소를 판별한다.
- */
-@Component
 public class ProblemExecutionPlanPolicy {
-
-    /**
-     * DBMS별 실행 계획 텍스트를 대표 요소 비트셋과 요약 문구로 분석한다.
-     *
-     * @param dbmsType 실행 DBMS 유형
-     * @param planLines SQL 실행 계획 라인
-     * @param submittedSql 제출 기준 SQL
-     * @return 실행 계획 분석 결과
-     */
     public ProblemExecutionPlanAnalysis analyze(DbmsType dbmsType, List<String> planLines, String submittedSql) {
         // DBMS별 실행 계획 표현 차이를 각 DBMS 전용 분석 흐름으로 위임
         return switch (dbmsType) {
@@ -36,13 +22,6 @@ public class ProblemExecutionPlanPolicy {
         };
     }
 
-    /**
-     * 실행 계획 대표 요소 비트셋을 제출 진행 상태 상세 문구로 변환한다.
-     *
-     * @param dbmsType 실행 DBMS 유형
-     * @param executionPlanElement 실행 계획 대표 요소 비트셋
-     * @return 제출 진행 상태 상세 문구 목록
-     */
     public List<String> resolveDetailLines(DbmsType dbmsType, long executionPlanElement) {
         // DBMS별 대표 요소 비트의 의미를 진행 상태 문구로 변환
         if (dbmsType == DbmsType.MYSQL) {

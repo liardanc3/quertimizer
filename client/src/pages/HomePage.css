@@ -1602,17 +1602,26 @@ body.handle-setup-locked {
 }
 
 .home-page .problem-table-empty-row {
-  padding: 0.92rem 0.14rem 0.2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-height: 9rem;
+  padding: 1.6rem 0.14rem 0.7rem;
 }
 
 .home-page .problem-empty-state-inline {
-  display: inline-flex;
-  min-height: auto;
+  display: grid;
+  place-items: center;
+  justify-self: stretch;
+  width: 100%;
+  min-height: 7.2rem;
   padding: 0;
   border: 0;
   background: transparent;
-  font-size: 0.76rem;
-  font-weight: 700;
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 400;
+  text-align: center;
 }
 
 .home-page .problem-table-title-row {

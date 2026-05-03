@@ -1,6 +1,6 @@
 package com.quertimizer.auth.application.output;
 
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.global.constant.UserRole;
 import lombok.AllArgsConstructor;
 import lombok.Data;

@@ -1,6 +1,6 @@
 package com.quertimizer.judge.application.input;
 
-import com.quertimizer.judge.domain.entity.ids.JudgeDatasetId;
+import com.quertimizer.judge.domain.entity.JudgeDatasetId;
 import com.quertimizer.judge.domain.model.IndexPolicy;
 
 import java.util.List;
@@ -13,9 +13,9 @@ public class CreateJudgeSetupSqlInput {
     private final IndexPolicy indexPolicy;
 
     public CreateJudgeSetupSqlInput(JudgeDatasetId datasetId, List<String> setupSqls, IndexPolicy indexPolicy) {
-        this.datasetId = Objects.requireNonNull(datasetId, "datasetId must not be null");
-        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "setupSqls must not be null"));
-        this.indexPolicy = Objects.requireNonNull(indexPolicy, "indexPolicy must not be null");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
+        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "필수 값이 없다."));
+        this.indexPolicy = Objects.requireNonNull(indexPolicy, "필수 값이 없다.");
     }
 
     public JudgeDatasetId getDatasetId() {

@@ -1,4 +1,5 @@
 import { resolveCommonHttpErrorFallback, resolveCommonHttpErrorMessageKey } from '../../lib/apiError';
+import { useSession } from '../../lib/session';
 import { useUiText } from '../../lib/uiText';
 import './HttpErrorState.css';
 
@@ -9,7 +10,13 @@ interface HttpErrorStateProps {
 }
 
 export default function HttpErrorState({ status, className = '', message }: HttpErrorStateProps) {
+  const session = useSession();
   const { text } = useUiText();
+
+  if (status === 401 || (status === 403 && !session.isAuthenticated)) {
+    return null;
+  }
+
   const resolvedMessage = typeof message === 'string' && message.trim() !== ''
     ? message
     : text(resolveCommonHttpErrorMessageKey(status), resolveCommonHttpErrorFallback(status));

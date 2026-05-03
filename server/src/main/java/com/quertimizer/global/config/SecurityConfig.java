@@ -1,19 +1,24 @@
 package com.quertimizer.global.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.global.constant.GlobalFailReason;
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.filter.AccountRestrictionFilter;
 import com.quertimizer.global.filter.ApiLoggingFilter;
 import com.quertimizer.global.filter.CsrfCookieFilter;
 import com.quertimizer.global.filter.CsrfCookieNormalizationFilter;
+import com.quertimizer.global.handler.ApiExceptionHandler;
 import com.quertimizer.global.properties.AppSecurityProperties;
-import com.quertimizer.user.application.port.UserRepository;
+import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -37,7 +42,9 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,12 +52,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final UserRepository userRepository;
+    private final UserRepositoryPort userRepository;
     private final AccountRestrictionFilter accountRestrictionFilter;
     private final ApiLoggingFilter apiLoggingFilter;
     private final CsrfCookieFilter csrfCookieFilter;
     private final CsrfCookieNormalizationFilter csrfCookieNormalizationFilter;
     private final AppSecurityProperties appSecurityProperties;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.frontend-base-url:}")
     private String frontendBaseUrl;
@@ -70,8 +78,16 @@ public class SecurityConfig {
                    .formLogin(AbstractHttpConfigurer::disable)
                    .logout(AbstractHttpConfigurer::disable)
                    .exceptionHandling(exceptionHandling -> exceptionHandling
-                           .authenticationEntryPoint((request, response, exception) -> response.sendError(401))
-                           .accessDeniedHandler((request, response, exception) -> response.sendError(403)))
+                           .authenticationEntryPoint((request, response, exception) ->
+                                   writeSecurityExceptionResponse(
+                                           response, HttpServletResponse.SC_UNAUTHORIZED,
+                                           GlobalFailReason.AUTHENTICATION_REQUIRED.getMessage()
+                                   ))
+                           .accessDeniedHandler((request, response, exception) ->
+                                   writeSecurityExceptionResponse(
+                                           response, HttpServletResponse.SC_FORBIDDEN,
+                                           GlobalFailReason.ACCESS_DENIED.getMessage()
+                                   )))
                    .headers(headers -> headers.contentTypeOptions(Customizer.withDefaults()))
                    .oauth2Login(oauth2 -> oauth2
                            .redirectionEndpoint(redirection -> redirection.baseUri("/login/*"))
@@ -118,10 +134,18 @@ public class SecurityConfig {
                            .requestMatchers("/oauth2/**", "/login/*").permitAll()
                            .requestMatchers("/admin/auth-manage/**").hasRole(UserRole.ADMIN.name())
                            .requestMatchers("/admin/problem-sets/**", "/admin/problems", "/admin/problems/output-preview")
-                           .hasAnyRole(UserRole.ADMIN.name(), UserRole.PROBLEM_GENERATOR.name())
+                           .hasRole(UserRole.ADMIN.name())
                            .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                            .anyRequest().authenticated())
                    .build();
+    }
+
+    private void writeSecurityExceptionResponse(HttpServletResponse response, int status, String reason) throws IOException {
+        // Spring Security 인증/인가 실패 응답을 공용 JSON 형식으로 변환
+        response.setStatus(status);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getWriter(), ApiExceptionHandler.ExceptionResponse.reason(reason));
     }
 
     private String resolveSocialLoginProvider(HttpServletRequest request) {

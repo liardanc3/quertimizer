@@ -13,7 +13,7 @@ public class ProblemOutputPreviewOutput {
     private final List<List<String>> rows;
     private final long rowCount;
 
-    public static ProblemOutputPreviewOutput from(ProblemSqlExecutionOutput output) {
+    public static ProblemOutputPreviewOutput from(ProblemJudgeExecutionResult output) {
         return new ProblemOutputPreviewOutput(output.getColumns(), output.getRows(), output.getRowCount());
     }
 }

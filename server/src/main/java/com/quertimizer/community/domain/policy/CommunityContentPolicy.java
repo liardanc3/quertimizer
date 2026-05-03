@@ -1,92 +1,41 @@
 package com.quertimizer.community.domain.policy;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quertimizer.global.exception.BusinessException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
+import com.quertimizer.global.exception.DomainRuleViolationException;
+import com.quertimizer.global.exception.DomainRuleViolationType;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-@Component
-@RequiredArgsConstructor
+import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_MARK_ATTRS;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_MARKS;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_NODES;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_NODE_ATTRS;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_NODE_CLASSES;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_CONTENT_BYTES;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_DEPTH;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_NODE_COUNT;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_TEXT_LENGTH;
+
 public class CommunityContentPolicy {
 
-    private static final int MAX_CONTENT_BYTES = 500_000;
-    private static final int MAX_DEPTH = 30;
-    private static final int MAX_NODE_COUNT = 2_000;
-    private static final int MAX_TEXT_LENGTH = 100_000;
-    private static final Set<String> ALLOWED_NODES = Set.of(
-            "doc", "paragraph", "text", "heading", "bulletList", "orderedList", "listItem",
-            "codeBlock", "blockquote", "hardBreak", "horizontalRule", "image",
-            "details", "detailsSummary", "detailsContent", "taskList", "taskItem"
-    );
-    private static final Set<String> ALLOWED_MARKS = Set.of(
-            "bold", "italic", "strike", "underline", "highlight", "code", "link"
-    );
-    private static final Map<String, Set<String>> ALLOWED_NODE_ATTRS = Map.ofEntries(
-            Map.entry("heading", Set.of("level")),
-            Map.entry("orderedList", Set.of("start")),
-            Map.entry("codeBlock", Set.of("language", "class")),
-            Map.entry("image", Set.of("src", "alt", "title", "imageId", "class")),
-            Map.entry("details", Set.of("open")),
-            Map.entry("taskList", Set.of("class")),
-            Map.entry("taskItem", Set.of("checked", "class"))
-    );
-    private static final Map<String, Set<String>> ALLOWED_NODE_CLASSES = Map.of(
-            "codeBlock", Set.of("community-code-block"),
-            "image", Set.of("community-content-image"),
-            "taskList", Set.of("community-task-list"),
-            "taskItem", Set.of("community-task-item")
-    );
-    private static final Map<String, Set<String>> ALLOWED_MARK_ATTRS = Map.of(
-            "link", Set.of("href", "target", "rel"),
-            "highlight", Set.of("color")
-    );
-
-    private final ObjectMapper objectMapper;
-
-    /**
-     * 커뮤니티 본문 JSON을 허용된 문서 구조로 검증한다.
-     *
-     * <ol>
-     *   <li>본문 존재 여부와 크기 검증
-     *   <li>JSON 파싱
-     *   <li>노드 구조와 속성 검증
-     * </ol>
-     *
-     * @param contentJson 검증할 커뮤니티 본문 JSON
-     */
-    public void validate(String contentJson) {
+    public void validate(String contentJson, Object root) {
         if (contentJson == null || contentJson.isBlank()) {
             throw badContent();
         }
 
         if (contentJson.getBytes(StandardCharsets.UTF_8).length > MAX_CONTENT_BYTES) {
-            throw new BusinessException("본문은 최대 500000 Byte까지 입력할 수 있습니다.", HttpStatus.BAD_REQUEST);
+            throw new DomainRuleViolationException("본문은 최대 500000 Byte까지 입력할 수 있습니다.", DomainRuleViolationType.INVALID_REQUEST);
         }
 
-        JsonNode root = parse(contentJson);
         ContentStats stats = new ContentStats();
         validateNode(root, 1, stats);
     }
 
-    private JsonNode parse(String contentJson) {
-        try {
-            return objectMapper.readTree(contentJson);
-        } catch (JsonProcessingException exception) {
-            throw badContent();
-        }
-    }
-
-    private void validateNode(JsonNode node, int depth, ContentStats stats) {
-        if (!node.isObject() || depth > MAX_DEPTH) {
+    private void validateNode(Object node, int depth, ContentStats stats) {
+        if (!(node instanceof Map<?, ?> nodeMap) || depth > MAX_DEPTH) {
             throw badContent();
         }
 
@@ -95,42 +44,39 @@ public class CommunityContentPolicy {
             throw badContent();
         }
 
-        String type = textValue(node.get("type"));
+        String type = textValue(nodeMap.get("type"));
         if (!ALLOWED_NODES.contains(type)) {
             throw badContent();
         }
 
-        validateObjectFields(node, Set.of("type", "attrs", "content", "marks", "text"));
-        validateNodeAttrs(type, node.get("attrs"));
-        validateMarks(node.get("marks"));
-        validateTextNode(type, node.get("text"), stats);
-        validateChildren(node.get("content"), depth, stats);
+        validateObjectFields(nodeMap, Set.of("type", "attrs", "content", "marks", "text"));
+        validateNodeAttrs(type, nodeMap.get("attrs"));
+        validateMarks(nodeMap.get("marks"));
+        validateTextNode(type, nodeMap.get("text"), stats);
+        validateChildren(nodeMap.get("content"), depth, stats);
     }
 
-    private void validateObjectFields(JsonNode node, Set<String> allowedFields) {
-        Iterator<String> fieldNames = node.fieldNames();
-        while (fieldNames.hasNext()) {
-            String fieldName = fieldNames.next();
+    private void validateObjectFields(Map<?, ?> node, Set<String> allowedFields) {
+        for (Object key : node.keySet()) {
+            String fieldName = key instanceof String value ? value : "";
             if (!allowedFields.contains(fieldName) || isDangerousAttributeName("", fieldName)) {
                 throw badContent();
             }
         }
     }
 
-    private void validateNodeAttrs(String nodeType, JsonNode attrs) {
-        if (attrs == null || attrs.isNull()) {
+    private void validateNodeAttrs(String nodeType, Object attrs) {
+        if (attrs == null) {
             return;
         }
 
-        if (!attrs.isObject()) {
+        if (!(attrs instanceof Map<?, ?> attrMap)) {
             throw badContent();
         }
 
         Set<String> allowedAttrs = ALLOWED_NODE_ATTRS.getOrDefault(nodeType, Set.of());
-        Iterator<Map.Entry<String, JsonNode>> fields = attrs.fields();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> field = fields.next();
-            String attrName = field.getKey();
+        for (Map.Entry<?, ?> field : attrMap.entrySet()) {
+            String attrName = field.getKey() instanceof String value ? value : "";
             if (!allowedAttrs.contains(attrName) || isDangerousAttributeName(nodeType, attrName)) {
                 throw badContent();
             }
@@ -139,7 +85,7 @@ public class CommunityContentPolicy {
         }
     }
 
-    private void validateAttrValue(String nodeType, String attrName, JsonNode value) {
+    private void validateAttrValue(String nodeType, String attrName, Object value) {
         if ("image".equals(nodeType) && "src".equals(attrName)) {
             validateImageSrc(textValue(value));
             return;
@@ -155,89 +101,88 @@ public class CommunityContentPolicy {
             return;
         }
 
-        if (value.isTextual()) {
-            validateSafeText(value.textValue());
+        if (value instanceof String text) {
+            validateSafeText(text);
         }
     }
 
-    private void validateMarks(JsonNode marks) {
-        if (marks == null || marks.isNull()) {
+    private void validateMarks(Object marks) {
+        if (marks == null) {
             return;
         }
 
-        if (!marks.isArray()) {
+        if (!(marks instanceof List<?> markList)) {
             throw badContent();
         }
 
-        for (JsonNode mark : marks) {
-            if (!mark.isObject()) {
+        for (Object mark : markList) {
+            if (!(mark instanceof Map<?, ?> markMap)) {
                 throw badContent();
             }
 
-            String type = textValue(mark.get("type"));
+            String type = textValue(markMap.get("type"));
             if (!ALLOWED_MARKS.contains(type)) {
                 throw badContent();
             }
 
-            validateObjectFields(mark, Set.of("type", "attrs"));
-            validateMarkAttrs(type, mark.get("attrs"));
+            validateObjectFields(markMap, Set.of("type", "attrs"));
+            validateMarkAttrs(type, markMap.get("attrs"));
         }
     }
 
-    private void validateMarkAttrs(String markType, JsonNode attrs) {
-        if (attrs == null || attrs.isNull()) {
+    private void validateMarkAttrs(String markType, Object attrs) {
+        if (attrs == null) {
             return;
         }
 
-        if (!attrs.isObject()) {
+        if (!(attrs instanceof Map<?, ?> attrMap)) {
             throw badContent();
         }
 
         Set<String> allowedAttrs = ALLOWED_MARK_ATTRS.getOrDefault(markType, Set.of());
-        Iterator<Map.Entry<String, JsonNode>> fields = attrs.fields();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> field = fields.next();
-            if (!allowedAttrs.contains(field.getKey()) || isDangerousAttributeName("", field.getKey())) {
+        for (Map.Entry<?, ?> field : attrMap.entrySet()) {
+            String attrName = field.getKey() instanceof String value ? value : "";
+            if (!allowedAttrs.contains(attrName) || isDangerousAttributeName("", attrName)) {
                 throw badContent();
             }
 
-            if ("link".equals(markType) && "href".equals(field.getKey())) {
+            if ("link".equals(markType) && "href".equals(attrName)) {
                 validateHttpUrl(textValue(field.getValue()));
                 continue;
             }
 
-            if (field.getValue().isTextual()) {
-                validateSafeText(field.getValue().textValue());
+            if (field.getValue() instanceof String text) {
+                validateSafeText(text);
             }
         }
     }
 
-    private void validateTextNode(String type, JsonNode text, ContentStats stats) {
-        if (text == null || text.isNull()) {
+    private void validateTextNode(String type, Object text, ContentStats stats) {
+        if (text == null) {
             return;
         }
 
-        if (!"text".equals(type) || !text.isTextual()) {
+        if (!"text".equals(type) || !(text instanceof String textValue)) {
             throw badContent();
         }
 
-        validateSafeText(text.textValue());
-        stats.textLength += text.textValue().length();
+        validateSafeText(textValue);
+        stats.textLength += textValue.length();
         if (stats.textLength > MAX_TEXT_LENGTH) {
             throw badContent();
         }
     }
 
-    private void validateChildren(JsonNode content, int depth, ContentStats stats) {
-        if (content == null || content.isNull()) {
+    private void validateChildren(Object content, int depth, ContentStats stats) {
+        if (content == null) {
             return;
         }
 
-        if (!content.isArray()) {
+        if (!(content instanceof List<?> children)) {
             throw badContent();
         }
 
-        for (JsonNode child : content) {
+        for (Object child : children) {
             validateNode(child, depth + 1, stats);
         }
     }
@@ -288,12 +233,12 @@ public class CommunityContentPolicy {
                 || "class".equals(normalizedAttrName);
     }
 
-    private String textValue(JsonNode value) {
-        return value != null && value.isTextual() ? value.textValue() : "";
+    private String textValue(Object value) {
+        return value instanceof String text ? text : "";
     }
 
-    private BusinessException badContent() {
-        return new BusinessException("본문 형식이 올바르지 않습니다.", HttpStatus.BAD_REQUEST);
+    private DomainRuleViolationException badContent() {
+        return new DomainRuleViolationException("본문 형식이 올바르지 않습니다.", DomainRuleViolationType.INVALID_REQUEST);
     }
 
     private static final class ContentStats {

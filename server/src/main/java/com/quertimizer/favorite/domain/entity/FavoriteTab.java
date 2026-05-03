@@ -1,47 +1,15 @@
 package com.quertimizer.favorite.domain.entity;
 
-import com.quertimizer.user.domain.entity.User;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
-@Entity
-@Table(name = "favorite_tab")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FavoriteTab {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "favorite_tab_id", nullable = false)
     private Long favoriteTabId;
-
-    @Column(name = "user_email", nullable = false, length = 255)
     private String userEmail;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_email", insertable = false, updatable = false)
-    private User user;
-
-    @Column(name = "display_order", nullable = false)
     private int displayOrder;
-
-    @Column(nullable = false, length = 200)
     private String label;
-
-    @Column(nullable = false, length = 2048)
     private String path;
-
-    @Column(name = "snapshot_json", columnDefinition = "TEXT")
     private String snapshotJson;
 
     public static FavoriteTab create(String userEmail,
@@ -50,6 +18,15 @@ public class FavoriteTab {
                                      String path,
                                      String snapshotJson) {
         return new FavoriteTab(userEmail, displayOrder, label, path, snapshotJson);
+    }
+
+    public static FavoriteTab restore(Long favoriteTabId, String userEmail,
+                                      int displayOrder, String label,
+                                      String path, String snapshotJson) {
+        // 저장된 즐겨찾기 탭 상태 복원
+        FavoriteTab favoriteTab = new FavoriteTab(userEmail, displayOrder, label, path, snapshotJson);
+        favoriteTab.favoriteTabId = favoriteTabId;
+        return favoriteTab;
     }
 
     private FavoriteTab(String userEmail,

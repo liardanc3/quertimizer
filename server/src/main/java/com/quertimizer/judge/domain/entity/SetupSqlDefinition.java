@@ -1,7 +1,7 @@
 package com.quertimizer.judge.domain.entity;
 
-import com.quertimizer.judge.domain.entity.ids.JudgeDatasetId;
-import com.quertimizer.judge.domain.entity.ids.JudgeSetupSqlId;
+import com.quertimizer.judge.domain.entity.JudgeDatasetId;
+import com.quertimizer.judge.domain.entity.JudgeSetupSqlId;
 import com.quertimizer.judge.domain.model.IndexPolicy;
 
 import java.util.List;
@@ -18,10 +18,10 @@ public class SetupSqlDefinition {
                               JudgeDatasetId datasetId,
                               List<String> setupSqls,
                               IndexPolicy indexPolicy) {
-        this.setupSqlId = Objects.requireNonNull(setupSqlId, "setupSqlId must not be null");
-        this.datasetId = Objects.requireNonNull(datasetId, "datasetId must not be null");
-        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "setupSqls must not be null"));
-        this.indexPolicy = Objects.requireNonNull(indexPolicy, "indexPolicy must not be null");
+        this.setupSqlId = Objects.requireNonNull(setupSqlId, "필수 값이 없다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
+        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "필수 값이 없다."));
+        this.indexPolicy = Objects.requireNonNull(indexPolicy, "필수 값이 없다.");
     }
 
     public JudgeSetupSqlId getSetupSqlId() {

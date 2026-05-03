@@ -110,18 +110,13 @@ export interface CreateProblemPayload {
   description: string;
   condition: string;
   output: string;
-  ddlPostgresql?: string;
-  ddlMysql?: string;
-  actualDataPostgresql?: string;
-  actualDataMysql?: string;
-  sampleDataPostgresql?: string;
-  sampleDataMysql?: string;
+  ddl: string;
+  actualDataSql: string;
+  sampleDataSql: string;
   answerSql: string;
-  existingProblemSet: boolean;
-  existingProblem: boolean;
   problemSetId?: string;
   problemId?: string;
-  dbms?: DbmsType;
+  dbms: DbmsType;
 }
 
 interface ProblemOutputPreviewResponse {

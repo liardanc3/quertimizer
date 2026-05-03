@@ -2,20 +2,32 @@ package com.quertimizer.auth.application.input;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import org.springframework.security.core.Authentication;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Data
 @AllArgsConstructor
 public class SocialLoginInput {
 
-    private final Authentication authentication;
+    private final String provider;
+    private final Map<String, Object> attributes;
     private final String accessIp;
 
-    public static SocialLoginInput of(Authentication authentication, String accessIp) {
+    public static SocialLoginInput of(String provider, Map<String, Object> attributes, String accessIp) {
         // 정규화된 소셜 로그인 입력 생성
-        return new SocialLoginInput(authentication, normalizeAccessIp(accessIp));
+        return new SocialLoginInput(
+                normalizeProvider(provider),
+                Optional.ofNullable(attributes).map(Map::copyOf).orElseGet(Map::of),
+                normalizeAccessIp(accessIp)
+        );
+    }
+
+    private static String normalizeProvider(String provider) {
+        // OAuth provider 정규화
+        return Optional.ofNullable(provider)
+                .map(String::trim)
+                .orElse("");
     }
 
     private static String normalizeAccessIp(String accessIp) {

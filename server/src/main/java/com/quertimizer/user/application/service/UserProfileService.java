@@ -1,6 +1,6 @@
 package com.quertimizer.user.application.service;
 
-import com.quertimizer.global.constant.DbmsType;
+import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.user.application.input.UserProfileLinkInput;
 import com.quertimizer.user.application.input.UserProfileUpdateInput;
 import com.quertimizer.user.application.output.UserProfileLinkOutput;
@@ -27,15 +27,16 @@ import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.user.domain.entity.User;
 import com.quertimizer.user.domain.entity.UserExternalLink;
 import com.quertimizer.user.domain.model.UserProfilePageConstant;
-import com.quertimizer.community.application.port.CommunityCommentLikeRepository;
-import com.quertimizer.community.application.port.CommunityCommentRepository;
-import com.quertimizer.community.application.port.CommunityPostLikeRepository;
-import com.quertimizer.community.application.port.CommunityPostRepository;
-import com.quertimizer.community.application.port.CommunityPostTagRepository;
-import com.quertimizer.problem.application.port.ProblemSolveHistoryRepository;
-import com.quertimizer.problem.application.port.ProblemSubmitHistoryRepository;
-import com.quertimizer.user.application.port.UserExternalLinkRepository;
-import com.quertimizer.problem.application.store.ProblemStore;
+import com.quertimizer.community.application.port.out.CommunityCommentLikeRepositoryPort;
+import com.quertimizer.community.application.port.out.CommunityCommentRepositoryPort;
+import com.quertimizer.community.application.port.out.CommunityPostLikeRepositoryPort;
+import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
+import com.quertimizer.community.application.port.out.CommunityPostTagRepositoryPort;
+import com.quertimizer.problem.application.port.out.ProblemRepositoryPort;
+import com.quertimizer.problem.application.port.out.ProblemSolveHistoryRepositoryPort;
+import com.quertimizer.problem.application.port.out.ProblemSubmitHistoryRepositoryPort;
+import com.quertimizer.user.application.port.out.UserExternalLinkRepositoryPort;
+import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -55,16 +56,16 @@ import java.util.Optional;
 @Transactional
 public class UserProfileService {
 
-    private final ProblemSolveHistoryRepository problemSolveHistoryRepository;
-    private final ProblemSubmitHistoryRepository problemSubmitHistoryRepository;
-    private final UserExternalLinkRepository userExternalLinkRepository;
-    private final CommunityPostRepository communityPostRepository;
-    private final CommunityPostTagRepository communityPostTagRepository;
-    private final CommunityCommentRepository communityCommentRepository;
-    private final CommunityCommentLikeRepository communityCommentLikeRepository;
-    private final CommunityPostLikeRepository communityPostLikeRepository;
-    private final ProblemStore problemStore;
-
+    private final ProblemSolveHistoryRepositoryPort problemSolveHistoryRepository;
+    private final ProblemSubmitHistoryRepositoryPort problemSubmitHistoryRepository;
+    private final UserExternalLinkRepositoryPort userExternalLinkRepository;
+    private final CommunityPostRepositoryPort communityPostRepository;
+    private final CommunityPostTagRepositoryPort communityPostTagRepository;
+    private final CommunityCommentRepositoryPort communityCommentRepository;
+    private final CommunityCommentLikeRepositoryPort communityCommentLikeRepository;
+    private final CommunityPostLikeRepositoryPort communityPostLikeRepository;
+    private final ProblemRepositoryPort problemRepository;
+    private final UserRepositoryPort userRepository;
     public UserProfileSummaryOutput buildUserProfileSummary(User user, boolean isOwnProfile) {
         // 사용자 프로필 요약 구성
         List<ProblemSolveHistory> histories = problemSolveHistoryRepository.findAllByHandleOrderBySubmittedAtDesc(user.getHandle());
@@ -234,10 +235,11 @@ public class UserProfileService {
                 input.isSolvedProblemCountPublic(),
                 input.isCommunityActivityPublic()
         );
+        User savedUser = userRepository.save(user);
 
         // 프로필 링크를 입력값으로 교체 후 요약 응답 생성
-        replaceExternalLinks(user.getHandle(), input.getLinks());
-        return buildUserProfileSummary(user, true);
+        replaceExternalLinks(savedUser.getHandle(), input.getLinks());
+        return buildUserProfileSummary(savedUser, true);
     }
 
     private List<UserProfileCommunityActivityOutput> createCommunityActivityResponses(String handle) {
@@ -406,6 +408,7 @@ public class UserProfileService {
         }
 
         user.changeSolvedStatistics(solvedProblemCount, solvedExecutionTimeSumMs);
+        userRepository.save(user);
     }
 
     private List<ProblemSolveHistory> createBestSolvedHistories(List<ProblemSolveHistory> histories) {
@@ -465,7 +468,7 @@ public class UserProfileService {
         return bestSolvedHistories.stream()
                 .map(history -> new UserProfileSolvedRecordOutput(
                         history.getProblemId(),
-                        problemStore.findProblem(history.getProblemId())
+                        problemRepository.findByProblemId(history.getProblemId())
                                 .map(problem -> problem.getTitle())
                                 .orElse(history.getProblemId()),
                         resolveDbmsType(history).getValue(),
@@ -498,7 +501,7 @@ public class UserProfileService {
 
     private Optional<Integer> calculateExecutionPercentile(ProblemSolveHistory history) {
         // 실행 백분위 계산
-        List<ProblemSolveHistory> bestSubmittedHistories = problemStore.findBestSubmittedHistories(history.getProblemId()).stream()
+        List<ProblemSolveHistory> bestSubmittedHistories = findBestSubmittedHistories(history.getProblemId()).stream()
                 .filter(candidateHistory -> resolveDbmsType(candidateHistory) == resolveDbmsType(history))
                 .toList();
 
@@ -516,6 +519,17 @@ public class UserProfileService {
         );
 
         return Optional.of(executionPercentile);
+    }
+
+    private List<ProblemSolveHistory> findBestSubmittedHistories(String problemId) {
+        // DB에서 문제별 최고 제출 기록 직접 조회 후 응답 순서 정렬
+        return problemSolveHistoryRepository.findAllByProblemId(problemId).stream()
+                .sorted(
+                        Comparator.comparingDouble(ProblemSolveHistory::getCost)
+                                .thenComparingLong(ProblemSolveHistory::getExecutionTimeMs)
+                                .thenComparing(ProblemSolveHistory::getHandle)
+                )
+                .toList();
     }
 
     private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {

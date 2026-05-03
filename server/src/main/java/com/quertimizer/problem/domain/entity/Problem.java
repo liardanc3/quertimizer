@@ -1,93 +1,81 @@
 package com.quertimizer.problem.domain.entity;
 
-import com.quertimizer.global.constant.DbmsType;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
+import com.quertimizer.judge.domain.model.DbmsType;
+import com.quertimizer.global.exception.DomainRuleViolationException;
+import com.quertimizer.global.exception.DomainRuleViolationType;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import org.hibernate.annotations.BatchSize;
 
-import java.util.ArrayList;
-import java.util.List;
+import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_UPDATE_DATA_INVALID;
 
-@Entity
-@Table(name = "problem")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Problem {
 
-    @Id
-    @Column(name = "problem_id", nullable = false, length = 12)
+    private Long id;
     private String problemId;
-
-    @Column(name = "problem_set_id", nullable = false, length = 6)
     private String problemSetId;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "problem_set_id", insertable = false, updatable = false)
-    private ProblemSet problemSet;
-
-    @BatchSize(size = 50)
-    @OrderBy("submittedAt DESC")
-    @OneToMany(mappedBy = "problem", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ProblemSubmitHistory> submitHistories = new ArrayList<>();
-
-    @BatchSize(size = 50)
-    @OrderBy("submittedAt DESC")
-    @OneToMany(mappedBy = "problem", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ProblemSolveHistory> solveHistories = new ArrayList<>();
-
-    @Column(nullable = false, length = 200)
     private String title;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
     private String ddl;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "dbms_type", nullable = false, length = 20)
     private DbmsType dbmsType;
-
-    @Column(columnDefinition = "TEXT")
     private String condition;
-
-    @Column(columnDefinition = "TEXT")
     private String output;
-
-    @Column(name = "output_sample", columnDefinition = "TEXT")
     private String sampleOutput;
-
-    @Column(columnDefinition = "TEXT")
     private String answerHash;
-
-    @Column(name = "answer_sql", columnDefinition = "TEXT")
     private String answerSql;
-
-    @Column(name = "sample_data_sql", columnDefinition = "TEXT")
     private String sampleDataSql;
 
-    @Column(name = "sample_dataset_id", length = 80)
-    private String sampleDatasetId;
+    public static Problem create(String problemSetId) {
+        // 문제 테이블셋 번호 기준 DBMS 유형을 가진 빈 문제 엔티티 생성
+        String normalizedProblemSetId = requireProblemSetId(problemSetId);
+        DbmsType dbmsType = DbmsType.fromScopedId(normalizedProblemSetId).orElse(DbmsType.POSTGRESQL);
+        return new Problem(
+                "", normalizedProblemSetId,
+                "", "", "", dbmsType,
+                "", "", "", "", "", ""
+        );
+    }
 
-    @Column(name = "judge_reference_id", length = 80)
-    private String judgeReferenceId;
+    public static Problem create(String problemSetId,
+                                 String title,
+                                 String description,
+                                 String ddl,
+                                 DbmsType dbmsType,
+                                 String condition,
+                                 String output,
+                                 String sampleDataSql,
+                                 String answerSql) {
+        // 문제 테이블셋과 요청 입력값을 가진 신규 문제 엔티티 생성
+        String normalizedProblemSetId = requireProblemSetId(problemSetId);
+        return new Problem(
+                "", normalizedProblemSetId,
+                title, description, ddl, dbmsType,
+                condition, output, sampleDataSql, "", "", answerSql
+        );
+    }
+
+    public static Problem create(String problemSetId,
+                                 String title,
+                                 String description,
+                                 String ddl,
+                                 DbmsType dbmsType,
+                                 String condition,
+                                 String output,
+                                 String sampleDataSql,
+                                 String sampleOutput,
+                                 String answerHash,
+                                 String answerSql) {
+        // 문제 테이블셋과 judge 산출물을 가진 신규 문제 엔티티 생성
+        String normalizedProblemSetId = requireProblemSetId(problemSetId);
+        return new Problem(
+                "", normalizedProblemSetId,
+                title, description, ddl, dbmsType,
+                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+        );
+    }
 
     public static Problem create(String problemId, String title, String description, DbmsType dbmsType) {
         // 문제 생성
-        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "", "", "");
+        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "");
     }
 
     public static Problem create(String problemId,
@@ -102,30 +90,99 @@ public class Problem {
                                  String sampleOutput,
                                  String answerHash,
                                  String answerSql) {
-        return create(
+        return new Problem(
                 problemId, problemSetId, title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql, "", ""
+                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
         );
     }
 
-    public static Problem create(String problemId,
-                                 String problemSetId,
-                                 String title,
-                                 String description,
-                                 String ddl,
-                                 DbmsType dbmsType,
-                                 String condition,
-                                 String output,
-                                 String sampleDataSql,
-                                 String sampleOutput,
-                                 String answerHash,
-                                 String answerSql,
-                                 String sampleDatasetId,
-                                 String judgeReferenceId) {
-        return new Problem(
+    public static Problem restore(Long id, String problemId, String problemSetId,
+                                  String title, String description, String ddl,
+                                  DbmsType dbmsType, String condition,
+                                  String output, String sampleDataSql,
+                                  String sampleOutput, String answerHash,
+                                  String answerSql) {
+        // 저장된 문제 상태 복원
+        Problem problem = new Problem(
                 problemId, problemSetId, title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql, sampleDatasetId, judgeReferenceId
+                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
         );
+        problem.id = id;
+        return problem;
+    }
+
+    public Problem updateInfo(String title,
+                              String description,
+                              String ddl,
+                              DbmsType dbmsType,
+                              String condition,
+                              String output,
+                              String sampleDataSql,
+                              String answerSql) {
+        // 요청 입력값으로 문제 기본 정보 전체 교체
+        this.title = title;
+        this.description = description;
+        this.ddl = ddl;
+        this.dbmsType = dbmsType;
+        this.condition = condition;
+        this.output = output;
+        this.sampleDataSql = sampleDataSql;
+        this.answerSql = answerSql;
+        return this;
+    }
+
+    public Problem updateInfo(String title,
+                              String description,
+                              String ddl,
+                              DbmsType dbmsType,
+                              String condition,
+                              String output,
+                              String sampleDataSql,
+                              String sampleOutput,
+                              String answerHash,
+                              String answerSql) {
+        // 요청 입력값과 judge 산출물로 문제 정보 전체 교체
+        this.title = title;
+        this.description = description;
+        this.ddl = ddl;
+        this.dbmsType = dbmsType;
+        this.condition = condition;
+        this.output = output;
+        this.sampleDataSql = sampleDataSql;
+        this.sampleOutput = sampleOutput;
+        this.answerHash = answerHash;
+        this.answerSql = answerSql;
+        return this;
+    }
+
+    public Problem update(String title, String description, String condition, String output) {
+        // 문제 설명성 정보만 교체
+        this.title = title;
+        this.description = description;
+        this.condition = condition;
+        this.output = output;
+        return this;
+    }
+
+    public Problem updateAnswerHash(String answerHash) {
+        // 문제 정답 해시 교체
+        this.answerHash = answerHash;
+        return this;
+    }
+
+    public Problem updateSampleOutput(String sampleOutput) {
+        // 문제 예시 출력 교체
+        this.sampleOutput = sampleOutput;
+        return this;
+    }
+
+    public Problem validateSql() {
+        // 문제 SQL 자료 유효성 검증
+        validateText(ddl);
+        validateText(sampleDataSql);
+        validateText(answerSql);
+
+        return this;
     }
 
     public void changeContent(String title,
@@ -138,21 +195,7 @@ public class Problem {
                               String sampleOutput,
                               String answerHash,
                               String answerSql) {
-        changeContent(title, description, ddl, dbmsType, condition, output, sampleDataSql, sampleOutput, answerHash, answerSql, sampleDatasetId, judgeReferenceId);
-    }
-
-    public void changeContent(String title,
-                              String description,
-                              String ddl,
-                              DbmsType dbmsType,
-                              String condition,
-                              String output,
-                              String sampleDataSql,
-                              String sampleOutput,
-                              String answerHash,
-                              String answerSql,
-                              String sampleDatasetId,
-                              String judgeReferenceId) {
+        // 요청 입력값과 judge 산출물로 문제 정보 전체 교체
         this.title = title;
         this.description = description;
         this.ddl = ddl;
@@ -163,8 +206,6 @@ public class Problem {
         this.sampleOutput = sampleOutput;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
-        this.sampleDatasetId = sampleDatasetId;
-        this.judgeReferenceId = judgeReferenceId;
     }
 
     public String getOutputSample() {
@@ -217,6 +258,39 @@ public class Problem {
         return DbmsType.extractBaseProblemSetId(problemSetId);
     }
 
+    private static String requireProblemSetId(String problemSetId) {
+        // 문제 테이블셋 번호 null 또는 공백 여부 검사
+        if (problemSetId == null || problemSetId.isBlank()) {
+            throw new IllegalArgumentException("problemSetId is required.");
+        }
+
+        // 문제 테이블셋 번호 공백 제거 후 반환
+        return problemSetId.trim();
+    }
+
+    public void assignProblemId(Long id) {
+        // DB 생성 ID 기반 문제 번호 부여 대상 여부 검사
+        if (problemId != null && !problemId.isBlank()) {
+            return;
+        }
+
+        // 문제 테이블셋 번호와 DB 생성 ID 조합
+        this.id = id;
+        problemId = problemSetId + "-" + formatFiveDigits(id);
+    }
+
+    private static String formatFiveDigits(Long value) {
+        // 다섯 자리 문자열 포맷
+        return "%05d".formatted(value);
+    }
+
+    private void validateText(String value) {
+        // 문제 업데이트 필수 문자열 존재 여부 검사
+        if (value == null || value.isBlank()) {
+            throw new DomainRuleViolationException(PROBLEM_UPDATE_DATA_INVALID.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
+        }
+    }
+
     private Problem(String problemId,
                     String problemSetId,
                     String title,
@@ -228,9 +302,7 @@ public class Problem {
                     String sampleDataSql,
                     String sampleOutput,
                     String answerHash,
-                    String answerSql,
-                    String sampleDatasetId,
-                    String judgeReferenceId) {
+                    String answerSql) {
         this.problemId = problemId;
         this.problemSetId = problemSetId;
         this.title = title;
@@ -243,8 +315,6 @@ public class Problem {
         this.sampleOutput = sampleOutput;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
-        this.sampleDatasetId = sampleDatasetId;
-        this.judgeReferenceId = judgeReferenceId;
     }
 
 }

@@ -2,7 +2,7 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.output.BlockedIpItemOutput;
 import com.quertimizer.auth.application.output.BlockedUserItemOutput;
-import com.quertimizer.auth.application.port.BlockedIpRepository;
+import com.quertimizer.auth.application.port.out.BlockedIpRepositoryPort;
 import com.quertimizer.auth.domain.entity.BlockedIp;
 import com.quertimizer.auth.domain.model.BlockedAccountPageConstant;
 import com.quertimizer.user.domain.entity.User;
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class AccountRestrictionService {
 
-    private final BlockedIpRepository blockedIpRepository;
+    private final BlockedIpRepositoryPort blockedIpRepository;
 
     @Transactional(readOnly = true)
     public boolean isBlockedIp(String ipAddress) {

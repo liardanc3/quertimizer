@@ -1,7 +1,7 @@
 package com.quertimizer.alarm.application.service;
 
 import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
-import com.quertimizer.alarm.application.port.AlarmTemplateRepository;
+import com.quertimizer.alarm.application.port.out.AlarmTemplateRepositoryPort;
 import com.quertimizer.alarm.domain.entity.AlarmTemplate;
 import com.quertimizer.alarm.domain.model.AlarmTemplateDefault;
 import com.quertimizer.alarm.domain.model.AlarmTemplateDefaults;
@@ -23,7 +23,7 @@ import static com.quertimizer.alarm.domain.model.AlarmTemplateFailReason.ALARM_T
 @Transactional
 public class AlarmTemplateService {
 
-    private final AlarmTemplateRepository alarmTemplateRepository;
+    private final AlarmTemplateRepositoryPort alarmTemplateRepository;
 
     @Transactional
     public void ensureDefaultTemplates() {

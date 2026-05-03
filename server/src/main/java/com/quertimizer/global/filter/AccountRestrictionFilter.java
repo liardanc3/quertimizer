@@ -2,8 +2,9 @@ package com.quertimizer.global.filter;
 
 import com.quertimizer.auth.application.service.AccountRestrictionService;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
-import com.quertimizer.global.exception.BusinessException;
+import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.support.ClientIpResolver;
+import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +26,7 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
     private final AccountRestrictionService accountRestrictionService;
     private final LoginPolicy loginPolicy;
     private final ClientIpResolver clientIpResolver;
+    private final UserRepositoryPort userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -60,10 +62,10 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
     private boolean isBlockedUser(Authentication authentication) {
         // 차단 사용자 여부 확인
         try {
-            loginPolicy.validateBlockedUser(authentication.getName());
+            userRepository.findByEmailIgnoreCase(authentication.getName())
+                    .ifPresent(loginPolicy::validateBlockedUser);
             return false;
-
-        } catch (BusinessException exception) {
+        } catch (DomainRuleViolationException exception) {
             return true;
         }
     }
