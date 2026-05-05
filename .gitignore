@@ -4,3 +4,4 @@
 logs/
 *.log
 *.log.gz
+skills-lock.json

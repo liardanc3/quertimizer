@@ -1,0 +1,124 @@
+.ranking-page.submit-history-page.home-page.page-stack {
+  gap: 0;
+}
+
+.main-content:has(.ranking-page) {
+  padding-bottom: 0.68rem;
+}
+
+.app-shell:has(.ranking-page) .app-footer-inner {
+  padding-top: 0.44rem;
+}
+
+.ranking-page .submit-history-toolbar-stack,
+.ranking-toolbar-stack {
+  gap: 0.9rem;
+}
+
+.ranking-dbms-tab-row {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.ranking-search-form {
+  width: 100%;
+}
+
+.ranking-search-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.ranking-search-input {
+  font-weight: 400;
+}
+
+.ranking-search-input::placeholder {
+  font-weight: 400;
+}
+
+.ranking-page .submit-history-board,
+.ranking-board {
+  display: grid;
+  gap: 0.56rem;
+  margin-top: 0;
+}
+
+.ranking-page .submit-history-head,
+.ranking-head {
+  border: 0;
+  border-bottom: 1px solid rgba(219, 230, 242, 0.82);
+  background: transparent;
+  padding-top: 0;
+  padding-bottom: 0.58rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.ranking-head::before,
+.ranking-head::after {
+  content: none;
+}
+
+.ranking-table {
+  position: relative;
+  min-width: 52rem;
+}
+
+.ranking-table-shell {
+  position: relative;
+}
+
+.ranking-table.is-loading > :not(.ranking-table-loading-overlay) {
+}
+
+.ranking-table .submit-history-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+}
+
+.ranking-table .submit-history-empty-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ranking-head .submit-history-head-cell {
+  justify-content: center;
+}
+
+.ranking-head .ranking-head-handle-cell {
+  justify-content: flex-start;
+  justify-self: stretch;
+  text-align: left;
+}
+
+.ranking-body .submit-history-cell {
+  justify-content: center;
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.ranking-body .submit-history-cell[data-label='Handle'] {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.ranking-body .submit-history-link-button {
+  font-weight: 800;
+}
+
+.ranking-body .ranking-emphasis-cell {
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .ranking-table {
+    min-width: 44rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .ranking-head {
+    border-bottom-color: var(--line-soft);
+  }
+}

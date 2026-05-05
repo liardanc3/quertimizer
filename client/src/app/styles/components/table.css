@@ -1,0 +1,67 @@
+.data-table {
+  position: relative;
+}
+
+.data-board {
+  display: grid;
+  gap: 0.56rem;
+  margin-top: 0;
+}
+
+.data-row {
+  line-height: var(--data-row-line-height);
+}
+
+.data-table [role='row'],
+.data-table [role='rowgroup'] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3.25rem;
+}
+
+.data-cell,
+.data-table [role='cell'],
+.data-table [role='columnheader'] {
+  min-width: 0;
+}
+
+.data-table [role='columnheader'] > span,
+.data-table [role='cell'] > span,
+.data-table button {
+  min-width: 0;
+}
+
+.data-table-empty-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-height: 8.6rem;
+  padding: 1.35rem 0.75rem;
+  border-bottom: 1px dashed var(--line-muted);
+  background: transparent;
+}
+
+.data-table-empty-cell {
+  display: grid;
+  grid-column: 1 / -1;
+  place-items: center;
+  justify-self: stretch;
+  width: 100%;
+  min-height: 0;
+  color: var(--ink-subtle);
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: center;
+  text-wrap: balance;
+}
+
+@media (prefers-color-scheme: dark) {
+  .data-table-empty-row {
+    border-bottom-color: rgba(148, 163, 184, 0.3);
+    background: transparent;
+  }
+
+  .data-table-empty-cell {
+    color: var(--ink-subtle);
+  }
+}
