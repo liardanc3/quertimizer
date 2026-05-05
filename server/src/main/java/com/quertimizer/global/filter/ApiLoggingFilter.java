@@ -47,7 +47,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
         String prefix = logFormatter.prefix(actor);
 
         // 요청 라인과 쿼리스트링 로그 기록
-        log.info("{}", logFormatter.formatHttpLine(
+        log.debug("{}", logFormatter.formatHttpLine(
                 actor,
                 "API Request",
                 requestWrapper.getMethod() + " " + requestPath(requestWrapper)
@@ -62,7 +62,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
             if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), requestWrapper.getContentType(), requestWrapper.getContentLengthLong())) {
                 logLines(logFormatter.formatRequestBodyLines(prefix, extractRequestBody(requestWrapper)));
             }
-            log.info("{}", logFormatter.formatHttpLine(actor, "API Response", responseStatus(responseWrapper)));
+            log.debug("{}", logFormatter.formatHttpLine(actor, "API Response", responseStatus(responseWrapper)));
             if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), responseWrapper.getContentType(), responseWrapper.getContentAsByteArray().length)) {
                 logLines(logFormatter.formatResponseBodyLines(prefix, extractResponseBody(responseWrapper)));
             }

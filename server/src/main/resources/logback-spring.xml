@@ -11,22 +11,55 @@
 	</appender>
 
 	<springProfile name="prod">
-		<appender name="PROD_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<appender name="DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
 			<append>true</append>
+			<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+				<level>DEBUG</level>
+			</filter>
 			<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
 				<charset>UTF-8</charset>
 				<pattern>${LOG_PATTERN}</pattern>
 			</encoder>
 			<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-				<fileNamePattern>${QUERTIMIZER_LOG_DIR}/%d{yyyy-MM, aux}/%d{yyyy-MM-dd}.log.gz</fileNamePattern>
-				<maxHistory>90</maxHistory>
+				<fileNamePattern>${QUERTIMIZER_LOG_DIR}/debug/%d{yyyy-MM-dd}.log</fileNamePattern>
+				<maxHistory>1</maxHistory>
+				<cleanHistoryOnStart>true</cleanHistoryOnStart>
+			</rollingPolicy>
+		</appender>
+
+		<appender name="INFO_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+			<append>true</append>
+			<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+				<level>INFO</level>
+			</filter>
+			<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+				<charset>UTF-8</charset>
+				<pattern>${LOG_PATTERN}</pattern>
+			</encoder>
+			<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+				<fileNamePattern>${QUERTIMIZER_LOG_DIR}/info/%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+				<maxHistory>30</maxHistory>
 				<totalSizeCap>3GB</totalSizeCap>
 				<cleanHistoryOnStart>true</cleanHistoryOnStart>
 			</rollingPolicy>
 		</appender>
+
+		<appender name="WARN_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+			<append>true</append>
+			<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+				<level>WARN</level>
+			</filter>
+			<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+				<charset>UTF-8</charset>
+				<pattern>${LOG_PATTERN}</pattern>
+			</encoder>
+			<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+				<fileNamePattern>${QUERTIMIZER_LOG_DIR}/warn/%d{yyyy-MM, aux}/%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+			</rollingPolicy>
+		</appender>
 	</springProfile>
 
-	<logger name="com.quertimizer" level="INFO"/>
+	<logger name="com.quertimizer" level="DEBUG"/>
 	<logger name="org.springframework" level="INFO"/>
 	<logger name="org.hibernate" level="WARN"/>
 	<logger name="org.hibernate.SQL" level="WARN"/>
@@ -37,7 +70,9 @@
 	<springProfile name="prod">
 		<root level="INFO">
 			<appender-ref ref="CONSOLE"/>
-			<appender-ref ref="PROD_FILE"/>
+			<appender-ref ref="DEBUG_FILE"/>
+			<appender-ref ref="INFO_FILE"/>
+			<appender-ref ref="WARN_FILE"/>
 		</root>
 	</springProfile>
 
