@@ -13,7 +13,7 @@ public class EnvironmentPolicy {
     }
 
     public static EnvironmentPolicy interactive() {
-        return new EnvironmentPolicy(true, true, true);
+        return new EnvironmentPolicy(true, true, false);
     }
 
     public boolean isInitializeStatisticsAfterLoad() {

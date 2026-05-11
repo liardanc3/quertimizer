@@ -1,23 +1,25 @@
 package com.quertimizer.user.application.service;
 
-import com.quertimizer.user.application.port.in.GetBlockedIpsUseCase;
-import com.quertimizer.auth.application.port.out.BlockedIpRepositoryPort;
-import com.quertimizer.auth.application.output.BlockedIpPageOutput;
-import com.quertimizer.auth.application.service.AccountRestrictionService;
-import com.quertimizer.auth.domain.entity.BlockedIp;
 import com.quertimizer.user.application.input.BlockedAccountPageInput;
+import com.quertimizer.user.application.output.BlockedIpItemOutput;
+import com.quertimizer.user.application.output.BlockedIpPageOutput;
+import com.quertimizer.user.application.port.in.GetBlockedIpsUseCase;
+import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
+import com.quertimizer.user.domain.model.UserBlockedIp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.quertimizer.user.domain.model.UserBlockedAccountPageConstant.DEFAULT_PAGE_SIZE;
+import static com.quertimizer.user.domain.model.UserBlockedAccountPageConstant.MAX_PAGE_SIZE;
+
 @Component
 @RequiredArgsConstructor
 public class GetBlockedIps implements GetBlockedIpsUseCase {
 
-    private final BlockedIpRepositoryPort blockedIpRepository;
-    private final AccountRestrictionService accountRestrictionService;
+    private final UserAccountRestrictionPort userAccountRestrictionPort;
 
     /**
      * 차단된 IP 목록을 조회한다.
@@ -34,11 +36,22 @@ public class GetBlockedIps implements GetBlockedIpsUseCase {
     @Override
     public BlockedIpPageOutput execute(BlockedAccountPageInput input) {
         int currentPage = Math.max(1, input.getPage());
-        int pageSize = accountRestrictionService.normalizePageSize(input.getPageSize());
-        Page<BlockedIp> blockedIpPage = blockedIpRepository.findAllByOrderByBlockedAtDescIpAddressAsc(PageRequest.of(currentPage - 1, pageSize));
+        int pageSize = normalizePageSize(input.getPageSize());
+        Page<UserBlockedIp> blockedIpPage = userAccountRestrictionPort.findBlockedIps(PageRequest.of(currentPage - 1, pageSize));
         return new BlockedIpPageOutput(
                 currentPage, pageSize, blockedIpPage.getTotalElements(), Math.max(1, blockedIpPage.getTotalPages()),
-                blockedIpPage.getContent().stream().map(accountRestrictionService::toBlockedIpItemOutput).toList()
+                blockedIpPage.getContent().stream()
+                        .map(blockedIp -> new BlockedIpItemOutput(blockedIp.getIpAddress(), blockedIp.getBlockedAt()))
+                        .toList()
         );
+    }
+
+    private int normalizePageSize(Integer requestedPageSize) {
+        // 페이지 크기 정규화
+        if (requestedPageSize == null) {
+            return DEFAULT_PAGE_SIZE;
+        }
+
+        return Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize));
     }
 }

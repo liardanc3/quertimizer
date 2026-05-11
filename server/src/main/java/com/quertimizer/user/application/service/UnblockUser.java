@@ -1,7 +1,7 @@
 package com.quertimizer.user.application.service;
 
 import com.quertimizer.user.application.port.in.UnblockUserUseCase;
-import com.quertimizer.auth.application.port.out.BlockedIpRepositoryPort;
+import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UnblockUser implements UnblockUserUseCase {
 
     private final UserRepositoryPort userRepository;
-    private final BlockedIpRepositoryPort blockedIpRepository;
+    private final UserAccountRestrictionPort userAccountRestrictionPort;
 
     /**
      * 사용자 차단을 해제한다.
@@ -32,6 +32,6 @@ public class UnblockUser implements UnblockUserUseCase {
                     user.unblock();
                     userRepository.save(user);
                 });
-        blockedIpRepository.deleteByBlockedHandle(handle);
+        userAccountRestrictionPort.unblockHandle(handle);
     }
 }

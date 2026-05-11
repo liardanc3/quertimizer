@@ -1,12 +1,10 @@
 package com.quertimizer.problem.application.output;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@RequiredArgsConstructor
+@Data
 public class ProblemExecutionOutput {
 
     private final String problemId;

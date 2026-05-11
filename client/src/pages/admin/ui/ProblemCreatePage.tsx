@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { StatusPopup } from '@/shared/ui';
 import useDismissableLayer from '@/shared/lib/hooks/use-dismissable-layer';
+import { subscribeSessionSocketMessages, type SessionSocketMessage } from '@/shared/auth/session-socket';
 import {
   createProblem,
   fetchAdminProblemOptions,
   fetchProblemDetail,
   fetchProblemSetDetail,
   fetchProblemSets,
-  previewProblemOutput,
+  previewProblemExamples,
   type DbmsType,
+  type ProblemDataExampleTableData,
+  type ProblemDataPreviewData,
   type ProblemDetailData,
   type ProblemOutputPreviewData,
   type ProblemSetDetailData,
@@ -16,10 +19,11 @@ import {
 } from '@/shared/api/problem-api';
 import { navigate } from '@/shared/config/navigation';
 import { getUiText, getUiTextValue, useUiText } from '@/shared/config/ui-text';
+import ReactFlowDiagram from '@/pages/problem-solve/ui/ReactFlowDiagram';
 import './ProblemCreatePage.css';
 
-type SectionKey = 'condition' | 'output' | 'ddl' | 'actualData' | 'sampleData' | 'outputPreview' | 'answerSql';
-type MissingFieldKey = 'title' | 'description' | 'condition' | 'output' | 'ddl' | 'actualData' | 'sampleData' | 'answerSql';
+type SectionKey = 'condition' | 'output' | 'ddl' | 'actualData' | 'hiddenData' | 'dataPreview' | 'outputPreview' | 'answerSql';
+type MissingFieldKey = 'title' | 'description' | 'condition' | 'output' | 'ddl' | 'actualData' | 'hiddenData' | 'answerSql';
 
 interface EditableDraftState<T> {
   appliedValue: T;
@@ -53,31 +57,85 @@ interface MissingField {
   label: string;
 }
 
+interface ProblemCreateProgressStep {
+  stepKey: string;
+  status: 'waiting' | 'running' | 'success' | 'error';
+  message: string;
+  stepOrder: number;
+}
+
+interface ProblemCreateProgressMessage extends SessionSocketMessage {
+  type: 'problem.create.progress';
+  stepKey?: unknown;
+  status?: unknown;
+  message?: unknown;
+  stepOrder?: unknown;
+  problemId?: unknown;
+}
+
 interface SectionRefs {
   condition: HTMLElement | null;
   output: HTMLElement | null;
   ddl: HTMLElement | null;
   actualData: HTMLElement | null;
-  sampleData: HTMLElement | null;
+  hiddenData: HTMLElement | null;
   answerSql: HTMLElement | null;
+}
+
+interface ParsedSchemaColumn {
+  name: string;
+  type: string;
+  description: string;
+  primaryKey: boolean;
+  foreignKey: boolean;
+  reference?: {
+    tableName: string;
+    columnName: string;
+  };
+}
+
+interface ParsedSchemaRelation {
+  sourceTableName: string;
+  sourceColumnName: string;
+  targetTableName: string;
+  targetColumnName: string;
+}
+
+interface ParsedSchemaTable {
+  name: string;
+  description: string;
+  columns: ParsedSchemaColumn[];
+}
+
+interface ParsedSchemaDdl {
+  tables: ParsedSchemaTable[];
+  relations: ParsedSchemaRelation[];
 }
 
 const EMPTY_PROBLEM_SET_DETAIL: ProblemSetDetailData = {
   problemSetId: '',
-  ddlPostgresql: '',
-  ddlMysql: '',
-  dataPostgresql: '',
-  dataMysql: '',
+  ddl: '',
+  actualDataSql: '',
 };
 
 const EMPTY_PREVIEW_OUTPUT: ProblemOutputPreviewData = {
   columns: [],
   rows: [],
   rowCount: 0,
+  visibleRows: 0,
+  rowLimit: 10,
+};
+
+const EMPTY_DATA_PREVIEW: ProblemDataPreviewData = {
+  rowLimit: 10,
+  tables: [],
 };
 
 const NEW_PROBLEM_SET_OPTION_VALUE = '__new__';
 const NEW_PROBLEM_OPTION_VALUE = '__new_problem__';
+const SCHEMA_TABLE_COLUMN_TEMPLATE = 'minmax(9.2rem, 2fr) minmax(13rem, 3.4fr) minmax(8rem, 1.6fr) minmax(4.5rem, 1fr) minmax(9.2rem, 2fr)';
+const ROW_COUNT_FORMATTER = new Intl.NumberFormat('ko-KR');
+const MAX_HIDDEN_DATA_SQL_COUNT = 10;
 
 function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
   const [appliedValue, setAppliedValue] = useState(initialValue);
@@ -142,7 +200,7 @@ function resolveScopedDbms(value: string | null | undefined): DbmsType {
 }
 
 function getTableNamesFromDdl(ddl: string) {
-  const pattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\(/gi;
+  const pattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\s*\(/gi;
   const tableNames: string[] = [];
   let match: RegExpExecArray | null;
 
@@ -161,7 +219,7 @@ function filterDdlByTableNames(ddl: string, includedTableNames: string[]) {
   }
 
   const tableNameSet = new Set(includedTableNames);
-  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\([\s\S]*?\)\s*(?:ENGINE\s*=\s*\w+\s*)?(?:COMMENT\s*=\s*'[^']*'\s*)?;/gi;
+  const createTablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\s*\([\s\S]*?\)\s*(?:ENGINE\s*=\s*\w+\s*)?(?:(?:DEFAULT\s+)?CHARSET\s*=\s*[\w\d_]+\s*)?(?:COLLATE\s*=\s*[\w\d_]+\s*)?(?:COMMENT\s*=\s*'[^']*'\s*)?;/gi;
   const commentPattern = /COMMENT ON (TABLE|COLUMN)\s+([\s\S]*?);/gi;
   const fragments: string[] = [];
   let match: RegExpExecArray | null;
@@ -173,7 +231,7 @@ function filterDdlByTableNames(ddl: string, includedTableNames: string[]) {
   }
 
   while ((match = commentPattern.exec(ddl)) != null) {
-    const targetTableName = match[2].trim().split('.')[0]?.trim().replace(/^.*\./, '');
+    const targetTableName = resolveCommentTargetTableName(match[1], match[2]);
     if (targetTableName && tableNameSet.has(targetTableName)) {
       fragments.push(`COMMENT ON ${match[1]} ${match[2]};`.trim());
     }
@@ -182,23 +240,317 @@ function filterDdlByTableNames(ddl: string, includedTableNames: string[]) {
   return fragments.join('\n\n').trim();
 }
 
-function filterDataSqlByTableNames(dataSql: string, includedTableNames: string[]) {
-  if (includedTableNames.length === 0 || dataSql.trim() === '') {
-    return dataSql.trim();
+function resolveCommentTargetTableName(commentKind: string, commentBody: string) {
+  const targetExpression = commentBody.match(/^([\s\S]*?)\s+IS\s+/i)?.[1].trim() ?? '';
+  const targetTokens = targetExpression.replace(/[`"]/g, '').split('.').map((token) => token.trim()).filter(Boolean);
+
+  if (commentKind.toUpperCase() === 'TABLE') {
+    return targetTokens[targetTokens.length - 1] ?? '';
   }
 
-  const tableNameSet = new Set(includedTableNames);
-  const insertPattern = /INSERT INTO\s+(?:[\w]+\.)?(\w+)\s*\(([\s\S]*?)\)\s*VALUES\s*([\s\S]*?);/gi;
-  const fragments: string[] = [];
+  return targetTokens[targetTokens.length - 2] ?? '';
+}
+
+function parseSchemaMetadata(rawSchemaMetadata: string): ParsedSchemaDdl {
+  if (rawSchemaMetadata.trim() === '') {
+    return { tables: [], relations: [] };
+  }
+
+  try {
+    const parsed = JSON.parse(rawSchemaMetadata) as { tables?: unknown; relations?: unknown };
+    const tables = Array.isArray(parsed.tables)
+      ? parsed.tables
+          .filter((table): table is Record<string, unknown> => typeof table === 'object' && table != null)
+          .map((table) => ({
+            name: typeof table.name === 'string' ? table.name : '',
+            description: typeof table.description === 'string' ? table.description : '',
+            columns: Array.isArray(table.columns)
+              ? table.columns
+                  .filter((column): column is Record<string, unknown> => typeof column === 'object' && column != null)
+                  .map((column) => {
+                    const reference = typeof column.reference === 'object' && column.reference != null
+                      ? column.reference as Record<string, unknown>
+                      : null;
+
+                    return {
+                      name: typeof column.name === 'string' ? column.name : '',
+                      type: typeof column.type === 'string' ? column.type : '',
+                      description: typeof column.description === 'string' ? column.description : '',
+                      primaryKey: column.primaryKey === true,
+                      foreignKey: column.foreignKey === true,
+                      reference: reference == null ? undefined : {
+                        tableName: typeof reference.tableName === 'string' ? reference.tableName : '',
+                        columnName: typeof reference.columnName === 'string' ? reference.columnName : '',
+                      },
+                    };
+                  })
+                  .filter((column) => column.name !== '')
+              : [],
+          }))
+          .filter((table) => table.name !== '')
+      : [];
+    const relations = Array.isArray(parsed.relations)
+      ? parsed.relations
+          .filter((relation): relation is Record<string, unknown> => typeof relation === 'object' && relation != null)
+          .map((relation) => ({
+            sourceTableName: typeof relation.sourceTableName === 'string' ? relation.sourceTableName : '',
+            sourceColumnName: typeof relation.sourceColumnName === 'string' ? relation.sourceColumnName : '',
+            targetTableName: typeof relation.targetTableName === 'string' ? relation.targetTableName : '',
+            targetColumnName: typeof relation.targetColumnName === 'string' ? relation.targetColumnName : '',
+          }))
+          .filter((relation) => relation.sourceTableName !== '' && relation.targetTableName !== '')
+      : [];
+
+    return { tables, relations: dedupeRelations(relations) };
+  } catch {
+    return { tables: [], relations: [] };
+  }
+}
+
+function parseSchemaDdl(ddl: string): ParsedSchemaDdl {
+  const createTablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\s*\(([\s\S]*?)\)\s*(?:ENGINE\s*=\s*\w+\s*)?(?:(?:DEFAULT\s+)?CHARSET\s*=\s*[\w\d_]+\s*)?(?:COLLATE\s*=\s*[\w\d_]+\s*)?(?:COMMENT\s*=\s*'((?:''|[^'])*)'\s*)?;/gi;
+  const tableComments = parseTableComments(ddl);
+  const columnComments = parseColumnComments(ddl);
+  const tables: ParsedSchemaTable[] = [];
+  const relations: ParsedSchemaRelation[] = [];
   let match: RegExpExecArray | null;
 
-  while ((match = insertPattern.exec(dataSql)) != null) {
-    if (tableNameSet.has(match[1])) {
-      fragments.push(match[0].trim());
+  while ((match = createTablePattern.exec(ddl)) != null) {
+    const tableName = normalizeSqlIdentifier(match[1]);
+    const columns: ParsedSchemaColumn[] = [];
+
+    splitCreateTableItems(match[2]).forEach((line) => {
+      if (/^CONSTRAINT\s+/i.test(line) || /^FOREIGN\s+KEY\s*\(/i.test(line)) {
+        const foreignKeyMatch = line.match(/FOREIGN\s+KEY\s*\([`"]?(\w+)[`"]?\)\s+REFERENCES\s+(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\s*\([`"]?(\w+)[`"]?\)/i);
+
+        if (!foreignKeyMatch) {
+          return;
+        }
+
+        const sourceColumnName = normalizeSqlIdentifier(foreignKeyMatch[1]);
+        const targetTableName = normalizeSqlIdentifier(foreignKeyMatch[2]);
+        const targetColumnName = normalizeSqlIdentifier(foreignKeyMatch[3]);
+        const sourceColumn = columns.find((column) => column.name === sourceColumnName);
+
+        if (sourceColumn) {
+          sourceColumn.foreignKey = true;
+          sourceColumn.reference = { tableName: targetTableName, columnName: targetColumnName };
+        }
+
+        relations.push({
+          sourceTableName: targetTableName, sourceColumnName: targetColumnName,
+          targetTableName: tableName, targetColumnName: sourceColumnName,
+        });
+        return;
+      }
+
+      if (/^PRIMARY\s+KEY\s*\(/i.test(line)) {
+        extractKeyColumnNames(line).forEach((primaryKeyColumnName) => {
+          const targetColumn = columns.find((column) => column.name === primaryKeyColumnName);
+          if (targetColumn) {
+            targetColumn.primaryKey = true;
+          }
+        });
+        return;
+      }
+
+      const columnMatch = line.match(/^[`"]?(\w+)[`"]?\s+(.+)$/);
+      if (!columnMatch) {
+        return;
+      }
+
+      const columnName = normalizeSqlIdentifier(columnMatch[1]);
+      const remainder = columnMatch[2];
+      const referenceMatch = remainder.match(/REFERENCES\s+(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\s*\([`"]?(\w+)[`"]?\)/i);
+      const columnDescription = columnComments.get(`${tableName}.${columnName}`) ?? parseInlineColumnComment(remainder) ?? describeSchemaColumn(columnName);
+
+      columns.push({
+        name: columnName,
+        type: extractColumnType(remainder),
+        description: columnDescription,
+        primaryKey: /PRIMARY\s+KEY/i.test(remainder),
+        foreignKey: referenceMatch != null,
+        reference: referenceMatch == null
+          ? undefined
+          : { tableName: normalizeSqlIdentifier(referenceMatch[1]), columnName: normalizeSqlIdentifier(referenceMatch[2]) },
+      });
+
+      if (referenceMatch != null) {
+        relations.push({
+          sourceTableName: normalizeSqlIdentifier(referenceMatch[1]), sourceColumnName: normalizeSqlIdentifier(referenceMatch[2]),
+          targetTableName: tableName, targetColumnName: columnName,
+        });
+      }
+    });
+
+    tables.push({
+      name: tableName,
+      description: tableComments.get(tableName) ?? (match[3] ? decodeSqlComment(match[3]) : `${formatSchemaIdentifier(tableName)} 테이블`),
+      columns,
+    });
+  }
+
+  return { tables, relations: dedupeRelations(relations) };
+}
+
+function splitCreateTableItems(definition: string) {
+  const items: string[] = [];
+  let startIndex = 0;
+  let depth = 0;
+  let quote: string | null = null;
+
+  for (let index = 0; index < definition.length; index += 1) {
+    const currentCharacter = definition[index];
+    const nextCharacter = definition[index + 1];
+
+    if (quote != null) {
+      if (currentCharacter === quote) {
+        if (quote === "'" && nextCharacter === "'") {
+          index += 1;
+          continue;
+        }
+
+        quote = null;
+      }
+      continue;
+    }
+
+    if (currentCharacter === "'" || currentCharacter === '"' || currentCharacter === '`') {
+      quote = currentCharacter;
+      continue;
+    }
+
+    if (currentCharacter === '(') {
+      depth += 1;
+      continue;
+    }
+
+    if (currentCharacter === ')') {
+      depth = Math.max(depth - 1, 0);
+      continue;
+    }
+
+    if (currentCharacter === ',' && depth === 0) {
+      items.push(definition.slice(startIndex, index).trim());
+      startIndex = index + 1;
     }
   }
 
-  return fragments.join('\n\n').trim();
+  items.push(definition.slice(startIndex).trim());
+  return items.map((item) => item.replace(/,$/, '').trim()).filter(Boolean);
+}
+
+function parseTableComments(ddl: string) {
+  const tableCommentPattern = /COMMENT\s+ON\s+TABLE\s+(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\s+IS\s+'((?:''|[^'])*)';/gi;
+  const tableComments = new Map<string, string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = tableCommentPattern.exec(ddl)) != null) {
+    tableComments.set(normalizeSqlIdentifier(match[1]), decodeSqlComment(match[2]));
+  }
+
+  return tableComments;
+}
+
+function parseColumnComments(ddl: string) {
+  const columnCommentPattern = /COMMENT\s+ON\s+COLUMN\s+(?:[`"\w]+\.)?[`"]?(\w+)[`"]?\.[`"]?(\w+)[`"]?\s+IS\s+'((?:''|[^'])*)';/gi;
+  const columnComments = new Map<string, string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = columnCommentPattern.exec(ddl)) != null) {
+    columnComments.set(`${normalizeSqlIdentifier(match[1])}.${normalizeSqlIdentifier(match[2])}`, decodeSqlComment(match[3]));
+  }
+
+  return columnComments;
+}
+
+function parseInlineColumnComment(remainder: string) {
+  const commentMatch = remainder.match(/\s+COMMENT\s+'((?:''|[^'])*)'/i);
+  return commentMatch ? decodeSqlComment(commentMatch[1]) : null;
+}
+
+function decodeSqlComment(value: string) {
+  return value.replace(/''/g, "'");
+}
+
+function extractColumnType(remainder: string) {
+  return remainder
+    .replace(/\s+NOT\s+NULL/gi, '')
+    .replace(/\s+NULL/gi, '')
+    .replace(/\s+PRIMARY\s+KEY/gi, '')
+    .replace(/\s+AUTO_INCREMENT/gi, '')
+    .replace(/\s+CHECK\s*\(.+$/gi, '')
+    .replace(/\s+DEFAULT\s+.+$/gi, '')
+    .replace(/\s+REFERENCES\s+.+$/gi, '')
+    .replace(/\s+COMMENT\s+'.+$/gi, '')
+    .trim();
+}
+
+function extractKeyColumnNames(line: string) {
+  return (line.match(/\(([^)]+)\)/)?.[1] ?? '')
+    .split(',')
+    .map((columnName) => normalizeSqlIdentifier(columnName))
+    .filter(Boolean);
+}
+
+function dedupeRelations(relations: ParsedSchemaRelation[]) {
+  const relationMap = new Map<string, ParsedSchemaRelation>();
+
+  relations.forEach((relation) => {
+    relationMap.set([
+      relation.sourceTableName, relation.sourceColumnName,
+      relation.targetTableName, relation.targetColumnName,
+    ].join(':'), relation);
+  });
+
+  return Array.from(relationMap.values());
+}
+
+function normalizeSqlIdentifier(value: string) {
+  return value.trim().replace(/^[`"]/, '').replace(/[`"]$/, '');
+}
+
+function describeSchemaColumn(columnName: string) {
+  if (columnName.endsWith('_id')) {
+    return `${formatSchemaIdentifier(columnName.replace(/_id$/, ''))} ID`;
+  }
+
+  if (columnName.endsWith('_at')) {
+    return `${formatSchemaIdentifier(columnName.replace(/_at$/, ''))} 시각`;
+  }
+
+  if (columnName.endsWith('_date')) {
+    return `${formatSchemaIdentifier(columnName.replace(/_date$/, ''))} 날짜`;
+  }
+
+  if (columnName.endsWith('_amount')) {
+    return `${formatSchemaIdentifier(columnName.replace(/_amount$/, ''))} 금액`;
+  }
+
+  return formatSchemaIdentifier(columnName);
+}
+
+function formatSchemaIdentifier(value: string) {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
+function formatColumnKey(column: ParsedSchemaColumn) {
+  if (column.primaryKey && column.foreignKey) return 'PK, FK';
+  if (column.primaryKey) return 'PK';
+  if (column.foreignKey) return 'FK';
+  return '-';
+}
+
+function renderSchemaGridCell(value: string, bodyClassName?: string) {
+  return (
+    <div className={bodyClassName ? `solve-detail-grid-cell ${bodyClassName}` : 'solve-detail-grid-cell'}>
+      {value}
+    </div>
+  );
 }
 
 function arraysEqual(left: string[], right: string[]) {
@@ -250,35 +602,86 @@ function parseCsvValue(value: string): string | number | boolean | null {
   return value;
 }
 
-function parseProblemOutputSample(rawSampleOutput: string): ProblemOutputPreviewData {
-  if (rawSampleOutput.trim() === '') {
+function formatExampleSummary(totalRows: number, visibleRows: number) {
+  return `… 총 ${ROW_COUNT_FORMATTER.format(totalRows)}행 중 ${ROW_COUNT_FORMATTER.format(visibleRows)}행 표시`;
+}
+
+function normalizeExampleRows(rows: unknown): Array<Array<string | number | boolean | null>> {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.map((row) =>
+    Array.isArray(row)
+      ? row.map((value) =>
+          typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null
+            ? value
+            : String(value),
+        )
+      : [],
+  );
+}
+
+function parseProblemDataExample(rawDataExample: string): ProblemDataExampleTableData[] {
+  if (rawDataExample.trim() === '') {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawDataExample) as { tables?: unknown };
+    if (!Array.isArray(parsed.tables)) {
+      return [];
+    }
+
+    return parsed.tables
+      .filter((table): table is { name: unknown; columns: unknown; rows: unknown; totalRows?: unknown; visibleRows?: unknown } =>
+        typeof table === 'object' && table != null,
+      )
+      .map((table) => {
+        const rows = normalizeExampleRows(table.rows);
+        return {
+          name: typeof table.name === 'string' ? table.name : '',
+          columns: Array.isArray(table.columns) ? table.columns.filter((column): column is string => typeof column === 'string') : [],
+          rows,
+          totalRows: typeof table.totalRows === 'number' ? table.totalRows : rows.length,
+          visibleRows: typeof table.visibleRows === 'number' ? table.visibleRows : rows.length,
+        };
+      })
+      .filter((table) => table.name !== '' && table.columns.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function parseProblemOutputExample(rawOutputExample: string): ProblemOutputPreviewData {
+  if (rawOutputExample.trim() === '') {
     return EMPTY_PREVIEW_OUTPUT;
   }
 
   try {
-    const parsed = JSON.parse(rawSampleOutput) as { columns?: unknown; rows?: unknown; rowCount?: unknown };
+    const parsed = JSON.parse(rawOutputExample) as {
+      columns?: unknown;
+      rows?: unknown;
+      totalRows?: unknown;
+      visibleRows?: unknown;
+      rowLimit?: unknown;
+    };
     if (Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) {
-      const rows = parsed.rows.map((row) =>
-        Array.isArray(row)
-          ? row.map((value) =>
-              typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null
-                ? value
-                : String(value),
-            )
-          : [],
-      );
+      const rows = normalizeExampleRows(parsed.rows);
 
       return {
         columns: parsed.columns.filter((column): column is string => typeof column === 'string'),
         rows,
-        rowCount: typeof parsed.rowCount === 'number' ? parsed.rowCount : rows.length,
+        rowCount: typeof parsed.totalRows === 'number' ? parsed.totalRows : rows.length,
+        visibleRows: typeof parsed.visibleRows === 'number' ? parsed.visibleRows : rows.length,
+        rowLimit: typeof parsed.rowLimit === 'number' ? parsed.rowLimit : 10,
       };
     }
   } catch {
   }
 
   try {
-    const lines = rawSampleOutput
+    const lines = rawOutputExample
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
@@ -294,6 +697,8 @@ function parseProblemOutputSample(rawSampleOutput: string): ProblemOutputPreview
       columns: parseCsvLine(headerLine),
       rows,
       rowCount: rows.length,
+      visibleRows: rows.length,
+      rowLimit: 10,
     };
   } catch {
     return EMPTY_PREVIEW_OUTPUT;
@@ -307,7 +712,8 @@ function buildMissingFields(values: {
   output: string;
   ddl: string;
   actualData: string;
-  sampleData: string;
+  hiddenDataSqls: string[];
+  requireHiddenData: boolean;
   answerSql: string;
 }) {
   const missingFields: MissingField[] = [];
@@ -318,10 +724,41 @@ function buildMissingFields(values: {
   if (values.output.trim() === '') missingFields.push({ key: 'output', label: getUiTextValue('PROBLEM_CREATE_OUTPUT_LABEL', '출력 설명') });
   if (values.ddl.trim() === '') missingFields.push({ key: 'ddl', label: getUiTextValue('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL') });
   if (values.actualData.trim() === '') missingFields.push({ key: 'actualData', label: getUiTextValue('PROBLEM_CREATE_ACTUAL_DATA_LABEL', '실제 채점 데이터') });
-  if (values.sampleData.trim() === '') missingFields.push({ key: 'sampleData', label: getUiTextValue('PROBLEM_CREATE_SAMPLE_DATA_LABEL', '예시 데이터') });
+  if (values.requireHiddenData && values.hiddenDataSqls.every((hiddenDataSql) => hiddenDataSql.trim() === '')) {
+    missingFields.push({ key: 'hiddenData', label: getUiTextValue('PROBLEM_CREATE_HIDDEN_DATA_LABEL', '채점용 데이터 - Hidden') });
+  }
   if (values.answerSql.trim() === '') missingFields.push({ key: 'answerSql', label: getUiTextValue('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL') });
 
   return missingFields;
+}
+
+function isProblemCreateProgressMessage(message: SessionSocketMessage): message is ProblemCreateProgressMessage {
+  return message.type === 'problem.create.progress';
+}
+
+function upsertCreateProgressStep(currentSteps: ProblemCreateProgressStep[], nextStep: ProblemCreateProgressStep) {
+  const nextSteps = currentSteps.filter((step) => step.stepKey !== nextStep.stepKey);
+  return [...nextSteps, nextStep].sort((left, right) => left.stepOrder - right.stepOrder);
+}
+
+function createInitialCreateProgressSteps(hiddenDataCount: number, existingProblem: boolean): ProblemCreateProgressStep[] {
+  if (existingProblem) {
+    return [{ stepKey: 'problem-text', status: 'running', message: '문제 정보 저장 중', stepOrder: 1 }];
+  }
+
+  return [
+    { stepKey: 'open-data', status: 'running', message: '채점용 데이터 INSERT - Open 생성 중', stepOrder: 1 },
+    { stepKey: 'table-info', status: 'waiting', message: '테이블 정보 생성 대기 중', stepOrder: 2 },
+    { stepKey: 'erd-info', status: 'waiting', message: 'ERD 정보 생성 대기 중', stepOrder: 3 },
+    { stepKey: 'data-example', status: 'waiting', message: '데이터 예시 생성 대기 중', stepOrder: 4 },
+    { stepKey: 'output-example', status: 'waiting', message: '출력 예시 생성 대기 중', stepOrder: 5 },
+    ...Array.from({ length: hiddenDataCount }, (_, index) => ({
+      stepKey: `hidden-data-${index + 1}`,
+      status: 'waiting' as const,
+      message: `채점용 데이터 INSERT - Hidden ${index + 1} 생성 대기 중`,
+      stepOrder: index + 6,
+    })),
+  ];
 }
 
 function EditIcon() {
@@ -345,6 +782,39 @@ function CheckIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path fill="currentColor" d="m9 16.17-3.88-3.88L3.71 13.7 9 19l12-12-1.41-1.41z" />
     </svg>
+  );
+}
+
+function SmallSpinner() {
+  return <span className="problem-create-progress-spinner" aria-hidden="true" />;
+}
+
+function ProblemCreateProgressPopup({ steps }: { steps: ProblemCreateProgressStep[] }) {
+  const visibleSteps = steps.length > 0
+    ? steps
+    : [{ stepKey: 'waiting', status: 'running' as const, message: '문제 저장 요청 처리 중', stepOrder: 0 }];
+
+  return (
+    <div className="problem-create-progress-scrim" role="dialog" aria-modal="true" aria-label="문제 생성 진행 상태">
+      <div className="problem-create-progress-popup">
+        <ol className="problem-create-progress-list">
+          {visibleSteps.map((step) => (
+            <li key={step.stepKey} className={`problem-create-progress-item is-${step.status}`}>
+              <span className="problem-create-progress-icon">
+                {step.status === 'success'
+                  ? <CheckIcon />
+                  : step.status === 'error'
+                    ? <CloseIcon />
+                    : step.status === 'waiting'
+                      ? <span className="problem-create-progress-wait-dot" />
+                      : <SmallSpinner />}
+              </span>
+              <span className="problem-create-progress-message">{step.message}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
   );
 }
 
@@ -498,6 +968,147 @@ function ProblemCreateSection({
   );
 }
 
+function ProblemCreateSchemaPreview({ ddl, schema }: { ddl: string; schema?: ParsedSchemaDdl }) {
+  const { text } = useUiText();
+  const parsedSchema = useMemo(() => schema ?? parseSchemaDdl(ddl), [ddl, schema]);
+  const [collapsedSections, setCollapsedSections] = useState({ table: false, erd: false });
+  const [selectedTableName, setSelectedTableName] = useState('');
+  const [erdResetKey, setErdResetKey] = useState(0);
+  const tableDefinitionColumns = useMemo(
+    () => [
+      { key: 'name', label: text('PROBLEM_DETAIL_COLUMN_NAME_LABEL', '컬럼명'), bodyClassName: 'solve-detail-grid-cell-name' },
+      { key: 'description', label: text('PROBLEM_DETAIL_COLUMN_DESCRIPTION_LABEL', '설명') },
+      { key: 'type', label: text('PROBLEM_DETAIL_COLUMN_TYPE_LABEL', '타입'), bodyClassName: 'solve-detail-grid-cell-type' },
+      { key: 'key', label: text('PROBLEM_DETAIL_COLUMN_KEY_LABEL', '키') },
+      { key: 'reference', label: text('PROBLEM_DETAIL_COLUMN_REFERENCE_LABEL', '참조') },
+    ],
+    [text],
+  );
+  const tableNamesSignature = parsedSchema.tables.map((table) => table.name).join('|');
+  const selectedTable = parsedSchema.tables.find((table) => table.name === selectedTableName) ?? parsedSchema.tables[0];
+
+  useEffect(() => {
+    setSelectedTableName((current) =>
+      parsedSchema.tables.some((table) => table.name === current) ? current : parsedSchema.tables[0]?.name ?? '',
+    );
+    setErdResetKey((current) => current + 1);
+  }, [tableNamesSignature]);
+
+  function toggleSchemaSection(sectionKey: 'table' | 'erd') {
+    setCollapsedSections((current) => ({
+      ...current,
+      [sectionKey]: !current[sectionKey],
+    }));
+  }
+
+  return (
+    <div className="problem-create-schema-preview">
+      <section className={`problem-create-section problem-create-schema-section ${collapsedSections.table ? 'is-collapsed' : ''}`.trim()}>
+        <div className="problem-create-section-header">
+          <button
+            type="button"
+            className="problem-create-section-toggle"
+            aria-label={collapsedSections.table ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
+            aria-expanded={!collapsedSections.table}
+            onClick={() => toggleSchemaSection('table')}
+          >
+            <ChevronIcon collapsed={collapsedSections.table} />
+          </button>
+          <h2 className="problem-create-section-title">{text('PROBLEM_DETAIL_TABLE_SECTION_TITLE', '테이블 정보')}</h2>
+          <div className="problem-create-section-actions" />
+        </div>
+
+        {!collapsedSections.table ? (
+          <div className="problem-create-section-body">
+            {parsedSchema.tables.length > 0 && selectedTable ? (
+              <>
+                <div className="solve-detail-table-tab-row">
+                  {parsedSchema.tables.map((table) => (
+                    <button
+                      key={table.name}
+                      type="button"
+                      className={`solve-bookmark-button ${table.name === selectedTable.name ? 'is-selected' : ''}`.trim()}
+                      aria-pressed={table.name === selectedTable.name}
+                      onClick={() => setSelectedTableName(table.name)}
+                    >
+                      {table.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="solve-detail-table-stack">
+                  <div className="solve-detail-table-block">
+                    <div className="solve-detail-table-block-header">
+                      <div className="solve-detail-table-block-copy">
+                        <p className="solve-detail-table-description">{selectedTable.description}</p>
+                        <p className="solve-detail-table-name">{selectedTable.name}</p>
+                      </div>
+                    </div>
+
+                    <div className="solve-detail-grid-table">
+                      <div className="solve-detail-grid-row solve-detail-grid-row-head" style={{ gridTemplateColumns: SCHEMA_TABLE_COLUMN_TEMPLATE }}>
+                        {tableDefinitionColumns.map((column) => (
+                          <div key={column.key} className="solve-detail-grid-cell solve-detail-grid-cell-head">
+                            <span>{column.label}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {selectedTable.columns.length > 0 ? (
+                        selectedTable.columns.map((column) => (
+                          <div key={`${selectedTable.name}-${column.name}`} className="solve-detail-grid-row" style={{ gridTemplateColumns: SCHEMA_TABLE_COLUMN_TEMPLATE }}>
+                            {renderSchemaGridCell(column.name, 'solve-detail-grid-cell-name')}
+                            {renderSchemaGridCell(column.description)}
+                            {renderSchemaGridCell(column.type || '-', 'solve-detail-grid-cell-type')}
+                            {renderSchemaGridCell(formatColumnKey(column))}
+                            {renderSchemaGridCell(column.reference ? `${column.reference.tableName}.${column.reference.columnName}` : '-')}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="solve-detail-empty">{text('PROBLEM_DETAIL_TABLE_EMPTY_STATE', '표시할 테이블 정의가 없습니다.')}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="problem-create-empty">{text('PROBLEM_DETAIL_TABLE_EMPTY_STATE', '표시할 테이블 정의가 없습니다.')}</p>
+            )}
+          </div>
+        ) : null}
+      </section>
+
+      <section className={`problem-create-section problem-create-schema-section ${collapsedSections.erd ? 'is-collapsed' : ''}`.trim()}>
+        <div className="problem-create-section-header">
+          <button
+            type="button"
+            className="problem-create-section-toggle"
+            aria-label={collapsedSections.erd ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
+            aria-expanded={!collapsedSections.erd}
+            onClick={() => toggleSchemaSection('erd')}
+          >
+            <ChevronIcon collapsed={collapsedSections.erd} />
+          </button>
+          <h2 className="problem-create-section-title">{text('PROBLEM_DETAIL_ERD_SECTION_TITLE', 'ERD')}</h2>
+          <div className="problem-create-section-actions" />
+        </div>
+
+        {!collapsedSections.erd ? (
+          <div className="problem-create-section-body">
+            {parsedSchema.tables.length > 0 ? (
+              <div key={`problem-create-erd-${erdResetKey}`} className="solve-erd-frame problem-create-erd-frame">
+                <ReactFlowDiagram tables={parsedSchema.tables} relations={parsedSchema.relations} className="solve-erd-diagram problem-create-erd-diagram" resetKey={erdResetKey} />
+              </div>
+            ) : (
+              <p className="problem-create-empty">{text('PROBLEM_DETAIL_ERD_EMPTY_STATE', 'ERD를 만들 DDL이 없습니다.')}</p>
+            )}
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 function ProblemCreatePreviewGrid({ previewData }: { previewData: ProblemOutputPreviewData }) {
   if (previewData.columns.length === 0) {
     return <p className="problem-create-empty">{getUiTextValue('PROBLEM_CREATE_OUTPUT_EMPTY_STATE', '출력 예시가 아직 없습니다.')}</p>;
@@ -505,7 +1116,6 @@ function ProblemCreatePreviewGrid({ previewData }: { previewData: ProblemOutputP
 
   return (
     <div className="problem-create-preview-grid-shell">
-      <div className="problem-create-preview-meta">{getUiText('PROBLEM_CREATE_PREVIEW_ROW_COUNT_LABEL', { count: previewData.rowCount }, `행 ${previewData.rowCount}개`)}</div>
       <div className="problem-create-preview-grid">
         <table>
           <thead>
@@ -524,7 +1134,113 @@ function ProblemCreatePreviewGrid({ previewData }: { previewData: ProblemOutputP
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={previewData.columns.length}>
+                <div className="problem-create-preview-summary">
+                  {formatExampleSummary(previewData.rowCount, previewData.visibleRows)}
+                </div>
+              </td>
+            </tr>
+          </tfoot>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function ProblemCreateExampleFrame({ loading, label, children }: { loading: boolean; label: string; children: ReactNode }) {
+  return (
+    <div className={`problem-create-example-frame ${loading ? 'is-loading' : ''}`} aria-busy={loading}>
+      <div className="problem-create-example-frame-content">
+        {children}
+      </div>
+      {loading ? (
+        <div className="problem-create-example-loading" role="status" aria-live="polite">
+          <span className="problem-create-example-spinner" aria-hidden="true" />
+          <span>{label}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ProblemCreateDataPreviewGrid({ previewData, schemaTables }: { previewData: ProblemDataPreviewData; schemaTables: ParsedSchemaTable[] }) {
+  const [selectedTableName, setSelectedTableName] = useState('');
+  const tableNamesSignature = previewData.tables.map((table) => table.name).join('|');
+
+  useEffect(() => {
+    setSelectedTableName((current) =>
+      previewData.tables.some((table) => table.name === current)
+        ? current
+        : previewData.tables[0]?.name ?? '',
+    );
+  }, [previewData.tables, tableNamesSignature]);
+
+  if (previewData.tables.length === 0) {
+    return <p className="problem-create-empty">{getUiTextValue('PROBLEM_CREATE_DATA_EMPTY_STATE', '데이터 예시가 아직 없습니다.')}</p>;
+  }
+
+  const selectedTable = previewData.tables.find((table) => table.name === selectedTableName) ?? previewData.tables[0];
+  const selectedTableDescription = schemaTables.find((table) => table.name === selectedTable.name)?.description ?? `${selectedTable.name} 데이터`;
+
+  return (
+    <div className="problem-create-data-preview">
+      <div className="solve-detail-table-tab-row">
+        {previewData.tables.map((table) => (
+          <button
+            key={table.name}
+            type="button"
+            className={`solve-bookmark-button ${selectedTable.name === table.name ? 'is-selected' : ''}`}
+            aria-pressed={selectedTable.name === table.name}
+            onClick={() => setSelectedTableName(table.name)}
+          >
+            {table.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="solve-detail-table-stack">
+        <div className="solve-detail-table-block problem-create-data-preview-block">
+          <div className="solve-detail-table-block-header">
+            <div className="solve-detail-table-block-copy">
+              <p className="solve-detail-table-description">{selectedTableDescription}</p>
+              <p className="solve-detail-table-name">{selectedTable.name}</p>
+            </div>
+          </div>
+
+          <div className="problem-create-preview-grid-shell">
+            <div className="problem-create-preview-grid">
+              <table>
+                <thead>
+                  <tr>
+                    {selectedTable.columns.map((column) => (
+                      <th key={column}>{column}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedTable.rows.map((row, rowIndex) => (
+                    <tr key={`${selectedTable.name}-data-row-${rowIndex}`}>
+                      {selectedTable.columns.map((column, columnIndex) => (
+                        <td key={`${selectedTable.name}-${column}-${rowIndex}`}>{row[columnIndex] == null ? '' : String(row[columnIndex])}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={selectedTable.columns.length}>
+                      <div className="problem-create-preview-summary">
+                        {formatExampleSummary(selectedTable.totalRows, selectedTable.visibleRows)}
+                      </div>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -539,7 +1255,7 @@ export function ProblemCreateContent() {
     output: null,
     ddl: null,
     actualData: null,
-    sampleData: null,
+    hiddenData: null,
     answerSql: null,
   });
 
@@ -548,7 +1264,7 @@ export function ProblemCreateContent() {
   const outputState = useEditableDraft('');
   const ddlState = useEditableDraft<SourceDraft>({ postgresql: '', mysql: '' });
   const actualDataState = useEditableDraft<SourceDraft>({ postgresql: '', mysql: '' });
-  const sampleDataState = useEditableDraft('');
+  const hiddenDataState = useEditableDraft<string[]>(['']);
   const answerSqlState = useEditableDraft('');
 
   const [existingProblemSet, setExistingProblemSet] = useState(true);
@@ -562,20 +1278,26 @@ export function ProblemCreateContent() {
   const [loadedProblemDetail, setLoadedProblemDetail] = useState<ProblemDetailData | null>(null);
   const [isProblemSetLoading, setIsProblemSetLoading] = useState(false);
   const [isProblemLoading, setIsProblemLoading] = useState(false);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isExamplePreviewLoading, setIsExamplePreviewLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [problemSetErrorMessage, setProblemSetErrorMessage] = useState('');
   const [problemErrorMessage, setProblemErrorMessage] = useState('');
   const [previewErrorMessage, setPreviewErrorMessage] = useState('');
   const [previewData, setPreviewData] = useState<ProblemOutputPreviewData>(EMPTY_PREVIEW_OUTPUT);
+  const [dataPreviewErrorMessage, setDataPreviewErrorMessage] = useState('');
+  const [dataPreviewData, setDataPreviewData] = useState<ProblemDataPreviewData>(EMPTY_DATA_PREVIEW);
   const [includedTableNames, setIncludedTableNames] = useState<string[]>([]);
+  const [activeHiddenDataIndex, setActiveHiddenDataIndex] = useState(0);
+  const [createProgressSteps, setCreateProgressSteps] = useState<ProblemCreateProgressStep[]>([]);
   const [popupState, setPopupState] = useState<PopupState>({ open: false, level: 2, message: '' });
+  const [isHeroDescriptionCollapsed, setIsHeroDescriptionCollapsed] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>({
     condition: false,
     output: false,
     ddl: false,
     actualData: false,
-    sampleData: false,
+    hiddenData: false,
+    dataPreview: false,
     outputPreview: false,
     answerSql: false,
   });
@@ -588,22 +1310,58 @@ export function ProblemCreateContent() {
     return resolveScopedDbms(selectedProblemId ?? selectedProblemSetId);
   }, [existingProblemSet, selectedDbms, selectedProblemId, selectedProblemSetId]);
 
+  const currentDraftProblemSetDdl = useMemo(
+    () => (currentDbms === 'mysql' ? ddlState.appliedValue.mysql : ddlState.appliedValue.postgresql),
+    [currentDbms, ddlState.appliedValue.mysql, ddlState.appliedValue.postgresql],
+  );
   const currentFullProblemSetDdl = useMemo(
-    () => (currentDbms === 'mysql' ? loadedProblemSetDetail.ddlMysql : loadedProblemSetDetail.ddlPostgresql),
-    [currentDbms, loadedProblemSetDetail.ddlMysql, loadedProblemSetDetail.ddlPostgresql],
+    () => existingProblemSet ? loadedProblemSetDetail.ddl : currentDraftProblemSetDdl,
+    [currentDraftProblemSetDdl, existingProblemSet, loadedProblemSetDetail.ddl],
   );
   const currentFullActualData = useMemo(
-    () => (currentDbms === 'mysql' ? loadedProblemSetDetail.dataMysql : loadedProblemSetDetail.dataPostgresql),
-    [currentDbms, loadedProblemSetDetail.dataMysql, loadedProblemSetDetail.dataPostgresql],
+    () => loadedProblemSetDetail.actualDataSql,
+    [loadedProblemSetDetail.actualDataSql],
   );
 
   const availableTableNames = useMemo(() => {
-    if (!existingProblemSet) {
-      return [];
+    return getTableNamesFromDdl(currentFullProblemSetDdl);
+  }, [currentFullProblemSetDdl]);
+
+  useEffect(() => {
+    if (!isSaving) {
+      return;
     }
 
-    return getTableNamesFromDdl(currentFullProblemSetDdl);
-  }, [currentFullProblemSetDdl, existingProblemSet]);
+    return subscribeSessionSocketMessages((message) => {
+      if (!isProblemCreateProgressMessage(message)
+          || typeof message.stepKey !== 'string'
+          || typeof message.status !== 'string'
+          || typeof message.message !== 'string') {
+        return;
+      }
+
+      const status = message.status === 'success' ? 'success' : message.status === 'error' ? 'error' : 'running';
+      const stepOrder = typeof message.stepOrder === 'number' ? message.stepOrder : Number.MAX_SAFE_INTEGER;
+      const stepKey = String(message.stepKey);
+      const progressMessage = String(message.message);
+      setCreateProgressSteps((currentSteps) => upsertCreateProgressStep(currentSteps, {
+        stepKey,
+        status,
+        message: progressMessage,
+        stepOrder,
+      }));
+
+      if (status === 'error') {
+        setPopupState({ open: true, level: 2, message: progressMessage });
+        setIsSaving(false);
+        return;
+      }
+
+      if (status === 'success' && typeof message.problemId === 'string') {
+        navigate(`/problems/${encodeURIComponent(message.problemId)}`);
+      }
+    });
+  }, [isSaving]);
 
   useEffect(() => {
     if (availableTableNames.length === 0) {
@@ -612,7 +1370,7 @@ export function ProblemCreateContent() {
     }
 
     if (existingProblemSet && existingProblem && loadedProblemDetail) {
-      const problemDdl = currentDbms === 'mysql' ? loadedProblemDetail.ddlMysql : loadedProblemDetail.ddlPostgresql;
+      const problemDdl = loadedProblemDetail.ddl;
       const nextIncludedTableNames = getTableNamesFromDdl(problemDdl).filter((tableName) => availableTableNames.includes(tableName));
       const normalizedIncludedTableNames = nextIncludedTableNames.length > 0 ? nextIncludedTableNames : availableTableNames;
       setIncludedTableNames((current) => (arraysEqual(current, normalizedIncludedTableNames) ? current : normalizedIncludedTableNames));
@@ -626,13 +1384,22 @@ export function ProblemCreateContent() {
     });
   }, [availableTableNames, currentDbms, loadedProblemDetail, existingProblem, existingProblemSet]);
 
-  const scopedProblemSetDdl = useMemo(() => {
-    if (!existingProblemSet) {
-      return currentDbms === 'mysql' ? ddlState.appliedValue.mysql : ddlState.appliedValue.postgresql;
-    }
-
-    return filterDdlByTableNames(currentFullProblemSetDdl, includedTableNames);
-  }, [currentDbms, currentFullProblemSetDdl, ddlState.appliedValue.mysql, ddlState.appliedValue.postgresql, includedTableNames, existingProblemSet]);
+  const scopedProblemDdl = useMemo(
+    () => filterDdlByTableNames(currentFullProblemSetDdl, includedTableNames),
+    [currentFullProblemSetDdl, includedTableNames],
+  );
+  const schemaPreviewDdl = !existingProblemSet && ddlState.isEditing
+    ? (currentDbms === 'mysql' ? ddlState.draftValue.mysql : ddlState.draftValue.postgresql)
+    : scopedProblemDdl;
+  const storedSchemaMetadata = useMemo(
+    () => parseSchemaMetadata(existingProblem && loadedProblemDetail ? loadedProblemDetail.schemaMetadata : ''),
+    [existingProblem, loadedProblemDetail],
+  );
+  const schemaPreviewSchema = useMemo(
+    () => existingProblem ? storedSchemaMetadata : parseSchemaDdl(schemaPreviewDdl),
+    [existingProblem, schemaPreviewDdl, storedSchemaMetadata],
+  );
+  const schemaPreviewTables = schemaPreviewSchema.tables;
 
   const currentActualData = useMemo(() => {
     if (!existingProblemSet) {
@@ -641,6 +1408,13 @@ export function ProblemCreateContent() {
 
     return currentFullActualData;
   }, [actualDataState.appliedValue.mysql, actualDataState.appliedValue.postgresql, currentDbms, currentFullActualData, existingProblemSet]);
+
+  useEffect(() => {
+    const hiddenDataLength = hiddenDataState.isEditing ? hiddenDataState.draftValue.length : hiddenDataState.appliedValue.length;
+    if (activeHiddenDataIndex >= hiddenDataLength) {
+      setActiveHiddenDataIndex(Math.max(hiddenDataLength - 1, 0));
+    }
+  }, [activeHiddenDataIndex, hiddenDataState.appliedValue.length, hiddenDataState.draftValue.length, hiddenDataState.isEditing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -686,7 +1460,6 @@ export function ProblemCreateContent() {
     }
 
     const targetProblemSetId = selectedProblemSetId;
-    const targetProblemSetDbms = resolveScopedDbms(targetProblemSetId);
     let cancelled = false;
 
     async function loadProblemManagementTargets() {
@@ -707,7 +1480,7 @@ export function ProblemCreateContent() {
         if (nextProblemOptions.length === 0) {
           setExistingProblem(false);
           setSelectedProblemId(null);
-          resetProblemDrafts(targetProblemSetDbms === 'mysql' ? nextDetail.dataMysql : nextDetail.dataPostgresql);
+          resetProblemDrafts();
           return;
         }
 
@@ -756,9 +1529,10 @@ export function ProblemCreateContent() {
         heroState.replaceValue({ title: nextProblemDetail.title, description: nextProblemDetail.description });
         conditionState.replaceValue(nextProblemDetail.condition);
         outputState.replaceValue(nextProblemDetail.output);
-        sampleDataState.replaceValue(nextProblemDetail.sampleDataSql);
         answerSqlState.replaceValue(nextProblemDetail.answerSql);
-        setPreviewData(parseProblemOutputSample(nextProblemDetail.outputSample));
+        setDataPreviewData({ rowLimit: 10, tables: parseProblemDataExample(nextProblemDetail.dataExample) });
+        setPreviewData(parseProblemOutputExample(nextProblemDetail.outputExample));
+        setDataPreviewErrorMessage('');
         setPreviewErrorMessage('');
       } catch (error) {
         if (!cancelled) {
@@ -783,23 +1557,8 @@ export function ProblemCreateContent() {
       return;
     }
 
-    resetProblemDrafts('');
+    resetProblemDrafts();
   }, [existingProblemSet]);
-
-  useEffect(() => {
-    if (!existingProblemSet || existingProblem) {
-      return;
-    }
-
-    if (sampleDataState.appliedValue.trim() !== '') {
-      return;
-    }
-
-    const nextSampleData = filterDataSqlByTableNames(currentFullActualData, includedTableNames);
-    if (nextSampleData.trim() !== '') {
-      sampleDataState.replaceValue(nextSampleData);
-    }
-  }, [currentFullActualData, includedTableNames, existingProblem, existingProblemSet, sampleDataState.appliedValue]);
 
   const selectedProblemSetValue = existingProblemSet && selectedProblemSetId != null ? selectedProblemSetId : NEW_PROBLEM_SET_OPTION_VALUE;
   const selectedProblemValue = existingProblem && selectedProblemId != null ? selectedProblemId : NEW_PROBLEM_OPTION_VALUE;
@@ -810,21 +1569,28 @@ export function ProblemCreateContent() {
     description: heroState.appliedValue.description,
     condition: conditionState.appliedValue,
     output: outputState.appliedValue,
-    ddl: scopedProblemSetDdl,
+    ddl: scopedProblemDdl,
     actualData: currentActualData,
-    sampleData: sampleDataState.appliedValue,
+    hiddenDataSqls: hiddenDataState.appliedValue,
+    requireHiddenData: !existingProblem,
     answerSql: answerSqlState.appliedValue,
   });
 
   const missingFieldLabels = missingFields.map((field) => field.label);
-  const completedFieldCount = 8 - missingFields.length;
+  const requiredFieldCount = existingProblem ? 7 : 8;
+  const completedFieldCount = requiredFieldCount - missingFields.length;
+  const isHeroMissing = missingFields.some((field) => field.key === 'title' || field.key === 'description');
 
-  function resetProblemDrafts(nextSampleData: string) {
+  function resetProblemDrafts() {
     heroState.replaceValue({ title: '', description: '' });
     conditionState.replaceValue('');
     outputState.replaceValue('');
-    sampleDataState.replaceValue(nextSampleData);
+    hiddenDataState.replaceValue(['']);
     answerSqlState.replaceValue('');
+    setActiveHiddenDataIndex(0);
+    setIsHeroDescriptionCollapsed(false);
+    setDataPreviewData(EMPTY_DATA_PREVIEW);
+    setDataPreviewErrorMessage('');
     setPreviewData(EMPTY_PREVIEW_OUTPUT);
     setPreviewErrorMessage('');
   }
@@ -858,6 +1624,7 @@ export function ProblemCreateContent() {
 
   function scrollToMissingField(fieldKey: MissingFieldKey) {
     if (fieldKey === 'title' || fieldKey === 'description') {
+      setIsHeroDescriptionCollapsed(false);
       if (!heroState.isEditing) {
         heroState.startEditing();
       }
@@ -867,7 +1634,7 @@ export function ProblemCreateContent() {
 
     const sectionKey = fieldKey === 'ddl' ? 'ddl'
       : fieldKey === 'actualData' ? 'actualData'
-      : fieldKey === 'sampleData' ? 'sampleData'
+      : fieldKey === 'hiddenData' ? 'hiddenData'
       : fieldKey === 'answerSql' ? 'answerSql'
       : fieldKey;
 
@@ -892,7 +1659,7 @@ export function ProblemCreateContent() {
     if (nextValue === NEW_PROBLEM_OPTION_VALUE) {
       setExistingProblem(false);
       setSelectedProblemId(null);
-      resetProblemDrafts(filterDataSqlByTableNames(currentFullActualData, includedTableNames));
+      resetProblemDrafts();
       return;
     }
 
@@ -900,38 +1667,61 @@ export function ProblemCreateContent() {
     setSelectedProblemId(nextValue);
   }
 
-  async function handlePreviewOutput() {
+  function updateHiddenDataDraft(index: number, nextValue: string) {
+    hiddenDataState.setDraftValue((current) =>
+      current.map((hiddenDataSql, hiddenDataIndex) => (hiddenDataIndex === index ? nextValue : hiddenDataSql)),
+    );
+  }
+
+  function addHiddenDataDraft() {
+    hiddenDataState.setDraftValue((current) => {
+      if (current.length >= MAX_HIDDEN_DATA_SQL_COUNT) {
+        return current;
+      }
+
+      setActiveHiddenDataIndex(current.length);
+      return [...current, ''];
+    });
+  }
+
+  async function handlePreviewExamples() {
     const previewMissingField = buildMissingFields({
       title: heroState.appliedValue.title || 'filled',
       description: heroState.appliedValue.description || 'filled',
       condition: conditionState.appliedValue || 'filled',
       output: outputState.appliedValue || 'filled',
-      ddl: scopedProblemSetDdl,
-      actualData: currentActualData || 'filled',
-      sampleData: sampleDataState.appliedValue,
+      ddl: scopedProblemDdl,
+      actualData: currentActualData,
+      hiddenDataSqls: ['filled'],
+      requireHiddenData: false,
       answerSql: answerSqlState.appliedValue,
-    }).find((field) => field.key === 'ddl' || field.key === 'sampleData' || field.key === 'answerSql');
+    }).find((field) => field.key === 'ddl' || field.key === 'actualData' || field.key === 'answerSql');
 
     if (previewMissingField) {
       scrollToMissingField(previewMissingField.key);
       return;
     }
 
-    setIsPreviewLoading(true);
+    setIsExamplePreviewLoading(true);
+    setDataPreviewErrorMessage('');
     setPreviewErrorMessage('');
 
     try {
-      const nextPreview = await previewProblemOutput({
+      const nextPreview = await previewProblemExamples({
         dbms: currentDbms,
-        ddl: scopedProblemSetDdl,
-        sampleDataSql: sampleDataState.appliedValue.trim(),
+        ddl: currentFullProblemSetDdl,
+        problemDdl: scopedProblemDdl,
+        actualDataSql: currentActualData.trim(),
         answerSql: answerSqlState.appliedValue.trim(),
       });
-      setPreviewData(nextPreview);
+      setDataPreviewData(nextPreview.dataExample);
+      setPreviewData(nextPreview.outputExample);
     } catch (error) {
-      setPreviewErrorMessage(error instanceof Error ? error.message : text('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
+      const errorMessage = error instanceof Error ? error.message : text('PROBLEM_CREATE_EXAMPLE_PREVIEW_FAIL_MESSAGE', '예시를 생성하지 못했습니다.');
+      setDataPreviewErrorMessage(errorMessage);
+      setPreviewErrorMessage(errorMessage);
     } finally {
-      setIsPreviewLoading(false);
+      setIsExamplePreviewLoading(false);
     }
   }
 
@@ -941,31 +1731,31 @@ export function ProblemCreateContent() {
       return;
     }
 
+    const hiddenDataSqls = hiddenDataState.appliedValue.map((hiddenDataSql) => hiddenDataSql.trim()).filter(Boolean);
     setIsSaving(true);
+    setCreateProgressSteps(createInitialCreateProgressSteps(hiddenDataSqls.length, existingProblem));
 
     try {
-      const createdProblemId = await createProblem({
+      await createProblem({
         title: heroState.appliedValue.title.trim(),
         description: heroState.appliedValue.description.trim(),
         condition: conditionState.appliedValue.trim(),
         output: outputState.appliedValue.trim(),
-        ddl: scopedProblemSetDdl,
+        ddl: currentFullProblemSetDdl.trim(),
+        problemDdl: scopedProblemDdl.trim(),
         actualDataSql: currentActualData.trim(),
-        sampleDataSql: sampleDataState.appliedValue.trim(),
+        hiddenDataSqls,
         answerSql: answerSqlState.appliedValue.trim(),
         problemSetId: existingProblemSet ? selectedProblemSetId ?? undefined : undefined,
         problemId: existingProblem ? selectedProblemId ?? undefined : undefined,
         dbms: currentDbms,
       });
-
-      navigate(`/problems/${encodeURIComponent(createdProblemId)}`);
     } catch (error) {
       setPopupState({
         open: true,
         level: 2,
         message: error instanceof Error ? error.message : text('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'),
       });
-    } finally {
       setIsSaving(false);
     }
   }
@@ -973,78 +1763,106 @@ export function ProblemCreateContent() {
   return (
     <>
       <div ref={pageRef} className="page-stack problem-create-page">
-        <section ref={heroSectionRef} className="solve-page-hero solve-surface-section problem-create-hero">
-          <div className="solve-page-hero-copy solve-page-hero-copy-wide">
-            <div className="problem-create-number-row">
-              <span className="solve-problem-number">{getProblemNumberLabel(existingProblemSet, existingProblem, selectedProblemSetId, selectedProblemId)}</span>
+        <section ref={heroSectionRef} className="problem-create-hero">
+          <div className="problem-create-number-row">
+            <span className="solve-problem-number">{getProblemNumberLabel(existingProblemSet, existingProblem, selectedProblemSetId, selectedProblemId)}</span>
+            <ProblemCreateSelectMenu
+              value={selectedProblemSetValue}
+              className="problem-create-select"
+              options={[
+                { value: NEW_PROBLEM_SET_OPTION_VALUE, label: text('PROBLEM_CREATE_NEW_SET_LABEL', '신규 테이블셋') },
+                ...problemSets.map((problemSet) => ({
+                  value: problemSet.problemSetId,
+                  label: getProblemSetLabel(problemSet.problemSetId),
+                })),
+              ]}
+              onChange={handleProblemSetSelectChange}
+            />
+            {!existingProblemSet ? (
               <ProblemCreateSelectMenu
-                value={selectedProblemSetValue}
-                className="problem-create-select"
+                value={selectedDbms}
+                className="problem-create-select problem-create-problem-select"
                 options={[
-                  { value: NEW_PROBLEM_SET_OPTION_VALUE, label: text('PROBLEM_CREATE_NEW_SET_LABEL', '신규 테이블셋') },
-                  ...problemSets.map((problemSet) => ({
-                    value: problemSet.problemSetId,
-                    label: getProblemSetLabel(problemSet.problemSetId),
-                  })),
+                  { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
+                  { value: 'mysql', label: text('COMMON_MYSQL_LABEL', 'MySQL') },
                 ]}
-                onChange={handleProblemSetSelectChange}
-              />
-              {!existingProblemSet ? (
-                <ProblemCreateSelectMenu
-                  value={selectedDbms}
-                  className="problem-create-select problem-create-problem-select"
-                  options={[
-                    { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
-                    { value: 'mysql', label: text('COMMON_MYSQL_LABEL', 'MySQL') },
-                  ]}
-                  onChange={(nextValue) => setSelectedDbms(nextValue as DbmsType)}
-                />
-              ) : (
-                <ProblemCreateSelectMenu
-                  value={selectedProblemValue}
-                  className="problem-create-select problem-create-problem-select"
-                  options={[
-                    { value: NEW_PROBLEM_OPTION_VALUE, label: text('PROBLEM_CREATE_NEW_PROBLEM_LABEL', '신규 문제') },
-                    ...problemOptions.map((problemId) => ({
-                      value: problemId,
-                      label: getProblemLabel(problemId),
-                    })),
-                  ]}
-                  onChange={handleProblemSelectChange}
-                  disabled={problemOptions.length === 0}
-                />
-              )}
-            </div>
-
-            <div className="problem-create-title-edit-row">
-              {heroState.isEditing ? (
-                <input
-                  className="problem-create-title-input"
-                  value={heroState.draftValue.title}
-                  onChange={(event) => heroState.setDraftValue((current) => ({ ...current, title: event.target.value }))}
-                  placeholder={text('PROBLEM_CREATE_TITLE_PLACEHOLDER', '문제 제목')}
-                />
-              ) : (
-                <h1 className="solve-problem-title">
-                  {heroState.appliedValue.title.trim() !== '' ? heroState.appliedValue.title : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_TITLE_LABEL', '문제 제목')}</span>}
-                </h1>
-              )}
-              <InlineEditActions isEditing={heroState.isEditing} onEdit={heroState.startEditing} onCancel={heroState.cancelEditing} onConfirm={heroState.confirmEditing} />
-            </div>
-
-            {heroState.isEditing ? (
-              <textarea
-                className="text-field problem-create-inline-textarea problem-create-description-editor"
-                value={heroState.draftValue.description}
-                onChange={(event) => heroState.setDraftValue((current) => ({ ...current, description: event.target.value }))}
-                placeholder={text('PROBLEM_CREATE_DESCRIPTION_PLACEHOLDER', '설명')}
+                onChange={(nextValue) => setSelectedDbms(nextValue as DbmsType)}
               />
             ) : (
-              <p className="solve-problem-description">
-                {heroState.appliedValue.description.trim() !== '' ? heroState.appliedValue.description : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DESCRIPTION_LABEL', '설명')}</span>}
-              </p>
+              <ProblemCreateSelectMenu
+                value={selectedProblemValue}
+                className="problem-create-select problem-create-problem-select"
+                options={[
+                  { value: NEW_PROBLEM_OPTION_VALUE, label: text('PROBLEM_CREATE_NEW_PROBLEM_LABEL', '신규 문제') },
+                  ...problemOptions.map((problemId) => ({
+                    value: problemId,
+                    label: getProblemLabel(problemId),
+                  })),
+                ]}
+                onChange={handleProblemSelectChange}
+                disabled={problemOptions.length === 0}
+              />
             )}
           </div>
+
+          <section className={`problem-create-section problem-create-title-section ${isHeroDescriptionCollapsed ? 'is-collapsed' : ''} ${isHeroMissing ? 'is-missing' : ''}`.trim()}>
+            <div className="problem-create-section-header">
+              <button
+                type="button"
+                className="problem-create-section-toggle"
+                aria-label={isHeroDescriptionCollapsed ? text('COMMON_EXPAND_ACTION', '펼치기') : text('COMMON_COLLAPSE_ACTION', '접기')}
+                aria-expanded={!isHeroDescriptionCollapsed}
+                aria-controls="problem-create-description-panel"
+                onClick={() => setIsHeroDescriptionCollapsed((current) => !current)}
+              >
+                <ChevronIcon collapsed={isHeroDescriptionCollapsed} />
+              </button>
+              <h2 className="problem-create-section-title">{text('PROBLEM_CREATE_TITLE_DESCRIPTION_TITLE', '문제 제목/설명')}</h2>
+              <div className="problem-create-section-actions">
+                <InlineEditActions isEditing={heroState.isEditing} onEdit={heroState.startEditing} onCancel={heroState.cancelEditing} onConfirm={heroState.confirmEditing} />
+              </div>
+            </div>
+
+            <div className="problem-create-title-section-body">
+              <div className="problem-create-title-edit-row">
+                {heroState.isEditing ? (
+                  <input
+                    className="problem-create-title-input"
+                    name="problem-title"
+                    autoComplete="off"
+                    aria-label={text('PROBLEM_CREATE_TITLE_LABEL', '문제 제목')}
+                    value={heroState.draftValue.title}
+                    onChange={(event) => heroState.setDraftValue((current) => ({ ...current, title: event.target.value }))}
+                    placeholder={text('PROBLEM_CREATE_TITLE_PLACEHOLDER', '문제 제목')}
+                  />
+                ) : (
+                  <h1 className="solve-problem-title">
+                    {heroState.appliedValue.title.trim() !== '' ? heroState.appliedValue.title : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_TITLE_LABEL', '문제 제목')}</span>}
+                  </h1>
+                )}
+              </div>
+
+              {!isHeroDescriptionCollapsed ? (
+                <div id="problem-create-description-panel">
+                  {heroState.isEditing ? (
+                    <textarea
+                      className="text-field problem-create-inline-textarea problem-create-description-editor"
+                      name="problem-description"
+                      autoComplete="off"
+                      aria-label={text('PROBLEM_CREATE_DESCRIPTION_LABEL', '설명')}
+                      value={heroState.draftValue.description}
+                      onChange={(event) => heroState.setDraftValue((current) => ({ ...current, description: event.target.value }))}
+                      placeholder={text('PROBLEM_CREATE_DESCRIPTION_PLACEHOLDER', '설명')}
+                    />
+                  ) : (
+                    <p className="solve-problem-description">
+                      {heroState.appliedValue.description.trim() !== '' ? heroState.appliedValue.description : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DESCRIPTION_LABEL', '설명')}</span>}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </section>
         </section>
 
         {existingProblemSet && isProblemSetLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_SET_LOADING_LABEL', '테이블셋 정보를 불러오는 중입니다.')}</p> : null}
@@ -1052,11 +1870,10 @@ export function ProblemCreateContent() {
         {existingProblem && isProblemLoading ? <p className="problem-create-info">{text('PROBLEM_CREATE_PROBLEM_LOADING_LABEL', '문제 정보를 불러오는 중입니다.')}</p> : null}
         {existingProblem && problemErrorMessage ? <p className="problem-create-error">{problemErrorMessage}</p> : null}
 
-        {existingProblemSet && availableTableNames.length > 0 ? (
+        {availableTableNames.length > 0 ? (
           <section className="problem-create-table-selector-card">
             <div className="problem-create-table-selector-header">
               <h2>{text('PROBLEM_CREATE_SET_SCOPE_TITLE', '테이블 범위')}</h2>
-              <p>{text('PROBLEM_CREATE_SET_SCOPE_DESC', '기존 테이블셋에서 문제에 보여 줄 테이블 범위를 선택합니다.')}</p>
             </div>
             <div className="problem-create-table-chip-row">
               {availableTableNames.map((tableName) => (
@@ -1141,13 +1958,15 @@ export function ProblemCreateContent() {
               placeholder={currentDbms === 'mysql' ? 'MySQL DDL' : 'PostgreSQL DDL'}
             />
           ) : (
-            <pre className="problem-create-code-preview">{scopedProblemSetDdl.trim() !== '' ? scopedProblemSetDdl : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL')}</span>}</pre>
+            <pre className="problem-create-code-preview">{scopedProblemDdl.trim() !== '' ? scopedProblemDdl : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_DDL_LABEL', '테이블 정보 DDL')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
+        <ProblemCreateSchemaPreview ddl={schemaPreviewDdl} schema={schemaPreviewSchema} />
+
         <ProblemCreateSection
           sectionKey="actualData"
-          title={text('PROBLEM_CREATE_ACTUAL_DATA_TITLE', '실제 채점 데이터 INSERT')}
+          title={text('PROBLEM_CREATE_ACTUAL_DATA_OPEN_TITLE', '채점용 데이터 INSERT - Open')}
           collapsed={collapsedSections.actualData}
           onToggle={toggleSection}
           isMissing={missingFields.some((field) => field.key === 'actualData')}
@@ -1172,41 +1991,56 @@ export function ProblemCreateContent() {
               placeholder={currentDbms === 'mysql' ? text('PROBLEM_CREATE_ACTUAL_DATA_MYSQL_PLACEHOLDER', 'MySQL 실제 채점 데이터 INSERT') : text('PROBLEM_CREATE_ACTUAL_DATA_POSTGRES_PLACEHOLDER', 'PostgreSQL 실제 채점 데이터 INSERT')}
             />
           ) : (
-            <pre className="problem-create-code-preview">{currentActualData.trim() !== '' ? currentActualData : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ACTUAL_DATA_TITLE', '실제 채점 데이터 INSERT')}</span>}</pre>
+            <pre className="problem-create-code-preview">{currentActualData.trim() !== '' ? currentActualData : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ACTUAL_DATA_OPEN_TITLE', '채점용 데이터 INSERT - Open')}</span>}</pre>
           )}
         </ProblemCreateSection>
 
-        <ProblemCreateSection
-          sectionKey="sampleData"
-          title={text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')}
-          collapsed={collapsedSections.sampleData}
-          onToggle={toggleSection}
-          isMissing={missingFields.some((field) => field.key === 'sampleData')}
-          actions={
-            !immutableProblemSql ? (
-              <InlineEditActions isEditing={sampleDataState.isEditing} onEdit={sampleDataState.startEditing} onCancel={sampleDataState.cancelEditing} onConfirm={sampleDataState.confirmEditing} />
-            ) : null
-          }
-          sectionRef={(node) => {
-            sectionRefs.current.sampleData = node;
-          }}
-        >
-          {!immutableProblemSql && sampleDataState.isEditing ? (
-            <textarea className="text-field problem-create-code-textarea" value={sampleDataState.draftValue} onChange={(event) => sampleDataState.setDraftValue(event.target.value)} placeholder={text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')} />
-          ) : (
-            <pre className="problem-create-code-preview">{sampleDataState.appliedValue.trim() !== '' ? sampleDataState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_SAMPLE_DATA_TITLE', '예시 데이터 INSERT')}</span>}</pre>
-          )}
-        </ProblemCreateSection>
+        {!existingProblem ? (
+          <ProblemCreateSection
+            sectionKey="hiddenData"
+            title={text('PROBLEM_CREATE_HIDDEN_DATA_COMPACT_TITLE', '채점용 데이터 INSERT - Hidden')}
+            collapsed={collapsedSections.hiddenData}
+            onToggle={toggleSection}
+            isMissing={missingFields.some((field) => field.key === 'hiddenData')}
+            actions={<InlineEditActions isEditing={hiddenDataState.isEditing} onEdit={hiddenDataState.startEditing} onCancel={hiddenDataState.cancelEditing} onConfirm={hiddenDataState.confirmEditing} />}
+            sectionRef={(node) => {
+              sectionRefs.current.hiddenData = node;
+            }}
+          >
+            <div className="problem-create-hidden-tab-row">
+              {(hiddenDataState.isEditing ? hiddenDataState.draftValue : hiddenDataState.appliedValue).map((_, index) => (
+                <button
+                  key={`hidden-data-${index}`}
+                  type="button"
+                  className={`problem-create-hidden-tab ${activeHiddenDataIndex === index ? 'is-selected' : ''}`.trim()}
+                  onClick={() => setActiveHiddenDataIndex(index)}
+                >
+                  Hidden {index + 1}
+                </button>
+              ))}
+              {hiddenDataState.isEditing && hiddenDataState.draftValue.length < MAX_HIDDEN_DATA_SQL_COUNT ? (
+                <button type="button" className="problem-create-hidden-add-button" onClick={addHiddenDataDraft}>
+                  +
+                </button>
+              ) : null}
+            </div>
 
-        <ProblemCreateSection
-          sectionKey="outputPreview"
-          title={text('PROBLEM_CREATE_OUTPUT_SAMPLE_TITLE', '출력 예시')}
-          collapsed={collapsedSections.outputPreview}
-          onToggle={toggleSection}
-        >
-          {previewErrorMessage ? <p className="problem-create-error">{previewErrorMessage}</p> : null}
-          <ProblemCreatePreviewGrid previewData={previewData} />
-        </ProblemCreateSection>
+            {hiddenDataState.isEditing ? (
+              <textarea
+                className="text-field problem-create-code-textarea"
+                value={hiddenDataState.draftValue[activeHiddenDataIndex] ?? ''}
+                onChange={(event) => updateHiddenDataDraft(activeHiddenDataIndex, event.target.value)}
+                placeholder={text('PROBLEM_CREATE_HIDDEN_DATA_PLACEHOLDER', '채점용 데이터 - Hidden INSERT')}
+              />
+            ) : (
+              <pre className="problem-create-code-preview">
+                {(hiddenDataState.appliedValue[activeHiddenDataIndex] ?? '').trim() !== ''
+                  ? hiddenDataState.appliedValue[activeHiddenDataIndex]
+                  : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_HIDDEN_DATA_LABEL', '채점용 데이터 - Hidden')}</span>}
+              </pre>
+            )}
+          </ProblemCreateSection>
+        ) : null}
 
         <ProblemCreateSection
           sectionKey="answerSql"
@@ -1229,19 +2063,43 @@ export function ProblemCreateContent() {
             <pre className="problem-create-code-preview problem-create-answer-preview">{answerSqlState.appliedValue.trim() !== '' ? answerSqlState.appliedValue : <span className="problem-create-placeholder-text">{text('PROBLEM_CREATE_ANSWER_SQL_LABEL', '정답 SQL')}</span>}</pre>
           )}
         </ProblemCreateSection>
+
+        <ProblemCreateSection
+          sectionKey="dataPreview"
+          title={text('PROBLEM_CREATE_DATA_SAMPLE_TITLE', '데이터 예시')}
+          collapsed={collapsedSections.dataPreview}
+          onToggle={toggleSection}
+        >
+          {dataPreviewErrorMessage ? <p className="problem-create-error">{dataPreviewErrorMessage}</p> : null}
+          <ProblemCreateExampleFrame loading={isExamplePreviewLoading} label={text('PROBLEM_CREATE_EXAMPLE_GENERATING_LABEL', '예시 생성 중…')}>
+            <ProblemCreateDataPreviewGrid previewData={dataPreviewData} schemaTables={schemaPreviewTables} />
+          </ProblemCreateExampleFrame>
+        </ProblemCreateSection>
+
+        <ProblemCreateSection
+          sectionKey="outputPreview"
+          title={text('PROBLEM_CREATE_OUTPUT_SAMPLE_TITLE', '출력 예시')}
+          collapsed={collapsedSections.outputPreview}
+          onToggle={toggleSection}
+        >
+          {previewErrorMessage ? <p className="problem-create-error">{previewErrorMessage}</p> : null}
+          <ProblemCreateExampleFrame loading={isExamplePreviewLoading} label={text('PROBLEM_CREATE_EXAMPLE_GENERATING_LABEL', '예시 생성 중…')}>
+            <ProblemCreatePreviewGrid previewData={previewData} />
+          </ProblemCreateExampleFrame>
+        </ProblemCreateSection>
       </div>
 
       <div className="problem-create-sticky-bar">
         <div className="problem-create-sticky-status">
           {missingFields.length === 0 ? (
-            <p>{text('PROBLEM_CREATE_COMPLETED_FIELDS_LABEL', { count: completedFieldCount }, `필수 항목 ${completedFieldCount}/8 완료`)}</p>
+            <p>{text('PROBLEM_CREATE_COMPLETED_FIELDS_LABEL', { count: completedFieldCount, total: requiredFieldCount }, `필수 항목 ${completedFieldCount}/${requiredFieldCount} 완료`)}</p>
           ) : (
             <p>{text('PROBLEM_CREATE_MISSING_FIELDS_LABEL', { fields: missingFieldLabels.join(', ') }, `필수 항목 누락: ${missingFieldLabels.join(', ')}`)}</p>
           )}
         </div>
         <div className="problem-create-sticky-actions">
-          <button type="button" className="btn secondary" onClick={() => void handlePreviewOutput()} disabled={isPreviewLoading}>
-            {isPreviewLoading ? text('PROBLEM_CREATE_OUTPUT_GENERATING_LABEL', '출력 예시 생성 중') : text('PROBLEM_CREATE_OUTPUT_GENERATE_BUTTON', '출력 예시 생성')}
+          <button type="button" className="btn secondary" onClick={() => void handlePreviewExamples()} disabled={isExamplePreviewLoading}>
+            {isExamplePreviewLoading ? text('PROBLEM_CREATE_EXAMPLE_GENERATING_LABEL', '예시 생성 중…') : text('PROBLEM_CREATE_EXAMPLE_GENERATE_BUTTON', '예시 생성')}
           </button>
           <button type="button" className="btn primary problem-create-submit-button" onClick={() => void handleCreateProblem()} disabled={isSaving}>
             {isSaving ? text('PROBLEM_CREATE_SAVING_LABEL', '문제 저장 중') : text('PROBLEM_CREATE_CREATE_BUTTON', '문제 생성')}
@@ -1250,6 +2108,7 @@ export function ProblemCreateContent() {
       </div>
 
       <StatusPopup open={popupState.open} level={popupState.level} message={popupState.message} onConfirm={() => setPopupState((current) => ({ ...current, open: false }))} />
+      {isSaving ? <ProblemCreateProgressPopup steps={createProgressSteps} /> : null}
     </>
   );
 }

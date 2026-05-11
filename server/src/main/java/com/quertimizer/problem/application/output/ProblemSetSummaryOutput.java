@@ -1,12 +1,10 @@
 package com.quertimizer.problem.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
-@Getter
+@Data
 @Accessors(fluent = true)
-@AllArgsConstructor
 public class ProblemSetSummaryOutput {
 
     private final String problemSetId;

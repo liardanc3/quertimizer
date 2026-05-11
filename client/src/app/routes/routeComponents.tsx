@@ -8,7 +8,6 @@ const CommunityPage = lazy(() => import('@/pages/community/ui/CommunityPage'));
 const CommunityWritePage = lazy(() => import('@/pages/community/ui/CommunityWritePage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/ui/DashboardPage'));
 const FavoritePage = lazy(() => import('@/pages/favorites/ui/FavoritePage'));
-const GuidePage = lazy(() => import('@/pages/guide/ui/GuidePage'));
 const HomePage = lazy(() => import('@/pages/problems/ui/HomePage'));
 const ProblemSolvePage = lazy(() => import('@/pages/problem-solve/ui/ProblemSolvePage'));
 const ProfileActivityPage = lazy(() => import('@/pages/profile/ui/ProfileActivityPage'));
@@ -45,8 +44,6 @@ export function renderRouteComponent(route: AppRoute) {
         return <FavoritePage />;
       case 'community':
         return <CommunityPage />;
-      case 'guide':
-        return <GuidePage />;
       case 'admin':
         return <AdminPage />;
       case 'communityWrite':

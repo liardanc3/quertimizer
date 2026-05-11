@@ -15,7 +15,7 @@ public class LvmSnapshotRuntimeCommandFactory {
     private final LvmSnapshotRuntimeOptions options;
 
     public LvmSnapshotRuntimeCommandFactory(LvmSnapshotRuntimeOptions options) {
-        this.options = Objects.requireNonNull(options, "LVM 스냅샷 런타임 옵션이 필요하다.");
+        this.options = Objects.requireNonNull(options, "LVM 스냅샷 런타임 옵션이 필요합니다.");
     }
 
     public List<List<String>> createMaintenanceTemplateCommands(String dbmsName, String sourceTemplateVersion,
@@ -99,7 +99,7 @@ public class LvmSnapshotRuntimeCommandFactory {
     public List<String> startEvalProcessCommand(DbmsType dbmsType, String runnerContainer,
                                                 String environmentId, int port) {
         String normalizedEnvironmentId = runtimeName(environmentId);
-        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요하다.")) {
+        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요합니다.")) {
             case POSTGRESQL -> startPostgresProcessCommand(
                     runnerContainer,
                     evalMountPath("postgresql", normalizedEnvironmentId),
@@ -120,7 +120,7 @@ public class LvmSnapshotRuntimeCommandFactory {
     public List<String> stopEvalProcessCommand(DbmsType dbmsType, String runnerContainer,
                                                String environmentId, String mysqlRootPassword) {
         String normalizedEnvironmentId = runtimeName(environmentId);
-        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요하다.")) {
+        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요합니다.")) {
             case POSTGRESQL -> stopPostgresProcessCommand(
                     runnerContainer,
                     evalMountPath("postgresql", normalizedEnvironmentId)
@@ -136,7 +136,7 @@ public class LvmSnapshotRuntimeCommandFactory {
     public List<List<String>> startTemplateProcessCommands(DbmsType dbmsType, String runnerContainer,
                                                            String templateVersion, int port) {
         String normalizedTemplateVersion = runtimeName(templateVersion);
-        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요하다.")) {
+        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요합니다.")) {
             case POSTGRESQL -> List.of(
                     sudoCommand("mkdir", "-p", templateLogPath("postgresql", normalizedTemplateVersion)),
                     sudoCommand("chown", "-R", JudgeRuntimeConstants.JUDGE_RUNTIME_OWNER, templateLogPath("postgresql", normalizedTemplateVersion)),
@@ -165,7 +165,7 @@ public class LvmSnapshotRuntimeCommandFactory {
     public List<String> stopTemplateProcessCommand(DbmsType dbmsType, String runnerContainer,
                                                    String templateVersion, String mysqlRootPassword) {
         String normalizedTemplateVersion = runtimeName(templateVersion);
-        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요하다.")) {
+        return switch (Objects.requireNonNull(dbmsType, "DBMS 유형이 필요합니다.")) {
             case POSTGRESQL -> stopPostgresProcessCommand(
                     runnerContainer,
                     templateMountPath("postgresql", normalizedTemplateVersion)
@@ -309,7 +309,7 @@ public class LvmSnapshotRuntimeCommandFactory {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value.trim();

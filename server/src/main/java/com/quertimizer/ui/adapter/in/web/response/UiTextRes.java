@@ -1,11 +1,9 @@
 package com.quertimizer.ui.adapter.in.web.response;
 
 import com.quertimizer.ui.application.output.UiTextOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UiTextRes {
 
     private final String key;

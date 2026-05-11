@@ -1,10 +1,9 @@
 package com.quertimizer.global.filter;
 
 import com.quertimizer.auth.application.service.AccountRestrictionService;
-import com.quertimizer.auth.domain.policy.LoginPolicy;
+import com.quertimizer.auth.application.port.in.ValidateAuthenticatedUserAccessUseCase;
 import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.support.ClientIpResolver;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,16 +16,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 @RequiredArgsConstructor
 public class AccountRestrictionFilter extends OncePerRequestFilter {
 
     private final AccountRestrictionService accountRestrictionService;
-    private final LoginPolicy loginPolicy;
+    private final ValidateAuthenticatedUserAccessUseCase validateAuthenticatedUserAccess;
     private final ClientIpResolver clientIpResolver;
-    private final UserRepositoryPort userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -62,8 +59,7 @@ public class AccountRestrictionFilter extends OncePerRequestFilter {
     private boolean isBlockedUser(Authentication authentication) {
         // 차단 사용자 여부 확인
         try {
-            userRepository.findByEmailIgnoreCase(authentication.getName())
-                    .ifPresent(loginPolicy::validateBlockedUser);
+            validateAuthenticatedUserAccess.execute(authentication.getName());
             return false;
         } catch (DomainRuleViolationException exception) {
             return true;

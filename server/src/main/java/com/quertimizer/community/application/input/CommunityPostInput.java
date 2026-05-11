@@ -1,12 +1,10 @@
 package com.quertimizer.community.application.input;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class CommunityPostInput {
 
     private final String title;

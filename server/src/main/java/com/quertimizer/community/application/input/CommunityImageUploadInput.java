@@ -1,8 +1,8 @@
 package com.quertimizer.community.application.input;
 
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
+@Data
 public class CommunityImageUploadInput {
 
     private final long size;

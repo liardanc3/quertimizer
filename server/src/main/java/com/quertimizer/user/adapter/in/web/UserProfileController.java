@@ -3,6 +3,7 @@ package com.quertimizer.user.adapter.in.web;
 import com.quertimizer.user.application.input.UserProfileAccessInput;
 import com.quertimizer.user.application.input.UserProfileActivityPageInput;
 import com.quertimizer.user.application.input.UserProfileUpdateCommandInput;
+import com.quertimizer.user.application.port.in.DeleteMyAccountUseCase;
 import com.quertimizer.user.application.port.in.GetUserProfileCommunityActivitiesUseCase;
 import com.quertimizer.user.application.port.in.GetUserProfileCommunityCommentsUseCase;
 import com.quertimizer.user.application.port.in.GetUserProfileCommunityPostsUseCase;
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -48,6 +50,7 @@ public class UserProfileController {
     private final GetUserProfileCommunityCommentsUseCase getUserProfileCommunityComments;
     private final GetUserProfileLikedCommentsUseCase getUserProfileLikedComments;
     private final UpdateUserProfileUseCase updateUserProfile;
+    private final DeleteMyAccountUseCase deleteMyAccount;
 
     private final UserProfileSupport userProfileSupport;
 
@@ -266,6 +269,27 @@ public class UserProfileController {
 
         return ResponseEntity.of(updateUserProfile.execute(new UserProfileUpdateCommandInput(currentHandle, request.toUserProfileUpdateInput()))
                 .map(UserProfileSummaryRes::from));
+    }
+
+    /**
+     * 현재 사용자 계정을 삭제한다.
+     *
+     * <ol>
+     *   <li>현재 사용자 email 확인
+     *   <li>계정 삭제 처리
+     * </ol>
+     *
+     * @param authentication 현재 요청의 인증 정보
+     */
+    @DeleteMapping("/profile/me")
+    public ResponseEntity<Void> deleteMyAccount(Authentication authentication) {
+        String currentEmail = userProfileSupport.resolveCurrentEmail(authentication);
+        if (currentEmail == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        deleteMyAccount.execute(currentEmail);
+        return ResponseEntity.noContent().build();
     }
 
     /**

@@ -2,8 +2,7 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.GetUserBootstrapInfoUseCase;
 import com.quertimizer.auth.application.output.UserBootstrapOutput;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class GetUserBootstrapInfo implements GetUserBootstrapInfoUseCase {
 
     private final AuthService authService;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 인증 이메일 기준 사용자 부트스트랩 정보를 조회한다.

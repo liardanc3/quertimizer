@@ -33,6 +33,13 @@ public class CommunityPostTagPersistenceAdapter implements CommunityPostTagRepos
     }
 
     @Override
+    public List<CommunityPostTag> findAllByTagOrderByPostIdAscTagOrderAsc(String tag) {
+        return communityPostTagJpaRepository.findAllByTagOrderByPostIdAscTagOrderAsc(tag).stream()
+                .map(communityPostTagPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<CommunityPostTag> findAllByTagContainingIgnoreCaseOrderByTagAsc(String tag) {
         return communityPostTagJpaRepository.findAllByTagContainingIgnoreCaseOrderByTagAsc(tag).stream()
                 .map(communityPostTagPersistenceMapper::toDomain)

@@ -14,6 +14,7 @@ interface ProblemSpreadRateFilterProps {
   onChangeRange: (range: { min: number; max: number }) => void;
   onApplyRange: (range?: { min: number; max: number }) => void;
   hasPendingChanges: boolean;
+  numberInputOnly?: boolean;
 }
 
 function SortNeutralIcon() {
@@ -128,6 +129,7 @@ export default function ProblemSpreadRateFilter({
   onChangeRange,
   onApplyRange,
   hasPendingChanges,
+  numberInputOnly = false,
 }: ProblemSpreadRateFilterProps) {
   const [isEditingValue, setIsEditingValue] = useState(false);
   const [draftMin, setDraftMin] = useState(formatDraftValue(displayMin));
@@ -150,13 +152,13 @@ export default function ProblemSpreadRateFilter({
         : 'Cost \uD3B8\uCC28 \uC815\uB82C \uC5C6\uC74C';
 
   useEffect(() => {
-    if (isEditingValue) {
+    if (isEditingValue && !numberInputOnly) {
       return;
     }
 
     setDraftMin(formatDraftValue(displayMin));
     setDraftMax(formatDraftValue(displayMax));
-  }, [displayMax, displayMin, isEditingValue]);
+  }, [displayMax, displayMin, isEditingValue, numberInputOnly]);
 
   function resolveDraftRange() {
     const parsedMin = Number.parseFloat(draftMin);
@@ -242,10 +244,36 @@ export default function ProblemSpreadRateFilter({
   const hasDraftChanges =
     draftRange != null && (draftRange.min !== displayMin || draftRange.max !== displayMax);
   const canApplyChanges = !isDisabled && (hasPendingChanges || hasDraftChanges);
+  const valueEditor = (
+    <div className="problem-variance-value-editor" onBlur={handleEditorBlur}>
+      <input
+        type="text"
+        inputMode="decimal"
+        className="problem-variance-value-input"
+        aria-label={`Cost \uD3B8\uCC28 \uCD5C\uC18C \uC785\uB825\uAC12`}
+        value={draftMin}
+        onChange={(event) => handleDraftMinChange(event.target.value)}
+        onKeyDown={handleEditorKeyDown}
+        autoFocus={!numberInputOnly}
+      />
+      <span className="problem-variance-value-unit">%</span>
+      <span className="problem-variance-value-separator">~</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        className="problem-variance-value-input"
+        aria-label={`Cost \uD3B8\uCC28 \uCD5C\uB300 \uC785\uB825\uAC12`}
+        value={draftMax}
+        onChange={(event) => handleDraftMaxChange(event.target.value)}
+        onKeyDown={handleEditorKeyDown}
+      />
+      <span className="problem-variance-value-unit">%</span>
+    </div>
+  );
 
   return (
     <div
-      className="problem-control-group problem-variance-group"
+      className={`problem-control-group problem-variance-group ${numberInputOnly ? 'is-number-input-only' : ''}`.trim()}
       role="group"
       aria-label={`Cost \uD3B8\uCC28 \uD544\uD130`}
     >
@@ -265,73 +293,56 @@ export default function ProblemSpreadRateFilter({
       </div>
 
       <div className="problem-variance-controls">
-        <button
-          type="button"
-          className={`problem-sort-toggle-button ${sortOrder === 'none' ? '' : 'is-selected'}`.trim()}
-          aria-label={sortLabel}
-          title={sortLabel}
-          aria-pressed={sortOrder !== 'none'}
-          onClick={onToggleSort}
-        >
-          {sortOrder === 'asc' ? <SortAscendingIcon /> : sortOrder === 'desc' ? <SortDescendingIcon /> : <SortNeutralIcon />}
-        </button>
+        {!numberInputOnly ? (
+          <>
+            <button
+              type="button"
+              className={`problem-sort-toggle-button ${sortOrder === 'none' ? '' : 'is-selected'}`.trim()}
+              aria-label={sortLabel}
+              title={sortLabel}
+              aria-pressed={sortOrder !== 'none'}
+              onClick={onToggleSort}
+            >
+              {sortOrder === 'asc' ? <SortAscendingIcon /> : sortOrder === 'desc' ? <SortDescendingIcon /> : <SortNeutralIcon />}
+            </button>
 
-        <div className="problem-variance-slider-shell" style={sliderStyle}>
-          <div className="problem-variance-slider-track" aria-hidden="true">
-            <span className="problem-variance-slider-active" />
-          </div>
+            <div className="problem-variance-slider-shell" style={sliderStyle}>
+              <div className="problem-variance-slider-track" aria-hidden="true">
+                <span className="problem-variance-slider-active" />
+              </div>
 
-          <input
-            type="range"
-            min={minBound}
-            max={maxBound}
-            step={1}
-            value={selectedMin}
-            className="problem-variance-slider-input is-min"
-            aria-label={`Cost \uD3B8\uCC28 \uCD5C\uC18C\uAC12`}
-            disabled={isDisabled}
-            onChange={(event) => onChangeMin(Number(event.target.value))}
-          />
+              <input
+                type="range"
+                min={minBound}
+                max={maxBound}
+                step={1}
+                value={selectedMin}
+                className="problem-variance-slider-input is-min"
+                aria-label={`Cost \uD3B8\uCC28 \uCD5C\uC18C\uAC12`}
+                disabled={isDisabled}
+                onChange={(event) => onChangeMin(Number(event.target.value))}
+              />
 
-          <input
-            type="range"
-            min={minBound}
-            max={maxBound}
-            step={1}
-            value={selectedMax}
-            className="problem-variance-slider-input is-max"
-            aria-label={`Cost \uD3B8\uCC28 \uCD5C\uB300\uAC12`}
-            disabled={isDisabled}
-            onChange={(event) => onChangeMax(Number(event.target.value))}
-          />
-        </div>
+              <input
+                type="range"
+                min={minBound}
+                max={maxBound}
+                step={1}
+                value={selectedMax}
+                className="problem-variance-slider-input is-max"
+                aria-label={`Cost \uD3B8\uCC28 \uCD5C\uB300\uAC12`}
+                disabled={isDisabled}
+                onChange={(event) => onChangeMax(Number(event.target.value))}
+              />
+            </div>
+          </>
+        ) : null}
 
         <div className="problem-variance-actions">
           {isEditingValue ? (
-            <div className="problem-variance-value-editor" onBlur={handleEditorBlur}>
-              <input
-                type="text"
-                inputMode="decimal"
-                className="problem-variance-value-input"
-                aria-label={`Cost \uD3B8\uCC28 \uCD5C\uC18C \uC785\uB825\uAC12`}
-                value={draftMin}
-                onChange={(event) => handleDraftMinChange(event.target.value)}
-                onKeyDown={handleEditorKeyDown}
-                autoFocus
-              />
-              <span className="problem-variance-value-unit">%</span>
-              <span className="problem-variance-value-separator">~</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                className="problem-variance-value-input"
-                aria-label={`Cost \uD3B8\uCC28 \uCD5C\uB300 \uC785\uB825\uAC12`}
-                value={draftMax}
-                onChange={(event) => handleDraftMaxChange(event.target.value)}
-                onKeyDown={handleEditorKeyDown}
-              />
-              <span className="problem-variance-value-unit">%</span>
-            </div>
+            valueEditor
+          ) : numberInputOnly ? (
+            valueEditor
           ) : (
             <button
               type="button"

@@ -1,10 +1,8 @@
 package com.quertimizer.alarm.application.input;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class MarkAlarmReadInput {
 
     private final Long alarmId;

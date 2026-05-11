@@ -12,8 +12,8 @@ public class ProblemPersistenceMapper {
                 entity.getId(), entity.getProblemId(), entity.getProblemSetId(),
                 entity.getTitle(), entity.getDescription(), entity.getDdl(),
                 entity.getDbmsType(), entity.getCondition(), entity.getOutput(),
-                entity.getSampleDataSql(), entity.getSampleOutput(),
-                entity.getAnswerHash(), entity.getAnswerSql()
+                entity.getDataExample(), entity.getOutputExample(),
+                entity.getSchemaMetadata(), entity.getAnswerHash(), entity.getAnswerSql()
         );
     }
 
@@ -23,8 +23,8 @@ public class ProblemPersistenceMapper {
                 problem.getProblemId(), problem.getProblemSetId(),
                 problem.getTitle(), problem.getDescription(), problem.getDdl(),
                 problem.getDbmsType(), problem.getCondition(), problem.getOutput(),
-                problem.getSampleDataSql(), problem.getSampleOutput(),
-                problem.getAnswerHash(), problem.getAnswerSql()
+                problem.getDataExample(), problem.getOutputExample(),
+                problem.getSchemaMetadata(), problem.getAnswerHash(), problem.getAnswerSql()
         );
     }
 
@@ -34,8 +34,8 @@ public class ProblemPersistenceMapper {
                 problem.getTitle(), problem.getDescription(),
                 problem.getDdl(), problem.getDbmsType(),
                 problem.getCondition(), problem.getOutput(),
-                problem.getSampleDataSql(), problem.getSampleOutput(),
-                problem.getAnswerHash(), problem.getAnswerSql()
+                problem.getDataExample(), problem.getOutputExample(),
+                problem.getSchemaMetadata(), problem.getAnswerHash(), problem.getAnswerSql()
         );
     }
 }

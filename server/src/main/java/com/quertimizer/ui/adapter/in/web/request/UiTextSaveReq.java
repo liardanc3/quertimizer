@@ -3,10 +3,10 @@ package com.quertimizer.ui.adapter.in.web.request;
 import com.quertimizer.ui.application.input.UiTextInput;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Getter
+@Data
 @NoArgsConstructor
 public class UiTextSaveReq {
 

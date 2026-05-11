@@ -97,14 +97,13 @@ public class ProblemService {
         return new ProblemDetailOutput(
                 problem.getProblemId(), problem.getTitle(),
                 normalizeOptionalText(problem.getDescription()),
-                problem.getDbmsType() == DbmsType.POSTGRESQL ? normalizeOptionalText(problem.getDdl()) : "",
-                problem.getDbmsType() == DbmsType.MYSQL ? normalizeOptionalText(problem.getDdl()) : "",
-                problemSet.getDbmsType() == DbmsType.POSTGRESQL ? normalizeOptionalText(problemSet.getData()) : "",
-                problemSet.getDbmsType() == DbmsType.MYSQL ? normalizeOptionalText(problemSet.getData()) : "",
+                normalizeOptionalText(problem.getDdl()),
+                normalizeOptionalText(problemSet.getData()),
                 normalizeOptionalText(problem.getCondition()),
                 normalizeOptionalText(problem.getOutput()),
-                normalizeOptionalText(problem.getOutputSample()),
-                normalizeOptionalText(problem.getSampleDataSql()),
+                normalizeOptionalText(problem.getDataExample()),
+                normalizeOptionalText(problem.getOutputExample()),
+                normalizeOptionalText(problem.getSchemaMetadata()),
                 normalizeAnswerSql(problem), normalizeOptionalText(problem.getAnswer()), problem.getDbmsType().getValue()
         );
     }
@@ -114,14 +113,13 @@ public class ProblemService {
         return new ProblemDetailOutput(
                 problem.getProblemId(), problem.getTitle(),
                 normalizeOptionalText(problem.getDescription()),
-                problem.getDbmsType() == DbmsType.POSTGRESQL ? normalizeOptionalText(problem.getDdl()) : "",
-                problem.getDbmsType() == DbmsType.MYSQL ? normalizeOptionalText(problem.getDdl()) : "",
-                "",
+                normalizeOptionalText(problem.getDdl()),
                 "",
                 normalizeOptionalText(problem.getCondition()),
                 normalizeOptionalText(problem.getOutput()),
-                normalizeOptionalText(problem.getOutputSample()),
-                normalizeOptionalText(problem.getSampleDataSql()),
+                normalizeOptionalText(problem.getDataExample()),
+                normalizeOptionalText(problem.getOutputExample()),
+                normalizeOptionalText(problem.getSchemaMetadata()),
                 normalizeAnswerSql(problem), normalizeOptionalText(problem.getAnswer()), problem.getDbmsType().getValue()
         );
     }

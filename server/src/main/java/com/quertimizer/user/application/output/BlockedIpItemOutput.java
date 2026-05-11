@@ -1,0 +1,12 @@
+package com.quertimizer.user.application.output;
+
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+@Data
+public class BlockedIpItemOutput {
+
+    private final String ipAddress;
+    private final LocalDateTime blockedAt;
+}

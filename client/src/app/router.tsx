@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { PageStatePanel } from '@/shared/ui';
 import { useLocationPathname, useLocationSearch } from '@/shared/lib/hooks/use-location-state';
 import { openLoginOverlay } from '@/shared/auth/auth-overlay';
-import { DASHBOARD_PATH, PROBLEMS_PATH, getProfileActivityPath, getProfilePath, navigate } from '@/shared/config/navigation';
+import { COMMUNITY_PATH, DASHBOARD_PATH, PROBLEMS_PATH, getProfileActivityPath, getProfilePath, navigate } from '@/shared/config/navigation';
 import { useSession } from '@/shared/auth/session';
 import { hasSocialLoginCallbackSearch } from '@/shared/auth/social-login-callback';
 import { useHomeSiteTitle, useUiText } from '@/shared/config/ui-text';
@@ -32,8 +31,6 @@ function resolveRoutePageTitle(route: AppRoute, text: ReturnType<typeof useUiTex
       return text('PAGE_TITLE_COMMUNITY_WRITE', '게시글 작성');
     case 'communityEdit':
       return text('PAGE_TITLE_COMMUNITY_EDIT', '게시글 수정');
-    case 'guide':
-      return text('PAGE_TITLE_GUIDE', '가이드');
     case 'admin':
       return text('PAGE_TITLE_ADMIN', '관리자');
     case 'profile':
@@ -54,9 +51,10 @@ export default function AppRouter() {
   const pathname = useLocationPathname();
   const search = useLocationSearch();
   const route = parseRoute(pathname);
-  const { isAuthenticated, isReady, isAdmin, handleSetupRequired, handle: currentHandle } = useSession();
+  const { isAuthenticated, isReady, isAdmin, handleSetupRequired, handle: currentHandle, reauthenticationRequired } = useSession();
   const shouldRequireHandleSetup = isAuthenticated && handleSetupRequired;
   const needsSession = routeNeedsSession(route);
+  const shouldPreserveRouteForReauthentication = needsSession && reauthenticationRequired && !isAuthenticated;
   const isSocialLoginCallback = route.type === 'home' && hasSocialLoginCallbackSearch(search);
   const routePageTitle = resolveRoutePageTitle(route, text);
   const siteTitle = text('TITLE', '쿼티마이저');
@@ -68,6 +66,15 @@ export default function AppRouter() {
       navigate(DASHBOARD_PATH, { replace: true });
     }
   }, [isSocialLoginCallback, pathname, route.type]);
+
+  useEffect(() => {
+    if ((route.type !== 'communityWrite' && route.type !== 'communityEdit') || isAuthenticated || !isReady || reauthenticationRequired) {
+      return;
+    }
+
+    openLoginOverlay(text('ROUTER_COMMUNITY_WRITE_LOGIN_RETURN_MESSAGE', '로그인 후 커뮤니티 작성 화면으로 돌아옵니다.'), { force: true });
+    navigate(COMMUNITY_PATH, { replace: true });
+  }, [isAuthenticated, isReady, reauthenticationRequired, route.type, text]);
 
   useEffect(() => {
     if (!shouldRequireHandleSetup) {
@@ -123,49 +130,30 @@ export default function AppRouter() {
 
   if (route.type === 'notFound') {
     return (
-      <PageStatePanel
-        fullPage
-        label="404"
-        title={text('ROUTER_NOT_FOUND_TITLE', '찾을 수 없는 페이지입니다.')}
-        description={text('ROUTER_NOT_FOUND_DESC', '주소가 바뀌었거나 삭제된 화면입니다. 대시보드에서 다시 이동해 주세요.')}
-        actionLabel={text('PROFILE_DASHBOARD_MOVE_BUTTON', '대시보드로 이동')}
-        onAction={() => navigate(DASHBOARD_PATH, { replace: true })}
-      />
+      <div className="page-stack route-inline-state-layout">
+        <p className="route-inline-state-message" role="status">
+          {text('ROUTER_NOT_FOUND_TITLE', '찾을 수 없는 페이지입니다.')}
+        </p>
+      </div>
     );
+  }
+
+  if (shouldPreserveRouteForReauthentication) {
+    return renderRouteComponent(route);
   }
 
   if (route.type === 'admin' && !(isAuthenticated && isAdmin)) {
     return (
-      <PageStatePanel
-        fullPage
-        label={text('ROUTER_ACCESS_DENIED_LABEL', '권한')}
-        title={text('ROUTER_ADMIN_ACCESS_DENIED_TITLE', '관리자 화면에 접근할 수 없습니다.')}
-        description={text('ADMIN_ACCESS_DENIED_MESSAGE', '관리자만 접근할 수 있습니다.')}
-        actionLabel={isAuthenticated ? text('PROFILE_DASHBOARD_MOVE_BUTTON', '대시보드로 이동') : text('AUTH_LOGIN_TITLE', '로그인')}
-        onAction={
-          isAuthenticated
-            ? () => navigate(DASHBOARD_PATH, { replace: true })
-            : () => openLoginOverlay(text('ROUTER_ADMIN_LOGIN_REQUIRED_MESSAGE', '관리자 화면은 권한이 있는 계정으로만 접근할 수 있습니다.'))
-        }
-      />
+      <div className="page-stack route-inline-state-layout">
+        <p className="route-inline-state-message" role="status">
+          {text('HTTP_FORBIDDEN_ERROR_MESSAGE', '접근 권한이 없습니다.')}
+        </p>
+      </div>
     );
   }
 
   if ((route.type === 'communityWrite' || route.type === 'communityEdit') && !isAuthenticated) {
-    return (
-      <PageStatePanel
-        fullPage
-        label={text('AUTH_LOGIN_TITLE', '로그인')}
-        title={
-          route.type === 'communityEdit'
-            ? text('ROUTER_COMMUNITY_EDIT_LOGIN_REQUIRED_TITLE', '로그인 후 게시글을 수정할 수 있습니다.')
-            : text('ROUTER_COMMUNITY_WRITE_LOGIN_REQUIRED_TITLE', '로그인 후 게시글을 작성할 수 있습니다.')
-        }
-        description={text('ROUTER_COMMUNITY_WRITE_LOGIN_REQUIRED_DESC', '커뮤니티 작성 화면은 로그인한 사용자에게만 열립니다.')}
-        actionLabel={text('AUTH_LOGIN_TITLE', '로그인')}
-        onAction={() => openLoginOverlay(text('ROUTER_COMMUNITY_WRITE_LOGIN_RETURN_MESSAGE', '로그인 후 커뮤니티 작성 화면으로 돌아옵니다.'))}
-      />
-    );
+    return null;
   }
 
   if ((route.type === 'profile' || route.type === 'profileActivity') && route.handle == null) {

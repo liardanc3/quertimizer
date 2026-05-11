@@ -27,10 +27,10 @@ public class RuntimeDatabase {
                            int weight) {
         this.id = requireText(id, "id");
         this.name = requireText(name, "name");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없다.");
+        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없습니다.");
         this.jdbcUrl = normalizeText(jdbcUrl);
         this.username = normalizeText(username);
-        this.password = Objects.requireNonNull(password, "필수 값이 없다.");
+        this.password = Objects.requireNonNull(password, "필수 값이 없습니다.");
         this.enabled = enabled;
         this.maxConcurrency = requirePositive(maxConcurrency, "maxConcurrency");
         this.weight = requirePositive(weight, "weight");
@@ -92,7 +92,7 @@ public class RuntimeDatabase {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value;
@@ -104,7 +104,7 @@ public class RuntimeDatabase {
 
     private int requirePositive(int value, String name) {
         if (value <= 0) {
-            throw new IllegalArgumentException(name + "은 0보다 커야 한다.");
+            throw new IllegalArgumentException(name + "은 0보다 커야 합니다.");
         }
 
         return value;

@@ -2,13 +2,11 @@ package com.quertimizer.problem.application.output;
 
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@RequiredArgsConstructor
+@Data
 public class ProblemListEntry {
 
     private final Problem problem;

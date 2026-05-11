@@ -9,7 +9,7 @@ public abstract class AbstractJudgeEvent implements JudgeEvent {
     private final JudgeExecutionId executionId;
 
     protected AbstractJudgeEvent(JudgeExecutionId executionId) {
-        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없다.");
+        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없습니다.");
     }
 
     @Override

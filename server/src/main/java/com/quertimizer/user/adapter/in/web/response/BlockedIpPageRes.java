@@ -1,13 +1,11 @@
 package com.quertimizer.user.adapter.in.web.response;
 
-import com.quertimizer.auth.application.output.BlockedIpPageOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import com.quertimizer.user.application.output.BlockedIpPageOutput;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class BlockedIpPageRes {
 
     private final int currentPage;

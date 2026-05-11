@@ -4,12 +4,9 @@ import com.quertimizer.community.application.port.in.CreateCommunityPostUseCase;
 import com.quertimizer.community.application.input.CreateCommunityPostInput;
 import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostSearchPort;
-import com.quertimizer.community.application.service.CommunityService;
+import com.quertimizer.community.application.port.out.CommunityUserPort;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.policy.CommunityNoticePolicy;
-import com.quertimizer.global.constant.UserRole;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +22,7 @@ public class CreateCommunityPost implements CreateCommunityPostUseCase {
     private final CommunityService communityService;
     private final CommunityContentValidationService communityContentValidationService;
     private final CommunityNoticePolicy communityNoticePolicy;
-    private final UserRepositoryPort userRepository;
+    private final CommunityUserPort communityUserPort;
 
     /**
      * 커뮤니티 게시글을 생성한다.
@@ -48,7 +45,7 @@ public class CreateCommunityPost implements CreateCommunityPostUseCase {
         String normalizedImageIds = communityService.normalizeImageIds(input.getPost().getImageIds());
         List<String> normalizedTags = communityService.normalizeTags(input.getPost().getTags());
         String normalizedCategory = communityService.normalizePostCategory(input.getPost().getCategory());
-        communityNoticePolicy.validateNoticeWritable(resolveRole(input.getHandle()), "", normalizedCategory);
+        communityNoticePolicy.validateNoticeWritable(communityUserPort.findRole(input.getHandle()), "", normalizedCategory);
 
         CommunityPost post = communityPostRepository.save(CommunityPost.create(
                 createNextPostId(), input.getHandle(), normalizedTitle, normalizedContentJson,
@@ -66,10 +63,4 @@ public class CreateCommunityPost implements CreateCommunityPostUseCase {
                 .orElse(1L);
     }
 
-    private UserRole resolveRole(String handle) {
-        // 게시글 작성자 역할 조회
-        return userRepository.findByHandle(handle)
-                .map(User::getResolvedRole)
-                .orElse(UserRole.USER);
-    }
 }

@@ -21,7 +21,7 @@ import { COMMUNITY_POST_CONTENT_MAX_BYTES } from '@/entities/community';
 import { createCommunityEditorSnapshotFromJson, type CommunityEditorSnapshot } from '@/entities/community';
 import { COMMUNITY_PATH, getProfilePath, PROBLEMS_PATH, navigate } from '@/shared/config/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '@/shared/auth/auth-overlay';
-import { showSessionToast, useSession } from '@/shared/auth/session';
+import { expireAuthenticatedSession, showSessionToast, useSession } from '@/shared/auth/session';
 import { formatBoardDate, formatInteger } from '@/shared/lib/formatters';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import './CommunityPage.css';
@@ -315,6 +315,17 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     };
   }, [locationHash, post]);
 
+  useEffect(() => {
+    if (isAuthenticated || !isEditing) {
+      return;
+    }
+
+    setIsEditing(false);
+    setIsEditCategoryMenuOpen(false);
+    setEditDraftTag('');
+    setIsSavingEdit(false);
+  }, [isAuthenticated, isEditing]);
+
   async function reloadPost() {
     try {
       const nextPost = await fetchCommunityPostDetail(postId);
@@ -327,6 +338,12 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   function openEditMode() {
+    if (!isAuthenticated) {
+      setFeedback(null);
+      openLoginOverlay();
+      return;
+    }
+
     if (!post) {
       return;
     }
@@ -436,6 +453,13 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   async function handleSaveEdit() {
+    if (!isAuthenticated) {
+      setFeedback(null);
+      closeEditMode();
+      openLoginOverlay();
+      return;
+    }
+
     const normalizedTitle = editTitle.trim();
 
     if (normalizedTitle === '') {
@@ -471,6 +495,18 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         showSessionToast(text('COMMUNITY_EDIT_SUCCESS_TOAST', '게시글 수정 완료.'));
       }
     } catch (error) {
+      if (getApiErrorStatus(error) === 401) {
+        setFeedback(null);
+        closeEditMode();
+        expireAuthenticatedSession();
+        return;
+      }
+
+      if (getApiErrorStatus(error) === 403) {
+        setIsEditing(false);
+        await reloadPost();
+      }
+
       setFeedback(error instanceof Error ? error.message : text('COMMUNITY_EDIT_FAIL_MESSAGE', '게시글을 수정하지 못했습니다.'));
     } finally {
       setIsSavingEdit(false);
@@ -595,6 +631,12 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   async function handleDeletePost() {
+    if (!isAuthenticated) {
+      setFeedback(null);
+      openLoginOverlay();
+      return;
+    }
+
     if (!window.confirm(text('COMMUNITY_DELETE_CONFIRM_MESSAGE', '게시글을 삭제하시겠습니까?'))) {
       return;
     }
@@ -603,6 +645,16 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       await deleteCommunityPost(postId);
       handleBack();
     } catch (error) {
+      if (getApiErrorStatus(error) === 401) {
+        setFeedback(null);
+        expireAuthenticatedSession();
+        return;
+      }
+
+      if (getApiErrorStatus(error) === 403) {
+        await reloadPost();
+      }
+
       setFeedback(error instanceof Error ? error.message : text('COMMUNITY_DELETE_FAIL_MESSAGE', '게시글을 삭제하지 못했습니다.'));
     }
   }
@@ -698,12 +750,12 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                 <button type="button" className="community-detail-icon-button" onClick={handleCopyLink} aria-label={text('COMMUNITY_COPY_LINK_LABEL', '링크 복사')}>
                   <LinkCopyIcon />
                 </button>
-                {post.editable ? (
+                {post.editable && isAuthenticated ? (
                   <button type="button" className="community-detail-icon-button" onClick={openEditMode} aria-label={text('COMMON_EDIT_BUTTON', '수정')}>
                     <EditIcon />
                   </button>
                 ) : null}
-                {post.editable ? (
+                {post.editable && isAuthenticated ? (
                   <button type="button" className="community-detail-icon-button is-danger" onClick={() => void handleDeletePost()} aria-label={text('COMMON_DELETE_BUTTON', '삭제')}>
                     <DeleteIcon />
                   </button>
@@ -815,7 +867,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <CommentIcon />
               <span>{formatInteger(post.comments)}</span>
             </span>
-            {post.updatedAt ? <span>{text('COMMUNITY_UPDATED_PREFIX', { date: formatBoardDate(post.updatedAt) }, `수정 ${formatBoardDate(post.updatedAt)}`)}</span> : null}
           </div>
 
           <div className="community-content-body" onClick={handleContentClick}>

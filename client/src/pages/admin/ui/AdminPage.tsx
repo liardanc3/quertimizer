@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useRef, useSyncExternalStore } from 'react';
 import { FavoriteTabButton } from '@/features/favorite-tab';
 import { LoadingOverlay } from '@/shared/ui';
 import { ADMIN_PATH, getLocationSearchSnapshot, navigate, subscribeLocation } from '@/shared/config/navigation';
@@ -62,15 +62,24 @@ function getAdminTabLabel(tab: AdminTab) {
 
 export default function AdminPage() {
   const { text } = useUiText();
-  const { isReady, isAuthenticated, isAdmin } = useSession();
+  const { isReady, isAuthenticated, isAdmin, reauthenticationRequired } = useSession();
+  const hadAdminAccessRef = useRef(false);
   const locationSearch = useSyncExternalStore(subscribeLocation, getLocationSearchSnapshot, () => '');
   const requestedTab = readAdminTabFromSearch(locationSearch || window.location.search);
   const selectedTab = requestedTab;
   const usesCompactContentGap = shouldUseCompactContentGap(selectedTab);
-  const adminPageClassName = `page-stack admin-page ${usesCompactContentGap ? 'is-compact-content-gap ' : ''}${
-    selectedTab === 'globalConfig' ? 'is-global-config-tab' : ''
-  }`.trim();
   const canAccessAdminPage = isAuthenticated && isAdmin;
+  const shouldPreserveAdminPage = reauthenticationRequired && hadAdminAccessRef.current;
+  const adminPageClassName = [
+    'page-stack admin-page',
+    usesCompactContentGap ? 'is-compact-content-gap' : '',
+    selectedTab === 'globalConfig' ? 'is-global-config-tab' : '',
+    shouldPreserveAdminPage ? 'is-reauthentication-paused' : '',
+  ].filter(Boolean).join(' ');
+
+  if (canAccessAdminPage) {
+    hadAdminAccessRef.current = true;
+  }
 
   function handleTabSelect(tab: AdminTab) {
     const nextPath = buildAdminPath(tab);
@@ -159,12 +168,12 @@ export default function AdminPage() {
     );
   }
 
-  if (!canAccessAdminPage) {
+  if (!canAccessAdminPage && !shouldPreserveAdminPage) {
     return (
-      <div className="page-stack">
-        <section className="panel-card">
-          <p className="content-text">{text('ADMIN_ACCESS_DENIED_MESSAGE', '관리자만 접근할 수 있습니다.')}</p>
-        </section>
+      <div className="page-stack route-inline-state-layout">
+        <p className="route-inline-state-message" role="status">
+          {text('HTTP_FORBIDDEN_ERROR_MESSAGE', '접근 권한이 없습니다.')}
+        </p>
       </div>
     );
   }

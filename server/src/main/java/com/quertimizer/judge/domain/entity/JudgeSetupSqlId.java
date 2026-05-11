@@ -8,7 +8,7 @@ public class JudgeSetupSqlId {
 
     public JudgeSetupSqlId(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("judge 설정 SQL ID가 비어 있다.");
+            throw new IllegalArgumentException("judge 설정 SQL ID가 비어 있습니다.");
         }
 
         this.value = value;

@@ -1,14 +1,12 @@
 package com.quertimizer.user.adapter.in.web.response;
 
 import com.quertimizer.user.application.output.UserProfileSummaryOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileSummaryRes {
 
     private final String handle;

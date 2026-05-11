@@ -24,6 +24,7 @@ import com.quertimizer.judge.domain.entity.JudgeDatasetId;
 import com.quertimizer.judge.domain.entity.JudgeEnvironmentId;
 import com.quertimizer.judge.domain.entity.JudgeExecutionId;
 import com.quertimizer.judge.domain.entity.JudgeSetupSqlId;
+import com.quertimizer.judge.domain.model.EnvironmentPolicy;
 import com.quertimizer.judge.domain.policy.SqlDefinitionPolicy;
 import com.quertimizer.judge.domain.policy.SqlExecutionPolicy;
 import com.quertimizer.judge.application.output.ExecutionMode;
@@ -68,24 +69,6 @@ public class JdbcJudgeRuntime implements JudgeRuntimePort {
 
     public JdbcJudgeRuntime(RuntimeDatabaseCluster databaseCluster, JudgeDefinitionStorePort definitionStore,
                             JudgeDialectService dialectService, RuntimeEnvironmentNamingStrategy namingStrategy,
-                            SqlStatementParser statementParser, SqlDefinitionPolicy definitionPolicy) {
-        this(databaseCluster, definitionStore, dialectService, namingStrategy,
-                statementParser, definitionPolicy,
-                new SqlReplayEnvironmentProvisioner(databaseCluster, dialectService, namingStrategy, statementParser),
-                new NoOpJudgeTemplateStore(), new NoOpDatasetTemplateProvisioner());
-    }
-
-    public JdbcJudgeRuntime(RuntimeDatabaseCluster databaseCluster, JudgeDefinitionStorePort definitionStore,
-                            JudgeDialectService dialectService, RuntimeEnvironmentNamingStrategy namingStrategy,
-                            SqlStatementParser statementParser, SqlDefinitionPolicy definitionPolicy,
-                            RuntimeEnvironmentProvisioner environmentProvisioner) {
-        this(databaseCluster, definitionStore, dialectService, namingStrategy,
-                statementParser, definitionPolicy, environmentProvisioner,
-                new NoOpJudgeTemplateStore(), new NoOpDatasetTemplateProvisioner());
-    }
-
-    public JdbcJudgeRuntime(RuntimeDatabaseCluster databaseCluster, JudgeDefinitionStorePort definitionStore,
-                            JudgeDialectService dialectService, RuntimeEnvironmentNamingStrategy namingStrategy,
                             SqlStatementParser statementParser, SqlDefinitionPolicy definitionPolicy,
                             RuntimeEnvironmentProvisioner environmentProvisioner,
                             JudgeTemplateStorePort templateStore, DatasetTemplateProvisioner templateProvisioner) {
@@ -116,10 +99,18 @@ public class JdbcJudgeRuntime implements JudgeRuntimePort {
                 datasetId, command.getDbmsType(), command.getDdl(),
                 command.getDataSql(), command.getBaseIndexDdls()
         );
-        definitionStore.saveDataset(datasetDefinition);
-        templateProvisioner.prepare(datasetDefinition).ifPresent(templateStore::saveDatasetTemplate);
-
-        return datasetId;
+        DatasetTemplateDefinition templateDefinition = null;
+        try {
+            definitionStore.saveDataset(datasetDefinition, command.isStoreSqlDefinition());
+            templateDefinition = templateProvisioner.prepare(datasetDefinition, command.getQueuePriority()).orElse(null);
+            if (templateDefinition != null) {
+                templateStore.saveDatasetTemplate(templateDefinition);
+            }
+            return datasetId;
+        } catch (RuntimeException exception) {
+            cleanupFailedDataset(datasetId, templateDefinition);
+            throw exception;
+        }
     }
 
     @Override
@@ -181,7 +172,10 @@ public class JdbcJudgeRuntime implements JudgeRuntimePort {
                 command.getPolicy().isApplyBaseIndexes(), command.getPolicy().isInitializeStatisticsAfterLoad()
         );
         try {
-            ProvisionedRuntimeEnvironment environment = environmentProvisioner.create(environmentId, dataset, command.getPolicy());
+            ProvisionedRuntimeEnvironment environment = environmentProvisioner.create(
+                    environmentId, dataset, command.getPolicy(),
+                    command.getQueuePriority(), command.getQueueStatusListener()
+            );
             environments.put(environmentId, new PersistentRuntimeEnvironment(environment));
             log.info(
                     "judge 실행 환경 생성 완료 environmentId={}, datasetId={}, strategy={}",
@@ -222,8 +216,12 @@ public class JdbcJudgeRuntime implements JudgeRuntimePort {
     public SqlExecutionResult execute(ExecuteJudgeSqlInput command) {
         // 실행 입력 검증과 실행 대상 준비
         Objects.requireNonNull(command, "SQL 실행 입력이 필요합니다.");
-        ExecutionMode mode = executionPolicy.resolveMode(command.getSql());
-        String sql = resolveSingleStatement(command.getSql());
+        ExecutionMode mode = command.getOptions().isValidateSql()
+                ? executionPolicy.resolveMode(command.getSql())
+                : ExecutionMode.SELECT;
+        String sql = command.getOptions().isValidateSql()
+                ? resolveSingleStatement(command.getSql())
+                : command.getSql();
         PersistentRuntimeEnvironment persistentEnvironment = requireEnvironment(command.getEnvironmentId());
         log.info(
                 "judge SQL 실행 시작 executionId={}, environmentId={}, mode={}, sqlLength={}, timeoutSeconds={}",
@@ -404,23 +402,77 @@ public class JdbcJudgeRuntime implements JudgeRuntimePort {
     }
 
     private void deleteDatasetTemplate(DatasetTemplateDefinition templateDefinition) {
-        // 물리 템플릿 제거 후 저장된 템플릿 메타데이터 제거
+        // 데이터셋 정의 aggregate 삭제 전 물리 템플릿 제거
         templateProvisioner.drop(templateDefinition);
-        templateStore.deleteDatasetTemplate(templateDefinition.getDatasetId());
+    }
+
+    private void cleanupFailedDataset(JudgeDatasetId datasetId, DatasetTemplateDefinition templateDefinition) {
+        // 데이터셋 생성 실패 시 물리 템플릿과 저장된 정의 제거
+        try {
+            if (templateDefinition != null) {
+                templateProvisioner.drop(templateDefinition);
+            } else {
+                templateStore.findDatasetTemplate(datasetId).ifPresent(this::deleteDatasetTemplate);
+            }
+            definitionStore.deleteDataset(datasetId);
+        } catch (RuntimeException cleanupException) {
+            log.warn("judge 데이터셋 생성 실패 후 정리 실패 datasetId={}", datasetId, cleanupException);
+        }
     }
 
     private SqlExecutionResult executeInTemporaryEnvironment(ExecuteIsolatedJudgeSqlInput command, DatasetDefinition dataset,
                                                             List<SetupSqlDefinition> setupSqlDefinitions) {
-        // 격리 실행용 런타임 DB 점유와 커넥션 생성
-        try (RuntimeDatabaseLease lease = databaseCluster.acquire(dataset.getDbmsType());
-             Connection connection = lease.openConnection()) {
-            JudgeEnvironmentId environmentId = new JudgeEnvironmentId("environment-" + UUID.randomUUID());
-            RuntimeEnvironment environment = createRuntimeEnvironment(environmentId, dataset, lease.getDatabase());
-            JudgeDialect dialect = dialectService.get(dataset.getDbmsType());
+        // 격리 실행 환경 생성
+        JudgeEnvironmentId environmentId = new JudgeEnvironmentId("environment-" + UUID.randomUUID());
+        ProvisionedRuntimeEnvironment environment = null;
+        try {
+            environment = environmentProvisioner.create(
+                    environmentId,
+                    dataset,
+                    new EnvironmentPolicy(command.getIsolationPolicy().isInitializeStatisticsAfterLoad(), true, false)
+            );
 
-            return executeWithTemporaryEnvironment(command, dataset, setupSqlDefinitions, connection, dialect, environment);
+            // 격리 실행 환경 연결과 대상 SQL 실행
+            try (RuntimeEnvironmentConnection environmentConnection = environmentProvisioner.openConnection(
+                    environment, command.getOptions().getTimeoutSeconds())) {
+                Connection connection = environmentConnection.getConnection();
+                try {
+                    if (command.getIsolationPolicy().isApplySetupSqls()) {
+                        executeSetupSqls(connection, setupSqlDefinitions);
+                    }
+                    if (command.getIsolationPolicy().isInitializeStatisticsAfterSetup()) {
+                        initializeStatistics(
+                                command.getExecutionId(),
+                                connection,
+                                environmentConnection.getDialect(),
+                                environmentConnection.getEnvironmentName()
+                        );
+                    }
+                    SqlExecutionResult result = executeSelectAll(
+                            command.getExecutionId(),
+                            connection,
+                            environmentConnection.getDialect(),
+                            command.getTargetSql(),
+                            command.getOptions().isIncludeCost(),
+                            command.getOptions().isIncludePlan()
+                    );
+                    connection.commit();
+                    return result;
+                } catch (Exception exception) {
+                    rollback(connection);
+                    throw exception;
+                }
+            }
         } catch (Exception exception) {
             throw new IllegalStateException("judge 격리 실행 실패", exception);
+        } finally {
+            if (environment != null && command.getIsolationPolicy().isDropEnvironmentAfterExecution()) {
+                try {
+                    environmentProvisioner.drop(environment);
+                } catch (Exception cleanupException) {
+                    log.warn("judge 격리 실행 환경 정리 실패 environmentId={}", environmentId, cleanupException);
+                }
+            }
         }
     }
 

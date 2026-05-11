@@ -1,13 +1,11 @@
 package com.quertimizer.user.adapter.in.web.response;
 
 import com.quertimizer.user.application.output.UserProfileSubmissionSummaryOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileSubmissionSummaryRes {
 
     private final List<String> attemptedProblemIds;

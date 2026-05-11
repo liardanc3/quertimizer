@@ -1,4 +1,4 @@
-import { memo, useState, type MouseEvent } from 'react';
+import { memo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { formatInteger } from '@/shared/lib/formatters';
 import { useUiText } from '@/shared/config/ui-text';
 import type { DbmsType, ProblemSummary } from '@/shared/api/domain';
@@ -31,6 +31,10 @@ function formatSpreadRate(value: number | undefined) {
   return Number.isInteger(normalizedValue) ? `${normalizedValue}%` : `${normalizedValue.toFixed(1)}%`;
 }
 
+function isProblemSelectKey(event: KeyboardEvent<HTMLDivElement>) {
+  return event.key === 'Enter' || event.key === ' ';
+}
+
 function StatsToggleIcon({ expanded }: { expanded: boolean }) {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -61,9 +65,20 @@ function ProblemCard({
   return (
     <div
       role="rowgroup"
+      tabIndex={0}
+      aria-label={`${problemNumber} ${problem.title}`}
       className={`problem-table-entry ${showSolveState && problem.isSolved ? 'is-solved' : ''} ${
         visibleStatsEnabled ? '' : 'is-stats-hidden'
       }`.trim()}
+      onClick={() => onSelect(problem.id)}
+      onKeyDown={(event) => {
+        if (!isProblemSelectKey(event)) {
+          return;
+        }
+
+        event.preventDefault();
+        onSelect(problem.id);
+      }}
     >
       <div className="problem-table-row problem-table-body" role="row">
         <div role="cell" className="problem-table-cell problem-table-cell-status" data-label={text('PROBLEM_TABLE_STATUS_COLUMN_LABEL', '해결여부')}>
@@ -106,20 +121,20 @@ function ProblemCard({
           </div>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수')}>
-          {formatCount(problem.solvedCount)}
+        <div role="cell" className="problem-table-cell problem-table-cell-metric is-solved-count" data-label={text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수')}>
+          <span className="problem-table-metric-value">{formatCount(problem.solvedCount)}</span>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출')}>
-          {formatCount(problem.totalSubmitCount)}
+        <div role="cell" className="problem-table-cell problem-table-cell-metric is-total-submit" data-label={text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출')}>
+          <span className="problem-table-metric-value">{formatCount(problem.totalSubmitCount)}</span>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}>
-          {formatCount(problem.successSubmitCount)}
+        <div role="cell" className="problem-table-cell problem-table-cell-metric is-success-submit" data-label={text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}>
+          <span className="problem-table-metric-value">{formatCount(problem.successSubmitCount)}</span>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric" data-label={text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}>
-          {formatSpreadRate(problem.spreadRate)}
+        <div role="cell" className="problem-table-cell problem-table-cell-metric is-spread-rate" data-label={text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}>
+          <span className="problem-table-metric-value">{formatSpreadRate(problem.spreadRate)}</span>
         </div>
 
         <div role="cell" className="problem-table-cell problem-table-cell-stats" data-label={text('PROBLEM_TABLE_STATS_COLUMN_LABEL', '통계')}>

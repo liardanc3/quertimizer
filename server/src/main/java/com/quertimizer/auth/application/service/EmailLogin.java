@@ -5,8 +5,8 @@ import com.quertimizer.auth.application.input.EmailLoginInput;
 import com.quertimizer.auth.application.output.AuthenticatedUserOutput;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -20,7 +20,7 @@ public class EmailLogin implements EmailLoginUseCase {
     private final LoginService loginService;
     private final LoginPolicy loginPolicy;
     private final AuthRateLimitService authRateLimitPolicy;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 이메일 로그인 인증 결과를 생성하고 계정 상태와 접속 정보를 반영한다.
@@ -46,10 +46,10 @@ public class EmailLogin implements EmailLoginUseCase {
             throw exception;
         }
 
-        User user = userRepository.findByEmailIgnoreCase(authenticatedEmail)
+        AuthUser user = userRepository.findByEmailIgnoreCase(authenticatedEmail)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.UNAUTHORIZED));
 
-        loginPolicy.validateBlockedUser(user);
+        loginPolicy.validateBlockedUser(user.hasHandle(), user.isBlocked());
         loginService.updateLastAccess(user.getEmail(), input.getAccessIp());
         return AuthenticatedUserOutput.from(user);
     }

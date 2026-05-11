@@ -17,10 +17,10 @@ public class ExecuteJudgeSqlInput {
                              JudgeEnvironmentId environmentId,
                              String sql,
                              ExecutionOptions options) {
-        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없다.");
-        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없다.");
+        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없습니다.");
+        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없습니다.");
         this.sql = requireSql(sql);
-        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없습니다.");
     }
 
     public JudgeExecutionId getExecutionId() {
@@ -41,7 +41,7 @@ public class ExecuteJudgeSqlInput {
 
     private String requireSql(String sql) {
         if (sql == null || sql.isBlank()) {
-            throw new IllegalArgumentException("필수 문자열이 비어 있다.");
+            throw new IllegalArgumentException("필수 문자열이 비어 있습니다.");
         }
 
         return sql;

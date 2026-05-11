@@ -8,7 +8,7 @@ public class JudgeEnvironmentId {
 
     public JudgeEnvironmentId(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("judge 실행 환경 ID가 비어 있다.");
+            throw new IllegalArgumentException("judge 실행 환경 ID가 비어 있습니다.");
         }
 
         this.value = value;

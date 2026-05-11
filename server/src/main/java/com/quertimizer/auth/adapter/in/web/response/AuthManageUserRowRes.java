@@ -1,11 +1,9 @@
 package com.quertimizer.auth.adapter.in.web.response;
 
 import com.quertimizer.auth.application.output.AuthManageUserRowOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class AuthManageUserRowRes {
 
     private final String handle;

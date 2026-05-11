@@ -18,10 +18,10 @@ public class SetupSqlDefinition {
                               JudgeDatasetId datasetId,
                               List<String> setupSqls,
                               IndexPolicy indexPolicy) {
-        this.setupSqlId = Objects.requireNonNull(setupSqlId, "필수 값이 없다.");
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
-        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "필수 값이 없다."));
-        this.indexPolicy = Objects.requireNonNull(indexPolicy, "필수 값이 없다.");
+        this.setupSqlId = Objects.requireNonNull(setupSqlId, "필수 값이 없습니다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
+        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "필수 값이 없습니다."));
+        this.indexPolicy = Objects.requireNonNull(indexPolicy, "필수 값이 없습니다.");
     }
 
     public JudgeSetupSqlId getSetupSqlId() {

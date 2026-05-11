@@ -46,19 +46,4 @@ export function PageLoading({ className = '', label }: Omit<ContentLoadingProps,
   return <ContentLoading as="section" className={className} label={label} />;
 }
 
-export function SectionLoading({ className = '', label }: ContentLoadingProps) {
-  return <ContentLoading as="div" className={className} label={label} />;
-}
-
-export function TableLoadingOverlay(props: LoadingOverlayProps) {
-  return <LoadingOverlay {...props} />;
-}
-
-export function InlineSpinner({ className = '', label }: Omit<LoadingOverlayProps, 'ariaHidden'>) {
-  const { text } = useUiText();
-  return (
-    <span className={getClassName('inline-spinner', className)} aria-live="polite" aria-label={label ?? text('COMMON_LOADING_STATUS', '로딩 중')} />
-  );
-}
-
 export default ContentLoading;

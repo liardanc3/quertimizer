@@ -14,9 +14,9 @@ public class AnalyzeJudgeEnvironmentInput {
 
     public AnalyzeJudgeEnvironmentInput(JudgeExecutionId executionId, JudgeEnvironmentId environmentId,
                                      ExecutionOptions options) {
-        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없다.");
-        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없다.");
-        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
+        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없습니다.");
+        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없습니다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없습니다.");
     }
 
     public JudgeExecutionId getExecutionId() {

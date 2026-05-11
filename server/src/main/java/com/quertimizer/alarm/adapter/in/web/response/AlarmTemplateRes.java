@@ -1,11 +1,9 @@
 package com.quertimizer.alarm.adapter.in.web.response;
 
 import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class AlarmTemplateRes {
 
     private final String type;

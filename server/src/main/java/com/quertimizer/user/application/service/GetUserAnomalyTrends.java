@@ -4,11 +4,12 @@ import com.quertimizer.user.application.port.in.GetUserAnomalyTrendsUseCase;
 import com.quertimizer.user.application.input.UserAnomalyTrendSearchInput;
 import com.quertimizer.user.application.output.UserAnomalyTrendItemOutput;
 import com.quertimizer.user.application.output.UserAnomalyTrendPageOutput;
-import com.quertimizer.problem.application.port.out.ProblemSubmitHistoryRepositoryPort;
+import com.quertimizer.user.application.port.out.UserAnomalySubmitTrendPort;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.user.domain.model.UserAnomalyAction;
 import com.quertimizer.user.domain.model.UserAnomalyDateTimeConstant;
 import com.quertimizer.user.domain.model.UserAnomalyPageConstant;
+import com.quertimizer.user.domain.model.UserAnomalySubmitTrend;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,7 +32,7 @@ import static com.quertimizer.user.domain.model.UserAnomalyRangeBoundary.START;
 @RequiredArgsConstructor
 public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
 
-    private final ProblemSubmitHistoryRepositoryPort problemSubmitHistoryRepository;
+    private final UserAnomalySubmitTrendPort userAnomalySubmitTrendPort;
 
     /**
      * 이상 제출 추세를 조회한다.
@@ -49,7 +50,7 @@ public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
     public UserAnomalyTrendPageOutput execute(UserAnomalyTrendSearchInput input) {
         int currentPage = Math.max(1, input.getPage());
         int pageSize = normalizePageSize(input.getPageSize());
-        Page<ProblemSubmitHistoryRepositoryPort.UserSubmitCountProjection> submitTrendPage = resolveSubmitTrendPage(
+        Page<UserAnomalySubmitTrend> submitTrendPage = resolveSubmitTrendPage(
                 input.getRange(), input.getStartedAt(), input.getEndedAt(), currentPage, pageSize
         );
 
@@ -63,18 +64,15 @@ public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
         );
     }
 
-    private Page<ProblemSubmitHistoryRepositoryPort.UserSubmitCountProjection> resolveSubmitTrendPage(String range,
-                                                                                                  String startedAt,
-                                                                                                  String endedAt,
-                                                                                                  int currentPage,
-                                                                                                  int pageSize) {
+    private Page<UserAnomalySubmitTrend> resolveSubmitTrendPage(String range, String startedAt, String endedAt,
+                                                                int currentPage, int pageSize) {
         // 조회 범위와 페이지 요청 준비
         Pageable pageable = PageRequest.of(currentPage - 1, pageSize);
         String normalizedRange = range == null ? "10m" : range.trim();
 
         // 전체 범위면 전체 제출 집계 조회
         if ("all".equals(normalizedRange)) {
-            return problemSubmitHistoryRepository.findUserSubmitCounts(pageable);
+            return userAnomalySubmitTrendPort.findUserSubmitCounts(pageable);
         }
 
         // 사용자 지정 범위면 시작/종료 시각 검증 후 제출 집계 조회
@@ -85,11 +83,11 @@ public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
                 throw new BusinessException(START_AFTER_END.getMessage(), HttpStatus.BAD_REQUEST);
             }
 
-            return problemSubmitHistoryRepository.findUserSubmitCountsBetween(submittedStart, submittedEnd, pageable);
+            return userAnomalySubmitTrendPort.findUserSubmitCountsBetween(submittedStart, submittedEnd, pageable);
         }
 
         // 프리셋 범위 기준 제출 집계 조회
-        return problemSubmitHistoryRepository.findUserSubmitCountsSince(resolveSubmittedAfter(normalizedRange), pageable);
+        return userAnomalySubmitTrendPort.findUserSubmitCountsSince(resolveSubmittedAfter(normalizedRange), pageable);
     }
 
     private LocalDateTime resolveSubmittedAfter(String range) {

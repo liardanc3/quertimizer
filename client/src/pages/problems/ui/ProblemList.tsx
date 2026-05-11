@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { DataTable } from '@/shared/ui';
 import { LoadingOverlay } from '@/shared/ui';
 import { SortIcon } from '@/shared/ui/icons';
@@ -12,6 +12,7 @@ import ProblemSpreadRateFilter from './ProblemSpreadRateFilter';
 type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
 
 type RangeSelection = { min: number; max: number };
+type SpreadRateMenuRect = { top: number; left: number; width: number };
 
 type ProblemListProps = {
   problems: ProblemSummary[];
@@ -77,10 +78,40 @@ export default function ProblemList({
   const { text } = useUiText();
   const [isSolveFilterOpen, setIsSolveFilterOpen] = useState(false);
   const [isSpreadRateFilterOpen, setIsSpreadRateFilterOpen] = useState(false);
+  const [spreadRateMenuRect, setSpreadRateMenuRect] = useState<SpreadRateMenuRect | null>(null);
   const solveFilterRef = useRef<HTMLDivElement | null>(null);
   const spreadRateFilterRef = useRef<HTMLDivElement | null>(null);
   const filterLayerRefs = useMemo(() => [solveFilterRef, spreadRateFilterRef], []);
   const handleSelectProblem = useCallback((id: string) => navigate(`/problems/${id}`), []);
+
+  const syncSpreadRateMenuRect = useCallback(() => {
+    // Cost 편차 필터 버튼 기준 메뉴 위치 계산
+    const trigger = spreadRateFilterRef.current;
+    if (!trigger) {
+      return;
+    }
+
+    // 테이블 overflow에 가려지지 않도록 viewport 기준 고정 좌표 구성
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 14;
+    const menuWidth = Math.min(360, window.innerWidth - viewportPadding * 2);
+    const left = Math.min(Math.max(viewportPadding, rect.right - menuWidth), window.innerWidth - menuWidth - viewportPadding);
+    setSpreadRateMenuRect({ top: rect.bottom + 8, left, width: menuWidth });
+  }, []);
+
+  useEffect(() => {
+    if (!isSpreadRateFilterOpen) {
+      return;
+    }
+
+    syncSpreadRateMenuRect();
+    window.addEventListener('resize', syncSpreadRateMenuRect);
+    window.addEventListener('scroll', syncSpreadRateMenuRect, true);
+    return () => {
+      window.removeEventListener('resize', syncSpreadRateMenuRect);
+      window.removeEventListener('scroll', syncSpreadRateMenuRect, true);
+    };
+  }, [isSpreadRateFilterOpen, syncSpreadRateMenuRect]);
 
   useDismissableLayer({
     enabled: isSolveFilterOpen || isSpreadRateFilterOpen,
@@ -98,6 +129,18 @@ export default function ProblemList({
     }
 
     return <SortIcon direction={countSortDirection} />;
+  }
+
+  function getSpreadRateMenuStyle(): CSSProperties | undefined {
+    if (!spreadRateMenuRect) {
+      return undefined;
+    }
+
+    return {
+      '--problem-spread-menu-top': `${spreadRateMenuRect.top}px`,
+      '--problem-spread-menu-left': `${spreadRateMenuRect.left}px`,
+      '--problem-spread-menu-width': `${spreadRateMenuRect.width}px`,
+    } as CSSProperties;
   }
 
   return (
@@ -217,7 +260,15 @@ export default function ProblemList({
                 type="button"
                 className={`problem-table-head-filter-trigger ${isSpreadRateFilterOpen ? 'is-open' : ''} ${isSpreadRateFilterActive ? 'is-active' : ''}`}
                 aria-label={text('PROBLEM_TABLE_COST_SPREAD_FILTER_OPEN_LABEL', 'Cost 편차 필터 열기')}
-                onClick={() => setIsSpreadRateFilterOpen((value) => !value)}
+                onClick={() => {
+                  setIsSpreadRateFilterOpen((value) => {
+                    const nextValue = !value;
+                    if (nextValue) {
+                      window.requestAnimationFrame(syncSpreadRateMenuRect);
+                    }
+                    return nextValue;
+                  });
+                }}
               >
                 ▾
               </button>
@@ -226,6 +277,7 @@ export default function ProblemList({
                   className="problem-table-header-menu problem-table-header-menu-spread"
                   role="menu"
                   aria-label={text('PROBLEM_TABLE_COST_SPREAD_FILTER_OPTIONS_LABEL', 'Cost 편차 필터 옵션')}
+                  style={getSpreadRateMenuStyle()}
                 >
                   <ProblemSpreadRateFilter
                     minBound={spreadRateMinBound}

@@ -17,11 +17,11 @@ public class DatasetTemplateDefinition {
     public DatasetTemplateDefinition(JudgeDatasetId datasetId, DbmsType dbmsType,
                                      String templateVersion, String environmentName,
                                      Instant createdAt) {
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
+        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없습니다.");
         this.templateVersion = requireText(templateVersion, "templateVersion");
         this.environmentName = requireText(environmentName, "environmentName");
-        this.createdAt = Objects.requireNonNull(createdAt, "필수 값이 없다.");
+        this.createdAt = Objects.requireNonNull(createdAt, "필수 값이 없습니다.");
     }
 
     public JudgeDatasetId getDatasetId() {
@@ -46,7 +46,7 @@ public class DatasetTemplateDefinition {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value.trim();

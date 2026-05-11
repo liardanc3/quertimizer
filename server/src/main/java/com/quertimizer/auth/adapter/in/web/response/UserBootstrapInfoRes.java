@@ -4,11 +4,9 @@ import com.quertimizer.auth.application.output.UserBootstrapOutput;
 import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.global.constant.UserRole;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserBootstrapInfoRes {
 

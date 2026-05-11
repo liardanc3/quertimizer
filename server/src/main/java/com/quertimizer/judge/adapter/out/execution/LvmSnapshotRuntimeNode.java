@@ -17,7 +17,7 @@ public class LvmSnapshotRuntimeNode {
         this.runnerContainer = requireText(runnerContainer, "runnerContainer");
         this.host = requireText(host, "host");
         if (portStart <= 0 || portEnd < portStart) {
-            throw new IllegalArgumentException("포트 범위는 0보다 크고 순서가 맞아야 한다.");
+            throw new IllegalArgumentException("포트 범위는 0보다 크고 순서가 맞아야 합니다.");
         }
 
         this.portStart = portStart;
@@ -56,7 +56,7 @@ public class LvmSnapshotRuntimeNode {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value.trim();

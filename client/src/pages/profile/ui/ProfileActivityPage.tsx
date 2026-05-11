@@ -11,11 +11,9 @@ import {
 } from '@/shared/api/community-api';
 import { HttpErrorState } from '@/shared/ui';
 import { LoadingOverlay } from '@/shared/ui';
-import { PageStatePanel } from '@/shared/ui';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '@/shared/api/api-error';
 import { getCommunityPostPath, getProfilePath, navigate } from '@/shared/config/navigation';
 import { PageLoadFailureState } from '@/shared/ui';
-import { openLoginOverlay } from '@/shared/auth/auth-overlay';
 import { useSession } from '@/shared/auth/session';
 import { formatCompactBoardDate, formatInteger } from '@/shared/lib/formatters';
 import { useUiText } from '@/shared/config/ui-text';
@@ -111,16 +109,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
   ], [comments.length, likedPosts.length, posts.length, text]);
 
   if (!resolvedHandle) {
-    return (
-      <PageStatePanel
-        fullPage
-        label={text('PROFILE_ACTIVITY_PAGE_LABEL', '활동 기록')}
-        title={text('PROFILE_ACTIVITY_NOT_FOUND_TITLE', '조회할 활동 기록이 없습니다.')}
-        description={text('PROFILE_ACTIVITY_NOT_FOUND_DESC', '로그인 후 내 활동 기록을 열거나 Handle 경로로 접근해 주세요.')}
-        actionLabel={text('AUTH_LOGIN_TITLE', '로그인')}
-        onAction={() => openLoginOverlay(text('PROFILE_ACTIVITY_LOGIN_MOVE_MESSAGE', '로그인 후 내 활동 기록 화면으로 이동할 수 있습니다.'))}
-      />
-    );
+    return null;
   }
 
   return (
@@ -205,7 +194,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                 >
                   <div className="community-activity-item-head">
                     <strong>{post.title}</strong>
-                    <span>{formatCompactBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                    <span>{formatCompactBoardDate(post.createdAt)}</span>
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">
@@ -258,7 +247,7 @@ export default function ProfileActivityPage({ handle: profileHandle }: ProfileAc
                 >
                   <div className="community-activity-item-head">
                     <strong>{post.title}</strong>
-                    <span>{formatCompactBoardDate(post.updatedAt ?? post.createdAt)}</span>
+                    <span>{formatCompactBoardDate(post.createdAt)}</span>
                   </div>
                   <p>{post.excerpt}</p>
                   <div className="community-activity-item-meta">

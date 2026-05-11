@@ -2,11 +2,9 @@ package com.quertimizer.alarm.adapter.in.web.realtime.dto;
 
 import com.quertimizer.alarm.application.output.AlarmCreatedOutput;
 import com.quertimizer.alarm.adapter.in.web.response.AlarmItemRes;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class AlarmSocketRes {
 
     private final String type;

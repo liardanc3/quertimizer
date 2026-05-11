@@ -50,7 +50,7 @@ public class SessionStompLifecycleListener {
         try {
             sessionStompSender.sendToSession(handle, stompSessionId, Map.of("type", "connected", "handle", handle));
         } catch (Exception exception) {
-            log.warn("STOMP 연결 완료 메시지 전송에 실패했다.", exception);
+            log.warn("STOMP 연결 완료 메시지 전송에 실패했습니다.", exception);
         }
     }
 

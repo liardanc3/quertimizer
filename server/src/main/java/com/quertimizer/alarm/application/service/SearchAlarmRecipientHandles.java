@@ -1,8 +1,7 @@
 package com.quertimizer.alarm.application.service;
 
 import com.quertimizer.alarm.application.port.in.SearchAlarmRecipientHandlesUseCase;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.alarm.application.port.out.AlarmRecipientPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +12,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SearchAlarmRecipientHandles implements SearchAlarmRecipientHandlesUseCase {
 
-    private final UserRepositoryPort userRepository;
+    private final AlarmRecipientPort alarmRecipientPort;
 
     /**
      * 관리자 알람 수신 handle 후보를 검색한다.
@@ -33,10 +32,6 @@ public class SearchAlarmRecipientHandles implements SearchAlarmRecipientHandlesU
             return List.of();
         }
 
-        return userRepository.findTop20ByHandleContainingIgnoreCaseOrderByHandleAsc(normalizedKeyword).stream()
-                .map(User::getHandle)
-                .filter(handle -> handle != null && !handle.isBlank())
-                .distinct()
-                .toList();
+        return alarmRecipientPort.searchHandles(normalizedKeyword);
     }
 }

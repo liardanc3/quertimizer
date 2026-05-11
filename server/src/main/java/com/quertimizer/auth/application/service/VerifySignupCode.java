@@ -3,10 +3,8 @@ package com.quertimizer.auth.application.service;
 import com.quertimizer.auth.application.port.in.VerifySignupCodeUseCase;
 import com.quertimizer.auth.application.input.VerifyCodeInput;
 import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.auth.application.service.AuthRateLimitService;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +17,7 @@ public class VerifySignupCode implements VerifySignupCodeUseCase {
     private final VerificationCodeRepositoryPort verificationCodeRepository;
     private final AuthRateLimitService authRateLimitPolicy;
     private final SignupPolicy signupPolicy;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 회원가입용 인증코드를 검증한다.

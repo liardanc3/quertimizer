@@ -268,6 +268,66 @@ function normalizePostSummary(post: CommunityPostSummaryResponse): CommunityPost
   };
 }
 
+const communityImagePathPattern = /^\/?community\/images\/[a-fA-F0-9]{32}\.(jpg|jpeg|png|gif|webp)$/;
+
+function normalizeCommunityImagePath(value: string) {
+  const normalizedValue = value.trim();
+  if (communityImagePathPattern.test(normalizedValue)) {
+    return normalizedValue.startsWith('/') ? normalizedValue : `/${normalizedValue}`;
+  }
+
+  try {
+    const imageUrl = new URL(normalizedValue);
+    return communityImagePathPattern.test(imageUrl.pathname) ? imageUrl.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
+function createCommunityImageUrl(value: string) {
+  const normalizedPath = normalizeCommunityImagePath(value);
+  return normalizedPath != null ? `${getApiBaseUrl()}${normalizedPath}` : value;
+}
+
+function normalizeCommunityImageSrc(value: unknown, normalizeSrc: (src: string) => string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeCommunityImageSrc(entry, normalizeSrc));
+  }
+
+  if (value == null || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (key !== 'src' || typeof entry !== 'string') {
+        return [key, normalizeCommunityImageSrc(entry, normalizeSrc)];
+      }
+
+      return [key, normalizeSrc(entry)];
+    }),
+  );
+}
+
+function normalizeCommunityContentJson(contentJson: string, normalizeSrc: (src: string) => string) {
+  try {
+    return JSON.stringify(normalizeCommunityImageSrc(JSON.parse(contentJson), normalizeSrc));
+  } catch {
+    return contentJson;
+  }
+}
+
+function normalizeSaveCommunityPostPayload(payload: SaveCommunityPostPayload) {
+  return {
+    ...payload,
+    contentJson: normalizeCommunityContentJson(payload.contentJson, (src) => normalizeCommunityImagePath(src) ?? src),
+  };
+}
+
+function normalizeCommunityPostDetailContentJson(contentJson: string) {
+  return normalizeCommunityContentJson(contentJson, createCommunityImageUrl);
+}
+
 async function executeCommunityRequest<T>(
   path: string,
   init: RequestInit,
@@ -400,7 +460,7 @@ export async function fetchCommunityPostDetail(postId: string): Promise<Communit
         authorHandle: post.authorId,
         excerpt: post.excerpt ?? '',
         content: post.excerpt ?? '',
-        contentJson: post.contentJson,
+        contentJson: normalizeCommunityPostDetailContentJson(post.contentJson),
         imageIds: Array.isArray(post.imageIds) ? post.imageIds.filter((imageId): imageId is string => typeof imageId === 'string') : [],
         tags: normalizeTags(post.tags),
         category: normalizePostCategory(post.category),
@@ -433,7 +493,7 @@ export async function createCommunityPost(payload: SaveCommunityPostPayload) {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizeSaveCommunityPostPayload(payload)),
   });
 
   if (!response.ok) {
@@ -451,7 +511,7 @@ export async function updateCommunityPost(postId: string, payload: SaveCommunity
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizeSaveCommunityPostPayload(payload)),
   });
 
   if (!response.ok) {
@@ -480,9 +540,7 @@ export async function uploadCommunityImage(file: File): Promise<CommunityUploade
 
   return {
     imageId: uploadedImage.imageId,
-    imageUrl: uploadedImage.imageUrl.startsWith('http')
-      ? uploadedImage.imageUrl
-      : `${getApiBaseUrl()}${uploadedImage.imageUrl}`,
+    imageUrl: createCommunityImageUrl(uploadedImage.imageUrl),
   };
 }
 

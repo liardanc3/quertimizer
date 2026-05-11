@@ -21,7 +21,6 @@ import {
   type AdminBlockedUserPageData,
 } from '@/shared/api/admin-anomaly-api';
 import { useUiText } from '@/shared/config/ui-text';
-import '@/shared/ui/styles/submit-history-page.css';
 import './AnomalyManagePage.css';
 
 type AnomalySection = 'trend' | 'blockedUsers' | 'blockedIps';

@@ -1,11 +1,9 @@
 package com.quertimizer.user.adapter.in.web.response;
 
 import com.quertimizer.user.application.output.UserProfileSubmissionActivityOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileSubmissionActivityRes {
 
     private final String date;

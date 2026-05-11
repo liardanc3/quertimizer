@@ -1,10 +1,8 @@
 package com.quertimizer.ui.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UiTextOutput {
 
     private final String key;

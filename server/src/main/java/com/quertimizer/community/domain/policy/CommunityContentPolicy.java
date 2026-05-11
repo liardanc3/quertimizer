@@ -14,6 +14,9 @@ import static com.quertimizer.community.domain.model.CommunityContentConstant.AL
 import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_NODES;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_NODE_ATTRS;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.ALLOWED_NODE_CLASSES;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.COMMUNITY_IMAGE_ABSOLUTE_URL_PATTERN;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.COMMUNITY_IMAGE_ID_PATTERN;
+import static com.quertimizer.community.domain.model.CommunityContentConstant.COMMUNITY_IMAGE_PATH_PATTERN;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_CONTENT_BYTES;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_DEPTH;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_NODE_COUNT;
@@ -93,6 +96,11 @@ public class CommunityContentPolicy {
 
         if ("image".equals(nodeType) && "imageId".equals(attrName)) {
             validateImageId(textValue(value));
+            return;
+        }
+
+        if ("image".equals(nodeType) && ("width".equals(attrName) || "height".equals(attrName))) {
+            validateImageDimension(value);
             return;
         }
 
@@ -190,15 +198,60 @@ public class CommunityContentPolicy {
     private void validateImageSrc(String src) {
         validateSafeText(src);
         String normalizedSrc = src != null ? src.trim() : "";
-        if (!normalizedSrc.matches("^/community/images/[a-fA-F0-9]{32}\\.(jpg|jpeg|png|gif|webp)$")) {
+        if (!COMMUNITY_IMAGE_PATH_PATTERN.matcher(normalizedSrc).matches()
+                && !COMMUNITY_IMAGE_ABSOLUTE_URL_PATTERN.matcher(normalizedSrc).matches()) {
             throw badContent();
         }
     }
 
     private void validateImageId(String imageId) {
-        if (imageId == null || !imageId.matches("[a-fA-F0-9]{32}\\.(jpg|jpeg|png|gif|webp)")) {
+        // 이미지 번호 없는 optional attr 검증 생략
+        String normalizedImageId = imageId != null ? imageId.trim() : "";
+        if (normalizedImageId.isEmpty()) {
+            return;
+        }
+
+        // 이미지 번호 형식 검증
+        if (!COMMUNITY_IMAGE_ID_PATTERN.matcher(normalizedImageId).matches()) {
             throw badContent();
         }
+    }
+
+    private void validateImageDimension(Object value) {
+        // 이미지 크기 없는 optional attr 검증 생략
+        if (value == null) {
+            return;
+        }
+
+        // 이미지 크기 숫자 값 검증
+        if (value instanceof Number number) {
+            double dimension = number.doubleValue();
+            if (dimension > 0 && dimension <= 10000) {
+                return;
+            }
+            throw badContent();
+        }
+
+        // 이미지 크기 문자열 값 검증
+        if (!(value instanceof String text)) {
+            throw badContent();
+        }
+
+        String normalizedValue = text.trim();
+        if (normalizedValue.isEmpty()) {
+            return;
+        }
+
+        try {
+            double dimension = Double.parseDouble(normalizedValue);
+            if (dimension > 0 && dimension <= 10000) {
+                return;
+            }
+        } catch (NumberFormatException exception) {
+            throw badContent();
+        }
+
+        throw badContent();
     }
 
     private void validateHttpUrl(String url) {
@@ -217,7 +270,14 @@ public class CommunityContentPolicy {
     }
 
     private void validateAllowedClass(String nodeType, String className) {
-        if (!ALLOWED_NODE_CLASSES.getOrDefault(nodeType, Set.of()).contains(className)) {
+        // class 없는 optional attr 검증 생략
+        String normalizedClassName = className != null ? className.trim() : "";
+        if (normalizedClassName.isEmpty()) {
+            return;
+        }
+
+        // 노드별 허용 class 검증
+        if (!ALLOWED_NODE_CLASSES.getOrDefault(nodeType, Set.of()).contains(normalizedClassName)) {
             throw badContent();
         }
     }

@@ -1,13 +1,11 @@
 package com.quertimizer.user.adapter.in.web.response;
 
-import com.quertimizer.auth.application.output.BlockedIpItemOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import com.quertimizer.user.application.output.BlockedIpItemOutput;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class BlockedIpItemRes {
 
     private final String ipAddress;

@@ -2,6 +2,7 @@ package com.quertimizer.community.domain.model;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public final class CommunityContentConstant {
 
@@ -21,7 +22,7 @@ public final class CommunityContentConstant {
             Map.entry("heading", Set.of("level")),
             Map.entry("orderedList", Set.of("start")),
             Map.entry("codeBlock", Set.of("language", "class")),
-            Map.entry("image", Set.of("src", "alt", "title", "imageId", "class")),
+            Map.entry("image", Set.of("src", "alt", "title", "width", "height", "imageId", "class")),
             Map.entry("details", Set.of("open")),
             Map.entry("taskList", Set.of("class")),
             Map.entry("taskItem", Set.of("checked", "class"))
@@ -36,6 +37,12 @@ public final class CommunityContentConstant {
             "link", Set.of("href", "target", "rel"),
             "highlight", Set.of("color")
     );
+    public static final Pattern COMMUNITY_IMAGE_PATH_PATTERN =
+            Pattern.compile("^/community/images/[a-fA-F0-9]{32}\\.(jpg|jpeg|png|gif|webp)$");
+    public static final Pattern COMMUNITY_IMAGE_ABSOLUTE_URL_PATTERN =
+            Pattern.compile("^https?://[^\\s/]+/community/images/[a-fA-F0-9]{32}\\.(jpg|jpeg|png|gif|webp)$", Pattern.CASE_INSENSITIVE);
+    public static final Pattern COMMUNITY_IMAGE_ID_PATTERN =
+            Pattern.compile("^[a-fA-F0-9]{32}\\.(jpg|jpeg|png|gif|webp)$");
 
     private CommunityContentConstant() {
     }

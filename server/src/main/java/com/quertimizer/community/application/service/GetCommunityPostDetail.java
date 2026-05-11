@@ -6,7 +6,6 @@ import com.quertimizer.community.application.output.CommunityCommentOutput;
 import com.quertimizer.community.application.output.CommunityPostDetailOutput;
 import com.quertimizer.community.application.port.out.CommunityCommentRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
-import com.quertimizer.community.application.service.CommunityService;
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;

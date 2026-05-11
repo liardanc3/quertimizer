@@ -1,4 +1,4 @@
-.ranking-page.submit-history-page.home-page.page-stack {
+.ranking-page.data-page.page-stack {
   gap: 0;
 }
 
@@ -75,7 +75,7 @@
 }
 
 .ranking-table .submit-history-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .ranking-table .submit-history-empty-row {
@@ -90,6 +90,7 @@
   justify-content: flex-start;
   justify-self: stretch;
   text-align: left;
+  text-transform: none;
 }
 
 .ranking-body .submit-history-cell {
@@ -113,12 +114,36 @@
 
 @media (max-width: 720px) {
   .ranking-table {
-    min-width: 44rem;
+    min-width: 34.5rem;
+  }
+
+  .ranking-table .submit-history-row {
+    grid-template-columns: 2.8rem 5.45rem repeat(4, minmax(4rem, 1fr));
+    gap: 0.26rem;
+  }
+
+  .ranking-head .submit-history-head-cell,
+  .ranking-body .submit-history-cell {
+    justify-content: center;
+    font-size: 0.64rem;
+    text-align: center;
+  }
+
+  .ranking-head .ranking-head-handle-cell,
+  .ranking-body .submit-history-cell[data-label='Handle'] {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .ranking-body .submit-history-cell[data-label='Handle'] .submit-history-link-button {
+    max-width: 5.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
 @media (prefers-color-scheme: dark) {
   .ranking-head {
-    border-bottom-color: var(--line-soft);
+    border-bottom-color: rgba(148, 163, 184, 0.18);
   }
 }

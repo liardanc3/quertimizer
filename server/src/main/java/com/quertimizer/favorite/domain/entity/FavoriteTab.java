@@ -1,8 +1,8 @@
 package com.quertimizer.favorite.domain.entity;
 
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
+@Data
 public class FavoriteTab {
 
     private Long favoriteTabId;

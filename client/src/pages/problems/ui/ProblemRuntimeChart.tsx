@@ -4,7 +4,6 @@ import { formatInteger, formatPreciseCost, formatRoundedPercent } from '@/shared
 import { useSession } from '@/shared/auth/session';
 import { getUiText, getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import type { AggregateBucket, DbmsType, FilterBucket, JoinBucket, ProblemSummary, ScanBucket, SortBucket } from '@/shared/api/domain';
-import '@/shared/ui/styles/runtime-panel.css';
 
 const TARGET_BUCKET_COUNT = 40;
 const MIN_VISUAL_BUCKET_COUNT = 12;
@@ -181,6 +180,14 @@ function formatCostValue(value: number) {
 
 function formatPercent(value: number) {
   return formatRoundedPercent(value);
+}
+
+function resolveDisplayBucketIndex(targetPercent: number, displayBucketCount: number) {
+  if (displayBucketCount <= 0) {
+    return -1;
+  }
+
+  return clamp(Math.floor((clamp(targetPercent, 0, 100) / 100) * displayBucketCount), 0, displayBucketCount - 1);
 }
 
 function formatBucketDisplayLabel(value: BucketFilterValue) {
@@ -826,21 +833,26 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
       };
     });
   }, [bucketModel, displayBucketLayout, markers]);
+  const displayBucketCount = displayBucketLayout?.displayBuckets.length ?? bucketModel?.buckets.length ?? 0;
   const markersByRow = useMemo(
     () => [placedMarkers.find((marker) => marker.key === 'mine') ?? null, placedMarkers.find((marker) => marker.key === 'fastest') ?? null],
     [placedMarkers]
   );
   const markerAxisLabels = useMemo(() => {
-    const labelsByValue = new Map<string, { key: string; label: string; targetPercent: number }>();
+    const labelsByBucket = new Map<number, { key: string; label: string; targetPercent: number }>();
     placedMarkers.forEach((marker) => {
-      const label = formatCostValue(marker.value);
-      if (!labelsByValue.has(label)) {
-        labelsByValue.set(label, { key: marker.key, label, targetPercent: marker.targetPercent });
+      const bucketIndex = resolveDisplayBucketIndex(marker.targetPercent, displayBucketCount);
+      if (bucketIndex >= 0 && !labelsByBucket.has(bucketIndex)) {
+        labelsByBucket.set(bucketIndex, { key: marker.key, label: formatCostValue(marker.value), targetPercent: marker.targetPercent });
       }
     });
 
-    return [...labelsByValue.values()].slice(0, 2);
-  }, [placedMarkers]);
+    return [...labelsByBucket.values()].slice(0, 2);
+  }, [displayBucketCount, placedMarkers]);
+  const markerAxisBucketIndexes = useMemo(
+    () => new Set(markerAxisLabels.map((marker) => resolveDisplayBucketIndex(marker.targetPercent, displayBucketCount)).filter((bucketIndex) => bucketIndex >= 0)),
+    [displayBucketCount, markerAxisLabels]
+  );
   const selectedRatioItems = useMemo(
     () =>
       buildPlanSectionRatioItems({
@@ -1016,8 +1028,11 @@ export default function ProblemRuntimeChart({ problem, forcedDbms, onSearchSelec
                           (marker.value < bucket.endValue || bucket.endValue === bucketModel.axisMax)
                       );
                     const singleValueLabelIndex = displayBucketLayout?.actualBucketIndexes[0] ?? 0;
+                    const hasMarkerAxisLabel = markerAxisBucketIndexes.has(index);
                     const axisLabel =
-                      bucketModel.axisMin === bucketModel.axisMax
+                      hasMarkerAxisLabel
+                        ? null
+                        : bucketModel.axisMin === bucketModel.axisMax
                         ? index === singleValueLabelIndex
                           ? firstAxisLabel
                           : null

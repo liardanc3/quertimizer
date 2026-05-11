@@ -6,37 +6,28 @@ import com.quertimizer.judge.application.service.JudgeDialectService;
 import com.quertimizer.judge.application.service.SqlStatementParser;
 import com.quertimizer.judge.domain.entity.DatasetDefinition;
 import com.quertimizer.judge.domain.entity.DatasetTemplateDefinition;
-import com.quertimizer.judge.adapter.out.execution.LvmSnapshotCommandExecutor;
-import com.quertimizer.judge.adapter.out.execution.LvmSnapshotRuntimeCommandFactory;
+import com.quertimizer.judge.domain.model.JudgeQueuePriority;
+import com.quertimizer.judge.domain.model.JudgeQueueStatusListener;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class LvmSnapshotDatasetTemplateProvisioner implements DatasetTemplateProvisioner {
 
-    private final RuntimeDatabaseCluster databaseCluster;
     private final JudgeDialectService dialectService;
     private final LvmSnapshotRuntimeOptions options;
     private final LvmSnapshotCommandExecutor commandExecutor;
     private final LvmSnapshotRuntimeCommandFactory commandFactory;
     private final SqlStatementParser statementParser;
     private final RuntimeStatisticsInitializer statisticsInitializer;
-    private final Map<String, RuntimeDatabasePool> runnerPools;
-    private final Map<String, PortPool> portPools;
-    private final ConcurrentHashMap<DbmsType, AtomicInteger> selectionIndexes = new ConcurrentHashMap<>();
+    private final LvmSnapshotRuntimeResourceManager resourceManager;
 
     public LvmSnapshotDatasetTemplateProvisioner(RuntimeDatabaseCluster databaseCluster,
                                                  JudgeDialectService dialectService,
@@ -44,34 +35,49 @@ public class LvmSnapshotDatasetTemplateProvisioner implements DatasetTemplatePro
                                                  LvmSnapshotCommandExecutor commandExecutor,
                                                  LvmSnapshotRuntimeCommandFactory commandFactory,
                                                  SqlStatementParser statementParser) {
-        this.databaseCluster = Objects.requireNonNull(databaseCluster, "필수 값이 없다.");
-        this.dialectService = Objects.requireNonNull(dialectService, "필수 값이 없다.");
-        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
-        this.commandExecutor = Objects.requireNonNull(commandExecutor, "필수 값이 없다.");
-        this.commandFactory = Objects.requireNonNull(commandFactory, "필수 값이 없다.");
-        this.statementParser = Objects.requireNonNull(statementParser, "필수 값이 없다.");
+        this(dialectService, options, commandExecutor, commandFactory, statementParser,
+                new LvmSnapshotRuntimeResourceManager(databaseCluster, options));
+    }
+
+    public LvmSnapshotDatasetTemplateProvisioner(JudgeDialectService dialectService,
+                                                 LvmSnapshotRuntimeOptions options,
+                                                 LvmSnapshotCommandExecutor commandExecutor,
+                                                 LvmSnapshotRuntimeCommandFactory commandFactory,
+                                                 SqlStatementParser statementParser,
+                                                 LvmSnapshotRuntimeResourceManager resourceManager) {
+        this.dialectService = Objects.requireNonNull(dialectService, "필수 값이 없습니다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없습니다.");
+        this.commandExecutor = Objects.requireNonNull(commandExecutor, "필수 값이 없습니다.");
+        this.commandFactory = Objects.requireNonNull(commandFactory, "필수 값이 없습니다.");
+        this.statementParser = Objects.requireNonNull(statementParser, "필수 값이 없습니다.");
         this.statisticsInitializer = new RuntimeStatisticsInitializer();
-        this.runnerPools = createRunnerPools(databaseCluster.getConfiguredDatabases());
-        this.portPools = createPortPools(this.runnerPools.keySet());
+        this.resourceManager = Objects.requireNonNull(resourceManager, "필수 값이 없습니다.");
     }
 
     @Override
     public Optional<DatasetTemplateDefinition> prepare(DatasetDefinition dataset) {
+        return prepare(dataset, JudgeQueuePriority.FIRST);
+    }
+
+    @Override
+    public Optional<DatasetTemplateDefinition> prepare(DatasetDefinition dataset, JudgeQueuePriority queuePriority) {
         // 데이터셋 템플릿 준비 입력 검증과 시작 로그 기록
-        Objects.requireNonNull(dataset, "필수 값이 없다.");
+        Objects.requireNonNull(dataset, "필수 값이 없습니다.");
         log.info(
                 "lvm-snapshot 데이터셋 템플릿 준비 시작 datasetId={}, dbmsType={}",
                 dataset.getDatasetId().getValue(), dataset.getDbmsType()
         );
 
         // 템플릿 생성용 runner와 snapshot 이름 정보 확보
-        RuntimeDatabaseLease runnerLease = acquireRunner(dataset.getDbmsType());
-        RuntimeDatabase runnerDatabase = runnerLease.getDatabase();
+        LvmSnapshotRuntimeSlot runtimeSlot = resourceManager.acquire(
+                dataset.getDbmsType(), queuePriority, JudgeQueueStatusListener.noop()
+        );
+        RuntimeDatabase runnerDatabase = runtimeSlot.getRunnerDatabase();
         LvmSnapshotRuntimeNode runtimeNode = options.requireNode(runnerDatabase.getId());
         String scriptDbmsName = LvmSnapshotNameSupport.scriptDbmsName(dataset.getDbmsType());
         String templateVersion = LvmSnapshotNameSupport.scriptName(dataset.getDatasetId().getValue());
         RuntimeEnvironmentName environmentName = LvmSnapshotNameSupport.datasetEnvironmentName(dataset.getDatasetId().getValue());
-        int port = portPools.get(runnerDatabase.getId()).acquire();
+        int port = runtimeSlot.getPort();
 
         boolean templateCreationRequested = false;
         boolean processStarted = false;
@@ -139,15 +145,14 @@ public class LvmSnapshotDatasetTemplateProvisioner implements DatasetTemplatePro
             throw new IllegalStateException("LVM 스냅샷 데이터셋 템플릿 준비 실패", exception);
         } finally {
             // 템플릿 준비용 포트와 runner lease 반환
-            portPools.get(runnerDatabase.getId()).release(port);
-            runnerLease.close();
+            resourceManager.release(runtimeSlot);
         }
     }
 
     @Override
     public void drop(DatasetTemplateDefinition templateDefinition) {
         // 데이터셋 템플릿 제거 입력 검증과 시작 로그 기록
-        Objects.requireNonNull(templateDefinition, "필수 값이 없다.");
+        Objects.requireNonNull(templateDefinition, "필수 값이 없습니다.");
         String scriptDbmsName = LvmSnapshotNameSupport.scriptDbmsName(templateDefinition.getDbmsType());
         log.info(
                 "lvm-snapshot 데이터셋 템플릿 제거 시작 datasetId={}, templateVersion={}",
@@ -160,29 +165,6 @@ public class LvmSnapshotDatasetTemplateProvisioner implements DatasetTemplatePro
                 "lvm-snapshot 데이터셋 템플릿 제거 완료 datasetId={}, templateVersion={}",
                 templateDefinition.getDatasetId().getValue(), templateDefinition.getTemplateVersion()
         );
-    }
-
-    private RuntimeDatabaseLease acquireRunner(DbmsType dbmsType) {
-        List<RuntimeDatabase> candidates = databaseCluster.getConfiguredDatabases().stream()
-                .filter(RuntimeDatabase::isEnabled)
-                .filter(database -> database.getDbmsType() == dbmsType)
-                .filter(database -> options.findNode(database.getId()).isPresent())
-                .toList();
-        if (candidates.isEmpty()) {
-            throw new IllegalStateException("LVM 스냅샷 실행 노드 설정이 없다: " + dbmsType);
-        }
-
-        AtomicInteger selectionIndex = selectionIndexes.computeIfAbsent(dbmsType, ignored -> new AtomicInteger());
-        int startIndex = Math.floorMod(selectionIndex.getAndIncrement(), candidates.size());
-        for (int offset = 0; offset < candidates.size(); offset++) {
-            RuntimeDatabase candidate = candidates.get(Math.floorMod(startIndex + offset, candidates.size()));
-            RuntimeDatabasePool pool = runnerPools.get(candidate.getId());
-            if (pool.hasAvailableLease()) {
-                return pool.acquire();
-            }
-        }
-
-        throw new IllegalStateException("사용 가능한 LVM 스냅샷 실행 노드 점유가 없다: " + dbmsType);
     }
 
     private void createMaintenanceTemplate(String scriptDbmsName, String templateVersion) {
@@ -325,27 +307,6 @@ public class LvmSnapshotDatasetTemplateProvisioner implements DatasetTemplatePro
         return !runtimeNode.getRootPassword().isBlank() ? runtimeNode.getRootPassword() : runnerPassword;
     }
 
-    private Map<String, RuntimeDatabasePool> createRunnerPools(List<RuntimeDatabase> databases) {
-        Map<String, RuntimeDatabasePool> pools = new LinkedHashMap<>();
-        for (RuntimeDatabase database : Objects.requireNonNull(databases, "필수 값이 없다.")) {
-            if (database.isEnabled() && options.findNode(database.getId()).isPresent()) {
-                pools.put(database.getId(), new RuntimeDatabasePool(database));
-            }
-        }
-
-        return Map.copyOf(pools);
-    }
-
-    private Map<String, PortPool> createPortPools(Iterable<String> databaseIds) {
-        Map<String, PortPool> createdPortPools = new LinkedHashMap<>();
-        for (String databaseId : databaseIds) {
-            LvmSnapshotRuntimeNode runtimeNode = options.requireNode(databaseId);
-            createdPortPools.put(databaseId, new PortPool(runtimeNode.getPortStart(), runtimeNode.getPortEnd()));
-        }
-
-        return Map.copyOf(createdPortPools);
-    }
-
     private void executeCommands(List<List<String>> commands) {
         for (List<String> command : commands) {
             commandExecutor.execute(command);
@@ -389,34 +350,4 @@ public class LvmSnapshotDatasetTemplateProvisioner implements DatasetTemplatePro
         void run();
     }
 
-    private static final class PortPool {
-        private final int portStart;
-        private final int portEnd;
-        private final Deque<Integer> availablePorts = new ArrayDeque<>();
-
-        private PortPool(int portStart, int portEnd) {
-            this.portStart = portStart;
-            this.portEnd = portEnd;
-            for (int port = portStart; port <= portEnd; port++) {
-                availablePorts.addLast(port);
-            }
-        }
-
-        private synchronized int acquire() {
-            Integer port = availablePorts.pollFirst();
-            if (port == null) {
-                throw new IllegalStateException("사용 가능한 LVM 스냅샷 템플릿 포트가 없다.");
-            }
-
-            return port;
-        }
-
-        private synchronized void release(int port) {
-            if (port < portStart || port > portEnd || availablePorts.contains(port)) {
-                return;
-            }
-
-            availablePorts.addLast(port);
-        }
-    }
 }

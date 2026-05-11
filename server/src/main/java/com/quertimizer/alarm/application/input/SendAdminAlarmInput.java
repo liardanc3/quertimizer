@@ -1,12 +1,10 @@
 package com.quertimizer.alarm.application.input;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class SendAdminAlarmInput {
 
     private final List<String> recipientHandles;

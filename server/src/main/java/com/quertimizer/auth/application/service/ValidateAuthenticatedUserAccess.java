@@ -2,7 +2,7 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.ValidateAuthenticatedUserAccessUseCase;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ValidateAuthenticatedUserAccess implements ValidateAuthenticatedUserAccessUseCase {
 
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final LoginPolicy loginPolicy;
 
     /**
@@ -24,7 +24,7 @@ public class ValidateAuthenticatedUserAccess implements ValidateAuthenticatedUse
     @Override
     public void execute(String authenticatedEmail) {
         userRepository.findByEmailIgnoreCase(normalizeEmail(authenticatedEmail))
-                .ifPresent(loginPolicy::validateBlockedUser);
+                .ifPresent(user -> loginPolicy.validateBlockedUser(user.hasHandle(), user.isBlocked()));
     }
 
     private String normalizeEmail(String email) {

@@ -2,11 +2,11 @@ package com.quertimizer.problem.application.input;
 
 import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.problem.application.output.ProblemSubmissionProgress;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.function.Consumer;
 
-@Getter
+@Data
 public class ProblemSubmissionInput {
 
     private final String handle;

@@ -2,15 +2,14 @@ package com.quertimizer.ranking.application.service;
 
 import com.quertimizer.ranking.application.port.in.GetRanksUseCase;
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.problem.application.port.out.ProblemSubmitHistoryRepositoryPort;
-import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
-import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
-import com.quertimizer.problem.application.port.out.ProblemSolveHistoryRepositoryPort;
 import com.quertimizer.ranking.application.input.RankSearchInput;
 import com.quertimizer.ranking.application.output.RankListItemOutput;
 import com.quertimizer.ranking.application.output.RankMonthlyDeltaOutput;
 import com.quertimizer.ranking.application.output.RankPageOutput;
+import com.quertimizer.ranking.application.port.out.RankingProblemRecordPort;
 import com.quertimizer.ranking.domain.model.RankPageConstant;
+import com.quertimizer.ranking.domain.model.RankingSolveRecord;
+import com.quertimizer.ranking.domain.model.RankingSubmitRecord;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -30,8 +29,7 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class GetRanks implements GetRanksUseCase {
 
-    private final ProblemSolveHistoryRepositoryPort problemSolveHistoryRepository;
-    private final ProblemSubmitHistoryRepositoryPort problemSubmitHistoryRepository;
+    private final RankingProblemRecordPort rankingProblemRecordPort;
 
     /**
      * 랭킹 검색 입력에 맞는 사용자 랭킹 페이지를 생성한다.
@@ -50,11 +48,11 @@ public class GetRanks implements GetRanksUseCase {
         DbmsType dbmsType = resolveDbmsType(input.getDbms());
         RankSortKey rankSortKey = resolveRankSortKey(input.getSortKey());
         LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        List<ProblemSolveHistory> histories = problemSolveHistoryRepository.findAll();
-        List<ProblemSubmitHistory> submitHistories = problemSubmitHistoryRepository.findAll();
+        List<RankingSolveRecord> histories = rankingProblemRecordPort.findSolveRecords();
+        List<RankingSubmitRecord> submitHistories = rankingProblemRecordPort.findSubmitRecords();
 
-        List<ProblemSolveHistory> currentBestHistories = createBestHistories(histories, dbmsType, null);
-        List<ProblemSolveHistory> baselineBestHistories = createBestHistories(histories, dbmsType, monthStart);
+        List<RankingSolveRecord> currentBestHistories = createBestHistories(histories, dbmsType, null);
+        List<RankingSolveRecord> baselineBestHistories = createBestHistories(histories, dbmsType, monthStart);
 
         Map<String, RankMetrics> currentMetricsByHandle = createRankMetricsByHandle(currentBestHistories);
         Map<String, RankMetrics> baselineMetricsByHandle = createRankMetricsByHandle(baselineBestHistories);
@@ -99,13 +97,13 @@ public class GetRanks implements GetRanksUseCase {
         return Math.min(requestedPageSize, RankPageConstant.MAX_PAGE_SIZE);
     }
 
-    private List<ProblemSolveHistory> createBestHistories(List<ProblemSolveHistory> histories,
+    private List<RankingSolveRecord> createBestHistories(List<RankingSolveRecord> histories,
                                                           DbmsType dbmsType,
                                                           LocalDateTime submittedBefore) {
-        Map<UserSolvedHistoryKey, ProblemSolveHistory> bestHistoryByKey = new HashMap<>();
+        Map<UserSolvedHistoryKey, RankingSolveRecord> bestHistoryByKey = new HashMap<>();
 
         // 문제, 사용자 기준 최고 제출 추출
-        for (ProblemSolveHistory history : histories) {
+        for (RankingSolveRecord history : histories) {
             if (resolveDbmsType(history) != dbmsType) {
                 continue;
             }
@@ -121,42 +119,42 @@ public class GetRanks implements GetRanksUseCase {
         return bestHistoryByKey.values().stream().toList();
     }
 
-    private Map<String, RankMetrics> createRankMetricsByHandle(List<ProblemSolveHistory> bestHistories) {
+    private Map<String, RankMetrics> createRankMetricsByHandle(List<RankingSolveRecord> bestHistories) {
         // Handle별 Rank 지표 생성
-        Map<String, List<ProblemSolveHistory>> historiesByProblemId = createHistoriesByProblemId(bestHistories);
-        Map<UserSolvedHistoryKey, Integer> executionPercentileByHistoryKey =
-                createExecutionPercentileByHistoryKey(historiesByProblemId);
-        Map<String, List<Integer>> executionPercentilesByHandle = new HashMap<>();
+        Map<String, List<RankingSolveRecord>> historiesByProblemId = createHistoriesByProblemId(bestHistories);
+        Map<UserSolvedHistoryKey, Double> costPercentileByHistoryKey =
+                createCostPercentileByHistoryKey(historiesByProblemId);
+        Map<String, List<Double>> costPercentilesByHandle = new HashMap<>();
         Map<String, Integer> solvedCountByHandle = new HashMap<>();
 
-        // 사용자별 해결 수, 실행시간 백분위 수집
-        for (ProblemSolveHistory history : bestHistories) {
+        // 사용자별 해결 수와 Cost 등수 백분위 수집
+        for (RankingSolveRecord history : bestHistories) {
             String handle = history.getHandle();
             solvedCountByHandle.merge(handle, 1, Integer::sum);
 
-            Integer executionPercentile = executionPercentileByHistoryKey.get(
+            Double costPercentile = costPercentileByHistoryKey.get(
                     new UserSolvedHistoryKey(history.getHandle(), history.getProblemId())
             );
 
-            if (executionPercentile == null) {
+            if (costPercentile == null) {
                 continue;
             }
 
-            executionPercentilesByHandle.computeIfAbsent(handle, key -> new ArrayList<>())
-                    .add(executionPercentile);
+            costPercentilesByHandle.computeIfAbsent(handle, key -> new ArrayList<>())
+                    .add(costPercentile);
         }
 
         Map<String, RankMetrics> metricsByHandle = new HashMap<>();
         for (Map.Entry<String, Integer> solvedCountEntry : solvedCountByHandle.entrySet()) {
             String handle = solvedCountEntry.getKey();
-            List<Integer> executionPercentiles = executionPercentilesByHandle.getOrDefault(handle, List.of());
+            List<Double> costPercentiles = costPercentilesByHandle.getOrDefault(handle, List.of());
 
-            if (executionPercentiles.isEmpty()) {
+            if (costPercentiles.isEmpty()) {
                 continue;
             }
 
-            double averageExecutionPercentile = executionPercentiles.stream()
-                    .mapToInt(Integer::intValue)
+            double averageCostPercentile = costPercentiles.stream()
+                    .mapToDouble(Double::doubleValue)
                     .average()
                     .orElse(0);
 
@@ -164,7 +162,7 @@ public class GetRanks implements GetRanksUseCase {
                     handle,
                     new RankMetrics(
                             handle, solvedCountEntry.getValue(),
-                            Math.round(averageExecutionPercentile * 10d) / 10d
+                            Math.round(averageCostPercentile * 10d) / 10d
                     )
             );
         }
@@ -172,12 +170,12 @@ public class GetRanks implements GetRanksUseCase {
         return metricsByHandle;
     }
 
-    private Map<String, List<ProblemSolveHistory>> createHistoriesByProblemId(List<ProblemSolveHistory> bestHistories) {
+    private Map<String, List<RankingSolveRecord>> createHistoriesByProblemId(List<RankingSolveRecord> bestHistories) {
         // 문제 번호별 목록 생성
-        Map<String, List<ProblemSolveHistory>> historiesByProblemId = new HashMap<>();
+        Map<String, List<RankingSolveRecord>> historiesByProblemId = new HashMap<>();
 
         // 문제별 최고 제출 목록 구성
-        for (ProblemSolveHistory history : bestHistories) {
+        for (RankingSolveRecord history : bestHistories) {
             historiesByProblemId.computeIfAbsent(history.getProblemId(), key -> new ArrayList<>())
                     .add(history);
         }
@@ -185,11 +183,11 @@ public class GetRanks implements GetRanksUseCase {
         return historiesByProblemId;
     }
 
-    private Map<String, SubmitMetrics> createSubmitMetricsByHandle(List<ProblemSubmitHistory> histories, DbmsType dbmsType) {
+    private Map<String, SubmitMetrics> createSubmitMetricsByHandle(List<RankingSubmitRecord> histories, DbmsType dbmsType) {
         // Handle별 전체 제출 수, 정답 제출 수 집계
         Map<String, SubmitMetrics> submitMetricsByHandle = new HashMap<>();
 
-        for (ProblemSubmitHistory history : histories) {
+        for (RankingSubmitRecord history : histories) {
             if (resolveDbmsType(history) != dbmsType) {
                 continue;
             }
@@ -217,45 +215,40 @@ public class GetRanks implements GetRanksUseCase {
         return monthlyDeltaByHandle.getOrDefault(handle, new RankMonthlyDeltaOutput(0, 0));
     }
 
-    private Map<UserSolvedHistoryKey, Integer> createExecutionPercentileByHistoryKey(
-            Map<String, List<ProblemSolveHistory>> historiesByProblemId
+    private Map<UserSolvedHistoryKey, Double> createCostPercentileByHistoryKey(
+            Map<String, List<RankingSolveRecord>> historiesByProblemId
     ) {
-        Map<UserSolvedHistoryKey, Integer> executionPercentileByHistoryKey = new HashMap<>();
+        Map<UserSolvedHistoryKey, Double> costPercentileByHistoryKey = new HashMap<>();
 
-        // 문제별 실행시간 백분위 계산
-        for (List<ProblemSolveHistory> problemHistories : historiesByProblemId.values()) {
-            List<ProblemSolveHistory> sortedHistories = problemHistories.stream()
+        // 문제별 Cost 등수 백분위 계산
+        for (List<RankingSolveRecord> problemHistories : historiesByProblemId.values()) {
+            List<RankingSolveRecord> sortedHistories = problemHistories.stream()
                     .sorted(
-                            Comparator.comparingLong(ProblemSolveHistory::getExecutionTimeMs)
-                                    .thenComparing(ProblemSolveHistory::getSubmittedAt)
-                                    .thenComparing(ProblemSolveHistory::getHandle)
+                            Comparator.comparingDouble(RankingSolveRecord::getCost)
+                                    .thenComparing(RankingSolveRecord::getHandle)
                     )
                     .toList();
 
-            Map<Long, Integer> fasterCountByExecutionTime = new HashMap<>();
+            Map<Double, Integer> rankByCost = new HashMap<>();
             for (int historyIndex = 0; historyIndex < sortedHistories.size(); historyIndex++) {
-                fasterCountByExecutionTime.putIfAbsent(
-                        sortedHistories.get(historyIndex).getExecutionTimeMs(),
-                        historyIndex
-                );
+                rankByCost.putIfAbsent(sortedHistories.get(historyIndex).getCost(), historyIndex + 1);
             }
 
             int historyCount = sortedHistories.size();
-            for (ProblemSolveHistory history : sortedHistories) {
-                int fasterHistoryCount = fasterCountByExecutionTime.getOrDefault(history.getExecutionTimeMs(), 0);
-                int executionPercentile = Math.max(
-                        1,
-                        (int) Math.round(((fasterHistoryCount + 1d) / (historyCount + 1d)) * 100d)
-                );
+            for (RankingSolveRecord history : sortedHistories) {
+                int rank = rankByCost.getOrDefault(history.getCost(), 1);
+                double costPercentile = historyCount <= 1
+                        ? 0d
+                        : ((rank - 1d) / (historyCount - 1d)) * 100d;
 
-                executionPercentileByHistoryKey.put(
+                costPercentileByHistoryKey.put(
                         new UserSolvedHistoryKey(history.getHandle(), history.getProblemId()),
-                        executionPercentile
+                        costPercentile
                 );
             }
         }
 
-        return executionPercentileByHistoryKey;
+        return costPercentileByHistoryKey;
     }
 
     private Map<String, RankMonthlyDeltaOutput> createMonthlyDeltaByHandle(Map<String, RankMetrics> currentMetricsByHandle,
@@ -347,7 +340,7 @@ public class GetRanks implements GetRanksUseCase {
                 .thenComparing(RankMetrics::handle);
     }
 
-    private ProblemSolveHistory pickBetterHistory(ProblemSolveHistory currentHistory, ProblemSolveHistory candidateHistory) {
+    private RankingSolveRecord pickBetterHistory(RankingSolveRecord currentHistory, RankingSolveRecord candidateHistory) {
         // 더 나은 기록 선택
         if (candidateHistory.getCost() < currentHistory.getCost()) {
             return candidateHistory;
@@ -377,12 +370,12 @@ public class GetRanks implements GetRanksUseCase {
         return DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
     }
 
-    private DbmsType resolveDbmsType(ProblemSolveHistory history) {
+    private DbmsType resolveDbmsType(RankingSolveRecord history) {
         // 오래된 해결 이력은 PostgreSQL 기록으로 간주
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }
 
-    private DbmsType resolveDbmsType(ProblemSubmitHistory history) {
+    private DbmsType resolveDbmsType(RankingSubmitRecord history) {
         // 오래된 제출 이력은 PostgreSQL 기록으로 간주
         return history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
     }

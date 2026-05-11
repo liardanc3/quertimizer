@@ -26,6 +26,7 @@ interface SessionSnapshot {
   defaultDbms: 'postgresql' | 'mysql' | null;
   role: 'user' | 'admin' | null;
   handleSetupRequired: boolean;
+  reauthenticationRequired: boolean;
 }
 
 interface PersistedSessionSnapshot {
@@ -178,6 +179,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
       defaultDbms: null,
       role: null,
       handleSetupRequired: false,
+      reauthenticationRequired: false,
     };
   }
 
@@ -191,6 +193,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
         defaultDbms: null,
         role: null,
         handleSetupRequired: false,
+        reauthenticationRequired: false,
       };
     }
 
@@ -206,6 +209,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
       defaultDbms,
       role,
       handleSetupRequired: parsedValue.handleSetupRequired === true,
+      reauthenticationRequired: false,
     };
   } catch {
     return {
@@ -215,6 +219,7 @@ function readPersistedSessionSnapshot(): SessionSnapshot {
       defaultDbms: null,
       role: null,
       handleSetupRequired: false,
+      reauthenticationRequired: false,
     };
   }
 }
@@ -233,6 +238,7 @@ export function markAuthenticatedSession() {
     defaultDbms: sessionSnapshot.defaultDbms,
     role: sessionSnapshot.role,
     handleSetupRequired: sessionSnapshot.handleSetupRequired,
+    reauthenticationRequired: false,
   });
 }
 
@@ -250,6 +256,7 @@ export function applyAuthenticatedSession(session: SessionMeResult) {
     defaultDbms: session.defaultDbms,
     role: session.role,
     handleSetupRequired: session.handleSetupRequired,
+    reauthenticationRequired: false,
   });
 }
 
@@ -281,18 +288,11 @@ export async function syncSession(options: SyncSessionOptions = {}) {
       const session = await fetchSessionMe();
 
       if (!session.authenticated) {
-        disconnectSessionSocket();
-        clearPersistedAuthentication();
-        updateSessionSnapshot({
-          isAuthenticated: false,
-          isReady: true,
-          handle: null,
-          defaultDbms: null,
-          role: null,
-          handleSetupRequired: false,
-        });
-        updateSessionAlert(null);
-
+        if (options.openLoginOnExpire === false) {
+          clearAuthenticatedSession();
+        } else {
+          expireAuthenticatedSession();
+        }
         return false;
       }
 
@@ -304,6 +304,7 @@ export async function syncSession(options: SyncSessionOptions = {}) {
         defaultDbms: session.defaultDbms,
         role: session.role,
         handleSetupRequired: session.handleSetupRequired,
+        reauthenticationRequired: false,
       });
       return true;
     } catch (error) {
@@ -349,6 +350,7 @@ export function expireAuthenticatedSession(message = getUiTextValue('AUTH_SESSIO
     defaultDbms: null,
     role: null,
     handleSetupRequired: false,
+    reauthenticationRequired: true,
   });
 
   const now = Date.now();
@@ -375,6 +377,7 @@ export function clearAuthenticatedSession() {
     defaultDbms: null,
     role: null,
     handleSetupRequired: false,
+    reauthenticationRequired: false,
   });
 }
 
@@ -391,13 +394,14 @@ export function prepareLogoutReload() {
 }
 
 export function useSession() {
-  const { isAuthenticated, isReady, handle, defaultDbms, role, handleSetupRequired } = useSyncExternalStore(subscribe, getSnapshot, () => ({
+  const { isAuthenticated, isReady, handle, defaultDbms, role, handleSetupRequired, reauthenticationRequired } = useSyncExternalStore(subscribe, getSnapshot, () => ({
     isAuthenticated: false,
     isReady: false,
     handle: null,
     defaultDbms: null,
     role: null,
     handleSetupRequired: false,
+    reauthenticationRequired: false,
   }));
 
   return {
@@ -407,6 +411,7 @@ export function useSession() {
     defaultDbms,
     role,
     handleSetupRequired,
+    reauthenticationRequired,
     isAdmin: role === 'admin',
     login: markAuthenticatedSession,
     logout: clearAuthenticatedSession,

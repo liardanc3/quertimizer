@@ -8,7 +8,7 @@ public class JudgeExecutionId {
 
     public JudgeExecutionId(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("judge 실행 ID가 비어 있다.");
+            throw new IllegalArgumentException("judge 실행 ID가 비어 있습니다.");
         }
 
         this.value = value;

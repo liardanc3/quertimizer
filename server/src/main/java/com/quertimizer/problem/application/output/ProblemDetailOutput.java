@@ -1,25 +1,22 @@
 package com.quertimizer.problem.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
-@Getter
+@Data
 @Accessors(fluent = true)
-@AllArgsConstructor
 public class ProblemDetailOutput {
 
     private final String problemId;
     private final String title;
     private final String description;
-    private final String ddlPostgresql;
-    private final String ddlMysql;
-    private final String dataPostgresql;
-    private final String dataMysql;
+    private final String ddl;
+    private final String actualDataSql;
     private final String condition;
     private final String output;
-    private final String outputSample;
-    private final String sampleDataSql;
+    private final String dataExample;
+    private final String outputExample;
+    private final String schemaMetadata;
     private final String answerSql;
     private final String answerHash;
     private final String dbms;

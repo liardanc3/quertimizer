@@ -14,12 +14,6 @@ public class ProblemExecutionSessionStore {
         return Optional.ofNullable(sessionById.get(executionSessionId));
     }
 
-    public Optional<ProblemExecutionSession> findReusable(String executionSessionId, String problemId, String datasetId) {
-        // 같은 문제와 데이터셋을 바라보는 재사용 가능 세션 조회
-        return find(executionSessionId)
-                .filter(session -> session.matches(problemId, datasetId));
-    }
-
     public ProblemExecutionSession save(String executionSessionId, String problemId, String datasetId, String environmentId) {
         // 실행 세션 상태 저장
         ProblemExecutionSession session = new ProblemExecutionSession(problemId, datasetId, environmentId);
@@ -30,6 +24,11 @@ public class ProblemExecutionSessionStore {
     public Optional<ProblemExecutionSession> remove(String executionSessionId) {
         // 실행 세션 상태 제거 후 반환
         return Optional.ofNullable(sessionById.remove(executionSessionId));
+    }
+
+    public void remove(String executionSessionId, ProblemExecutionSession session) {
+        // 지정한 실행 환경 세션과 일치하는 경우에만 상태 제거
+        sessionById.remove(executionSessionId, session);
     }
 
     public void markExecution(String executionSessionId, String executionId) {
@@ -54,19 +53,14 @@ public class ProblemExecutionSessionStore {
             this.environmentId = environmentId;
         }
 
-    public String getEnvironmentId() {
+        public String getEnvironmentId() {
             // judge 실행 환경 ID 반환
             return environmentId;
         }
 
-    public String getLastExecutionId() {
+        public String getLastExecutionId() {
             // 마지막 judge 실행 ID 반환
             return lastExecutionId;
-        }
-
-        private boolean matches(String problemId, String datasetId) {
-            // 문제와 데이터셋 일치 여부 확인
-            return this.problemId.equals(problemId) && this.datasetId.equals(datasetId);
         }
 
         private void clearExecution(String executionId) {

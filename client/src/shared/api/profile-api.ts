@@ -358,3 +358,21 @@ export async function updateMyProfile(payload: UpdateUserProfilePayload) {
     getUiTextValue('PROFILE_SAVE_FAIL_MESSAGE', '프로필을 저장하지 못했습니다.'),
   );
 }
+
+export async function deleteMyAccount() {
+  const fallbackMessage = getUiTextValue('PROFILE_DELETE_FAIL_MESSAGE', '회원탈퇴 처리에 실패했습니다.');
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/profile/me`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error(fallbackMessage);
+  }
+
+  if (!response.ok) {
+    throw await createApiErrorFromResponse(response, fallbackMessage);
+  }
+}

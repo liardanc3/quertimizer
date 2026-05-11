@@ -4,7 +4,6 @@ import {
   COMMUNITY_PATH,
   DASHBOARD_PATH,
   FAVORITES_PATH,
-  GUIDE_PATH,
   PROFILE_ACTIVITY_PATH,
   PROFILE_PATH,
   PROBLEMS_PATH,
@@ -45,6 +44,15 @@ function truncateAlarmHoverText(value: string) {
   return `${normalizedValue.slice(0, 15)}…`;
 }
 
+function truncateAlarmDisplayText(value: string) {
+  const normalizedValue = value.trim();
+  if (normalizedValue.length <= 40) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, 40).trimEnd()}…`;
+}
+
 function navigateToAlarmTarget(path: string | undefined, hash?: string) {
   if (!path || path.trim() === '') {
     return;
@@ -53,7 +61,7 @@ function navigateToAlarmTarget(path: string | undefined, hash?: string) {
   navigate(`${path}${hash ?? ''}`);
 }
 
-type MobileNavIconType = 'problems' | 'submitHistory' | 'ranking' | 'community' | 'guide' | 'admin' | 'profile' | 'logout' | 'login';
+type MobileNavIconType = 'problems' | 'submitHistory' | 'ranking' | 'community' | 'admin' | 'profile' | 'logout' | 'login';
 
 interface AlarmCreatedMessage extends SessionSocketMessage {
   type: 'alarm.created';
@@ -92,7 +100,7 @@ function resolveLogoutRedirectPath(pathname: string, search: string, currentHand
 }
 
 function resolveMobileNavIconType(key: string): MobileNavIconType {
-  if (key === 'submitHistory' || key === 'ranking' || key === 'community' || key === 'guide' || key === 'admin') {
+  if (key === 'submitHistory' || key === 'ranking' || key === 'community' || key === 'admin') {
     return key;
   }
 
@@ -120,14 +128,6 @@ function MobileNavIcon({ type }: { type: MobileNavIconType }) {
     return (
       <svg viewBox="0 0 18 18" aria-hidden="true">
         <path d="M4 4.3h10v6.8H8.2l-3.3 2.5v-2.5H4V4.3Z" />
-      </svg>
-    );
-  }
-
-  if (type === 'guide') {
-    return (
-      <svg viewBox="0 0 18 18" aria-hidden="true">
-        <path d="M4 3.3h6.6a2.4 2.4 0 0 1 2.4 2.4v9H6.4A2.4 2.4 0 0 1 4 12.3v-9ZM7 6.2h3.7M7 9h3.1" />
       </svg>
     );
   }
@@ -172,7 +172,7 @@ function MobileNavIcon({ type }: { type: MobileNavIconType }) {
 }
 
 export default function Header() {
-  const { isAuthenticated, isReady, isAdmin, handle: currentHandle } = useSession();
+  const { isAuthenticated, isReady, isAdmin, handle: currentHandle, reauthenticationRequired } = useSession();
   const { text } = useUiText();
   const pathname = useLocationPathname();
   const [isAlarmOpen, setIsAlarmOpen] = useState(false);
@@ -201,14 +201,12 @@ export default function Header() {
       ? 'submitHistory'
       : pathname.startsWith(FAVORITES_PATH)
         ? 'favorites'
-        : pathname.startsWith(GUIDE_PATH)
-          ? 'guide'
-          : pathname.startsWith(ADMIN_PATH)
-            ? 'admin'
-            : pathname.startsWith(COMMUNITY_PATH)
-              ? 'community'
-              : pathname.startsWith(PROBLEMS_PATH)
-                ? 'problems'
+        : pathname.startsWith(ADMIN_PATH)
+          ? 'admin'
+          : pathname.startsWith(COMMUNITY_PATH)
+            ? 'community'
+            : pathname.startsWith(PROBLEMS_PATH)
+              ? 'problems'
               : null;
   const headerNavItems = useMemo<HeaderNavItem[]>(
     () => [
@@ -216,7 +214,6 @@ export default function Header() {
       { key: 'submitHistory', label: text('HEADER_MENU_SUBMISSIONS', '제출 목록'), path: SUBMIT_HISTORY_PATH, isActive: activeNav === 'submitHistory' },
       { key: 'ranking', label: text('HEADER_MENU_RANKING', '랭킹'), path: RANKING_PATH, isActive: activeNav === 'ranking' },
       { key: 'community', label: text('HEADER_MENU_COMMUNITY', '커뮤니티'), path: COMMUNITY_PATH, isActive: activeNav === 'community' },
-      { key: 'guide', label: text('HEADER_MENU_GUIDE', '가이드'), path: GUIDE_PATH, isActive: activeNav === 'guide' },
     ],
     [activeNav, text]
   );
@@ -248,10 +245,12 @@ export default function Header() {
   useEffect(() => {
     setIsAlarmOpen(false);
     setIsFavoriteOpen(false);
-    setIsHeaderAuthOverlayOpen(false);
-    setHeaderAuthOverlayDescription(null);
+    if (!reauthenticationRequired) {
+      setIsHeaderAuthOverlayOpen(false);
+      setHeaderAuthOverlayDescription(null);
+    }
     setIsMobileNavOpen(false);
-  }, [pathname]);
+  }, [pathname, reauthenticationRequired]);
 
   useEffect(() => {
     function handleOpenLoginOverlay(event: Event) {
@@ -267,6 +266,15 @@ export default function Header() {
     window.addEventListener(OPEN_LOGIN_OVERLAY_EVENT, handleOpenLoginOverlay);
     return () => window.removeEventListener(OPEN_LOGIN_OVERLAY_EVENT, handleOpenLoginOverlay);
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!reauthenticationRequired || isAuthenticated) {
+      return;
+    }
+
+    setHeaderAuthOverlayDescription(getLoginOverlayDescription() ?? text('AUTH_SESSION_EXPIRED_MESSAGE', '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.'));
+    setIsHeaderAuthOverlayOpen(true);
+  }, [isAuthenticated, reauthenticationRequired, text]);
 
   useEffect(() => {
     if (!isReady) {
@@ -463,7 +471,7 @@ export default function Header() {
   function renderAlarmSentence(alarm: AlarmEntry) {
     const sentence = alarm.sentence.trim();
     if (sentence === '') {
-      return alarm.message;
+      return truncateAlarmDisplayText(alarm.message);
     }
 
     const parts: Array<string | ReactElement> = [];
@@ -482,7 +490,7 @@ export default function Header() {
       const tokenKey = tokenValue.slice(1, -1).trim();
       const binding = alarm.bindings[tokenKey];
       const linkText = isBraceToken
-        ? (binding?.text && binding.text.trim() !== '' ? binding.text : tokenKey)
+        ? truncateAlarmDisplayText(binding?.text && binding.text.trim() !== '' ? binding.text : tokenKey)
         : tokenValue;
       const tooltipText = !isBraceToken && binding?.text ? truncateAlarmHoverText(binding.text) : undefined;
       const tokenPath = binding?.path ?? alarm.targetPath;
@@ -511,7 +519,7 @@ export default function Header() {
       parts.push(sentence.slice(lastIndex));
     }
 
-    return parts.length > 0 ? parts : alarm.message;
+    return parts.length > 0 ? parts : truncateAlarmDisplayText(alarm.message);
   }
 
   function closeMobileNav() {
@@ -878,6 +886,7 @@ export default function Header() {
           description={headerAuthOverlayDescription}
           onClose={() => setIsHeaderAuthOverlayOpen(false)}
           onAuthenticated={() => setIsHeaderAuthOverlayOpen(false)}
+          hideCloseButton={reauthenticationRequired}
         />
       ) : null}
     </header>

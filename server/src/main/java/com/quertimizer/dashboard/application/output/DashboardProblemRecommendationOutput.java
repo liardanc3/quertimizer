@@ -1,12 +1,10 @@
 package com.quertimizer.dashboard.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
-@Getter
+@Data
 @Accessors(fluent = true)
-@AllArgsConstructor
 public class DashboardProblemRecommendationOutput {
 
     private final String problemId;

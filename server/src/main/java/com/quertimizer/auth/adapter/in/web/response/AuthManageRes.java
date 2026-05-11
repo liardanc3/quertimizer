@@ -1,11 +1,11 @@
 package com.quertimizer.auth.adapter.in.web.response;
 
 import com.quertimizer.auth.application.output.AuthManageOutput;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
+@Data
 public class AuthManageRes {
 
     private final List<AuthManageUserRowRes> users;

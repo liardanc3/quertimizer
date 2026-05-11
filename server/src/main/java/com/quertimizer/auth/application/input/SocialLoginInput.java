@@ -1,13 +1,11 @@
 package com.quertimizer.auth.application.input;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.Map;
 import java.util.Optional;
 
 @Data
-@AllArgsConstructor
 public class SocialLoginInput {
 
     private final String provider;

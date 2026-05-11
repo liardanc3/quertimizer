@@ -1,23 +1,23 @@
 package com.quertimizer.problem.application.input;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
+@Data
 public class ProblemOutputPreviewInput {
 
     private final DbmsType dbmsType;
     private final String ddl;
-    private final String sampleDataSql;
+    private final String actualDataSql;
     private final String answerSql;
     private final String requester;
     private final String clientIp;
 
-    public ProblemOutputPreviewInput(String dbms, String ddl, String sampleDataSql,
+    public ProblemOutputPreviewInput(String dbms, String ddl, String actualDataSql,
                                      String answerSql, String requester, String clientIp) {
         this.dbmsType = DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL);
         this.ddl = normalize(ddl);
-        this.sampleDataSql = normalize(sampleDataSql);
+        this.actualDataSql = normalize(actualDataSql);
         this.answerSql = normalize(answerSql);
         this.requester = normalize(requester);
         this.clientIp = normalize(clientIp);

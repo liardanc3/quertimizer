@@ -16,7 +16,7 @@ public final class LvmSnapshotNameSupport {
 
     public static String scriptName(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("스크립트 이름 값이 비어 있다.");
+            throw new IllegalArgumentException("스크립트 이름 값이 비어 있습니다.");
         }
 
         StringBuilder normalizedName = new StringBuilder(value.length());

@@ -1,11 +1,11 @@
 package com.quertimizer.problem.adapter.in.web.realtime.dto;
 
 import com.quertimizer.problem.application.output.ProblemSubmissionProgress;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
+@Data
 public class ProblemSubmitProgressRes {
 
     private final String type;

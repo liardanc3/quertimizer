@@ -21,16 +21,16 @@ public class DatasetDefinition {
                              String ddl,
                              String dataSql,
                              List<String> baseIndexDdls) {
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
+        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없습니다.");
         this.ddl = requireText(ddl, "ddl");
         this.dataSql = requireText(dataSql, "dataSql");
-        this.baseIndexDdls = List.copyOf(Objects.requireNonNull(baseIndexDdls, "필수 값이 없다."));
+        this.baseIndexDdls = List.copyOf(Objects.requireNonNull(baseIndexDdls, "필수 값이 없습니다."));
     }
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value;

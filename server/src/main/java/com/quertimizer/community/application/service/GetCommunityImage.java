@@ -2,7 +2,6 @@ package com.quertimizer.community.application.service;
 
 import com.quertimizer.community.application.port.in.GetCommunityImageUseCase;
 import com.quertimizer.community.application.output.CommunityImageOutput;
-import com.quertimizer.community.application.service.CommunityImageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

@@ -23,19 +23,19 @@ public class SqlReplayEnvironmentProvisioner implements RuntimeEnvironmentProvis
 
     public SqlReplayEnvironmentProvisioner(RuntimeDatabaseCluster databaseCluster, JudgeDialectService dialectService,
                                            RuntimeEnvironmentNamingStrategy namingStrategy, SqlStatementParser statementParser) {
-        this.databaseCluster = Objects.requireNonNull(databaseCluster, "필수 값이 없다.");
-        this.dialectService = Objects.requireNonNull(dialectService, "필수 값이 없다.");
-        this.namingStrategy = Objects.requireNonNull(namingStrategy, "필수 값이 없다.");
-        this.statementParser = Objects.requireNonNull(statementParser, "필수 값이 없다.");
+        this.databaseCluster = Objects.requireNonNull(databaseCluster, "필수 값이 없습니다.");
+        this.dialectService = Objects.requireNonNull(dialectService, "필수 값이 없습니다.");
+        this.namingStrategy = Objects.requireNonNull(namingStrategy, "필수 값이 없습니다.");
+        this.statementParser = Objects.requireNonNull(statementParser, "필수 값이 없습니다.");
         this.statisticsInitializer = new RuntimeStatisticsInitializer();
     }
 
     @Override
     public ProvisionedRuntimeEnvironment create(JudgeEnvironmentId environmentId, DatasetDefinition dataset,
                                                 EnvironmentPolicy policy) {
-        Objects.requireNonNull(environmentId, "필수 값이 없다.");
-        Objects.requireNonNull(dataset, "필수 값이 없다.");
-        Objects.requireNonNull(policy, "필수 값이 없다.");
+        Objects.requireNonNull(environmentId, "필수 값이 없습니다.");
+        Objects.requireNonNull(dataset, "필수 값이 없습니다.");
+        Objects.requireNonNull(policy, "필수 값이 없습니다.");
 
         try (RuntimeDatabaseLease lease = databaseCluster.acquire(dataset.getDbmsType());
              Connection connection = lease.openConnection()) {
@@ -61,7 +61,7 @@ public class SqlReplayEnvironmentProvisioner implements RuntimeEnvironmentProvis
 
     @Override
     public RuntimeEnvironmentConnection openConnection(ProvisionedRuntimeEnvironment environment, int timeoutSeconds) {
-        Objects.requireNonNull(environment, "필수 값이 없다.");
+        Objects.requireNonNull(environment, "필수 값이 없습니다.");
 
         RuntimeEnvironment runtimeEnvironment = environment.getRuntimeEnvironment();
         RuntimeDatabaseLease lease = null;
@@ -83,7 +83,7 @@ public class SqlReplayEnvironmentProvisioner implements RuntimeEnvironmentProvis
 
     @Override
     public void drop(ProvisionedRuntimeEnvironment environment) {
-        Objects.requireNonNull(environment, "필수 값이 없다.");
+        Objects.requireNonNull(environment, "필수 값이 없습니다.");
 
         RuntimeEnvironment runtimeEnvironment = environment.getRuntimeEnvironment();
         try (RuntimeDatabaseLease lease = databaseCluster.acquireNode(runtimeEnvironment.getDatabase().getId());

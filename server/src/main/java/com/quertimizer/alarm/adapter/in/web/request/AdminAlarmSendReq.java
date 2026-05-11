@@ -4,12 +4,12 @@ import com.quertimizer.alarm.application.input.SendAdminAlarmInput;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-@Getter
+@Data
 @NoArgsConstructor
 public class AdminAlarmSendReq {
 

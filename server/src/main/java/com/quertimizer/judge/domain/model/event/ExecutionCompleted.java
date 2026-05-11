@@ -11,7 +11,7 @@ public class ExecutionCompleted extends AbstractJudgeEvent {
 
     public ExecutionCompleted(JudgeExecutionId executionId, SqlExecutionResult result) {
         super(executionId);
-        this.result = Objects.requireNonNull(result, "필수 값이 없다.");
+        this.result = Objects.requireNonNull(result, "필수 값이 없습니다.");
     }
 
     public SqlExecutionResult getResult() {

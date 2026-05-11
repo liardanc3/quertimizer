@@ -1,15 +1,13 @@
 package com.quertimizer.dashboard.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
+@Data
 @Accessors(fluent = true)
-@AllArgsConstructor
 public class DashboardCommunityPostOutput {
 
     private final String postId;

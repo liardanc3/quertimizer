@@ -1,6 +1,6 @@
 package com.quertimizer.dashboard.domain.policy;
 
-import com.quertimizer.community.domain.entity.CommunityPost;
+import com.quertimizer.dashboard.domain.model.DashboardCommunityPostCandidate;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -18,14 +18,14 @@ public class DashboardHotPostPolicy {
         return DISPLAY_LIMIT;
     }
 
-    public Comparator<CommunityPost> createHotPostComparator() {
+    public Comparator<DashboardCommunityPostCandidate> createHotPostComparator() {
         return Comparator.comparingDouble(this::calculateHotScore)
                 .reversed()
-                .thenComparing(CommunityPost::getCreatedAt, Comparator.reverseOrder())
-                .thenComparing(CommunityPost::getPostId);
+                .thenComparing(DashboardCommunityPostCandidate::getCreatedAt, Comparator.reverseOrder())
+                .thenComparing(DashboardCommunityPostCandidate::getPostId);
     }
 
-    public double calculateHotScore(CommunityPost post) {
+    public double calculateHotScore(DashboardCommunityPostCandidate post) {
         long elapsedHours = Math.max(0L, Duration.between(post.getCreatedAt(), LocalDateTime.now()).toHours());
         double recencyBonus = Math.max(0L, RECENCY_BONUS_HOURS - elapsedHours) * RECENCY_WEIGHT;
 

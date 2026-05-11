@@ -19,11 +19,11 @@ public class RuntimeEnvironment {
                               RuntimeDatabase database,
                               RuntimeEnvironmentName name,
                               Instant createdAt) {
-        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없다.");
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
-        this.database = Objects.requireNonNull(database, "필수 값이 없다.");
-        this.name = Objects.requireNonNull(name, "필수 값이 없다.");
-        this.createdAt = Objects.requireNonNull(createdAt, "필수 값이 없다.");
+        this.environmentId = Objects.requireNonNull(environmentId, "필수 값이 없습니다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
+        this.database = Objects.requireNonNull(database, "필수 값이 없습니다.");
+        this.name = Objects.requireNonNull(name, "필수 값이 없습니다.");
+        this.createdAt = Objects.requireNonNull(createdAt, "필수 값이 없습니다.");
     }
 
     public JudgeEnvironmentId getEnvironmentId() {

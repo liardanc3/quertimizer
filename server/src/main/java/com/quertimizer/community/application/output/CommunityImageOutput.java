@@ -1,12 +1,10 @@
 package com.quertimizer.community.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.nio.file.Path;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class CommunityImageOutput {
 
     private final String imageId;

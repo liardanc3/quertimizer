@@ -17,8 +17,8 @@ public class RuntimeDatabaseLease implements AutoCloseable {
     }
 
     RuntimeDatabaseLease(RuntimeDatabase database, Runnable releaseAction) {
-        this.database = Objects.requireNonNull(database, "필수 값이 없다.");
-        this.releaseAction = Objects.requireNonNull(releaseAction, "필수 값이 없다.");
+        this.database = Objects.requireNonNull(database, "필수 값이 없습니다.");
+        this.releaseAction = Objects.requireNonNull(releaseAction, "필수 값이 없습니다.");
     }
 
     public RuntimeDatabase getDatabase() {

@@ -8,7 +8,7 @@ public class ProvisionedRuntimeEnvironment {
     private final String provisionerName;
 
     public ProvisionedRuntimeEnvironment(RuntimeEnvironment runtimeEnvironment, String provisionerName) {
-        this.runtimeEnvironment = Objects.requireNonNull(runtimeEnvironment, "필수 값이 없다.");
+        this.runtimeEnvironment = Objects.requireNonNull(runtimeEnvironment, "필수 값이 없습니다.");
         this.provisionerName = requireText(provisionerName, "provisionerName");
     }
 
@@ -22,7 +22,7 @@ public class ProvisionedRuntimeEnvironment {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value.trim();

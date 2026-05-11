@@ -2,10 +2,8 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.ResetPasswordUseCase;
 import com.quertimizer.auth.application.input.ResetPasswordInput;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.auth.application.service.AuthRateLimitService;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import com.quertimizer.auth.application.port.out.PasswordEncodingPort;
@@ -20,7 +18,7 @@ import static com.quertimizer.auth.domain.model.AccountRecoveryFailReason.PASSWO
 public class ResetPassword implements ResetPasswordUseCase {
 
     private final AuthService authService;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final PasswordEncodingPort passwordEncodingPort;
     private final AuthRateLimitService authRateLimitPolicy;
 

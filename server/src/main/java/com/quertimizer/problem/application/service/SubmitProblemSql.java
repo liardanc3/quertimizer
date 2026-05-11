@@ -12,6 +12,7 @@ import com.quertimizer.problem.application.port.out.ProblemJudgePort;
 import com.quertimizer.problem.domain.model.ProblemJudgeExecutionMode;
 import com.quertimizer.problem.domain.model.ProblemExecutionPlanAnalysis;
 import com.quertimizer.problem.domain.model.ProblemPlanMeasurement;
+import com.quertimizer.problem.domain.entity.ProblemAnswerCase;
 import com.quertimizer.problem.domain.policy.ProblemExecutionPlanPolicy;
 import com.quertimizer.problem.domain.policy.ProblemOfficialCostPolicy;
 import lombok.RequiredArgsConstructor;
@@ -23,10 +24,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.UUID;
 import java.util.function.Consumer;
 
 import static com.quertimizer.problem.domain.model.ProblemQueryFailReason.*;
+import static com.quertimizer.problem.domain.model.ProblemSubmitProgressProtocol.SELECTED_PLAN_ATTEMPT_PREFIX;
 import static com.quertimizer.problem.domain.model.ProblemSubmitProgressStep.*;
 import static com.quertimizer.problem.domain.model.ProblemSubmitProgressText.*;
 
@@ -46,9 +50,9 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
      * 문제 SQL을 제출하고 채점한다.
      *
      * <ol>
-     *   <li>제출 SQL 검증
-     *   <li>제출 실행 환경 생성
-     *   <li>정답과 실행 계획 검증
+     *   <li>SQL 구문 정적 검사
+     *   <li>출력 데이터 검증
+     *   <li>실행계획 분석
      *   <li>제출 이력 저장
      * </ol>
      *
@@ -69,39 +73,26 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         try {
             // 제출 SQL의 설정 DDL과 기준 SELECT 분리 및 형식 검증 진행 상태 전송
             log.info("문제 SQL 제출 검증 시작 problemId={}, sqlLength={}", problemId, storedSubmittedSql.length());
+            acceptProgress(input, running(problemId, VALIDATE.getKey(), SQL_VALIDATE_RUNNING.getText()));
             List<SubmittedStatement> submittedStatements = parseSubmittedStatements(input.getSql());
             SubmittedStatement referenceStatement = resolveReferenceStatement(submittedStatements);
             List<SubmittedStatement> ddlStatements = resolveDdlStatements(submittedStatements);
-            acceptProgress(input, running(problemId, VALIDATE.getKey(), SQL_VALIDATE_RUNNING.getText()));
             acceptProgress(input, success(problemId, VALIDATE.getKey(), SQL_VALIDATE_SUCCESS.getText()));
             log.info(
                     "문제 SQL 제출 검증 완료 problemId={}, statementCount={}, indexDdlCount={}, referenceStatementIndex={}",
                     problemId, submittedStatements.size(), ddlStatements.size(), referenceStatement.index
             );
 
-            // 제출 전용 영속 실행 환경 생성과 정답, DDL, 실행 계획 단계 수행
+            // 제출 전용 영속 실행 환경 생성을 위한 채점 데이터셋 조회
             ProblemDatasetResolver.ResolvedProblemDataset dataset = datasetResolver.resolve(problemId, input.getDbmsType());
             log.info(
                     "문제 SQL 제출 데이터셋 조회 완료 problemId={}, datasetId={}, dbmsType={}",
                     problemId, dataset.getDatasetId(), dataset.getDbmsType()
             );
-            log.info(
-                    "문제 SQL 제출 실행 환경 생성 시작 problemId={}, datasetId={}",
-                    problemId, dataset.getDatasetId()
+            return submitInDataset(
+                    input, problemId, storedSubmittedSql, submittedAt,
+                    dataset, referenceStatement, ddlStatements
             );
-            String environmentId = problemJudgePort.createSubmissionEnvironment(dataset.getDatasetId());
-            log.info(
-                    "문제 SQL 제출 실행 환경 생성 완료 problemId={}, environmentId={}, datasetId={}",
-                    problemId, environmentId, dataset.getDatasetId()
-            );
-            try {
-                return submitInEnvironment(
-                        input, problemId, storedSubmittedSql, submittedAt,
-                        dataset.getDbmsType(), environmentId, referenceStatement, ddlStatements
-                );
-            } finally {
-                dropQuietly(problemId, environmentId);
-            }
         } catch (BusinessException exception) {
             log.warn(
                     "문제 SQL 제출 비즈니스 예외 problemId={}, handle={}, reason={}",
@@ -132,65 +123,42 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         }
     }
 
-    private ProblemSubmissionOutput submitInEnvironment(ProblemSubmissionInput input, String problemId,
-                                                        String storedSubmittedSql, LocalDateTime submittedAt,
-                                                        DbmsType dbmsType, String environmentId,
-                                                        SubmittedStatement referenceStatement, List<SubmittedStatement> ddlStatements) {
-        // 기준 SELECT 실행 결과와 등록 정답 일치 확인
-        log.info(
-                "문제 SQL 제출 정답 SELECT 실행 시작 problemId={}, environmentId={}",
-                problemId, environmentId
-        );
-        acceptProgress(input, running(problemId, ANSWER.getKey(), ANSWER_VALIDATE_RUNNING.getText()));
-        ProblemJudgeExecutionResult answerResult;
+    private ProblemSubmissionOutput submitInDataset(ProblemSubmissionInput input, String problemId,
+                                                    String storedSubmittedSql, LocalDateTime submittedAt,
+                                                    ProblemDatasetResolver.ResolvedProblemDataset dataset,
+                                                    SubmittedStatement referenceStatement, List<SubmittedStatement> ddlStatements) {
+        // 숨김 케이스와 공개 케이스를 순차 실행해 출력 데이터 검증
+        AnswerValidationResult answerValidationResult;
         try {
-            answerResult = executeAnswer(environmentId, referenceStatement.sql);
-            log.info(
-                    "문제 SQL 제출 정답 SELECT 실행 완료 problemId={}, environmentId={}, rowCount={}, executionTimeMs={}",
-                    problemId, environmentId, answerResult.getRowCount(), answerResult.getExecutionTimeMs()
-            );
-        } catch (BusinessException exception) {
-            throw exception;
+            answerValidationResult = validateAnswerCases(input, problemId, dataset, referenceStatement.sql);
         } catch (Exception exception) {
             String message = resolveErrorMessage(exception);
             log.warn(
-                    "문제 SQL 제출 정답 SELECT 실행 실패 problemId={}, environmentId={}, reason={}",
-                    problemId, environmentId, message, exception
+                    "문제 SQL 제출 출력 데이터 검증 실패 problemId={}, datasetId={}, reason={}",
+                    problemId, dataset.getDatasetId(), message, exception
             );
-            acceptProgress(input, error(problemId, ANSWER.getKey(), ANSWER_VALIDATE_FAILED.getText(), List.of(message)));
-            saveFailedSubmission(input, problemId, dbmsType, storedSubmittedSql, message, submittedAt);
+            saveFailedSubmission(input, problemId, dataset.getDbmsType(), storedSubmittedSql, message, submittedAt);
             return new ProblemSubmissionOutput(problemId, false, message, null);
         }
 
-        if (!problemAnswerValidationService.isCorrectAnswer(problemId, answerResult.getColumns(), answerResult.getRows())) {
-            log.info(
-                    "문제 SQL 제출 정답 비교 오답 problemId={}, environmentId={}, rowCount={}",
-                    problemId, environmentId, answerResult.getRowCount()
-            );
-            acceptProgress(input, incorrect(problemId, ANSWER.getKey(), ANSWER_INCORRECT.getText()));
+        if (!answerValidationResult.correct) {
             problemSubmissionRecordService.saveSubmission(
                     problemId,
                     input.getHandle(),
-                    dbmsType,
+                    dataset.getDbmsType(),
                     storedSubmittedSql,
                     false,
                     INCORRECT_ANSWER.getText(),
-                    resolveExecutionTime(answerResult),
-                    toDouble(answerResult.getCost()),
-                    answerResult.getRowCount(),
+                    resolveExecutionTime(answerValidationResult.answerResult),
+                    null,
+                    answerValidationResult.answerResult.getRowCount(),
                     0L,
                     submittedAt
             );
             return new ProblemSubmissionOutput(problemId, false, INCORRECT_ANSWER.getText(), null);
         }
-        log.info(
-                "문제 SQL 제출 정답 비교 성공 problemId={}, environmentId={}, rowCount={}",
-                problemId, environmentId, answerResult.getRowCount()
-        );
-        acceptProgress(input, success(problemId, ANSWER.getKey(), ANSWER_CORRECT.getText()));
-
-        // 설정 DDL 반영으로 실행 계획 측정 조건 생성
-        String ddlFailureMessage = executeDdlStatements(input, problemId, environmentId, ddlStatements);
+        ProblemJudgeExecutionResult answerResult = answerValidationResult.answerResult;
+        String environmentId = answerValidationResult.environmentId;
 
         // 설정 반영 실행 환경에서 기준 SELECT 실행 계획과 비용 측정
         ProblemJudgeExecutionResult planResult;
@@ -201,13 +169,15 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
                     problemId, environmentId
             );
             acceptProgress(input, running(problemId, PLAN.getKey(), PLAN_RUNNING.getText()));
-            planResult = measureOfficialPlan(problemId, environmentId, referenceStatement.sql);
-            planAnalysis = executionPlanPolicy.analyze(dbmsType, planResult.getPlanLines(), referenceStatement.sql);
+            executeDdlStatements(problemId, environmentId, ddlStatements);
+            OfficialPlanMeasurement officialPlanMeasurement = measureOfficialPlan(input, problemId, environmentId, referenceStatement.sql);
+            planResult = officialPlanMeasurement.getPlanResult();
+            planAnalysis = executionPlanPolicy.analyze(dataset.getDbmsType(), planResult.getPlanLines(), referenceStatement.sql);
             acceptProgress(input, success(
                     problemId,
                     PLAN.getKey(),
                     PLAN_SUCCESS.getText(),
-                    buildPlanDetailLines(dbmsType, planResult, planAnalysis)
+                    buildPlanDetailLines(dataset.getDbmsType(), planResult, planAnalysis, officialPlanMeasurement)
             ));
             log.info(
                     "문제 SQL 제출 실행 계획 측정 완료 problemId={}, environmentId={}, cost={}, planElement={}",
@@ -223,7 +193,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
             problemSubmissionRecordService.saveSubmission(
                     problemId,
                     input.getHandle(),
-                    dbmsType,
+                    dataset.getDbmsType(),
                     storedSubmittedSql,
                     false,
                     message,
@@ -234,19 +204,20 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
                     submittedAt
             );
             return new ProblemSubmissionOutput(problemId, false, message, null);
+        } finally {
+            dropQuietly(problemId, environmentId);
         }
 
         // 제출 이력과 최고 기록 저장 후 최종 제출 결과 반환
-        boolean succeeded = ddlFailureMessage == null;
-        String message = succeeded ? CORRECT_ANSWER.getText() : ddlFailureMessage;
+        String message = CORRECT_ANSWER.getText();
         long executionTimeMs = resolveExecutionTime(answerResult);
         Double cost = resolveCost(planResult, answerResult);
         problemSubmissionRecordService.saveSubmission(
                 problemId,
                 input.getHandle(),
-                dbmsType,
+                dataset.getDbmsType(),
                 storedSubmittedSql,
-                succeeded,
+                true,
                 message,
                 executionTimeMs,
                 cost,
@@ -256,29 +227,25 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         );
         log.info(
                 "문제 SQL 제출 이력 저장 완료 problemId={}, handle={}, succeeded={}, cost={}, executionTimeMs={}",
-                problemId, input.getHandle(), succeeded, cost, executionTimeMs
+                problemId, input.getHandle(), true, cost, executionTimeMs
         );
 
-        if (succeeded) {
-            problemSubmissionRecordService.saveBestSolveHistory(
-                    problemId,
-                    input.getHandle(),
-                    dbmsType,
-                    storedSubmittedSql,
-                    executionTimeMs,
-                    cost,
-                    0,
-                    planAnalysis.getExecutionPlanElement(),
-                    submittedAt
-            );
-            log.info(
-                    "문제 SQL 제출 최고 기록 저장 완료 problemId={}, handle={}, cost={}, executionTimeMs={}",
-                    problemId, input.getHandle(), cost, executionTimeMs
-            );
-            return new ProblemSubmissionOutput(problemId, true, CORRECT_ANSWER.getText(), executionTimeMs);
-        }
-
-        return new ProblemSubmissionOutput(problemId, false, message, null);
+        problemSubmissionRecordService.saveBestSolveHistory(
+                problemId,
+                input.getHandle(),
+                dataset.getDbmsType(),
+                storedSubmittedSql,
+                executionTimeMs,
+                cost,
+                0,
+                planAnalysis.getExecutionPlanElement(),
+                submittedAt
+        );
+        log.info(
+                "문제 SQL 제출 최고 기록 저장 완료 problemId={}, handle={}, cost={}, executionTimeMs={}",
+                problemId, input.getHandle(), cost, executionTimeMs
+        );
+        return new ProblemSubmissionOutput(problemId, true, CORRECT_ANSWER.getText(), executionTimeMs);
     }
 
     private ProblemJudgeExecutionResult executeAnswer(String environmentId, String sql) {
@@ -293,22 +260,186 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         return result;
     }
 
-    private String executeDdlStatements(ProblemSubmissionInput input, String problemId,
-                                        String environmentId,
-                                        List<SubmittedStatement> ddlStatements) {
+    private AnswerValidationResult validateAnswerCases(ProblemSubmissionInput input, String problemId,
+                                                       ProblemDatasetResolver.ResolvedProblemDataset dataset, String sql) {
+        // 출력 데이터 검증 대상 케이스와 진행 상태 저장소 준비
+        List<ProblemAnswerCase> hiddenAnswerCases = problemAnswerValidationService.findHiddenAnswerCases(problemId);
+        List<AnswerCaseDefinition> answerCases = createAnswerCaseDefinitions(hiddenAnswerCases, dataset);
+        AnswerCaseProgress answerCaseProgress = new AnswerCaseProgress(input, problemId, answerCases);
+
+        // 모든 케이스의 실행 환경 생성 요청을 큐에 먼저 등록
+        List<AnswerCaseEnvironmentTask> environmentTasks = answerCases.stream()
+                .map(answerCase -> new AnswerCaseEnvironmentTask(
+                        answerCase,
+                        CompletableFuture.supplyAsync(() -> createAnswerCaseEnvironment(answerCaseProgress, answerCase))
+                ))
+                .toList();
+
+        // 숨김 케이스와 공개 케이스를 표시 순서대로 검증
+        String retainedEnvironmentId = null;
+        try {
+            for (AnswerCaseEnvironmentTask environmentTask : environmentTasks) {
+                AnswerCaseEnvironment environment = awaitAnswerCaseEnvironment(environmentTask);
+                ProblemJudgeExecutionResult result = executeAnswerCase(answerCaseProgress, environment, sql);
+                boolean correct;
+                try {
+                    correct = matchesAnswerCase(problemId, environment.getDefinition(), result);
+                } catch (RuntimeException exception) {
+                    answerCaseProgress.markError(environment.getDefinition(), resolveErrorMessage(exception));
+                    throw exception;
+                }
+
+                if (!correct) {
+                    answerCaseProgress.markIncorrect(environment.getDefinition());
+                    log.info(
+                            "문제 SQL 제출 채점 데이터 비교 오답 problemId={}, caseLabel={}, rowCount={}",
+                            problemId, environment.getDefinition().getCaseLabel(), result.getRowCount()
+                    );
+                    return new AnswerValidationResult(false, result, null);
+                }
+
+                if (environment.getDefinition().isOpen()) {
+                    retainedEnvironmentId = environment.getEnvironmentId();
+                    answerCaseProgress.markCorrect(environment.getDefinition());
+                    log.info(
+                            "문제 SQL 제출 공개 채점 데이터 검증 완료 problemId={}, environmentId={}, rowCount={}",
+                            problemId, environment.getEnvironmentId(), result.getRowCount()
+                    );
+                    return new AnswerValidationResult(true, result, retainedEnvironmentId);
+                }
+
+                answerCaseProgress.markCorrect(environment.getDefinition());
+                dropQuietly(problemId, environment.getEnvironmentId());
+                environment.markDropped();
+                log.info(
+                        "문제 SQL 제출 숨김 채점 데이터 검증 완료 problemId={}, caseLabel={}, rowCount={}",
+                        problemId, environment.getDefinition().getCaseLabel(), result.getRowCount()
+                );
+            }
+        } finally {
+            dropUnretainedAnswerCaseEnvironments(problemId, environmentTasks, retainedEnvironmentId);
+        }
+
+        throw new IllegalStateException("출력 데이터 검증 케이스가 없습니다.");
+    }
+
+    private List<AnswerCaseDefinition> createAnswerCaseDefinitions(List<ProblemAnswerCase> hiddenAnswerCases,
+                                                                   ProblemDatasetResolver.ResolvedProblemDataset dataset) {
+        // 숨김 케이스 정의와 공개 케이스 정의를 표시 순서대로 구성
+        List<AnswerCaseDefinition> answerCases = new ArrayList<>();
+        for (int index = 0; index < hiddenAnswerCases.size(); index++) {
+            ProblemAnswerCase hiddenAnswerCase = hiddenAnswerCases.get(index);
+            answerCases.add(AnswerCaseDefinition.hidden(
+                    "Case " + (index + 1) + ": Hidden " + (index + 1),
+                    hiddenAnswerCase.getDatasetId(), hiddenAnswerCase.getAnswerHash()
+            ));
+        }
+        answerCases.add(AnswerCaseDefinition.open(
+                "Case " + (hiddenAnswerCases.size() + 1) + ": Open",
+                dataset.getDatasetId()
+        ));
+
+        return List.copyOf(answerCases);
+    }
+
+    private AnswerCaseEnvironment createAnswerCaseEnvironment(AnswerCaseProgress progress, AnswerCaseDefinition answerCase) {
+        // 케이스별 제출 환경을 생성하며 queue와 LVM 세부 진행 상태 갱신
+        log.info(
+                "문제 SQL 제출 채점 케이스 환경 생성 시작 caseLabel={}, datasetId={}",
+                answerCase.getCaseLabel(), answerCase.getDatasetId()
+        );
+        try {
+            String environmentId = problemJudgePort.createSubmissionEnvironment(
+                    answerCase.getDatasetId(),
+                    remainingTasks -> progress.markWaiting(answerCase, remainingTasks),
+                    detailLine -> progress.markRunning(answerCase)
+            );
+            log.info(
+                    "문제 SQL 제출 채점 케이스 환경 생성 완료 caseLabel={}, datasetId={}, environmentId={}",
+                    answerCase.getCaseLabel(), answerCase.getDatasetId(), environmentId
+            );
+            return new AnswerCaseEnvironment(answerCase, environmentId);
+        } catch (RuntimeException exception) {
+            progress.markError(answerCase, resolveErrorMessage(exception));
+            throw exception;
+        }
+    }
+
+    private AnswerCaseEnvironment awaitAnswerCaseEnvironment(AnswerCaseEnvironmentTask environmentTask) {
+        // 비동기 환경 생성 결과를 현재 검증 순서에서 대기
+        try {
+            return environmentTask.getFuture().join();
+        } catch (CompletionException exception) {
+            throw unwrapCompletionException(exception);
+        }
+    }
+
+    private ProblemJudgeExecutionResult executeAnswerCase(AnswerCaseProgress progress,
+                                                          AnswerCaseEnvironment environment, String sql) {
+        // 케이스 환경에서 제출 SELECT 실행
+        progress.markRunning(environment.getDefinition());
+        try {
+            return executeAnswer(environment.getEnvironmentId(), sql);
+        } catch (RuntimeException exception) {
+            progress.markError(environment.getDefinition(), resolveErrorMessage(exception));
+            throw exception;
+        }
+    }
+
+    private boolean matchesAnswerCase(String problemId, AnswerCaseDefinition answerCase,
+                                      ProblemJudgeExecutionResult result) {
+        // 케이스 유형에 맞는 정답 해시 비교
+        if (answerCase.isHidden()) {
+            return problemAnswerValidationService.matches(answerCase.getAnswerHash(), result.getColumns(), result.getRows());
+        }
+
+        return problemAnswerValidationService.isCorrectAnswer(problemId, result.getColumns(), result.getRows());
+    }
+
+    private void dropUnretainedAnswerCaseEnvironments(String problemId, List<AnswerCaseEnvironmentTask> environmentTasks,
+                                                      String retainedEnvironmentId) {
+        // 실행계획 분석에 재사용하지 않는 케이스 환경 정리
+        for (AnswerCaseEnvironmentTask environmentTask : environmentTasks) {
+            try {
+                AnswerCaseEnvironment environment = environmentTask.getFuture().join();
+                if (!environment.isDropped() && !environment.hasEnvironmentId(retainedEnvironmentId)) {
+                    dropQuietly(problemId, environment.getEnvironmentId());
+                    environment.markDropped();
+                }
+            } catch (CompletionException exception) {
+                log.warn(
+                        "문제 SQL 제출 채점 케이스 환경 생성 실패 후 정리 생략 caseLabel={}",
+                        environmentTask.getDefinition().getCaseLabel(), exception
+                );
+            }
+        }
+    }
+
+    private RuntimeException unwrapCompletionException(CompletionException exception) {
+        // CompletableFuture 예외를 기존 비즈니스 예외 흐름에 맞게 복원
+        Throwable cause = exception.getCause();
+        if (cause instanceof BusinessException businessException) {
+            return businessException;
+        }
+        if (cause instanceof RuntimeException runtimeException) {
+            return runtimeException;
+        }
+
+        return new IllegalStateException(resolveErrorMessage(exception), exception);
+    }
+
+    private void executeDdlStatements(String problemId, String environmentId,
+                                      List<SubmittedStatement> ddlStatements) {
         // 제출 SQL에 포함된 index DDL 순차 반영
         log.info(
                 "문제 SQL 제출 INDEX DDL 반영 시작 problemId={}, environmentId={}, indexDdlCount={}",
                 problemId, environmentId, ddlStatements.size()
         );
-        acceptProgress(input, running(problemId, DDL.getKey(), DDL_RUNNING.getText()));
         if (ddlStatements.isEmpty()) {
-            acceptProgress(input, success(problemId, DDL.getKey(), DDL_EMPTY.getText()));
             log.info("문제 SQL 제출 INDEX DDL 반영 생략 problemId={}, environmentId={}", problemId, environmentId);
-            return null;
+            return;
         }
 
-        List<String> detailLines = new ArrayList<>();
         try {
             for (SubmittedStatement ddlStatement : ddlStatements) {
                 log.info(
@@ -316,23 +447,19 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
                         problemId, environmentId, ddlStatement.index, buildSubmittedDdlPreview(ddlStatement.sql)
                 );
                 problemJudgePort.executeOfficialSql("submit-ddl-" + UUID.randomUUID(), environmentId, ddlStatement.sql);
-                detailLines.add(CHECK_PREFIX.getText() + buildSubmittedDdlPreview(ddlStatement.sql));
                 log.info(
                         "문제 SQL 제출 INDEX DDL 실행 완료 problemId={}, environmentId={}, statementIndex={}",
                         problemId, environmentId, ddlStatement.index
                 );
             }
-            acceptProgress(input, success(problemId, DDL.getKey(), DDL_SUCCESS.getText(), detailLines));
             log.info("문제 SQL 제출 INDEX DDL 반영 완료 problemId={}, environmentId={}", problemId, environmentId);
-            return null;
         } catch (Exception exception) {
             String message = resolveErrorMessage(exception);
             log.warn(
                     "문제 SQL 제출 INDEX DDL 반영 실패 problemId={}, environmentId={}, reason={}",
                     problemId, environmentId, message, exception
             );
-            acceptProgress(input, error(problemId, DDL.getKey(), DDL_FAILED.getText(), List.of(message)));
-            return message;
+            throw new IllegalStateException(message, exception);
         }
     }
 
@@ -341,7 +468,8 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         return problemJudgePort.executeOfficialSql("submit-plan-" + UUID.randomUUID(), environmentId, "EXPLAIN " + sql);
     }
 
-    private ProblemJudgeExecutionResult measureOfficialPlan(String problemId, String environmentId, String sql) {
+    private OfficialPlanMeasurement measureOfficialPlan(ProblemSubmissionInput input, String problemId,
+                                                        String environmentId, String sql) {
         // Quertimizer 공식 제출 정책 기준 통계 갱신과 실행 계획 반복 측정 후 비용 중앙값 선택
         List<PlanMeasurement> measurements = new ArrayList<>();
         for (int attempt = 1; attempt <= officialCostPolicy.getMeasurementAttemptCount(); attempt++) {
@@ -364,6 +492,10 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
                     "문제 SQL 제출 실행 계획 측정 시도 완료 problemId={}, environmentId={}, attempt={}, cost={}",
                     problemId, environmentId, attempt, planResult.getCost()
             );
+            acceptProgress(input, running(
+                    problemId, PLAN.getKey(), PLAN_RUNNING.getText(),
+                    buildPlanMeasurementLines(measurements, null)
+            ));
         }
 
         ProblemPlanMeasurement selectedMeasurement = officialCostPolicy.selectMedianCostMeasurement(
@@ -375,11 +507,12 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
                 "문제 SQL 제출 실행 계획 중앙값 선택 problemId={}, environmentId={}, attempt={}, cost={}",
                 problemId, environmentId, selectedMeasurement.getAttemptOrder(), selectedMeasurement.getCost()
         );
-        return measurements.stream()
+        ProblemJudgeExecutionResult selectedPlanResult = measurements.stream()
                 .filter(measurement -> measurement.hasAttemptOrder(selectedMeasurement.getAttemptOrder()))
                 .findFirst()
                 .map(PlanMeasurement::getPlanResult)
-                .orElseThrow(() -> new IllegalStateException("공식 비용 측정 결과를 선택하지 못했다."));
+                .orElseThrow(() -> new IllegalStateException("공식 비용 측정 결과를 선택하지 못했습니다."));
+        return new OfficialPlanMeasurement(measurements, selectedMeasurement, selectedPlanResult);
     }
 
     private void dropQuietly(String problemId, String environmentId) {
@@ -501,9 +634,14 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
     private ProblemSubmissionProgress running(String problemId, String stepKey, String message) {
         // 진행 중 진행 상태 생성
+        return running(problemId, stepKey, message, List.of());
+    }
+
+    private ProblemSubmissionProgress running(String problemId, String stepKey, String message, List<String> detailLines) {
+        // 상세 정보 포함 진행 중 진행 상태 생성
         return new ProblemSubmissionProgress(
                 problemId, stepKey, "running", message,
-                List.of(), null, null, null, null, null
+                detailLines, null, null, null, null, null
         );
     }
 
@@ -522,9 +660,14 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
     private ProblemSubmissionProgress incorrect(String problemId, String stepKey, String message) {
         // 오답 진행 상태 생성
+        return incorrect(problemId, stepKey, message, List.of());
+    }
+
+    private ProblemSubmissionProgress incorrect(String problemId, String stepKey, String message, List<String> detailLines) {
+        // 상세 정보 포함 오답 진행 상태 생성
         return new ProblemSubmissionProgress(
                 problemId, stepKey, "incorrect", message,
-                List.of(), null, null, null, null, null
+                detailLines, null, null, null, null, null
         );
     }
 
@@ -544,11 +687,14 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         }
     }
 
-    private List<String> buildPlanDetailLines(DbmsType dbmsType,
-                                              ProblemJudgeExecutionResult planResult,
-                                              ProblemExecutionPlanAnalysis planAnalysis) {
-        // 기존 진행 상태 형식용 비용과 대표 실행 계획 상세 라인 생성
-        List<String> detailLines = new ArrayList<>();
+    private List<String> buildPlanDetailLines(DbmsType dbmsType, ProblemJudgeExecutionResult planResult,
+                                              ProblemExecutionPlanAnalysis planAnalysis,
+                                              OfficialPlanMeasurement officialPlanMeasurement) {
+        // 반복 측정 결과와 중앙값 선택 표시용 상세 라인 생성
+        List<String> detailLines = new ArrayList<>(buildPlanMeasurementLines(
+                officialPlanMeasurement.getMeasurements(),
+                officialPlanMeasurement.getSelectedMeasurement().getAttemptOrder()
+        ));
         detailLines.add(COST_PREFIX.getText() + formatCost(planResult.getCost()));
         detailLines.addAll(executionPlanPolicy.resolveDetailLines(dbmsType, planAnalysis.getExecutionPlanElement()));
 
@@ -556,6 +702,22 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
             for (String summaryLine : planAnalysis.getSummaryLines()) {
                 detailLines.add(CHECK_PREFIX.getText() + summaryLine);
             }
+        }
+
+        return List.copyOf(detailLines);
+    }
+
+    private List<String> buildPlanMeasurementLines(List<PlanMeasurement> measurements, Integer selectedAttemptOrder) {
+        // 실행 계획 반복 측정 횟수와 비용 상세 라인 생성
+        List<String> detailLines = new ArrayList<>();
+        for (PlanMeasurement measurement : measurements) {
+            detailLines.add("실행계획 분석 %d회 : Cost %s".formatted(
+                    measurement.getMeasurement().getAttemptOrder(),
+                    formatCost(measurement.getMeasurement().getCost())
+            ));
+        }
+        if (selectedAttemptOrder != null) {
+            detailLines.add(SELECTED_PLAN_ATTEMPT_PREFIX + selectedAttemptOrder);
         }
 
         return List.copyOf(detailLines);
@@ -626,12 +788,207 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
             cause = cause.getCause();
         }
 
-        return "SQL 제출에 실패했다.";
+        return "SQL 제출에 실패했습니다.";
     }
 
     private BusinessException badRequest(String message) {
         // 제출 요청 형식 오류를 비즈니스 예외로 변환
         return new BusinessException(message, HttpStatus.BAD_REQUEST);
+    }
+
+    private final class AnswerCaseProgress {
+        private final ProblemSubmissionInput input;
+        private final String problemId;
+
+        private AnswerCaseProgress(ProblemSubmissionInput input, String problemId, List<AnswerCaseDefinition> answerCases) {
+            this.input = input;
+            this.problemId = problemId;
+            for (AnswerCaseDefinition answerCase : answerCases) {
+                acceptProgress(input, running(problemId, answerCase.getStepKey(), answerCase.waitingMessage()));
+            }
+        }
+
+        private void markWaiting(AnswerCaseDefinition answerCase, int remainingTasks) {
+            // 케이스 대기열 순번을 제목에 반영
+            synchronized (answerCase) {
+                acceptProgress(input, running(
+                        problemId, answerCase.getStepKey(),
+                        answerCase.waitingMessage(remainingTasks)
+                ));
+            }
+        }
+
+        private void markRunning(AnswerCaseDefinition answerCase) {
+            // 케이스 채점 중 제목으로 진행 상태 전환
+            synchronized (answerCase) {
+                acceptProgress(input, running(problemId, answerCase.getStepKey(), answerCase.runningMessage()));
+            }
+        }
+
+        private void markCorrect(AnswerCaseDefinition answerCase) {
+            // 케이스 정답 완료 progress 전달
+            synchronized (answerCase) {
+                acceptProgress(input, success(problemId, answerCase.getStepKey(), answerCase.correctMessage()));
+            }
+        }
+
+        private void markIncorrect(AnswerCaseDefinition answerCase) {
+            // 케이스 오답 완료 progress 전달
+            synchronized (answerCase) {
+                acceptProgress(input, incorrect(problemId, answerCase.getStepKey(), answerCase.incorrectMessage()));
+            }
+        }
+
+        private void markError(AnswerCaseDefinition answerCase, String message) {
+            // 케이스 실패 progress 전달
+            synchronized (answerCase) {
+                acceptProgress(input, error(problemId, answerCase.getStepKey(), answerCase.failedMessage(), List.of(message)));
+            }
+        }
+    }
+
+    private static final class AnswerCaseDefinition {
+        private final String stepKey;
+        private final String caseLabel;
+        private final String datasetId;
+        private final String answerHash;
+        private final boolean hidden;
+
+        private static AnswerCaseDefinition hidden(String caseLabel, String datasetId, String answerHash) {
+            // 숨김 케이스 진행 상태 정의 생성
+            int hiddenOrder = Integer.parseInt(caseLabel.replaceFirst(".*Hidden\\s+", "").trim());
+            return new AnswerCaseDefinition("answer-hidden-" + hiddenOrder, "Case Hidden " + hiddenOrder, datasetId, answerHash, true);
+        }
+
+        private static AnswerCaseDefinition open(String caseLabel, String datasetId) {
+            // 공개 케이스 진행 상태 정의 생성
+            return new AnswerCaseDefinition("answer-open", "Case Open", datasetId, null, false);
+        }
+
+        private AnswerCaseDefinition(String stepKey, String caseLabel, String datasetId, String answerHash, boolean hidden) {
+            this.stepKey = stepKey;
+            this.caseLabel = caseLabel;
+            this.datasetId = datasetId;
+            this.answerHash = answerHash;
+            this.hidden = hidden;
+        }
+
+        private String waitingMessage(int remainingTasks) {
+            // 케이스 대기 중 제목 생성
+            return caseLabel + " 채점 대기 중 - " + remainingTasks;
+        }
+
+        private String waitingMessage() {
+            // 케이스 초기 대기 중 제목 생성
+            return caseLabel + " 채점 대기 중";
+        }
+
+        private String runningMessage() {
+            // 케이스 채점 중 제목 생성
+            return caseLabel + " 채점 중";
+        }
+
+        private String correctMessage() {
+            // 케이스 정답 완료 제목 생성
+            return caseLabel + " 채점 완료 - 정답";
+        }
+
+        private String incorrectMessage() {
+            // 케이스 오답 완료 제목 생성
+            return caseLabel + " 채점 완료 - 오답";
+        }
+
+        private String failedMessage() {
+            // 케이스 실패 제목 생성
+            return caseLabel + " 채점 실패";
+        }
+
+        private String getStepKey() {
+            return stepKey;
+        }
+
+        private String getCaseLabel() {
+            return caseLabel;
+        }
+
+        private String getDatasetId() {
+            return datasetId;
+        }
+
+        private String getAnswerHash() {
+            return answerHash;
+        }
+
+        private boolean isHidden() {
+            return hidden;
+        }
+
+        private boolean isOpen() {
+            return !hidden;
+        }
+
+    }
+
+    private static final class AnswerCaseEnvironment {
+        private final AnswerCaseDefinition definition;
+        private final String environmentId;
+        private boolean dropped;
+
+        private AnswerCaseEnvironment(AnswerCaseDefinition definition, String environmentId) {
+            this.definition = definition;
+            this.environmentId = environmentId;
+        }
+
+        private AnswerCaseDefinition getDefinition() {
+            return definition;
+        }
+
+        private String getEnvironmentId() {
+            return environmentId;
+        }
+
+        private boolean isDropped() {
+            return dropped;
+        }
+
+        private void markDropped() {
+            this.dropped = true;
+        }
+
+        private boolean hasEnvironmentId(String targetEnvironmentId) {
+            return environmentId != null && environmentId.equals(targetEnvironmentId);
+        }
+    }
+
+    private static final class AnswerCaseEnvironmentTask {
+        private final AnswerCaseDefinition definition;
+        private final CompletableFuture<AnswerCaseEnvironment> future;
+
+        private AnswerCaseEnvironmentTask(AnswerCaseDefinition definition,
+                                          CompletableFuture<AnswerCaseEnvironment> future) {
+            this.definition = definition;
+            this.future = future;
+        }
+
+        private AnswerCaseDefinition getDefinition() {
+            return definition;
+        }
+
+        private CompletableFuture<AnswerCaseEnvironment> getFuture() {
+            return future;
+        }
+    }
+
+    private static final class AnswerValidationResult {
+        private final boolean correct;
+        private final ProblemJudgeExecutionResult answerResult;
+        private final String environmentId;
+
+        private AnswerValidationResult(boolean correct, ProblemJudgeExecutionResult answerResult, String environmentId) {
+            this.correct = correct;
+            this.answerResult = answerResult;
+            this.environmentId = environmentId;
+        }
     }
 
     private static final class SubmittedStatement {
@@ -647,6 +1004,32 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
             this.sql = sql;
             this.mode = mode;
             this.referenceSelect = referenceSelect;
+        }
+    }
+
+    private static final class OfficialPlanMeasurement {
+        private final List<PlanMeasurement> measurements;
+        private final ProblemPlanMeasurement selectedMeasurement;
+        private final ProblemJudgeExecutionResult planResult;
+
+        private OfficialPlanMeasurement(List<PlanMeasurement> measurements,
+                                        ProblemPlanMeasurement selectedMeasurement,
+                                        ProblemJudgeExecutionResult planResult) {
+            this.measurements = List.copyOf(measurements);
+            this.selectedMeasurement = selectedMeasurement;
+            this.planResult = planResult;
+        }
+
+        private List<PlanMeasurement> getMeasurements() {
+            return measurements;
+        }
+
+        private ProblemPlanMeasurement getSelectedMeasurement() {
+            return selectedMeasurement;
+        }
+
+        private ProblemJudgeExecutionResult getPlanResult() {
+            return planResult;
         }
     }
 

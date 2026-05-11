@@ -129,22 +129,6 @@ public class ProblemSet {
         return DbmsType.extractBaseProblemSetId(problemSetId);
     }
 
-    public void assignProblemSetId(Long id) {
-        // DB 생성 ID 기반 문제 테이블셋 번호 부여 대상 여부 검사
-        if (problemSetId != null && !problemSetId.isBlank()) {
-            return;
-        }
-
-        // DBMS prefix와 DB 생성 ID 조합
-        this.id = id;
-        problemSetId = dbmsType.getIdPrefix() + formatFiveDigits(id);
-    }
-
-    private static String formatFiveDigits(Long value) {
-        // 다섯 자리 문자열 포맷
-        return "%05d".formatted(value);
-    }
-
     private void validateText(String value) {
         // 문제 업데이트 필수 문자열 존재 여부 검사
         if (value == null || value.isBlank()) {

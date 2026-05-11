@@ -5,7 +5,7 @@ import com.quertimizer.auth.application.output.BlockedUserItemOutput;
 import com.quertimizer.auth.application.port.out.BlockedIpRepositoryPort;
 import com.quertimizer.auth.domain.entity.BlockedIp;
 import com.quertimizer.auth.domain.model.BlockedAccountPageConstant;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +32,7 @@ public class AccountRestrictionService {
         return Math.min(BlockedAccountPageConstant.MAX_PAGE_SIZE, Math.max(1, requestedPageSize));
     }
 
-    public BlockedUserItemOutput toBlockedUserItemOutput(User user) {
+    public BlockedUserItemOutput toBlockedUserItemOutput(AuthUser user) {
         // 차단 사용자 항목 응답 변환
         return new BlockedUserItemOutput(user.getHandle(), user.getLastAccessIp(), user.getBlockedAt());
     }

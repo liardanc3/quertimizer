@@ -16,8 +16,6 @@ import { fetchRanks, type RankPage } from '@/shared/api/rank-api';
 import { formatPercent } from '@/shared/lib/formatters';
 import { useUiText } from '@/shared/config/ui-text';
 import type { DbmsType, RankingMetricKey } from '@/shared/api/domain';
-import '@/shared/ui/styles/problem-list-page.css';
-import '@/shared/ui/styles/submit-history-page.css';
 import './RankingPage.css';
 
 const PAGE_SIZE = 10;
@@ -220,7 +218,7 @@ export default function RankingPage() {
         );
 
   return (
-    <div className="page page-stack ranking-page submit-history-page home-page">
+    <div className="page page-stack data-page submit-data-page ranking-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card ranking-toolbar-card">
         <PageToolbar className="problem-toolbar home-problem-toolbar-stack submit-history-toolbar-stack ranking-toolbar-stack">
           <SegmentedTabs
@@ -278,6 +276,10 @@ export default function RankingPage() {
       <section className="panel-card problem-board submit-history-board ranking-board data-board">
         {loadError.failed ? (
           <PageErrorState status={loadError.status} message={loadError.message} />
+        ) : rankedEntries.length === 0 && !isLoading ? (
+          <div className="submit-history-board-empty-state ranking-board-empty-state" aria-live="polite">
+            {text('RANKING_EMPTY_STATE', '조건에 맞는 랭킹이 없습니다.')}
+          </div>
         ) : (
           <div className={`submit-history-table-shell ranking-table-shell ${isLoading ? 'is-loading' : ''}`.trim()}>
             <DataTable className="submit-history-table ranking-table" isLoading={isLoading} label={text('RANKING_TABLE_LABEL', '랭킹 목록')}>
@@ -333,12 +335,6 @@ export default function RankingPage() {
                     <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
                   </div>
                 ))
-              ) : rankedEntries.length === 0 ? (
-                <div className="submit-history-row submit-history-empty-row data-table-empty-row" role="row">
-                  <span className="submit-history-empty-cell data-table-empty-cell" role="cell" aria-live="polite">
-                    {text('RANKING_EMPTY_STATE', '조건에 맞는 랭킹이 없습니다.')}
-                  </span>
-                </div>
               ) : (
                 rankedEntries.map((entry) => (
                   <article key={`${selectedDbms}-${entry.handle}`} className="submit-history-row submit-history-body ranking-body" role="row">

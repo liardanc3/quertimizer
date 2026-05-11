@@ -222,65 +222,65 @@ export function normalizeSqlHighlightRanges(ranges: SqlHighlightRange[], sqlLeng
   }, []);
 }
 
-export function splitSqlTokenByHighlightRanges(text: string, tokenAbsoluteStart: number, highlightRanges: SqlHighlightRange[]) {
-  if (text.length === 0 || highlightRanges.length === 0) {
+export function splitSqlTokenByHighlightRanges(
+  text: string,
+  tokenAbsoluteStart: number,
+  highlightRanges: SqlHighlightRange[],
+  errorRanges: SqlHighlightRange[] = [],
+) {
+  if (text.length === 0 || (highlightRanges.length === 0 && errorRanges.length === 0)) {
     return [
       {
         text,
         isHighlighted: false,
+        isError: false,
       },
     ];
   }
 
   const tokenAbsoluteEnd = tokenAbsoluteStart + text.length;
-  const overlappingRanges = highlightRanges.filter((range) => range.end > tokenAbsoluteStart && range.start < tokenAbsoluteEnd);
+  const overlappingHighlightRanges = highlightRanges.filter((range) => range.end > tokenAbsoluteStart && range.start < tokenAbsoluteEnd);
+  const overlappingErrorRanges = errorRanges.filter((range) => range.end > tokenAbsoluteStart && range.start < tokenAbsoluteEnd);
 
-  if (overlappingRanges.length === 0) {
+  if (overlappingHighlightRanges.length === 0 && overlappingErrorRanges.length === 0) {
     return [
       {
         text,
         isHighlighted: false,
+        isError: false,
       },
     ];
   }
 
-  const segments: Array<{ text: string; isHighlighted: boolean }> = [];
-  let cursor = tokenAbsoluteStart;
-
-  overlappingRanges.forEach((range) => {
-    const segmentStart = Math.max(range.start, tokenAbsoluteStart);
-    const segmentEnd = Math.min(range.end, tokenAbsoluteEnd);
-
-    if (cursor < segmentStart) {
-      segments.push({
-        text: text.slice(cursor - tokenAbsoluteStart, segmentStart - tokenAbsoluteStart),
-        isHighlighted: false,
-      });
-    }
-
-    if (segmentStart < segmentEnd) {
-      segments.push({
-        text: text.slice(segmentStart - tokenAbsoluteStart, segmentEnd - tokenAbsoluteStart),
-        isHighlighted: true,
-      });
-    }
-
-    cursor = Math.max(cursor, segmentEnd);
+  const boundaries = new Set([tokenAbsoluteStart, tokenAbsoluteEnd]);
+  [...overlappingHighlightRanges, ...overlappingErrorRanges].forEach((range) => {
+    boundaries.add(Math.max(range.start, tokenAbsoluteStart));
+    boundaries.add(Math.min(range.end, tokenAbsoluteEnd));
   });
+  const sortedBoundaries = [...boundaries].sort((left, right) => left - right);
 
-  if (cursor < tokenAbsoluteEnd) {
-    segments.push({
-      text: text.slice(cursor - tokenAbsoluteStart),
-      isHighlighted: false,
-    });
-  }
-
-  return segments.filter((segment) => segment.text.length > 0);
+  return sortedBoundaries.slice(0, -1)
+    .map((segmentStart, boundaryIndex) => {
+      const segmentEnd = sortedBoundaries[boundaryIndex + 1];
+      return {
+        text: text.slice(segmentStart - tokenAbsoluteStart, segmentEnd - tokenAbsoluteStart),
+        isHighlighted: overlappingHighlightRanges.some((range) => range.start < segmentEnd && range.end > segmentStart),
+        isError: overlappingErrorRanges.some((range) => range.start < segmentEnd && range.end > segmentStart),
+      };
+    })
+    .filter((segment) => segment.text.length > 0);
 }
 
-export function renderHighlightedSql(sql: string, tableNames: Set<string> = new Set(), columnNames: Set<string> = new Set(), highlightRanges: SqlHighlightRange[] = []) {
+export function renderHighlightedSql(
+  sql: string,
+  tableNames: Set<string> = new Set(),
+  columnNames: Set<string> = new Set(),
+  highlightRanges: SqlHighlightRange[] = [],
+  errorRanges: SqlHighlightRange[] = [],
+) {
   const normalizedSql = sql.replace(/\r\n/g, '\n');
   const normalizedHighlightRanges = normalizeSqlHighlightRanges(highlightRanges, normalizedSql.length);
+  const normalizedErrorRanges = normalizeSqlHighlightRanges(errorRanges, normalizedSql.length);
   const lines = normalizedSql.split('\n');
 
   let lineAbsoluteStart = 0;
@@ -290,7 +290,7 @@ export function renderHighlightedSql(sql: string, tableNames: Set<string> = new 
     let tokenOffset = 0;
     const renderedLine = lineTokens.flatMap((token, tokenIndex) => {
       const tokenAbsoluteStart = lineAbsoluteStart + tokenOffset;
-      const tokenSegments = splitSqlTokenByHighlightRanges(token.text, tokenAbsoluteStart, normalizedHighlightRanges);
+      const tokenSegments = splitSqlTokenByHighlightRanges(token.text, tokenAbsoluteStart, normalizedHighlightRanges, normalizedErrorRanges);
 
       tokenOffset += token.text.length;
 
@@ -302,12 +302,16 @@ export function renderHighlightedSql(sql: string, tableNames: Set<string> = new 
             <span className={`solve-sql-token is-${token.kind}`}>{segment.text}</span>
           );
 
+        const errorContent = segment.isError
+          ? <span className="solve-sql-error-underline">{tokenContent}</span>
+          : tokenContent;
+
         return segment.isHighlighted ? (
           <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`} className="solve-sql-selection-fill">
-            {tokenContent}
+            {errorContent}
           </span>
         ) : (
-          <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`}>{tokenContent}</span>
+          <span key={`token-${lineIndex}-${tokenIndex}-${segmentIndex}`}>{errorContent}</span>
         );
       });
     });

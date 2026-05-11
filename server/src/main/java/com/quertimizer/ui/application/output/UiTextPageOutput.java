@@ -1,14 +1,12 @@
 package com.quertimizer.ui.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
 import java.util.List;
 
-@Getter
+@Data
 @Accessors(fluent = true)
-@AllArgsConstructor
 public class UiTextPageOutput {
 
     private final int currentPage;

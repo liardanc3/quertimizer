@@ -1,12 +1,10 @@
 package com.quertimizer.auth.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class BlockedUserItemOutput {
 
     private final String handle;

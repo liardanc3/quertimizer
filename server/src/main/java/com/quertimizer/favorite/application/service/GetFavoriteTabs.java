@@ -4,7 +4,6 @@ import com.quertimizer.favorite.application.port.in.GetFavoriteTabsUseCase;
 import com.quertimizer.favorite.application.output.FavoriteTabOutput;
 import com.quertimizer.favorite.application.output.FavoriteTabsOutput;
 import com.quertimizer.favorite.application.port.out.FavoriteTabRepositoryPort;
-import com.quertimizer.favorite.application.service.FavoriteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;

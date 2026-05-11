@@ -3,9 +3,8 @@ package com.quertimizer.auth.application.service;
 import com.quertimizer.auth.application.port.in.GetAuthManageUseCase;
 import com.quertimizer.auth.application.output.AuthManageOutput;
 import com.quertimizer.auth.application.output.AuthManageUserRowOutput;
-import com.quertimizer.auth.application.service.AuthManageService;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +15,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GetAuthManage implements GetAuthManageUseCase {
 
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final AuthManageService authManageService;
 
     /**
@@ -31,7 +30,7 @@ public class GetAuthManage implements GetAuthManageUseCase {
     @Override
     public AuthManageOutput execute() {
         List<AuthManageUserRowOutput> members = userRepository.findAllByOrderByHandleAsc().stream()
-                .filter(User::hasHandle)
+                .filter(AuthUser::hasHandle)
                 .map(user -> new AuthManageUserRowOutput(user.getHandle(), authManageService.resolveRoleValue(user.getResolvedRole())))
                 .toList();
         return new AuthManageOutput(members);

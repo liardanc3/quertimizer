@@ -22,7 +22,7 @@ import { COMMUNITY_POST_CONTENT_MAX_BYTES } from '@/entities/community';
 import { type CommunityEditorSnapshot } from '@/entities/community';
 import { COMMUNITY_PATH, getCommunityPostPath, navigate } from '@/shared/config/navigation';
 import { openLoginOverlay, setLoginOverlayDescription } from '@/shared/auth/auth-overlay';
-import { showSessionToast, useSession } from '@/shared/auth/session';
+import { showSessionErrorToast, showSessionToast, useSession } from '@/shared/auth/session';
 import { formatInteger } from '@/shared/lib/formatters';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import type { CommunityPostCategory } from '@/shared/api/domain';
@@ -431,7 +431,7 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
           `본문은 최대 ${formatInteger(COMMUNITY_POST_CONTENT_MAX_BYTES)} Byte까지 입력할 수 있습니다.`,
         ),
       );
-      showSessionToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
+      showSessionErrorToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
       return;
     }
 
@@ -460,8 +460,8 @@ export default function CommunityWritePage({ postId, embedded = false }: Communi
         },
       });
     } catch (error) {
-      showSessionToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
-      setFeedback(error instanceof Error ? error.message : text('COMMUNITY_POST_SAVE_FAIL_MESSAGE', '게시글을 저장하지 못했습니다.'));
+      showSessionErrorToast(text('COMMUNITY_UPLOAD_FAIL_TOAST', '업로드에 실패했습니다.'));
+      setFeedback(null);
     } finally {
       setIsSubmitting(false);
     }

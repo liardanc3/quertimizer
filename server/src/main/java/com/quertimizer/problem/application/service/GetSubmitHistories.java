@@ -108,15 +108,18 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
         Comparator<ProblemSubmitHistory> defaultComparator = Comparator
                 .comparing(ProblemSubmitHistory::getSubmittedAt, Comparator.reverseOrder())
                 .thenComparing(ProblemSubmitHistory::getSubmitId, Comparator.reverseOrder());
+        Comparator<ProblemSubmitHistory> successFirstComparator =
+                Comparator.comparing(ProblemSubmitHistory::isSuccess, Comparator.reverseOrder());
 
         if ("asc".equalsIgnoreCase(costSort)) {
-            return Comparator.comparingDouble(ProblemSubmitHistory::getCost)
+            return successFirstComparator
+                    .thenComparingDouble(ProblemSubmitHistory::getCost)
                     .thenComparing(defaultComparator);
         }
 
         if ("desc".equalsIgnoreCase(costSort)) {
-            return Comparator.comparingDouble(ProblemSubmitHistory::getCost)
-                    .reversed()
+            return successFirstComparator
+                    .thenComparing(Comparator.comparingDouble(ProblemSubmitHistory::getCost).reversed())
                     .thenComparing(defaultComparator);
         }
 
@@ -258,7 +261,10 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
     private SubmitHistoryListItemOutput toSubmitHistoryListItemOutput(ProblemSubmitHistory history) {
         // 제출 기록 목록 항목 응답으로 변환
         DbmsType dbmsType = history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
-        long executionPlanElement = history.getExecutionPlanElement() != null ? history.getExecutionPlanElement() : 0L;
+        long executionPlanElement = history.isSuccess() && history.getExecutionPlanElement() != null
+                ? history.getExecutionPlanElement()
+                : 0L;
+        double cost = history.isSuccess() ? history.getCost() : 0d;
 
         return new SubmitHistoryListItemOutput(
                 formatSubmitId(history.getSubmitId()),
@@ -269,7 +275,7 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
                 history.isSuccess(),
                 history.getMessage() != null ? history.getMessage() : "",
                 history.getSubmittedSql() != null ? history.getSubmittedSql() : "",
-                history.getCost(),
+                cost,
                 ExecutionPlanElementIndexes.normalize(dbmsType, executionPlanElement)
         );
     }

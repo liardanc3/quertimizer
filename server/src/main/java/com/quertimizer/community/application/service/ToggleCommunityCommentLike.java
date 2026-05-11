@@ -5,7 +5,6 @@ import com.quertimizer.community.application.input.ToggleCommunityCommentLikeInp
 import com.quertimizer.community.application.output.CommunityReactionOutput;
 import com.quertimizer.community.application.port.out.CommunityCommentLikeRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityCommentRepositoryPort;
-import com.quertimizer.community.application.service.CommunityService;
 import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityCommentLike;
 import com.quertimizer.community.domain.entity.ids.CommunityCommentLikeId;

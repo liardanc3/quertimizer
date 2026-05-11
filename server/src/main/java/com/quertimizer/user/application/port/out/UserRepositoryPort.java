@@ -34,4 +34,6 @@ public interface UserRepositoryPort {
     User save(User user);
 
     List<User> saveAll(Iterable<User> users);
+
+    void deleteByEmail(String email);
 }

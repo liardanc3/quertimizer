@@ -384,6 +384,22 @@ button {
   gap: 1rem;
 }
 
+.route-inline-state-layout {
+  display: grid;
+  place-items: center;
+  min-height: clamp(13rem, calc(100vh - 18rem), 24rem);
+}
+
+.route-inline-state-message {
+  margin: 0;
+  color: var(--ink-subtle);
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .page-loading-shell {
   position: relative;
   display: grid;
@@ -1700,6 +1716,24 @@ button {
   padding-top: 0.82rem;
 }
 
+.solve-detail-example-table {
+  display: grid;
+  gap: 0;
+}
+
+.solve-detail-example-summary {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.62rem;
+  padding-top: 0.58rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.72);
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .solve-detail-table-block {
   display: grid;
   gap: 0.72rem;
@@ -2583,17 +2617,19 @@ button {
 }
 
 .solve-editor-toolbar-row {
+  --solve-editor-toolbar-gap: 0.34rem;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.44rem;
-  flex-wrap: wrap;
+  gap: var(--solve-editor-toolbar-gap);
+  flex-wrap: nowrap;
 }
 
 .solve-editor-zoom-controls {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  flex: 0 0 auto;
+  gap: var(--solve-editor-toolbar-gap);
 }
 
 .solve-editor-zoom-button {
@@ -2609,13 +2645,6 @@ button {
   font-size: 0.74rem;
   font-weight: 800;
   line-height: 1;
-}
-
-.solve-editor-zoom-button.is-stop {
-  width: auto;
-  min-width: 0;
-  padding: 0 0.48rem;
-  font-size: 0.66rem;
 }
 
 .solve-editor-zoom-button.is-decrease {
@@ -2654,7 +2683,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.34rem;
+  flex: 0 0 auto;
+  gap: var(--solve-editor-toolbar-gap);
   margin-left: 0;
 }
 
@@ -2668,8 +2698,59 @@ button {
   line-height: 1;
 }
 
+.solve-editor-toolbar-index-button {
+  position: relative;
+  min-height: 1.34rem;
+  height: 1.34rem;
+  padding: 0.12rem 0.58rem;
+  border-radius: 0.56rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.solve-editor-toolbar-index-button.is-parsing-attention::after {
+  content: "";
+  position: absolute;
+  inset: -0.24rem;
+  border: 1px solid #ef4444;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  animation: solve-index-attention-pulse 0.9s ease-in-out infinite;
+}
+
+.solve-editor-toolbar-index-button svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+@keyframes solve-index-attention-pulse {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solve-editor-toolbar-index-button.is-parsing-attention::after {
+    animation: none;
+    opacity: 0.72;
+  }
+}
+
 .solve-editor-action-button {
   min-width: 4.4rem;
+}
+
+.solve-editor-action-button.is-stop {
+  min-width: 2.2rem;
+  padding-inline: 0.42rem;
 }
 
 .solve-editor-action-button .solve-editor-statement-spinner {
@@ -2678,18 +2759,28 @@ button {
   height: 0.82em;
 }
 
-.solve-action-label,
-.solve-action-shortcut {
+.solve-action-copy {
   display: inline-flex;
   align-items: center;
+  gap: 0.36rem;
+  line-height: 1;
+}
+
+.solve-action-text {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  height: 1em;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.solve-action-shortcut {
+.solve-action-text.is-shortcut {
   color: currentColor;
-  font-size: 0.64rem;
+  font-size: inherit;
   font-weight: 700;
   opacity: 0.72;
+  transform: none;
 }
 
 .solve-floating-opacity-control {
@@ -2791,8 +2882,7 @@ button {
 }
 
 .solve-sql-editor:focus {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  outline: none;
 }
 
 .solve-sql-highlight {
@@ -2814,6 +2904,14 @@ button {
 
 .solve-sql-highlight-placeholder {
   color: var(--ink-subtle);
+}
+
+.solve-sql-error-underline {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.18em;
 }
 
 .solve-sql-token.is-keyword {
@@ -4334,7 +4432,7 @@ button {
   }
 
   .solve-detail-grid-row {
-    min-width: 46rem;
+    min-width: 100%;
   }
 
   .solve-pane-header {
@@ -4364,23 +4462,52 @@ button {
   }
 
   .solve-editor-toolbar-row {
-    justify-content: space-between;
+    --solve-editor-toolbar-gap: 0.22rem;
+    justify-content: flex-start;
     align-items: center;
+    overflow: hidden;
   }
 
   .solve-editor-actions {
-    flex: 1 1 auto;
-    justify-content: flex-end;
+    flex: 0 0 auto;
+    justify-content: flex-start;
     min-width: 0;
   }
 
-  .solve-editor-actions .btn {
+  .solve-editor-actions .btn,
+  .solve-editor-toolbar-index-button {
     height: 1.72rem;
     min-height: 1.72rem;
     padding-inline: 0.58rem;
   }
 
-  .solve-action-shortcut {
+  .solve-editor-zoom-button {
+    width: 1.44rem;
+    min-width: 1.44rem;
+  }
+
+  .solve-editor-toolbar-index-button {
+    gap: 0.2rem;
+    padding-inline: 0.42rem;
+    font-size: 0.64rem;
+  }
+
+  .solve-editor-toolbar-index-button svg {
+    width: 0.68rem;
+    height: 0.68rem;
+  }
+
+  .solve-editor-action-button {
+    min-width: 2.38rem;
+    padding-inline: 0.42rem;
+    font-size: 0.64rem;
+  }
+
+  .solve-editor-action-button.is-stop {
+    min-width: 2.38rem;
+  }
+
+  .solve-action-text.is-shortcut {
     display: none;
   }
 
@@ -6829,6 +6956,11 @@ button {
   .solve-pane-summary-value,
   .solve-plan-lines {
     color: var(--ink-strong);
+  }
+
+  .solve-detail-example-summary {
+    border-top-color: rgba(148, 163, 184, 0.24);
+    color: #cbd5e1;
   }
 
   .solve-detail-table-name,

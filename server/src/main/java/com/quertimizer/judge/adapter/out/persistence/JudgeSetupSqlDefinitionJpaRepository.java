@@ -4,6 +4,4 @@ import com.quertimizer.judge.adapter.out.persistence.JudgeSetupSqlDefinitionEnti
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface JudgeSetupSqlDefinitionJpaRepository extends JpaRepository<JudgeSetupSqlDefinitionEntity, String> {
-
-    void deleteByDatasetId(String datasetId);
 }

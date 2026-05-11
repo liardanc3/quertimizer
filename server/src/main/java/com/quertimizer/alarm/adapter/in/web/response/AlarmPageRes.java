@@ -2,13 +2,11 @@ package com.quertimizer.alarm.adapter.in.web.response;
 
 import com.quertimizer.alarm.application.output.AlarmPageOutput;
 import com.quertimizer.alarm.domain.model.AlarmPageConstant;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class AlarmPageRes {
 
     private final int currentPage;

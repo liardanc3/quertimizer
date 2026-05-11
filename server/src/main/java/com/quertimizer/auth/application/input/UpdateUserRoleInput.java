@@ -1,12 +1,10 @@
 package com.quertimizer.auth.application.input;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.Optional;
 
 @Data
-@AllArgsConstructor
 public class UpdateUserRoleInput {
 
     private final String handle;

@@ -3,8 +3,6 @@ package com.quertimizer.auth.application.service;
 import com.quertimizer.auth.application.port.in.SendSignupCodeUseCase;
 import com.quertimizer.auth.application.input.SendCodeInput;
 import com.quertimizer.auth.application.port.out.AuthMailSenderPort;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.auth.application.service.AuthRateLimitService;
 import com.quertimizer.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -7,18 +7,25 @@ public class ExecutionOptions {
     private final int pageSize;
     private final boolean includeCost;
     private final boolean includePlan;
+    private final boolean validateSql;
 
     public ExecutionOptions(int timeoutSeconds, int page, int pageSize, boolean includeCost, boolean includePlan) {
+        this(timeoutSeconds, page, pageSize, includeCost, includePlan, true);
+    }
+
+    public ExecutionOptions(int timeoutSeconds, int page, int pageSize,
+                            boolean includeCost, boolean includePlan,
+                            boolean validateSql) {
         if (timeoutSeconds <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 한다.");
+            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
         }
 
         if (page <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 한다.");
+            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
         }
 
         if (pageSize <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 한다.");
+            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
         }
 
         this.timeoutSeconds = timeoutSeconds;
@@ -26,6 +33,7 @@ public class ExecutionOptions {
         this.pageSize = pageSize;
         this.includeCost = includeCost;
         this.includePlan = includePlan;
+        this.validateSql = validateSql;
     }
 
     public static ExecutionOptions interactive() {
@@ -38,6 +46,10 @@ public class ExecutionOptions {
 
     public static ExecutionOptions submissionAnswer() {
         return new ExecutionOptions(60, 1, 10_000, true, false);
+    }
+
+    public static ExecutionOptions internalMetadata(int pageSize) {
+        return new ExecutionOptions(60, 1, pageSize, false, false, false);
     }
 
     public int getTimeoutSeconds() {
@@ -58,5 +70,9 @@ public class ExecutionOptions {
 
     public boolean isIncludePlan() {
         return includePlan;
+    }
+
+    public boolean isValidateSql() {
+        return validateSql;
     }
 }

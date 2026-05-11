@@ -1,8 +1,8 @@
 package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.ResolveAuthenticatedHandleUseCase;
-import com.quertimizer.user.domain.entity.User;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.domain.model.AuthUser;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ResolveAuthenticatedHandle implements ResolveAuthenticatedHandleUseCase {
 
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 인증 이메일 기준 현재 사용자 handle을 조회한다.
@@ -23,7 +23,7 @@ public class ResolveAuthenticatedHandle implements ResolveAuthenticatedHandleUse
     @Override
     public String execute(String authenticatedEmail) {
         return userRepository.findByEmailIgnoreCase(normalizeEmail(authenticatedEmail))
-                .map(User::getHandle)
+                .map(AuthUser::getHandle)
                 .filter(handle -> !handle.isBlank())
                 .orElse(null);
     }

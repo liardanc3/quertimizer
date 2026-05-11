@@ -3,10 +3,8 @@ package com.quertimizer.auth.application.service;
 import com.quertimizer.auth.application.port.in.VerifyFindPasswordCodeUseCase;
 import com.quertimizer.auth.application.input.VerifyCodeInput;
 import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.auth.application.service.AuthRateLimitService;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -19,7 +17,7 @@ import static com.quertimizer.auth.domain.model.AccountRecoveryFailReason.EMAIL_
 public class VerifyFindPasswordCode implements VerifyFindPasswordCodeUseCase {
 
     private final AuthService authService;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final VerificationCodeRepositoryPort verificationCodeRepository;
     private final AuthRateLimitService authRateLimitPolicy;
 

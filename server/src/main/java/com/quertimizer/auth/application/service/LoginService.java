@@ -1,7 +1,7 @@
 package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.out.AuthenticationPort;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 public class LoginService {
 
     private final AuthenticationPort authenticationPort;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     public void updateLastAccess(String authenticatedEmail, String accessIp) {
         // IP, 현재시간 기록

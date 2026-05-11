@@ -1,13 +1,17 @@
-import { EditorContent, useEditor } from '@tiptap/react';
-import { type ClipboardEvent, type ChangeEvent, type DragEvent, type MouseEvent, useEffect, useRef } from 'react';
+import { EditorContent, ReactNodeViewRenderer, useEditor } from '@tiptap/react';
+import type { ChainedCommands } from '@tiptap/core';
+import { type ClipboardEvent, type ChangeEvent, type DragEvent, type MouseEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  communityTiptapExtensions,
+  COMMUNITY_IMAGE_MAX_WIDTH,
+  COMMUNITY_IMAGE_MIN_WIDTH,
+  createCommunityTiptapExtensions,
   createCommunityEditorSnapshot,
   parseCommunityContentJson,
   type CommunityEditorSnapshot,
   type CommunityUploadedImage,
 } from '@/entities/community';
 import { useUiText } from '@/shared/config/ui-text';
+import { ResizableCommunityImage } from './ResizableCommunityImage';
 
 interface CommunityTiptapEditorProps {
   initialContentJson?: string;
@@ -29,14 +33,54 @@ interface ToolbarButtonProps {
 
 type ToolbarIcon =
   | 'bold'
-  | 'italic'
   | 'strike'
   | 'underline'
-  | 'inlineCode'
   | 'codeBlock'
   | 'image'
   | 'undo'
   | 'redo';
+
+interface CommunityImageSize {
+  width: number;
+  height: number;
+}
+
+function clampImageWidth(width: number) {
+  return Math.min(COMMUNITY_IMAGE_MAX_WIDTH, Math.max(COMMUNITY_IMAGE_MIN_WIDTH, Math.round(width)));
+}
+
+function createCommunityImageSize(width: number, height: number): CommunityImageSize | null {
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const normalizedWidth = clampImageWidth(width);
+  return {
+    width: normalizedWidth,
+    height: Math.max(1, Math.round(normalizedWidth / (width / height))),
+  };
+}
+
+function resolveCommunityImageSize(file: File): Promise<CommunityImageSize | null> {
+  if (typeof window === 'undefined') {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(createCommunityImageSize(image.naturalWidth, image.naturalHeight));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+    image.src = objectUrl;
+  });
+}
 
 function ToolbarIconView({ icon }: { icon: ToolbarIcon }) {
   switch (icon) {
@@ -45,12 +89,6 @@ function ToolbarIconView({ icon }: { icon: ToolbarIcon }) {
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M5 3h3.5a2.2 2.2 0 0 1 0 4.4H5V3Z" stroke="currentColor" strokeWidth="1.35" strokeLinejoin="round" />
           <path d="M5 7.4h4a2.35 2.35 0 0 1 0 4.7H5V7.4Z" stroke="currentColor" strokeWidth="1.35" strokeLinejoin="round" />
-        </svg>
-      );
-    case 'italic':
-      return (
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M7.6 3h4.1M4.3 13h4.1M9.7 3 6.3 13" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
         </svg>
       );
     case 'strike':
@@ -63,12 +101,6 @@ function ToolbarIconView({ icon }: { icon: ToolbarIcon }) {
       return (
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M4.8 3v4.2a3.2 3.2 0 0 0 6.4 0V3M4 13h8" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
-        </svg>
-      );
-    case 'inlineCode':
-      return (
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="m6 4.2-3.2 3.8L6 11.8M10 4.2l3.2 3.8-3.2 3.8" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case 'codeBlock':
@@ -106,12 +138,22 @@ function ToolbarButton({ icon, label, title, active = false, disabled = false, o
     event.preventDefault();
   }
 
+  function handleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    event.preventDefault();
+
+    if (!disabled) {
+      onClick();
+    }
+  }
+
   return (
     <button
       type="button"
       className={`mini-toggle community-editor-tool ${active ? 'is-active' : ''}`.trim()}
       disabled={disabled}
+      data-community-editor-tool={icon ?? label ?? title}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
       onClick={onClick}
       title={title}
       aria-label={title}
@@ -132,9 +174,14 @@ export default function CommunityTiptapEditor({
   const { text } = useUiText();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const lastInitialContentJsonRef = useRef(initialContentJson);
+  const [, refreshToolbarState] = useState(0);
+  const editorExtensions = useMemo(
+    () => createCommunityTiptapExtensions(ReactNodeViewRenderer(ResizableCommunityImage)),
+    [],
+  );
 
   const editor = useEditor({
-    extensions: communityTiptapExtensions,
+    extensions: editorExtensions,
     content: parseCommunityContentJson(initialContentJson),
     onCreate: ({ editor: currentEditor }) => onSnapshot(createCommunityEditorSnapshot(currentEditor)),
     onUpdate: ({ editor: currentEditor }) => onSnapshot(createCommunityEditorSnapshot(currentEditor)),
@@ -144,6 +191,30 @@ export default function CommunityTiptapEditor({
       },
     },
   });
+
+  function shouldFocusEditorAfterToolbarAction() {
+    return typeof window === 'undefined' || !window.matchMedia('(pointer: coarse)').matches;
+  }
+
+  function createToolbarCommand(): ChainedCommands | null {
+    if (!editor) {
+      return null;
+    }
+
+    const command = editor.chain();
+    return shouldFocusEditorAfterToolbarAction() ? command.focus() : command;
+  }
+
+  function runToolbarCommand(command: (chain: ChainedCommands) => ChainedCommands) {
+    const toolbarCommand = createToolbarCommand();
+
+    if (toolbarCommand == null) {
+      return;
+    }
+
+    command(toolbarCommand).run();
+    refreshToolbarState((currentValue) => currentValue + 1);
+  }
 
   useEffect(() => {
     if (!editor || lastInitialContentJsonRef.current === initialContentJson) {
@@ -165,6 +236,7 @@ export default function CommunityTiptapEditor({
     }
 
     try {
+      const imageSize = await resolveCommunityImageSize(file);
       const uploadedImage = await onUploadImage(file);
       editor.chain().focus().insertContent({
         type: 'image',
@@ -172,6 +244,7 @@ export default function CommunityTiptapEditor({
           src: uploadedImage.imageUrl,
           alt: file.name || text('COMMUNITY_EDITOR_ATTACHED_IMAGE_ALT', '첨부 이미지'),
           imageId: uploadedImage.imageId,
+          ...imageSize,
         },
       }).run();
       onFeedback?.(null);
@@ -243,46 +316,34 @@ export default function CommunityTiptapEditor({
             icon="bold"
             title={text('COMMUNITY_EDITOR_BOLD_TITLE', '굵게')}
             active={editor?.isActive('bold')}
-            onClick={() => editor?.chain().focus().toggleBold().run()}
-          />
-          <ToolbarButton
-            icon="italic"
-            title={text('COMMUNITY_EDITOR_ITALIC_TITLE', '기울임')}
-            active={editor?.isActive('italic')}
-            onClick={() => editor?.chain().focus().toggleItalic().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleBold())}
           />
           <ToolbarButton
             icon="strike"
             title={text('COMMUNITY_EDITOR_STRIKE_TITLE', '취소선')}
             active={editor?.isActive('strike')}
-            onClick={() => editor?.chain().focus().toggleStrike().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleStrike())}
           />
           <ToolbarButton
             icon="underline"
             title={text('COMMUNITY_EDITOR_UNDERLINE_TITLE', '밑줄')}
             active={editor?.isActive('underline')}
-            onClick={() => editor?.chain().focus().toggleUnderline().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleUnderline())}
           />
           <ToolbarButton
             label={text('COMMUNITY_EDITOR_HIGHLIGHT_LABEL', '형광')}
             title={text('COMMUNITY_EDITOR_HIGHLIGHT_TITLE', '하이라이트')}
             active={editor?.isActive('highlight')}
-            onClick={() => editor?.chain().focus().toggleHighlight().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleHighlight())}
           />
         </div>
 
         <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_CODE_GROUP_LABEL', '코드')}>
           <ToolbarButton
-            icon="inlineCode"
-            title={text('COMMUNITY_EDITOR_INLINE_CODE_TITLE', '인라인 코드')}
-            active={editor?.isActive('code')}
-            onClick={() => editor?.chain().focus().toggleCode().run()}
-          />
-          <ToolbarButton
             icon="codeBlock"
             title={text('COMMUNITY_EDITOR_CODE_BLOCK_TITLE', '코드블럭')}
             active={editor?.isActive('codeBlock')}
-            onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleCodeBlock())}
           />
         </div>
 
@@ -291,13 +352,7 @@ export default function CommunityTiptapEditor({
             label={text('COMMUNITY_EDITOR_HEADING_LABEL', '제목')}
             title={text('COMMUNITY_EDITOR_HEADING_LABEL', '제목')}
             active={editor?.isActive('heading', { level: 2 })}
-            onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-          />
-          <ToolbarButton
-            label={text('COMMUNITY_EDITOR_QUOTE_LABEL', '인용')}
-            title={text('COMMUNITY_EDITOR_QUOTE_LABEL', '인용')}
-            active={editor?.isActive('blockquote')}
-            onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleHeading({ level: 2 }))}
           />
         </div>
 
@@ -306,13 +361,13 @@ export default function CommunityTiptapEditor({
             label={text('COMMUNITY_EDITOR_BULLET_LIST_LABEL', '글머리')}
             title={text('COMMUNITY_EDITOR_BULLET_LIST_TITLE', '글머리 목록')}
             active={editor?.isActive('bulletList')}
-            onClick={() => editor?.chain().focus().toggleBulletList().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleBulletList())}
           />
           <ToolbarButton
             label={text('COMMUNITY_EDITOR_ORDERED_LIST_LABEL', '번호')}
             title={text('COMMUNITY_EDITOR_ORDERED_LIST_TITLE', '번호 목록')}
             active={editor?.isActive('orderedList')}
-            onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+            onClick={() => runToolbarCommand((chain) => chain.toggleOrderedList())}
           />
         </div>
 
@@ -320,12 +375,12 @@ export default function CommunityTiptapEditor({
           <ToolbarButton
             label={text('COMMUNITY_EDITOR_HARD_BREAK_LABEL', '줄바꿈')}
             title={text('COMMUNITY_EDITOR_HARD_BREAK_LABEL', '줄바꿈')}
-            onClick={() => editor?.chain().focus().setHardBreak().run()}
+            onClick={() => runToolbarCommand((chain) => chain.setHardBreak())}
           />
           <ToolbarButton
             label={text('COMMUNITY_EDITOR_DIVIDER_LABEL', '구분선')}
             title={text('COMMUNITY_EDITOR_DIVIDER_LABEL', '구분선')}
-            onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+            onClick={() => runToolbarCommand((chain) => chain.setHorizontalRule())}
           />
           <ToolbarButton
             icon="image"
@@ -335,8 +390,8 @@ export default function CommunityTiptapEditor({
         </div>
 
         <div className="community-editor-tool-group" aria-label={text('COMMUNITY_EDITOR_HISTORY_GROUP_LABEL', '히스토리')}>
-          <ToolbarButton icon="undo" title={text('COMMUNITY_EDITOR_UNDO_TITLE', '실행취소')} onClick={() => editor?.chain().focus().undo().run()} />
-          <ToolbarButton icon="redo" title={text('COMMUNITY_EDITOR_REDO_TITLE', '다시실행')} onClick={() => editor?.chain().focus().redo().run()} />
+          <ToolbarButton icon="undo" title={text('COMMUNITY_EDITOR_UNDO_TITLE', '실행취소')} onClick={() => runToolbarCommand((chain) => chain.undo())} />
+          <ToolbarButton icon="redo" title={text('COMMUNITY_EDITOR_REDO_TITLE', '다시실행')} onClick={() => runToolbarCommand((chain) => chain.redo())} />
         </div>
       </div>
 

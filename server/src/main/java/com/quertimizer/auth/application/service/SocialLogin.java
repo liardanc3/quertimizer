@@ -4,7 +4,7 @@ import com.quertimizer.auth.application.port.in.SocialLoginUseCase;
 import com.quertimizer.auth.application.input.SocialLoginInput;
 import com.quertimizer.auth.application.output.AuthenticatedUserOutput;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -30,8 +30,8 @@ public class SocialLogin implements SocialLoginUseCase {
      */
     @Override
     public AuthenticatedUserOutput execute(SocialLoginInput input) {
-        User user = authService.findOrCreateOAuth2User(input.getProvider(), input.getAttributes());
-        loginPolicy.validateBlockedUser(user);
+        AuthUser user = authService.findOrCreateOAuth2User(input.getProvider(), input.getAttributes());
+        loginPolicy.validateBlockedUser(user.hasHandle(), user.isBlocked());
         loginService.updateLastAccess(user.getEmail(), input.getAccessIp());
         return AuthenticatedUserOutput.from(user);
     }

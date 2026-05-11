@@ -1,12 +1,10 @@
 package com.quertimizer.user.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileSolvedRecordsOutput {
 
     private final List<UserProfileSolvedRecordOutput> solvedRecords;

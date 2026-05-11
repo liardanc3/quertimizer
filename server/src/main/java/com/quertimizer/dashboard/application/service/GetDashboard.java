@@ -1,27 +1,23 @@
 package com.quertimizer.dashboard.application.service;
 
 import com.quertimizer.dashboard.application.port.in.GetDashboardUseCase;
-import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
-import com.quertimizer.community.application.port.out.CommunityPostTagRepositoryPort;
-import com.quertimizer.community.domain.entity.CommunityPost;
-import com.quertimizer.community.domain.entity.CommunityPostTag;
-import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
 import com.quertimizer.dashboard.application.output.DashboardCommunityPostOutput;
 import com.quertimizer.dashboard.application.output.DashboardOutput;
 import com.quertimizer.dashboard.application.output.DashboardProblemRecommendationOutput;
+import com.quertimizer.dashboard.application.port.out.DashboardCommunityPort;
+import com.quertimizer.dashboard.application.port.out.DashboardProblemPort;
+import com.quertimizer.dashboard.domain.model.DashboardCommunityPostCandidate;
 import com.quertimizer.dashboard.domain.model.DashboardDisplayConstant;
+import com.quertimizer.dashboard.domain.model.DashboardProblemCandidate;
 import com.quertimizer.dashboard.domain.policy.DashboardHotPostPolicy;
 import com.quertimizer.dashboard.domain.policy.DashboardProblemRecommendationPolicy;
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.problem.application.output.ProblemListEntry;
-import com.quertimizer.problem.application.service.ProblemSearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,9 +26,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GetDashboard implements GetDashboardUseCase {
 
-    private final CommunityPostRepositoryPort communityPostRepository;
-    private final CommunityPostTagRepositoryPort communityPostTagRepository;
-    private final ProblemSearchService problemSearchService;
+    private final DashboardCommunityPort dashboardCommunityPort;
+    private final DashboardProblemPort dashboardProblemPort;
     private final DashboardHotPostPolicy hotPostPolicy;
     private final DashboardProblemRecommendationPolicy problemRecommendationPolicy;
 
@@ -56,21 +51,17 @@ public class GetDashboard implements GetDashboardUseCase {
     }
 
     private List<DashboardCommunityPostOutput> getHotCommunityPosts() {
-        // 인기 게시글과 게시글 태그 조회
-        List<CommunityPost> posts = communityPostRepository.findAll();
-        Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
-
         // 인기 점수순 정렬 후 게시글 응답 변환
-        return posts.stream()
+        return dashboardCommunityPort.findCommunityPostCandidates().stream()
                 .sorted(hotPostPolicy.createHotPostComparator())
                 .limit(hotPostPolicy.getDisplayLimit())
-                .map(post -> toCommunityPostOutput(post, tagsByPostId.getOrDefault(post.getPostId(), List.of())))
+                .map(this::toCommunityPostOutput)
                 .toList();
     }
 
     private List<DashboardProblemRecommendationOutput> getRecommendedProblems(String currentHandle) {
         // DBMS별 추천 후보 수집
-        Map<String, ProblemListEntry> candidatesByProblemId = new LinkedHashMap<>();
+        Map<String, DashboardProblemCandidate> candidatesByProblemId = new LinkedHashMap<>();
         addProblemCandidates(candidatesByProblemId, DbmsType.POSTGRESQL, currentHandle);
         addProblemCandidates(candidatesByProblemId, DbmsType.MYSQL, currentHandle);
 
@@ -84,71 +75,38 @@ public class GetDashboard implements GetDashboardUseCase {
                 .toList();
     }
 
-    private void addProblemCandidates(Map<String, ProblemListEntry> candidatesByProblemId,
+    private void addProblemCandidates(Map<String, DashboardProblemCandidate> candidatesByProblemId,
                                       DbmsType dbmsType, String currentHandle) {
-        // DBMS별 풀이 상태와 정렬 기준별 후보 추가
-        String solveState = currentHandle == null ? "all" : "unsolved";
-        addProblemCandidates(candidatesByProblemId, findProblemCandidates(dbmsType, currentHandle, solveState, "desc", "none", "none"));
-        addProblemCandidates(candidatesByProblemId, findProblemCandidates(dbmsType, currentHandle, solveState, "none", "desc", "none"));
-        addProblemCandidates(candidatesByProblemId, findProblemCandidates(dbmsType, currentHandle, solveState, "none", "none", "desc"));
+        // DBMS별 추천 후보 추가
+        addProblemCandidates(candidatesByProblemId, dashboardProblemPort.findProblemCandidates(
+                dbmsType, currentHandle, problemRecommendationPolicy.getCandidateLimitPerDbms()
+        ));
     }
 
-    private List<ProblemListEntry> findProblemCandidates(DbmsType dbmsType, String currentHandle,
-                                                         String solveState, String solvedCountSort,
-                                                         String totalSubmitSort, String successSubmitSort) {
-        // DB 직접 조회로 정렬 기준별 추천 후보 조회
-        return problemSearchService.findProblemPage(
-                        1, null, dbmsType, solveState, currentHandle,
-                        solvedCountSort, totalSubmitSort, successSubmitSort,
-                        "none", null, null
-                )
-                .getProblems()
-                .stream()
-                .limit(problemRecommendationPolicy.getCandidateLimitPerDbms())
-                .toList();
-    }
-
-    private void addProblemCandidates(Map<String, ProblemListEntry> candidatesByProblemId,
-                                      List<ProblemListEntry> problemCandidates) {
+    private void addProblemCandidates(Map<String, DashboardProblemCandidate> candidatesByProblemId,
+                                      List<DashboardProblemCandidate> problemCandidates) {
         // 중복 문제 제외 후 추천 후보 추가
-        for (ProblemListEntry problemCandidate : problemCandidates) {
-            candidatesByProblemId.putIfAbsent(problemCandidate.getProblem().getProblemId(), problemCandidate);
+        for (DashboardProblemCandidate problemCandidate : problemCandidates) {
+            candidatesByProblemId.putIfAbsent(problemCandidate.getProblemId(), problemCandidate);
         }
     }
 
-    private Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
-        // 게시글 태그 결과 저장소 준비
-        Map<Long, List<String>> tagsByPostId = new LinkedHashMap<>();
-
-        // 조회 대상 게시글 번호 없으면 빈 결과 반환
-        if (postIds.isEmpty()) {
-            return tagsByPostId;
-        }
-
-        // 게시글 번호별 태그 목록 수집
-        for (CommunityPostTag postTag : communityPostTagRepository.findAllByPostIdInOrderByPostIdAscTagOrderAsc(postIds)) {
-            tagsByPostId.computeIfAbsent(postTag.getPostId(), key -> new ArrayList<>()).add(postTag.getTag());
-        }
-
-        return tagsByPostId;
-    }
-
-    private DashboardCommunityPostOutput toCommunityPostOutput(CommunityPost post, List<String> tags) {
+    private DashboardCommunityPostOutput toCommunityPostOutput(DashboardCommunityPostCandidate post) {
         // 커뮤니티 게시글 응답 변환
         return new DashboardCommunityPostOutput(
-                CommunityPostIdPolicy.format(post.getPostId()),
-                post.getTitle(), post.getHandle(), createExcerpt(post.getPlainTextSummary()),
-                tags, resolveCategory(post), post.getCreatedAt(),
+                post.getPostId(),
+                post.getTitle(), post.getAuthorHandle(), createExcerpt(post.getPlainTextSummary()),
+                post.getTags(), post.getCategory(), post.getCreatedAt(),
                 post.getViewCount(), post.getLikeCount(), post.getCommentCount(),
                 Math.round(hotPostPolicy.calculateHotScore(post) * 10d) / 10d
         );
     }
 
-    private DashboardProblemRecommendationOutput toProblemRecommendationOutput(ProblemListEntry problemEntry) {
+    private DashboardProblemRecommendationOutput toProblemRecommendationOutput(DashboardProblemCandidate problemEntry) {
         // 문제 추천 응답 변환
         return new DashboardProblemRecommendationOutput(
-                problemEntry.getProblem().getProblemId(), problemEntry.getProblem().getTitle(),
-                problemEntry.getProblem().getDbmsType().getValue(), problemEntry.getSolvedUserCount(),
+                problemEntry.getProblemId(), problemEntry.getTitle(),
+                problemEntry.getDbms(), problemEntry.getSolvedUserCount(),
                 problemEntry.getTotalSubmitCount(), problemEntry.getSuccessSubmitCount(),
                 problemEntry.getSpreadRate(), problemEntry.isSolvedByCurrentUser()
         );
@@ -184,19 +142,4 @@ public class GetDashboard implements GetDashboardUseCase {
                 .trim();
     }
 
-    private String resolveCategory(CommunityPost post) {
-        // seed 게시글 번호 기준 카테고리 후보 계산
-        int postNumber = CommunityPostIdPolicy.resolveSeedPostNumber(post.getPostId()).orElse(0);
-
-        // seed 게시글 번호가 있으면 번호 규칙으로 카테고리 결정
-        if (postNumber > 0) {
-            if (postNumber % 10 == 0) {
-                return "notice";
-            }
-
-            return postNumber % 2 == 0 ? "discussion" : "question";
-        }
-
-        return "discussion";
-    }
 }

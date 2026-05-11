@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FavoriteTabButton } from '@/features/favorite-tab';
 import { HandleSetupGate } from '@/features/handle-setup';
 import { PageErrorState } from '@/shared/ui';
@@ -7,13 +7,14 @@ import { PageToolbar, SearchForm, SegmentedTabs } from '@/shared/ui';
 import ProblemList from './ProblemList';
 import { replaceQueryState, useLocationSearch } from '@/shared/lib/hooks/use-location-state';
 import useRequestState from '@/shared/lib/hooks/use-request-state';
+import useDismissableLayer from '@/shared/lib/hooks/use-dismissable-layer';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '@/features/favorite-tab';
 import { PROBLEMS_PATH } from '@/shared/config/navigation';
 import { fetchProblems, type ProblemPage } from '@/shared/api/problem-api';
 import { useSession } from '@/shared/auth/session';
 import { useUiText } from '@/shared/config/ui-text';
 import type { DbmsType } from '@/shared/api/domain';
-import '@/shared/ui/styles/problem-list-page.css';
+import ProblemSpreadRateFilter from './ProblemSpreadRateFilter';
 
 type SortDirection = 'desc' | 'asc';
 type SpreadRateSortOrder = 'none' | 'desc' | 'asc';
@@ -36,6 +37,14 @@ interface HomePageFavoriteSnapshot {
 const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
 const PROBLEM_PAGE_SIZE = 10;
 const dbmsOptions: DbmsType[] = ['postgresql', 'mysql'];
+
+function ProblemFilterIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3.5 5.5h13M6 10h8M8.5 14.5h3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function readProblemsDbmsFromSearch(search: string) {
   const dbms = new URLSearchParams(search).get('dbms');
@@ -158,6 +167,18 @@ export default function HomePage() {
     committedSpreadRateRange != null
       && (committedSpreadRateRange.min > spreadRateSliderBounds.min || committedSpreadRateRange.max < spreadRateSliderBounds.max);
   const isSpreadRateFilterActive = spreadRateSortOrder !== 'none' || hasActiveSpreadRateConstraints;
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const mobileFilterRef = useRef<HTMLDivElement | null>(null);
+  const mobileFilterLayerRefs = useMemo(() => [mobileFilterRef], []);
+  const isMobileFilterActive =
+    !showSolved || !showUnsolved || isSpreadRateFilterActive || countSortField !== 'solvedCount' || countSortDirection !== 'desc';
+
+  useDismissableLayer({
+    enabled: isMobileFilterOpen,
+    refs: mobileFilterLayerRefs,
+    onDismiss: () => setIsMobileFilterOpen(false),
+    dismissOnResize: true,
+  });
 
   useEffect(() => {
     clearFavoriteRestoreSnapshot('home');
@@ -259,6 +280,12 @@ export default function HomePage() {
     setRequestedPage(1);
   }
 
+  function selectCountSort(field: CountSortField, direction: SortDirection) {
+    setCountSortField(field);
+    setCountSortDirection(direction);
+    setRequestedPage(1);
+  }
+
   function toggleSolvedFilter() {
     const nextSelection = toggleRequiredPairSelection(showSolved, showUnsolved);
     setShowSolved(nextSelection.currentChecked);
@@ -316,8 +343,39 @@ export default function HomePage() {
     setRequestedPage(normalizedPage);
   }
 
+  function renderMobileSortRow(label: string, field: CountSortField) {
+    return (
+      <div className="problem-mobile-sort-row">
+        <span className="problem-mobile-sort-label">{label}</span>
+        <div className="problem-mobile-sort-options">
+          <label className="problem-mobile-sort-option">
+            <input
+              type="radio"
+              name={`problem-mobile-sort-${field}`}
+              checked={countSortField === field && countSortDirection === 'asc'}
+              onChange={() => selectCountSort(field, 'asc')}
+            />
+            <span>오름차순</span>
+            <span className="problem-status-check-ui" aria-hidden="true" />
+          </label>
+
+          <label className="problem-mobile-sort-option">
+            <input
+              type="radio"
+              name={`problem-mobile-sort-${field}`}
+              checked={countSortField === field && countSortDirection === 'desc'}
+              onChange={() => selectCountSort(field, 'desc')}
+            />
+            <span>내림차순</span>
+            <span className="problem-status-check-ui" aria-hidden="true" />
+          </label>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="page page-stack home-page">
+    <div className="page page-stack data-page problem-list-page home-page">
       <section className="panel-card compact problem-toolbar-card">
         <PageToolbar className="problem-toolbar home-problem-toolbar-stack">
           <SegmentedTabs
@@ -361,20 +419,88 @@ export default function HomePage() {
             }
           />
 
-          <SearchForm
-            className="problem-search-form home-problem-search-form"
-            fieldClassName="problem-search-field home-problem-search-field"
-            inputClassName="problem-search-input home-problem-search-input"
-            buttonClassName="btn secondary problem-search-button home-problem-search-button"
-            value={draftSearchValue}
-            onChange={setDraftSearchValue}
-            onSubmit={() => applySearch(draftSearchValue)}
-            placeholder={text('HOME_PROBLEM_SEARCH_PLACEHOLDER', '문제 번호, 제목 검색')}
-            label={text('HOME_PROBLEM_SEARCH_LABEL', '문제 검색')}
-            submitLabel={text('COMMON_SEARCH_BUTTON', '검색')}
-            buttonLabel={text('COMMON_SEARCH_BUTTON', '검색')}
-            withIcon
-          />
+          <div className="home-problem-search-row" ref={mobileFilterRef}>
+            <SearchForm
+              className="problem-search-form home-problem-search-form"
+              fieldClassName="problem-search-field home-problem-search-field"
+              inputClassName="problem-search-input home-problem-search-input"
+              buttonClassName="btn secondary problem-search-button home-problem-search-button"
+              value={draftSearchValue}
+              onChange={setDraftSearchValue}
+              onSubmit={() => applySearch(draftSearchValue)}
+              placeholder={text('HOME_PROBLEM_SEARCH_PLACEHOLDER', '문제 번호, 제목 검색')}
+              label={text('HOME_PROBLEM_SEARCH_LABEL', '문제 검색')}
+              submitLabel={text('COMMON_SEARCH_BUTTON', '검색')}
+              buttonLabel={text('COMMON_SEARCH_BUTTON', '검색')}
+              withIcon
+            />
+
+            <button
+              type="button"
+              className={`problem-mobile-filter-button ${isMobileFilterOpen ? 'is-open' : ''} ${isMobileFilterActive ? 'is-active' : ''}`.trim()}
+              aria-label={text('PROBLEM_TABLE_SOLVE_FILTER_OPEN_LABEL', '해결 여부 필터 열기')}
+              aria-expanded={isMobileFilterOpen}
+              onClick={() => setIsMobileFilterOpen((value) => !value)}
+            >
+              <ProblemFilterIcon />
+            </button>
+
+            {isMobileFilterOpen ? (
+              <div className="problem-mobile-filter-menu" role="dialog" aria-label={text('PROBLEM_TABLE_SOLVE_FILTER_OPTIONS_LABEL', '해결 여부 필터 옵션')}>
+                <div className="problem-mobile-filter-row problem-mobile-solve-row">
+                  <span className="problem-mobile-sort-label">{text('PROBLEM_TABLE_STATUS_COLUMN_LABEL', '해결 여부')}</span>
+                  <div className="problem-status-checks">
+                    <label className="problem-status-check">
+                      <input
+                        type="checkbox"
+                        checked={showSolved}
+                        onChange={toggleSolvedFilter}
+                        className="problem-status-check-input"
+                        aria-label={text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}
+                      />
+                      <span className="problem-status-check-text">{text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}</span>
+                      <span className="problem-status-check-ui" aria-hidden="true" />
+                    </label>
+
+                    <label className="problem-status-check">
+                      <input
+                        type="checkbox"
+                        checked={showUnsolved}
+                        onChange={toggleUnsolvedFilter}
+                        className="problem-status-check-input"
+                        aria-label={text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}
+                      />
+                      <span className="problem-status-check-text">{text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}</span>
+                      <span className="problem-status-check-ui" aria-hidden="true" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="problem-mobile-sort-list" aria-label={text('PROBLEM_TABLE_MOBILE_SORT_LABEL', '문제 목록 정렬')}>
+                  {renderMobileSortRow(text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수'), 'solvedCount')}
+                  {renderMobileSortRow(text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출'), 'totalSubmitCount')}
+                  {renderMobileSortRow(text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출'), 'successSubmitCount')}
+                </div>
+
+                <ProblemSpreadRateFilter
+                  minBound={spreadRateSliderBounds.min}
+                  maxBound={spreadRateSliderBounds.max}
+                  selectedMin={visibleSpreadRateRange.min}
+                  selectedMax={visibleSpreadRateRange.max}
+                  displayMin={resolvedVisibleSpreadRateRange.min}
+                  displayMax={resolvedVisibleSpreadRateRange.max}
+                  sortOrder={spreadRateSortOrder}
+                  onToggleSort={toggleSpreadRateSortOrder}
+                  onChangeMin={updateSpreadRateMin}
+                  onChangeMax={updateSpreadRateMax}
+                  onChangeRange={updateSpreadRateRange}
+                  onApplyRange={applySpreadRateRange}
+                  hasPendingChanges={hasPendingSpreadRateRange}
+                  numberInputOnly
+                />
+              </div>
+            ) : null}
+          </div>
         </PageToolbar>
       </section>
 

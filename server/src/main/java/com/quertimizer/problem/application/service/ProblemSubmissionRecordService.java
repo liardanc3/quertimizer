@@ -20,9 +20,14 @@ public class ProblemSubmissionRecordService {
     private final ProblemSubmitHistoryRepositoryPort problemSubmitHistoryRepository;
     private final ProblemSolveHistoryRepositoryPort problemSolveHistoryRepository;
     private final ProblemSolveHistoryPolicy problemSolveHistoryPolicy;
+
     public void saveSubmission(String problemId, String handle, DbmsType dbmsType, String submittedSql,
                                boolean success, String message, long executionTimeMs, Double cost,
                                long rowCount, long executionPlanElement, LocalDateTime submittedAt) {
+        // 성공 제출만 Cost와 실행계획 요소 저장
+        double storedCost = success && cost != null ? cost : 0d;
+        long storedExecutionPlanElement = success ? executionPlanElement : 0L;
+
         // 제출 내역은 성공과 실패 모두 동일한 형식으로 누적 저장
         problemSubmitHistoryRepository.save(ProblemSubmitHistory.create(
                 problemId,
@@ -32,9 +37,9 @@ public class ProblemSubmissionRecordService {
                 success,
                 message,
                 executionTimeMs,
-                cost != null ? cost : 0d,
+                storedCost,
                 rowCount,
-                executionPlanElement,
+                storedExecutionPlanElement,
                 submittedAt
         ));
     }

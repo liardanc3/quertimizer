@@ -2,14 +2,12 @@ package com.quertimizer.alarm.adapter.in.web.response;
 
 import com.quertimizer.alarm.application.output.AlarmItemOutput;
 import com.quertimizer.alarm.domain.model.AlarmBinding;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class AlarmItemRes {
 
     private final Long alarmId;

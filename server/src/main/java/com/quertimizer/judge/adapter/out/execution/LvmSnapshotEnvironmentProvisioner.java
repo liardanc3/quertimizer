@@ -8,71 +8,78 @@ import com.quertimizer.judge.domain.entity.DatasetTemplateDefinition;
 import com.quertimizer.judge.application.port.out.JudgeTemplateStorePort;
 import com.quertimizer.judge.domain.entity.JudgeEnvironmentId;
 import com.quertimizer.judge.domain.model.EnvironmentPolicy;
-import com.quertimizer.judge.adapter.out.execution.LvmSnapshotCommandExecutor;
-import com.quertimizer.judge.adapter.out.execution.LvmSnapshotRuntimeCommandFactory;
+import com.quertimizer.judge.domain.model.JudgeQueuePriority;
+import com.quertimizer.judge.domain.model.JudgeQueueStatusListener;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProvisioner {
 
-    private final RuntimeDatabaseCluster databaseCluster;
     private final JudgeDialectService dialectService;
     private final JudgeTemplateStorePort templateStore;
     private final LvmSnapshotRuntimeOptions options;
     private final LvmSnapshotCommandExecutor commandExecutor;
     private final LvmSnapshotRuntimeCommandFactory commandFactory;
-    private final Map<String, RuntimeDatabasePool> runnerPools;
-    private final Map<String, PortPool> portPools;
-    private final ConcurrentHashMap<DbmsType, AtomicInteger> selectionIndexes = new ConcurrentHashMap<>();
+    private final LvmSnapshotRuntimeResourceManager resourceManager;
     private final ConcurrentHashMap<JudgeEnvironmentId, LvmSnapshotRuntimeInstance> instances = new ConcurrentHashMap<>();
 
     public LvmSnapshotEnvironmentProvisioner(RuntimeDatabaseCluster databaseCluster, JudgeDialectService dialectService,
                                              JudgeTemplateStorePort templateStore, LvmSnapshotRuntimeOptions options,
                                              LvmSnapshotCommandExecutor commandExecutor,
                                              LvmSnapshotRuntimeCommandFactory commandFactory) {
-        this.databaseCluster = Objects.requireNonNull(databaseCluster, "필수 값이 없다.");
-        this.dialectService = Objects.requireNonNull(dialectService, "필수 값이 없다.");
-        this.templateStore = Objects.requireNonNull(templateStore, "필수 값이 없다.");
-        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
-        this.commandExecutor = Objects.requireNonNull(commandExecutor, "필수 값이 없다.");
-        this.commandFactory = Objects.requireNonNull(commandFactory, "필수 값이 없다.");
-        this.runnerPools = createRunnerPools(databaseCluster.getConfiguredDatabases());
-        this.portPools = createPortPools(this.runnerPools.keySet());
+        this(dialectService, templateStore, options, commandExecutor, commandFactory,
+                new LvmSnapshotRuntimeResourceManager(databaseCluster, options));
+    }
+
+    public LvmSnapshotEnvironmentProvisioner(JudgeDialectService dialectService,
+                                             JudgeTemplateStorePort templateStore, LvmSnapshotRuntimeOptions options,
+                                             LvmSnapshotCommandExecutor commandExecutor,
+                                             LvmSnapshotRuntimeCommandFactory commandFactory,
+                                             LvmSnapshotRuntimeResourceManager resourceManager) {
+        this.dialectService = Objects.requireNonNull(dialectService, "필수 값이 없습니다.");
+        this.templateStore = Objects.requireNonNull(templateStore, "필수 값이 없습니다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없습니다.");
+        this.commandExecutor = Objects.requireNonNull(commandExecutor, "필수 값이 없습니다.");
+        this.commandFactory = Objects.requireNonNull(commandFactory, "필수 값이 없습니다.");
+        this.resourceManager = Objects.requireNonNull(resourceManager, "필수 값이 없습니다.");
     }
 
     @Override
     public ProvisionedRuntimeEnvironment create(JudgeEnvironmentId environmentId, DatasetDefinition dataset,
                                                 EnvironmentPolicy policy) {
+        return create(environmentId, dataset, policy, JudgeQueuePriority.NORMAL, JudgeQueueStatusListener.noop());
+    }
+
+    @Override
+    public ProvisionedRuntimeEnvironment create(JudgeEnvironmentId environmentId, DatasetDefinition dataset,
+                                                EnvironmentPolicy policy, JudgeQueuePriority queuePriority,
+                                                JudgeQueueStatusListener queueStatusListener) {
         // 실행 환경 입력 검증과 시작 로그 기록
-        Objects.requireNonNull(environmentId, "필수 값이 없다.");
-        Objects.requireNonNull(dataset, "필수 값이 없다.");
-        Objects.requireNonNull(policy, "필수 값이 없다.");
+        Objects.requireNonNull(environmentId, "필수 값이 없습니다.");
+        Objects.requireNonNull(dataset, "필수 값이 없습니다.");
+        Objects.requireNonNull(policy, "필수 값이 없습니다.");
         log.info(
                 "lvm-snapshot 실행 환경 분리 시작 environmentId={}, datasetId={}, dbmsType={}",
                 environmentId, dataset.getDatasetId(), dataset.getDbmsType()
         );
 
         // 실행 runner와 데이터셋 템플릿 정보 확보
-        RuntimeDatabaseLease runnerLease = acquireRunner(dataset.getDbmsType());
-        RuntimeDatabase runnerDatabase = runnerLease.getDatabase();
+        LvmSnapshotRuntimeSlot runtimeSlot = resourceManager.acquire(dataset.getDbmsType(), queuePriority, queueStatusListener);
+        queueStatusListener.onWaiting(0);
+        RuntimeDatabase runnerDatabase = runtimeSlot.getRunnerDatabase();
         LvmSnapshotRuntimeNode runtimeNode = options.requireNode(runnerDatabase.getId());
         DatasetTemplateDefinition templateDefinition = requireDatasetTemplate(dataset);
         String scriptDbmsName = LvmSnapshotNameSupport.scriptDbmsName(dataset.getDbmsType());
         String environmentScriptName = LvmSnapshotNameSupport.scriptName(environmentId.getValue());
         String templateVersion = templateDefinition.getTemplateVersion();
-        int port = portPools.get(runnerDatabase.getId()).acquire();
+        int port = runtimeSlot.getPort();
 
         boolean snapshotCreated = false;
         boolean processStarted = false;
@@ -82,8 +89,10 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
                     "lvm-snapshot 평가 snapshot 생성 시작 environmentId={}, runnerId={}, templateVersion={}, port={}",
                     environmentId, runnerDatabase.getId(), templateVersion, port
             );
+            queueStatusListener.onSnapshotCreating();
             createEvalSnapshot(scriptDbmsName, templateVersion, environmentScriptName);
             snapshotCreated = true;
+            queueStatusListener.onSnapshotCreated();
             log.info(
                     "lvm-snapshot 평가 snapshot 생성 완료 environmentId={}, runnerId={}, environmentScriptName={}",
                     environmentId, runnerDatabase.getId(), environmentScriptName
@@ -94,6 +103,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
                     "lvm-snapshot 평가 DB 프로세스 시작 environmentId={}, runnerContainer={}, port={}",
                     environmentId, runtimeNode.getRunnerContainer(), port
             );
+            queueStatusListener.onProcessStarting(dataset.getDbmsType());
             startDatabaseProcess(dataset.getDbmsType(), runtimeNode, environmentScriptName, port);
             processStarted = true;
 
@@ -110,6 +120,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
                     environmentId, evaluationDatabase.getJdbcUrl()
             );
             waitUntilReady(environment);
+            queueStatusListener.onProcessStarted(dataset.getDbmsType());
             log.info(
                     "lvm-snapshot 실행 환경 분리 완료 environmentId={}, datasetId={}, runnerId={}, port={}",
                     environmentId, dataset.getDatasetId(), runnerDatabase.getId(), port
@@ -117,7 +128,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
 
             // 생성된 실행 환경 인스턴스 등록 후 반환
             instances.put(environmentId, new LvmSnapshotRuntimeInstance(
-                    runnerLease, runtimeNode,
+                    runtimeSlot, runtimeNode,
                     scriptDbmsName, environmentScriptName, port,
                     runnerDatabase.getPassword()
             ));
@@ -129,7 +140,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
                     environmentId, dataset.getDatasetId(), runnerDatabase.getId(), exception
             );
             try {
-                cleanupFailedCreation(runnerLease, runtimeNode, scriptDbmsName, environmentScriptName, port,
+                cleanupFailedCreation(runtimeSlot, runtimeNode, scriptDbmsName, environmentScriptName, port,
                         processStarted, snapshotCreated, runnerDatabase.getPassword());
             } catch (RuntimeException cleanupException) {
                 exception.addSuppressed(cleanupException);
@@ -140,9 +151,9 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
 
     private DatasetTemplateDefinition requireDatasetTemplate(DatasetDefinition dataset) {
         DatasetTemplateDefinition templateDefinition = templateStore.findDatasetTemplate(dataset.getDatasetId())
-                .orElseThrow(() -> new IllegalStateException("봉인된 템플릿이 등록되지 않았다: " + dataset.getDatasetId()));
+                .orElseThrow(() -> new IllegalStateException("봉인된 템플릿이 등록되지 않았습니다: " + dataset.getDatasetId()));
         if (templateDefinition.getDbmsType() != dataset.getDbmsType()) {
-            throw new IllegalStateException("데이터셋 템플릿 DBMS 유형이 데이터셋과 다르다: " + dataset.getDatasetId());
+            throw new IllegalStateException("데이터셋 템플릿 DBMS 유형이 데이터셋과 다릅니다: " + dataset.getDatasetId());
         }
 
         return templateDefinition;
@@ -151,7 +162,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
     @Override
     public RuntimeEnvironmentConnection openConnection(ProvisionedRuntimeEnvironment environment, int timeoutSeconds) {
         // 실행 환경 연결 대상 조회와 시작 로그 기록
-        Objects.requireNonNull(environment, "필수 값이 없다.");
+        Objects.requireNonNull(environment, "필수 값이 없습니다.");
 
         RuntimeEnvironment runtimeEnvironment = environment.getRuntimeEnvironment();
         log.info(
@@ -188,7 +199,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
     @Override
     public void drop(ProvisionedRuntimeEnvironment environment) {
         // 정리 대상 실행 환경 인스턴스 조회
-        Objects.requireNonNull(environment, "필수 값이 없다.");
+        Objects.requireNonNull(environment, "필수 값이 없습니다.");
 
         JudgeEnvironmentId environmentId = environment.getRuntimeEnvironment().getEnvironmentId();
         LvmSnapshotRuntimeInstance instance = instances.remove(environmentId);
@@ -211,29 +222,6 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
             throw failure;
         }
         log.info("lvm-snapshot 실행 환경 정리 완료 environmentId={}", environmentId);
-    }
-
-    private RuntimeDatabaseLease acquireRunner(DbmsType dbmsType) {
-        List<RuntimeDatabase> candidates = databaseCluster.getConfiguredDatabases().stream()
-                .filter(RuntimeDatabase::isEnabled)
-                .filter(database -> database.getDbmsType() == dbmsType)
-                .filter(database -> options.findNode(database.getId()).isPresent())
-                .toList();
-        if (candidates.isEmpty()) {
-            throw new IllegalStateException("LVM 스냅샷 실행 노드 설정이 없다: " + dbmsType);
-        }
-
-        AtomicInteger selectionIndex = selectionIndexes.computeIfAbsent(dbmsType, ignored -> new AtomicInteger());
-        int startIndex = Math.floorMod(selectionIndex.getAndIncrement(), candidates.size());
-        for (int offset = 0; offset < candidates.size(); offset++) {
-            RuntimeDatabase candidate = candidates.get(Math.floorMod(startIndex + offset, candidates.size()));
-            RuntimeDatabasePool pool = runnerPools.get(candidate.getId());
-            if (pool.hasAvailableLease()) {
-                return pool.acquire();
-            }
-        }
-
-        throw new IllegalStateException("사용 가능한 LVM 스냅샷 실행 노드 점유가 없다: " + dbmsType);
     }
 
     private void createEvalSnapshot(String scriptDbmsName, String templateVersion, String environmentScriptName) {
@@ -338,12 +326,12 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
         }
     }
 
-    private void cleanupFailedCreation(RuntimeDatabaseLease runnerLease, LvmSnapshotRuntimeNode runtimeNode,
+    private void cleanupFailedCreation(LvmSnapshotRuntimeSlot runtimeSlot, LvmSnapshotRuntimeNode runtimeNode,
                                        String scriptDbmsName, String environmentScriptName, int port,
                                        boolean processStarted, boolean snapshotCreated, String runnerPassword) {
         RuntimeException failure = null;
         LvmSnapshotRuntimeInstance instance = new LvmSnapshotRuntimeInstance(
-                runnerLease, runtimeNode,
+                runtimeSlot, runtimeNode,
                 scriptDbmsName, environmentScriptName, port,
                 runnerPassword
         );
@@ -361,29 +349,7 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
     }
 
     private void releaseInstance(LvmSnapshotRuntimeInstance instance) {
-        portPools.get(instance.runnerLease.getDatabase().getId()).release(instance.port);
-        instance.runnerLease.close();
-    }
-
-    private Map<String, RuntimeDatabasePool> createRunnerPools(List<RuntimeDatabase> databases) {
-        Map<String, RuntimeDatabasePool> pools = new LinkedHashMap<>();
-        for (RuntimeDatabase database : Objects.requireNonNull(databases, "필수 값이 없다.")) {
-            if (database.isEnabled() && options.findNode(database.getId()).isPresent()) {
-                pools.put(database.getId(), new RuntimeDatabasePool(database));
-            }
-        }
-
-        return Map.copyOf(pools);
-    }
-
-    private Map<String, PortPool> createPortPools(Iterable<String> databaseIds) {
-        Map<String, PortPool> createdPortPools = new LinkedHashMap<>();
-        for (String databaseId : databaseIds) {
-            LvmSnapshotRuntimeNode runtimeNode = options.requireNode(databaseId);
-            createdPortPools.put(databaseId, new PortPool(runtimeNode.getPortStart(), runtimeNode.getPortEnd()));
-        }
-
-        return Map.copyOf(createdPortPools);
+        resourceManager.release(instance.runtimeSlot);
     }
 
     private void sleepBeforeRetry() {
@@ -430,26 +396,26 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
     }
 
     private static final class LvmSnapshotRuntimeInstance {
-        private final RuntimeDatabaseLease runnerLease;
+        private final LvmSnapshotRuntimeSlot runtimeSlot;
         private final LvmSnapshotRuntimeNode runtimeNode;
         private final String scriptDbmsName;
         private final String environmentScriptName;
         private final int port;
         private final String runnerPassword;
 
-        private LvmSnapshotRuntimeInstance(RuntimeDatabaseLease runnerLease, LvmSnapshotRuntimeNode runtimeNode,
+        private LvmSnapshotRuntimeInstance(LvmSnapshotRuntimeSlot runtimeSlot, LvmSnapshotRuntimeNode runtimeNode,
                                            String scriptDbmsName, String environmentScriptName,
                                            int port, String runnerPassword) {
-            this.runnerLease = Objects.requireNonNull(runnerLease, "필수 값이 없다.");
-            this.runtimeNode = Objects.requireNonNull(runtimeNode, "필수 값이 없다.");
-            this.scriptDbmsName = Objects.requireNonNull(scriptDbmsName, "필수 값이 없다.");
-            this.environmentScriptName = Objects.requireNonNull(environmentScriptName, "필수 값이 없다.");
+            this.runtimeSlot = Objects.requireNonNull(runtimeSlot, "필수 값이 없습니다.");
+            this.runtimeNode = Objects.requireNonNull(runtimeNode, "필수 값이 없습니다.");
+            this.scriptDbmsName = Objects.requireNonNull(scriptDbmsName, "필수 값이 없습니다.");
+            this.environmentScriptName = Objects.requireNonNull(environmentScriptName, "필수 값이 없습니다.");
             this.port = port;
             this.runnerPassword = runnerPassword != null ? runnerPassword : "";
         }
 
         private DbmsType dbmsType() {
-            return runnerLease.getDatabase().getDbmsType();
+            return runtimeSlot.getRunnerDatabase().getDbmsType();
         }
 
         private String mysqlRootPassword() {
@@ -457,34 +423,4 @@ public class LvmSnapshotEnvironmentProvisioner implements RuntimeEnvironmentProv
         }
     }
 
-    private static final class PortPool {
-        private final int portStart;
-        private final int portEnd;
-        private final Deque<Integer> availablePorts = new ArrayDeque<>();
-
-        private PortPool(int portStart, int portEnd) {
-            this.portStart = portStart;
-            this.portEnd = portEnd;
-            for (int port = portStart; port <= portEnd; port++) {
-                availablePorts.addLast(port);
-            }
-        }
-
-        private synchronized int acquire() {
-            Integer port = availablePorts.pollFirst();
-            if (port == null) {
-                throw new IllegalStateException("사용 가능한 LVM 스냅샷 런타임 포트가 없다.");
-            }
-
-            return port;
-        }
-
-        private synchronized void release(int port) {
-            if (port < portStart || port > portEnd || availablePorts.contains(port)) {
-                return;
-            }
-
-            availablePorts.addLast(port);
-        }
-    }
 }

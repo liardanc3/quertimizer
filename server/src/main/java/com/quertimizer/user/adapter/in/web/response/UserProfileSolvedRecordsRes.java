@@ -1,13 +1,11 @@
 package com.quertimizer.user.adapter.in.web.response;
 
 import com.quertimizer.user.application.output.UserProfileSolvedRecordsOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileSolvedRecordsRes {
 
     private final List<UserProfileSolvedRecordRes> solvedRecords;

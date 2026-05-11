@@ -12,6 +12,8 @@ public interface CommunityPostTagRepositoryPort {
 
     void deleteAllByPostId(Long postId);
 
+    List<CommunityPostTag> findAllByTagOrderByPostIdAscTagOrderAsc(String tag);
+
     List<CommunityPostTag> findAllByTagContainingIgnoreCaseOrderByTagAsc(String tag);
 
     List<CommunityPostTag> saveAll(Iterable<CommunityPostTag> communityPostTags);

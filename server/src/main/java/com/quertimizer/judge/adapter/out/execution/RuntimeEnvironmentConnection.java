@@ -15,9 +15,9 @@ public class RuntimeEnvironmentConnection implements AutoCloseable {
 
     RuntimeEnvironmentConnection(RuntimeDatabaseLease lease, Connection connection,
                                  JudgeDialect dialect, String environmentName) {
-        this.lease = Objects.requireNonNull(lease, "필수 값이 없다.");
-        this.connection = Objects.requireNonNull(connection, "필수 값이 없다.");
-        this.dialect = Objects.requireNonNull(dialect, "필수 값이 없다.");
+        this.lease = Objects.requireNonNull(lease, "필수 값이 없습니다.");
+        this.connection = Objects.requireNonNull(connection, "필수 값이 없습니다.");
+        this.dialect = Objects.requireNonNull(dialect, "필수 값이 없습니다.");
         this.environmentName = requireText(environmentName, "environmentName");
     }
 
@@ -45,7 +45,7 @@ public class RuntimeEnvironmentConnection implements AutoCloseable {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value.trim();

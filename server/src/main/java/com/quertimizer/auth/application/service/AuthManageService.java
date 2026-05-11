@@ -2,8 +2,8 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.global.constant.UserRole;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,8 +20,8 @@ import static com.quertimizer.auth.domain.model.AuthManageFailReason.USER_NOT_FO
 @Transactional(readOnly = true)
 public class AuthManageService {
 
-    private final UserRepositoryPort userRepository;
-    public User findUser(String handle) {
+    private final AuthUserPort userRepository;
+    public AuthUser findUser(String handle) {
         // handle 기준 변경 대상 사용자 조회
         return userRepository.findByHandle(handle)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));

@@ -47,16 +47,6 @@ public class ProblemSetJpaEntity {
         return new ProblemSetJpaEntity(problemSetId, ddl, actualDataSql, datasetId, dbmsType);
     }
 
-    public void assignProblemSetId() {
-        // DB 생성 ID 기반 문제 테이블셋 번호 부여 대상 여부 검사
-        if (problemSetId != null && !problemSetId.isBlank()) {
-            return;
-        }
-
-        // DBMS prefix와 DB 생성 ID 조합
-        problemSetId = dbmsType.getIdPrefix() + "%05d".formatted(id);
-    }
-
     public void update(String ddl, String actualDataSql, String datasetId, DbmsType dbmsType) {
         // 문제 테이블셋 JPA 엔티티 내용 변경
         this.ddl = ddl;

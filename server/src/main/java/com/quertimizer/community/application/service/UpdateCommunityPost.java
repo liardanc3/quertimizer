@@ -4,12 +4,9 @@ import com.quertimizer.community.application.port.in.UpdateCommunityPostUseCase;
 import com.quertimizer.community.application.input.UpdateCommunityPostInput;
 import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostSearchPort;
-import com.quertimizer.community.application.service.CommunityService;
+import com.quertimizer.community.application.port.out.CommunityUserPort;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.policy.CommunityNoticePolicy;
-import com.quertimizer.global.constant.UserRole;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +23,7 @@ public class UpdateCommunityPost implements UpdateCommunityPostUseCase {
     private final CommunityService communityService;
     private final CommunityContentValidationService communityContentValidationService;
     private final CommunityNoticePolicy communityNoticePolicy;
-    private final UserRepositoryPort userRepository;
+    private final CommunityUserPort communityUserPort;
 
     /**
      * 커뮤니티 게시글을 수정한다.
@@ -53,7 +50,8 @@ public class UpdateCommunityPost implements UpdateCommunityPostUseCase {
                     List<String> normalizedTags = communityService.normalizeTags(input.getPost().getTags());
                     String normalizedCategory = communityService.normalizePostCategory(input.getPost().getCategory());
                     communityNoticePolicy.validateNoticeWritable(
-                            resolveRole(input.getHandle()), communityService.normalizePostCategory(post.getCategory()), normalizedCategory
+                            communityUserPort.findRole(input.getHandle()),
+                            communityService.normalizePostCategory(post.getCategory()), normalizedCategory
                     );
 
                     post.changeContent(normalizedTitle, normalizedContentJson, normalizedPlainTextSummary, normalizedImageIds, normalizedCategory);
@@ -64,10 +62,4 @@ public class UpdateCommunityPost implements UpdateCommunityPostUseCase {
                 });
     }
 
-    private UserRole resolveRole(String handle) {
-        // 게시글 수정자 역할 조회
-        return userRepository.findByHandle(handle)
-                .map(User::getResolvedRole)
-                .orElse(UserRole.USER);
-    }
 }

@@ -24,12 +24,12 @@ public class ExecuteIsolatedJudgeSqlInput {
                                   String targetSql,
                                   IsolationPolicy isolationPolicy,
                                   ExecutionOptions options) {
-        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없다.");
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없다.");
-        this.setupSqlIds = List.copyOf(Objects.requireNonNull(setupSqlIds, "필수 값이 없다."));
+        this.executionId = Objects.requireNonNull(executionId, "필수 값이 없습니다.");
+        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
+        this.setupSqlIds = List.copyOf(Objects.requireNonNull(setupSqlIds, "필수 값이 없습니다."));
         this.targetSql = requireText(targetSql, "targetSql");
-        this.isolationPolicy = Objects.requireNonNull(isolationPolicy, "필수 값이 없다.");
-        this.options = Objects.requireNonNull(options, "필수 값이 없다.");
+        this.isolationPolicy = Objects.requireNonNull(isolationPolicy, "필수 값이 없습니다.");
+        this.options = Objects.requireNonNull(options, "필수 값이 없습니다.");
     }
 
     public JudgeExecutionId getExecutionId() {
@@ -58,7 +58,7 @@ public class ExecuteIsolatedJudgeSqlInput {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value;

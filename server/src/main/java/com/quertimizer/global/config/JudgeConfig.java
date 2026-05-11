@@ -15,6 +15,7 @@ import com.quertimizer.judge.adapter.out.execution.LvmSnapshotEnvironmentProvisi
 import com.quertimizer.judge.adapter.out.execution.LvmSnapshotRuntimeCommandFactory;
 import com.quertimizer.judge.adapter.out.execution.LvmSnapshotRuntimeNode;
 import com.quertimizer.judge.adapter.out.execution.LvmSnapshotRuntimeOptions;
+import com.quertimizer.judge.adapter.out.execution.LvmSnapshotRuntimeResourceManager;
 import com.quertimizer.judge.adapter.out.execution.NoOpDatasetTemplateProvisioner;
 import com.quertimizer.judge.adapter.out.execution.ProcessLvmSnapshotCommandExecutor;
 import com.quertimizer.judge.adapter.out.execution.RuntimeDatabase;
@@ -50,8 +51,8 @@ public class JudgeConfig {
 
     @Bean
     public JudgeRuntimePort judgeRuntime(JudgeProperties properties, JudgeDefinitionStorePort definitionStore,
-                                     JudgeTemplateStorePort templateStore, SqlStatementParser statementParser,
-                                     SqlDefinitionPolicy sqlDefinitionPolicy) {
+                                          JudgeTemplateStorePort templateStore, SqlStatementParser statementParser,
+                                          SqlDefinitionPolicy sqlDefinitionPolicy) {
         // Quertimizer 설정을 judge 런타임 구성으로 변환해 실행 경계 생성
         RuntimeDatabaseCluster databaseCluster = new RuntimeDatabaseCluster(createRuntimeDatabases(properties));
         JudgeDialectService dialectService = new JudgeDialectService();
@@ -60,16 +61,18 @@ public class JudgeConfig {
         LvmSnapshotRuntimeCommandFactory lvmCommandFactory = new LvmSnapshotRuntimeCommandFactory(lvmSnapshotRuntimeOptions);
         ProcessLvmSnapshotCommandExecutor lvmCommandExecutor = new ProcessLvmSnapshotCommandExecutor(
                 properties.getRuntime().getLvmSnapshot().getCommandTimeoutSeconds());
+        LvmSnapshotRuntimeResourceManager lvmResourceManager = new LvmSnapshotRuntimeResourceManager(
+                databaseCluster, lvmSnapshotRuntimeOptions);
         RuntimeEnvironmentProvisioner environmentProvisioner = createRuntimeEnvironmentProvisioner(
                 properties, databaseCluster,
                 dialectService, namingStrategy, templateStore,
                 lvmSnapshotRuntimeOptions, lvmCommandExecutor,
-                lvmCommandFactory, statementParser
+                lvmCommandFactory, statementParser, lvmResourceManager
         );
         DatasetTemplateProvisioner templateProvisioner = createDatasetTemplateProvisioner(
                 properties, databaseCluster,
                 dialectService, lvmSnapshotRuntimeOptions,
-                lvmCommandExecutor, lvmCommandFactory, statementParser
+                lvmCommandExecutor, lvmCommandFactory, statementParser, lvmResourceManager
         );
 
         return new JdbcJudgeRuntime(
@@ -87,7 +90,8 @@ public class JudgeConfig {
             JudgeTemplateStorePort templateStore, LvmSnapshotRuntimeOptions lvmSnapshotRuntimeOptions,
             ProcessLvmSnapshotCommandExecutor lvmCommandExecutor,
             LvmSnapshotRuntimeCommandFactory lvmCommandFactory,
-            SqlStatementParser statementParser) {
+            SqlStatementParser statementParser,
+            LvmSnapshotRuntimeResourceManager lvmResourceManager) {
         // 설정 값으로 영속 실행 환경 준비 방식을 선택해 LVM 전환 지점 집중
         String provisioner = properties.getRuntime().getProvisioner();
         if ("sql-replay".equalsIgnoreCase(provisioner)) {
@@ -95,12 +99,13 @@ public class JudgeConfig {
         }
         if ("lvm-snapshot".equalsIgnoreCase(provisioner)) {
             return new LvmSnapshotEnvironmentProvisioner(
-                    databaseCluster, dialectService, templateStore,
-                    lvmSnapshotRuntimeOptions, lvmCommandExecutor, lvmCommandFactory
+                    dialectService, templateStore,
+                    lvmSnapshotRuntimeOptions, lvmCommandExecutor, lvmCommandFactory,
+                    lvmResourceManager
             );
         }
 
-        throw new IllegalStateException("judge.runtime.provisioner 설정값이 올바르지 않다: " + provisioner);
+        throw new IllegalStateException("judge.runtime.provisioner 설정값이 올바르지 않습니다: " + provisioner);
     }
 
     private DatasetTemplateProvisioner createDatasetTemplateProvisioner(
@@ -108,14 +113,16 @@ public class JudgeConfig {
             JudgeDialectService dialectService, LvmSnapshotRuntimeOptions lvmSnapshotRuntimeOptions,
             ProcessLvmSnapshotCommandExecutor lvmCommandExecutor,
             LvmSnapshotRuntimeCommandFactory lvmCommandFactory,
-            SqlStatementParser statementParser) {
+            SqlStatementParser statementParser,
+            LvmSnapshotRuntimeResourceManager lvmResourceManager) {
         // LVM 스냅샷 모드에서만 문제 생성 시 봉인 템플릿을 준비하고 재실행 모드에서는 기존 동작 유지
         String provisioner = properties.getRuntime().getProvisioner();
         if ("lvm-snapshot".equalsIgnoreCase(provisioner)) {
             return new LvmSnapshotDatasetTemplateProvisioner(
-                    databaseCluster, dialectService,
+                    dialectService,
                     lvmSnapshotRuntimeOptions, lvmCommandExecutor,
-                    lvmCommandFactory, statementParser
+                    lvmCommandFactory, statementParser,
+                    lvmResourceManager
             );
         }
 
@@ -138,7 +145,7 @@ public class JudgeConfig {
     private LvmSnapshotRuntimeNode createLvmSnapshotRuntimeNode(JudgeProperties.DatabaseProperties properties) {
         // LVM provisioner는 DB 컨테이너 자체가 아니라 컨테이너 안의 per-eval DB process에 접속
         DbmsType dbmsType = properties.resolveEngine()
-                .orElseThrow(() -> new IllegalStateException("judge.databases engine 설정값이 올바르지 않다."));
+                .orElseThrow(() -> new IllegalStateException("judge.databases engine 설정값이 올바르지 않습니다."));
         String id = resolveRuntimeDatabaseId(properties, dbmsType);
         int portStart = properties.getRuntimePortStart() != null ? properties.getRuntimePortStart() : defaultRuntimePortStart(dbmsType);
         int portEnd = properties.getRuntimePortEnd() != null ? properties.getRuntimePortEnd() : defaultRuntimePortEnd(dbmsType);
@@ -161,7 +168,7 @@ public class JudgeConfig {
     private RuntimeDatabase createRuntimeDatabase(JudgeProperties.DatabaseProperties properties) {
         // 애플리케이션 설정 값의 DBMS 표현 조회
         DbmsType dbmsType = properties.resolveEngine()
-                .orElseThrow(() -> new IllegalStateException("judge.databases engine 설정값이 올바르지 않다."));
+                .orElseThrow(() -> new IllegalStateException("judge.databases engine 설정값이 올바르지 않습니다."));
         String id = resolveRuntimeDatabaseId(properties, dbmsType);
 
         // 접속 URL과 계정이 비어 있어도 빈 생성은 허용하고 실행 후보 여부는 RuntimeDatabase.isReady에서 판단

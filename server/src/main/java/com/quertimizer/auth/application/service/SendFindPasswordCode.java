@@ -3,11 +3,9 @@ package com.quertimizer.auth.application.service;
 import com.quertimizer.auth.application.port.in.SendFindPasswordCodeUseCase;
 import com.quertimizer.auth.application.input.SendCodeInput;
 import com.quertimizer.auth.application.port.out.AuthMailSenderPort;
-import com.quertimizer.auth.application.service.AuthService;
-import com.quertimizer.auth.application.service.AuthRateLimitService;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -26,7 +24,7 @@ import static com.quertimizer.auth.domain.model.AuthMailContentConstant.FIND_PAS
 public class SendFindPasswordCode implements SendFindPasswordCodeUseCase {
 
     private final AuthService authService;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final AuthMailSenderPort authMailSender;
     private final AuthRateLimitService authRateLimitPolicy;
 
@@ -47,12 +45,12 @@ public class SendFindPasswordCode implements SendFindPasswordCodeUseCase {
     public void execute(SendCodeInput input) {
         authRateLimitPolicy.validateTooManyRequest(input.getEmail(), input.getClientIp());
 
-        Optional<User> userOptional = userRepository.findByEmailIgnoreCase(input.getEmail());
+        Optional<AuthUser> userOptional = userRepository.findByEmailIgnoreCase(input.getEmail());
         if (userOptional.isEmpty()) {
             return;
         }
 
-        User user = userOptional.get();
+        AuthUser user = userOptional.get();
         String email = user.getEmail().toLowerCase(Locale.ROOT);
         String code = authService.issueVerificationCode(email);
 

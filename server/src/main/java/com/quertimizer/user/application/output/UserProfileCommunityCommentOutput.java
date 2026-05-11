@@ -1,12 +1,10 @@
 package com.quertimizer.user.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileCommunityCommentOutput {
 
     private final Long commentId;

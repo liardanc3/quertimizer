@@ -14,6 +14,10 @@ public final class AlarmTemplateDefaults {
     private static Map<String, AlarmTemplateDefault> createValues() {
         // 기본 알람 템플릿 목록 생성
         Map<String, AlarmTemplateDefault> values = new LinkedHashMap<>();
+        values.put(AlarmType.FROM_ADMIN.getValue(), new AlarmTemplateDefault(
+                AlarmType.FROM_ADMIN.getDefaultSentence(),
+                AlarmType.FROM_ADMIN.getDefaultDescription()
+        ));
         values.put(AlarmType.LIKE_MY_POST.getValue(), new AlarmTemplateDefault(
                 AlarmType.LIKE_MY_POST.getDefaultSentence(),
                 AlarmType.LIKE_MY_POST.getDefaultDescription()

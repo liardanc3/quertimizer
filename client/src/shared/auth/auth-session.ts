@@ -59,7 +59,6 @@ export function useAuthenticationSocket() {
 
       restorePromise = (async () => {
         const isSessionValid = await syncSession({
-          openLoginOnExpire: false,
           clearOnFailure: true,
         });
         if (isDisposed || !isSessionValid) {

@@ -1,13 +1,11 @@
 package com.quertimizer.user.adapter.in.web.response;
 
 import com.quertimizer.user.application.output.UserProfileCommunityPostsOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileCommunityPostsRes {
 
     private final List<UserProfileCommunityPostRes> posts;

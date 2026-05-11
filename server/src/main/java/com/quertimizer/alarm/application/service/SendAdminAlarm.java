@@ -2,11 +2,9 @@ package com.quertimizer.alarm.application.service;
 
 import com.quertimizer.alarm.application.port.in.SendAdminAlarmUseCase;
 import com.quertimizer.alarm.application.input.SendAdminAlarmInput;
-import com.quertimizer.alarm.application.service.AlarmService;
+import com.quertimizer.alarm.application.port.out.AlarmRecipientPort;
 import com.quertimizer.alarm.domain.model.AdminDirectAlarm;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -22,7 +20,7 @@ import static com.quertimizer.alarm.domain.model.AlarmFailReason.RECIPIENT_REQUI
 @RequiredArgsConstructor
 public class SendAdminAlarm implements SendAdminAlarmUseCase {
 
-    private final UserRepositoryPort userRepository;
+    private final AlarmRecipientPort alarmRecipientPort;
     private final AlarmService alarmService;
 
     /**
@@ -41,11 +39,7 @@ public class SendAdminAlarm implements SendAdminAlarmUseCase {
     public int execute(SendAdminAlarmInput input) {
         List<String> normalizedRecipientHandles = normalizeRecipientHandles(input.getRecipientHandles());
         String normalizedMessage = requireMessage(input.getMessage());
-        List<String> resolvedRecipientHandles = userRepository.findAllByHandleIn(normalizedRecipientHandles).stream()
-                .map(User::getHandle)
-                .filter(handle -> handle != null && !handle.isBlank())
-                .distinct()
-                .toList();
+        List<String> resolvedRecipientHandles = alarmRecipientPort.findExistingHandles(normalizedRecipientHandles);
 
         if (resolvedRecipientHandles.size() != normalizedRecipientHandles.size()) {
             throw new BusinessException(HANDLE_NOT_FOUND.getMessage(), HttpStatus.BAD_REQUEST);

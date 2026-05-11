@@ -1,12 +1,10 @@
 package com.quertimizer.favorite.application.input;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@RequiredArgsConstructor
+@Data
 public class FavoriteTabsReplaceInput {
 
     private final String userEmail;

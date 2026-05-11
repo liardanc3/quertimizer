@@ -1,10 +1,8 @@
 package com.quertimizer.problem.application.output;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Data;
 
-@Getter
-@RequiredArgsConstructor
+@Data
 public class ProblemSubmissionOutput {
 
     private final String problemId;

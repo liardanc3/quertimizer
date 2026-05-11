@@ -5,12 +5,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.judge.application.port.out.JudgeDefinitionStorePort;
 import com.quertimizer.judge.domain.entity.DatasetDefinition;
-import com.quertimizer.judge.adapter.out.persistence.JudgeDatasetDefinitionEntity;
-import com.quertimizer.judge.adapter.out.persistence.JudgeSetupSqlDefinitionEntity;
 import com.quertimizer.judge.domain.entity.SetupSqlDefinition;
 import com.quertimizer.judge.domain.entity.JudgeDatasetId;
 import com.quertimizer.judge.domain.entity.JudgeSetupSqlId;
-import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.judge.domain.model.IndexPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,40 +25,33 @@ public class JpaJudgeDefinitionStore implements JudgeDefinitionStorePort {
     };
 
     private final JudgeDatasetDefinitionJpaRepository datasetRepository;
+    private final JudgeProblemSetDatasetJpaRepository problemSetDatasetRepository;
     private final JudgeSetupSqlDefinitionJpaRepository setupSqlRepository;
     private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
-    public void saveDataset(DatasetDefinition datasetDefinition) {
-        // judge 정의 객체 컬렉션 값을 JSON으로 직렬화해 JPA 엔티티 저장
+    public void saveDataset(DatasetDefinition datasetDefinition, boolean storeSqlDefinition) {
+        // judge 데이터셋 handle과 필요 시 임시 SQL 정의 저장
         datasetRepository.save(JudgeDatasetDefinitionEntity.from(
                 datasetDefinition,
-                serializeStringList(datasetDefinition.getBaseIndexDdls())
+                serializeStringList(datasetDefinition.getBaseIndexDdls()),
+                storeSqlDefinition
         ));
     }
 
     @Override
     public Optional<DatasetDefinition> findDataset(JudgeDatasetId datasetId) {
-        // JPA 엔티티를 judge 정의 객체로 복원
+        // 데이터셋 handle 조회 후 임시 SQL 정의 또는 문제셋 원본으로 복원
         return datasetRepository.findById(datasetId.getValue())
-                .map(entity -> new DatasetDefinition(
-                        entity.toDatasetId(),
-                        DbmsType.valueOf(entity.getDbmsType()),
-                        entity.getDdl(),
-                        entity.getDataSql(),
-                        deserializeStringList(entity.getBaseIndexDdlsJson())
-                ));
+                .flatMap(this::toDatasetDefinition);
     }
 
     @Override
     @Transactional
     public void deleteDataset(JudgeDatasetId datasetId) {
-        // 데이터셋 하위 정의 제거 후 데이터셋 정의 제거
-        setupSqlRepository.deleteByDatasetId(datasetId.getValue());
-        if (datasetRepository.existsById(datasetId.getValue())) {
-            datasetRepository.deleteById(datasetId.getValue());
-        }
+        // 데이터셋 정의 aggregate 삭제로 하위 템플릿과 설정 SQL 함께 제거
+        datasetRepository.findById(datasetId.getValue()).ifPresent(datasetRepository::delete);
     }
 
     @Override
@@ -91,7 +81,7 @@ public class JpaJudgeDefinitionStore implements JudgeDefinitionStorePort {
         try {
             return objectMapper.writeValueAsString(values);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("judge 정의 직렬화에 실패했다.", exception);
+            throw new IllegalStateException("judge 정의 직렬화에 실패했습니다.", exception);
         }
     }
 
@@ -100,7 +90,21 @@ public class JpaJudgeDefinitionStore implements JudgeDefinitionStorePort {
         try {
             return objectMapper.readValue(value, STRING_LIST_TYPE);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("judge 정의 역직렬화에 실패했다.", exception);
+            throw new IllegalStateException("judge 정의 역직렬화에 실패했습니다.", exception);
         }
+    }
+
+    private Optional<DatasetDefinition> toDatasetDefinition(JudgeDatasetDefinitionEntity entity) {
+        // 데이터셋 handle에 보관된 기준 인덱스 정의 복원
+        List<String> baseIndexDdls = deserializeStringList(entity.getBaseIndexDdlsJson());
+
+        // 임시 데이터셋 SQL 정의가 있으면 우선 사용
+        if (entity.getInlineDefinition() != null) {
+            return Optional.of(entity.getInlineDefinition().toDefinition(baseIndexDdls));
+        }
+
+        // 영속 문제셋 데이터셋은 problem_set 원본 SQL 사용
+        return problemSetDatasetRepository.findByDatasetId(entity.getDatasetId())
+                .map(problemSet -> problemSet.toDefinition(baseIndexDdls));
     }
 }

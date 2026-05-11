@@ -36,14 +36,13 @@ interface ProblemDetailResponse {
   problemId?: string;
   title?: string;
   description?: string;
-  ddlPostgresql?: string;
-  ddlMysql?: string;
-  dataPostgresql?: string;
-  dataMysql?: string;
+  ddl?: string;
+  actualDataSql?: string;
   condition?: string;
   output?: string;
-  outputSample?: string;
-  sampleDataSql?: string;
+  dataExample?: string;
+  outputExample?: string;
+  schemaMetadata?: string;
   answerSql?: string;
   answerHash?: string;
   dbms?: string;
@@ -55,39 +54,41 @@ interface ProblemSetSummaryResponse {
 
 interface ProblemSetDetailResponse {
   problemSetId?: string;
-  ddlPostgresql?: string;
-  ddlMysql?: string;
-  dataPostgresql?: string;
-  dataMysql?: string;
+  ddl?: string;
+  actualDataSql?: string;
 }
 
 interface AdminProblemOptionResponse {
   problemId?: string;
 }
 
-export interface ProblemSampleTableData {
+export interface ProblemDataExampleTableData {
   name: string;
   columns: string[];
   rows: Array<Array<string | number | boolean | null>>;
+  totalRows: number;
+  visibleRows: number;
 }
 
-export interface ProblemOutputSampleData {
+export interface ProblemOutputExampleData {
   columns: string[];
   rows: Array<Array<string | number | boolean | null>>;
+  totalRows: number;
+  visibleRows: number;
+  rowLimit: number;
 }
 
 export interface ProblemDetailData {
   problemId: string;
   title: string;
   description: string;
-  ddlPostgresql: string;
-  ddlMysql: string;
-  dataPostgresql: string;
-  dataMysql: string;
+  ddl: string;
+  actualDataSql: string;
   condition: string;
   output: string;
-  outputSample: string;
-  sampleDataSql: string;
+  dataExample: string;
+  outputExample: string;
+  schemaMetadata: string;
   answerSql: string;
   answerHash: string;
   dbms: DbmsType;
@@ -99,10 +100,8 @@ export interface ProblemSetSummary {
 
 export interface ProblemSetDetailData {
   problemSetId: string;
-  ddlPostgresql: string;
-  ddlMysql: string;
-  dataPostgresql: string;
-  dataMysql: string;
+  ddl: string;
+  actualDataSql: string;
 }
 
 export interface CreateProblemPayload {
@@ -111,8 +110,9 @@ export interface CreateProblemPayload {
   condition: string;
   output: string;
   ddl: string;
+  problemDdl: string;
   actualDataSql: string;
-  sampleDataSql: string;
+  hiddenDataSqls: string[];
   answerSql: string;
   problemSetId?: string;
   problemId?: string;
@@ -123,12 +123,44 @@ interface ProblemOutputPreviewResponse {
   columns?: string[];
   rows?: unknown[][];
   rowCount?: number;
+  visibleRows?: number;
+  rowLimit?: number;
+}
+
+interface ProblemDataPreviewTableResponse {
+  name?: string;
+  columns?: string[];
+  rows?: unknown[][];
+  totalRows?: number;
+  visibleRows?: number;
+}
+
+interface ProblemDataPreviewResponse {
+  rowLimit?: number;
+  tables?: ProblemDataPreviewTableResponse[];
+}
+
+interface ProblemExamplePreviewResponse {
+  dataExample?: ProblemDataPreviewResponse;
+  outputExample?: ProblemOutputPreviewResponse;
 }
 
 export interface ProblemOutputPreviewData {
   columns: string[];
   rows: Array<Array<string | number | boolean | null>>;
   rowCount: number;
+  visibleRows: number;
+  rowLimit: number;
+}
+
+export interface ProblemDataPreviewData {
+  rowLimit: number;
+  tables: ProblemDataExampleTableData[];
+}
+
+export interface ProblemExamplePreviewData {
+  dataExample: ProblemDataPreviewData;
+  outputExample: ProblemOutputPreviewData;
 }
 
 export interface FetchProblemsParams {
@@ -158,6 +190,16 @@ export interface ProblemPage {
 
 const DEFAULT_PROBLEM_DIFFICULTY = '중급' as ProblemSummary['difficulty'];
 const problemGetRequestPromises = new Map<string, Promise<unknown>>();
+
+function createRequestTimeout(timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  return {
+    signal: controller.signal,
+    clear: () => window.clearTimeout(timeoutId),
+  };
+}
 
 function toDbmsType(value?: string) {
   return value === 'mysql' ? 'mysql' : 'postgresql';
@@ -238,14 +280,12 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       typeof data.problemId !== 'string' ||
       typeof data.title !== 'string' ||
       typeof data.description !== 'string' ||
-      typeof data.ddlPostgresql !== 'string' ||
-      typeof data.ddlMysql !== 'string' ||
-      typeof data.dataPostgresql !== 'string' ||
-      typeof data.dataMysql !== 'string' ||
+      typeof data.ddl !== 'string' ||
+      typeof data.actualDataSql !== 'string' ||
       typeof data.condition !== 'string' ||
       typeof data.output !== 'string' ||
-      typeof data.outputSample !== 'string' ||
-      typeof data.sampleDataSql !== 'string' ||
+      typeof data.dataExample !== 'string' ||
+      typeof data.outputExample !== 'string' ||
       typeof data.answerSql !== 'string' ||
       typeof data.answerHash !== 'string'
     ) {
@@ -256,14 +296,13 @@ export async function fetchProblemDetail(problemId: string): Promise<ProblemDeta
       problemId: data.problemId,
       title: data.title,
       description: data.description,
-      ddlPostgresql: data.ddlPostgresql,
-      ddlMysql: data.ddlMysql,
-      dataPostgresql: data.dataPostgresql,
-      dataMysql: data.dataMysql,
+      ddl: data.ddl,
+      actualDataSql: data.actualDataSql,
       condition: data.condition,
       output: data.output,
-      outputSample: data.outputSample,
-      sampleDataSql: data.sampleDataSql,
+      dataExample: data.dataExample,
+      outputExample: data.outputExample,
+      schemaMetadata: typeof data.schemaMetadata === 'string' ? data.schemaMetadata : '',
       answerSql: data.answerSql,
       answerHash: data.answerHash,
       dbms: toDbmsType(data.dbms),
@@ -429,20 +468,16 @@ export async function fetchProblemSetDetail(problemSetId: string): Promise<Probl
     const data = (await response.json()) as ProblemSetDetailResponse;
     if (
       typeof data.problemSetId !== 'string' ||
-      typeof data.ddlPostgresql !== 'string' ||
-      typeof data.ddlMysql !== 'string' ||
-      typeof data.dataPostgresql !== 'string' ||
-      typeof data.dataMysql !== 'string'
+      typeof data.ddl !== 'string' ||
+      typeof data.actualDataSql !== 'string'
     ) {
       throw new Error();
     }
 
     return {
       problemSetId: data.problemSetId,
-      ddlPostgresql: data.ddlPostgresql,
-      ddlMysql: data.ddlMysql,
-      dataPostgresql: data.dataPostgresql,
-      dataMysql: data.dataMysql,
+      ddl: data.ddl,
+      actualDataSql: data.actualDataSql,
     };
   } catch {
     throw new Error(getUiTextValue('PROBLEM_CREATE_SET_DETAIL_FAIL_MESSAGE', '테이블셋 정보를 불러오지 못했습니다.'));
@@ -478,8 +513,9 @@ export async function fetchAdminProblemOptions(problemSetId: string): Promise<st
   }
 }
 
-export async function createProblem(payload: CreateProblemPayload): Promise<string> {
+export async function createProblem(payload: CreateProblemPayload): Promise<void> {
   let response: Response;
+  const requestTimeout = createRequestTimeout(10 * 60 * 1000);
 
   try {
     response = await fetch(`${getApiBaseUrl()}/admin/problems`, {
@@ -489,25 +525,23 @@ export async function createProblem(payload: CreateProblemPayload): Promise<stri
       },
       credentials: 'include',
       body: JSON.stringify(payload),
+      signal: requestTimeout.signal,
     });
   } catch {
     throw new Error(getUiTextValue('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'));
+  } finally {
+    requestTimeout.clear();
   }
 
   if (!response.ok) {
     throw await createApiErrorFromResponse(response, getUiTextValue('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'));
   }
 
-  try {
-    const data = (await response.json()) as { problemId?: string };
-    if (typeof data.problemId !== 'string') {
-      throw new Error();
-    }
-
-    return data.problemId;
-  } catch {
-    throw new Error(getUiTextValue('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'));
+  if (response.status === 202 || response.status === 204) {
+    return;
   }
+
+  await response.json();
 }
 
 function normalizePreviewRows(rows: unknown[][] | undefined): Array<Array<string | number | boolean | null>> {
@@ -528,10 +562,56 @@ function normalizePreviewRows(rows: unknown[][] | undefined): Array<Array<string
   );
 }
 
+function normalizeDataPreviewTables(tables: ProblemDataPreviewTableResponse[] | undefined): ProblemDataExampleTableData[] {
+  if (!Array.isArray(tables)) {
+    return [];
+  }
+
+  return tables
+    .filter((table) => typeof table.name === 'string' && Array.isArray(table.columns))
+    .map((table) => {
+      const rows = normalizePreviewRows(table.rows);
+      return {
+        name: table.name!,
+        columns: table.columns!.filter((column): column is string => typeof column === 'string'),
+        rows,
+        totalRows: typeof table.totalRows === 'number' ? table.totalRows : rows.length,
+        visibleRows: typeof table.visibleRows === 'number' ? table.visibleRows : rows.length,
+      };
+    })
+    .filter((table) => table.name !== '' && table.columns.length > 0);
+}
+
+function toOutputPreviewData(data: ProblemOutputPreviewResponse | undefined): ProblemOutputPreviewData {
+  if (!Array.isArray(data?.columns) || typeof data.rowCount !== 'number') {
+    throw new Error();
+  }
+
+  const rows = normalizePreviewRows(data.rows);
+  return {
+    columns: data.columns.filter((column): column is string => typeof column === 'string'),
+    rows,
+    rowCount: data.rowCount,
+    visibleRows: typeof data.visibleRows === 'number' ? data.visibleRows : rows.length,
+    rowLimit: typeof data.rowLimit === 'number' ? data.rowLimit : 10,
+  };
+}
+
+function toDataPreviewData(data: ProblemDataPreviewResponse | undefined): ProblemDataPreviewData {
+  if (!Array.isArray(data?.tables)) {
+    throw new Error();
+  }
+
+  return {
+    rowLimit: typeof data.rowLimit === 'number' ? data.rowLimit : 10,
+    tables: normalizeDataPreviewTables(data.tables),
+  };
+}
+
 export async function previewProblemOutput(payload: {
   dbms: DbmsType;
   ddl: string;
-  sampleDataSql: string;
+  actualDataSql: string;
   answerSql: string;
 }): Promise<ProblemOutputPreviewData> {
   let response: Response;
@@ -555,16 +635,49 @@ export async function previewProblemOutput(payload: {
 
   try {
     const data = (await response.json()) as ProblemOutputPreviewResponse;
-    if (!Array.isArray(data.columns) || typeof data.rowCount !== 'number') {
-      throw new Error();
-    }
-
-    return {
-      columns: data.columns.filter((column): column is string => typeof column === 'string'),
-      rows: normalizePreviewRows(data.rows),
-      rowCount: data.rowCount,
-    };
+    return toOutputPreviewData(data);
   } catch {
     throw new Error(getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
+  }
+}
+
+export async function previewProblemExamples(payload: {
+  dbms: DbmsType;
+  ddl: string;
+  problemDdl: string;
+  actualDataSql: string;
+  answerSql: string;
+}): Promise<ProblemExamplePreviewData> {
+  let response: Response;
+  const requestTimeout = createRequestTimeout(10 * 60 * 1000);
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/admin/problems/example-preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+      signal: requestTimeout.signal,
+    });
+  } catch {
+    throw new Error(getUiTextValue('PROBLEM_CREATE_EXAMPLE_PREVIEW_FAIL_MESSAGE', '예시를 생성하지 못했습니다.'));
+  } finally {
+    requestTimeout.clear();
+  }
+
+  if (!response.ok) {
+    throw await createApiErrorFromResponse(response, getUiTextValue('PROBLEM_CREATE_EXAMPLE_PREVIEW_FAIL_MESSAGE', '예시를 생성하지 못했습니다.'));
+  }
+
+  try {
+    const data = (await response.json()) as ProblemExamplePreviewResponse;
+    return {
+      dataExample: toDataPreviewData(data.dataExample),
+      outputExample: toOutputPreviewData(data.outputExample),
+    };
+  } catch {
+    throw new Error(getUiTextValue('PROBLEM_CREATE_EXAMPLE_PREVIEW_FAIL_MESSAGE', '예시를 생성하지 못했습니다.'));
   }
 }

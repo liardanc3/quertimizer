@@ -1,13 +1,11 @@
 package com.quertimizer.user.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileCommunityPostOutput {
 
     private final String postId;

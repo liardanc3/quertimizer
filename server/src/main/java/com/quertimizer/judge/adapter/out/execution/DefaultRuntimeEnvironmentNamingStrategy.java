@@ -10,8 +10,8 @@ public class DefaultRuntimeEnvironmentNamingStrategy implements RuntimeEnvironme
 
     @Override
     public RuntimeEnvironmentName createName(JudgeEnvironmentId environmentId, JudgeDatasetId datasetId) {
-        Objects.requireNonNull(environmentId, "필수 값이 없다.");
-        Objects.requireNonNull(datasetId, "필수 값이 없다.");
+        Objects.requireNonNull(environmentId, "필수 값이 없습니다.");
+        Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
 
         String normalizedName = ("judge_" + environmentId.getValue() + "_" + datasetId.getValue())
                 .toLowerCase(Locale.ROOT)

@@ -1,9 +1,8 @@
 package com.quertimizer.user.application.service;
 
 import com.quertimizer.user.application.port.in.BlockUserUseCase;
-import com.quertimizer.auth.application.port.out.BlockedIpRepositoryPort;
-import com.quertimizer.auth.domain.entity.BlockedIp;
 import com.quertimizer.global.exception.BusinessException;
+import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -11,14 +10,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import static com.quertimizer.auth.domain.model.AuthFailReason.USER_NOT_FOUND;
+import static com.quertimizer.user.domain.model.UserProfileFailReason.USER_NOT_FOUND;
 
 @Component
 @RequiredArgsConstructor
 public class BlockUser implements BlockUserUseCase {
 
     private final UserRepositoryPort userRepository;
-    private final BlockedIpRepositoryPort blockedIpRepository;
+    private final UserAccountRestrictionPort userAccountRestrictionPort;
 
     /**
      * 사용자를 차단한다.
@@ -39,17 +38,6 @@ public class BlockUser implements BlockUserUseCase {
         user.block();
         userRepository.save(user);
 
-        if (user.getLastAccessIp() == null || user.getLastAccessIp().isBlank()) {
-            return;
-        }
-
-        blockedIpRepository.findById(user.getLastAccessIp().trim())
-                .ifPresentOrElse(
-                        blockedIp -> {
-                            blockedIp.refresh(handle);
-                            blockedIpRepository.save(blockedIp);
-                        },
-                        () -> blockedIpRepository.save(BlockedIp.create(user.getLastAccessIp().trim(), handle))
-                );
+        userAccountRestrictionPort.blockIp(user.getLastAccessIp(), handle);
     }
 }

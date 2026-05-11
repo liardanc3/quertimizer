@@ -10,6 +10,12 @@
   gap: 1.24rem;
 }
 
+.admin-page.is-reauthentication-paused {
+  filter: blur(0.7px);
+  transform: translateZ(0);
+  user-select: none;
+}
+
 .admin-page.is-compact-content-gap .admin-config-panel,
 .admin-page.is-compact-content-gap .admin-alarm-send-panel {
   gap: 0.28rem;

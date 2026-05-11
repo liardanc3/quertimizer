@@ -1,12 +1,10 @@
 package com.quertimizer.user.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileSolvedRecordOutput {
 
     private final String problemId;

@@ -1,13 +1,11 @@
 package com.quertimizer.ui.adapter.in.web.response;
 
 import com.quertimizer.ui.application.output.UiTextPageOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UiTextPageRes {
 
     private final int currentPage;

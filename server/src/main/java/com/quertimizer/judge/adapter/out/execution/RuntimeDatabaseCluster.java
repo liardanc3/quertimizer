@@ -19,20 +19,20 @@ public class RuntimeDatabaseCluster {
     }
 
     public RuntimeDatabaseCluster(List<RuntimeDatabase> configuredDatabases, RuntimeDatabaseSelector selector) {
-        this.configuredDatabases = List.copyOf(Objects.requireNonNull(configuredDatabases, "필수 값이 없다."));
+        this.configuredDatabases = List.copyOf(Objects.requireNonNull(configuredDatabases, "필수 값이 없습니다."));
         this.pools = createPools(this.configuredDatabases);
-        this.selector = Objects.requireNonNull(selector, "필수 값이 없다.");
+        this.selector = Objects.requireNonNull(selector, "필수 값이 없습니다.");
     }
 
     public RuntimeDatabaseLease acquire(DbmsType dbmsType) {
-        Objects.requireNonNull(dbmsType, "필수 값이 없다.");
+        Objects.requireNonNull(dbmsType, "필수 값이 없습니다.");
 
         List<RuntimeDatabase> candidates = configuredDatabases.stream()
                 .filter(RuntimeDatabase::isReady)
                 .filter(database -> database.getDbmsType() == dbmsType)
                 .toList();
         if (candidates.isEmpty()) {
-            throw new IllegalStateException("준비된 런타임 DB 설정이 없다: " + dbmsType);
+            throw new IllegalStateException("준비된 런타임 DB 설정이 없습니다: " + dbmsType);
         }
 
         int startIndex = selector.selectStartIndex(candidates);
@@ -44,12 +44,12 @@ public class RuntimeDatabaseCluster {
             }
         }
 
-        throw new IllegalStateException("사용 가능한 런타임 DB 점유가 없다: " + dbmsType);
+        throw new IllegalStateException("사용 가능한 런타임 DB 점유가 없습니다: " + dbmsType);
     }
 
     public RuntimeDatabaseLease acquireNode(String nodeId) {
         if (nodeId == null || nodeId.isBlank()) {
-            throw new IllegalArgumentException("필수 문자열이 비어 있다.");
+            throw new IllegalArgumentException("필수 문자열이 비어 있습니다.");
         }
 
         RuntimeDatabasePool pool = pools.get(nodeId);
@@ -58,7 +58,7 @@ public class RuntimeDatabaseCluster {
         }
 
         if (!pool.getDatabase().isReady()) {
-            throw new IllegalStateException("런타임 DB 노드가 준비되지 않았다: " + nodeId);
+            throw new IllegalStateException("런타임 DB 노드가 준비되지 않았습니다: " + nodeId);
         }
 
         return pool.acquire();
@@ -71,10 +71,10 @@ public class RuntimeDatabaseCluster {
     private Map<String, RuntimeDatabasePool> createPools(List<RuntimeDatabase> databases) {
         Map<String, RuntimeDatabasePool> createdPools = new LinkedHashMap<>();
         for (RuntimeDatabase database : databases) {
-            Objects.requireNonNull(database, "필수 값이 없다.");
+            Objects.requireNonNull(database, "필수 값이 없습니다.");
 
             if (createdPools.containsKey(database.getId())) {
-                throw new IllegalArgumentException("런타임 DB ID가 중복됐다: " + database.getId());
+                throw new IllegalArgumentException("런타임 DB ID가 중복되었습니다: " + database.getId());
             }
 
             createdPools.put(database.getId(), new RuntimeDatabasePool(database));

@@ -1,6 +1,6 @@
 package com.quertimizer.dashboard.domain.policy;
 
-import com.quertimizer.problem.application.output.ProblemListEntry;
+import com.quertimizer.dashboard.domain.model.DashboardProblemCandidate;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -21,25 +21,25 @@ public class DashboardProblemRecommendationPolicy {
         return CANDIDATE_LIMIT_PER_DBMS;
     }
 
-    public Comparator<ProblemListEntry> createPopularityComparator() {
+    public Comparator<DashboardProblemCandidate> createPopularityComparator() {
         return Comparator.comparingLong(this::calculatePopularityScore)
                 .reversed()
-                .thenComparing(problemEntry -> problemEntry.getProblem().getProblemId());
+                .thenComparing(DashboardProblemCandidate::getProblemId);
     }
 
-    public Comparator<ProblemListEntry> createDailyShuffleComparator(LocalDate basisDate) {
-        return Comparator.<ProblemListEntry>comparingLong(problemEntry -> calculateDailyShuffleKey(problemEntry, basisDate))
+    public Comparator<DashboardProblemCandidate> createDailyShuffleComparator(LocalDate basisDate) {
+        return Comparator.<DashboardProblemCandidate>comparingLong(problemEntry -> calculateDailyShuffleKey(problemEntry, basisDate))
                 .thenComparing(createPopularityComparator());
     }
 
-    public long calculatePopularityScore(ProblemListEntry problemEntry) {
+    public long calculatePopularityScore(DashboardProblemCandidate problemEntry) {
         return (long) problemEntry.getSolvedUserCount() * SOLVED_USER_WEIGHT
                 + (long) problemEntry.getTotalSubmitCount() * TOTAL_SUBMIT_WEIGHT
                 + (long) problemEntry.getSuccessSubmitCount() * SUCCESS_SUBMIT_WEIGHT;
     }
 
-    private long calculateDailyShuffleKey(ProblemListEntry problemEntry, LocalDate basisDate) {
+    private long calculateDailyShuffleKey(DashboardProblemCandidate problemEntry, LocalDate basisDate) {
         // 일일 셔플 키 계산
-        return Integer.toUnsignedLong(Objects.hash(problemEntry.getProblem().getProblemId(), basisDate));
+        return Integer.toUnsignedLong(Objects.hash(problemEntry.getProblemId(), basisDate));
     }
 }

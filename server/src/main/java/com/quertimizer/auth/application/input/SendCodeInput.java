@@ -1,13 +1,11 @@
 package com.quertimizer.auth.application.input;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.Locale;
 import java.util.Optional;
 
 @Data
-@AllArgsConstructor
 public class SendCodeInput {
 
     private final String email;

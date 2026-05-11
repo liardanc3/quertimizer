@@ -1,13 +1,11 @@
 package com.quertimizer.community.application.output;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class CommunityPostSummaryOutput {
 
     private final String postId;

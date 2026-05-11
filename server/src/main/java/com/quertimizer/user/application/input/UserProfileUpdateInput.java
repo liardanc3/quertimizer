@@ -1,13 +1,11 @@
 package com.quertimizer.user.application.input;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileUpdateInput {
 
     private final String bio;

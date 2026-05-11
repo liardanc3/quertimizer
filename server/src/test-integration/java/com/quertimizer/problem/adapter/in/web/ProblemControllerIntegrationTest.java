@@ -219,12 +219,10 @@ class ProblemControllerIntegrationTest {
                       "condition": "조건",
                       "output": "출력",
                       "answerSql": "SELECT 1",
-                      "existingProblemSet": false,
-                      "existingProblem": false,
                       "dbms": "postgresql",
-                      "ddlPostgresql": "CREATE TABLE t(id int);",
-                      "actualDataPostgresql": "INSERT INTO t VALUES (1);",
-                      "sampleDataPostgresql": "INSERT INTO t VALUES (1);"
+                      "ddl": "CREATE TABLE t(id int);",
+                      "problemDdl": "CREATE TABLE t(id int);",
+                      "actualDataSql": "INSERT INTO t VALUES (1);"
                     }
                     """;
             SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor user =
@@ -271,7 +269,7 @@ class ProblemControllerIntegrationTest {
                     {
                       "dbms": "postgresql",
                       "ddl": "",
-                      "sampleDataSql": "INSERT INTO t VALUES (1);",
+                      "actualDataSql": "INSERT INTO t VALUES (1);",
                       "answerSql": "SELECT 1"
                     }
                     """;

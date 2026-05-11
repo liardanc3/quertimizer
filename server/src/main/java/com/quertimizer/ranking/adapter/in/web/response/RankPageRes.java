@@ -1,13 +1,11 @@
 package com.quertimizer.ranking.adapter.in.web.response;
 
 import com.quertimizer.ranking.application.output.RankPageOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class RankPageRes {
 
     private final int currentPage;

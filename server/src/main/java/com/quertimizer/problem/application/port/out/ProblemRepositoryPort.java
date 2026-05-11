@@ -13,5 +13,7 @@ public interface ProblemRepositoryPort {
 
     Optional<Problem> findByProblemId(String problemId);
 
+    Optional<String> findLatestProblemIdByProblemSetId(String problemSetId);
+
     Problem save(Problem problem);
 }

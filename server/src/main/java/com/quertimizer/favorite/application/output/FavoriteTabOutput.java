@@ -1,11 +1,9 @@
 package com.quertimizer.favorite.application.output;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class FavoriteTabOutput {
 
     private final String label;

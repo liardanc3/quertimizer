@@ -1,13 +1,11 @@
 package com.quertimizer.problem.adapter.in.web.response;
 
 import com.quertimizer.problem.application.output.ProblemPageOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class ProblemPageRes {
 
     private final int currentPage;

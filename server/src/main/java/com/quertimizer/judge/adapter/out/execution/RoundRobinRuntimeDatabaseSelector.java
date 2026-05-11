@@ -10,10 +10,10 @@ public class RoundRobinRuntimeDatabaseSelector implements RuntimeDatabaseSelecto
 
     @Override
     public int selectStartIndex(List<RuntimeDatabase> candidates) {
-        Objects.requireNonNull(candidates, "필수 값이 없다.");
+        Objects.requireNonNull(candidates, "필수 값이 없습니다.");
 
         if (candidates.isEmpty()) {
-            throw new IllegalArgumentException("후보 목록이 비어 있다.");
+            throw new IllegalArgumentException("후보 목록이 비어 있습니다.");
         }
 
         return Math.floorMod(cursor.getAndIncrement(), candidates.size());

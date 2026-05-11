@@ -1,11 +1,9 @@
 package com.quertimizer.ranking.adapter.in.web.response;
 
 import com.quertimizer.ranking.application.output.RankListItemOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class RankListItemRes {
 
     private final String handle;

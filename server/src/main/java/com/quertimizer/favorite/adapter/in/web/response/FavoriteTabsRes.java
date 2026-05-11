@@ -1,13 +1,11 @@
 package com.quertimizer.favorite.adapter.in.web.response;
 
 import com.quertimizer.favorite.application.output.FavoriteTabsOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class FavoriteTabsRes {
 
     private final List<FavoriteTabRes> tabs;

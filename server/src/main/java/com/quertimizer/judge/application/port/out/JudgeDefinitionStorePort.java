@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public interface JudgeDefinitionStorePort {
 
-    void saveDataset(DatasetDefinition datasetDefinition);
+    void saveDataset(DatasetDefinition datasetDefinition, boolean storeSqlDefinition);
 
     Optional<DatasetDefinition> findDataset(JudgeDatasetId datasetId);
 

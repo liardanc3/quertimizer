@@ -1,9 +1,7 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
 import './ProblemSolvePage.css';
-import '@/shared/ui/styles/public-home-page.css';
-import '@/shared/ui/styles/submit-history-page.css';
 import usePageJump from '@/shared/lib/hooks/use-page-jump';
 import { FavoriteTabButton } from '@/features/favorite-tab';
 import { HttpErrorState } from '@/shared/ui';
@@ -43,7 +41,7 @@ import {
 } from '@/shared/auth/session-socket';
 import { syncSession, useSession } from '@/shared/auth/session';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '@/shared/config/navigation';
-import { getExecutionPlanDetailGroups } from '@/entities/execution-plan';
+import { ExecutionPlanDetailBoard, buildAvailableBucketFilters, getExecutionPlanDetailGroups, getPlanElementButtonLabel } from '@/entities/execution-plan';
 import {
   EMAIL_PATTERN,
   PASSWORD_RESET_CODE_PATTERN,
@@ -57,8 +55,8 @@ import {
   SOCIAL_LOGIN_SUCCESS_MESSAGE,
   isTrustedSocialLoginCallbackOrigin,
 } from '@/shared/auth/social-login-callback';
-import { formatCompactBoardDate, formatCost, formatInteger, formatSubmittedAt } from '@/shared/lib/formatters';
-import { renderHighlightedSql, type SqlHighlightRange } from '@/shared/lib/sql-highlighter';
+import { formatBoardDate, formatCost, formatInteger, formatSubmittedAt } from '@/shared/lib/formatters';
+import { renderHighlightedSql, renderStaticHighlightedSql, type SqlHighlightRange } from '@/shared/lib/sql-highlighter';
 import { getUiText, getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import type { CommunityPostSummary, DbmsType, ProblemDetail, SubmitHistoryEntry, SubmitHistoryPageData, SubmitHistoryPlanFilters } from '@/shared/api/domain';
 import logoImage from '@/shared/assets/logo.png';
@@ -169,8 +167,28 @@ function getSolveRelatedCommunityCategoryLabel(value: CommunityPostSummary['cate
   return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
-function getSolveRelatedCommunitySearchTerm(problemId: string) {
-  return /^[PM]\d{5}-\d{5}$/.test(problemId) ? problemId.slice(1) : problemId;
+function buildSolveRelatedPlanSections(history: SubmitHistoryEntry) {
+  const labelGroupsBySection = new Map(
+    getExecutionPlanDetailGroups(history.dbms, history.executionPlanElement)
+      .map((group) => [group.sectionKey, group.labels] as const),
+  );
+
+  return [
+    ...buildAvailableBucketFilters(history.dbms).map((filter) => ({
+      sectionKey: filter.key,
+      sectionLabel: filter.label,
+      labels: labelGroupsBySection.get(filter.key) ?? [],
+    })),
+    {
+      sectionKey: 'hint' as const,
+      sectionLabel: getUiTextValue('COMMON_HINT_LABEL', 'Hint'),
+      labels: labelGroupsBySection.get('hint') ?? [],
+    },
+  ];
+}
+
+function hasSolveRelatedExecutionPlanDetails(history: SubmitHistoryEntry) {
+  return buildSolveRelatedPlanSections(history).some((section) => section.labels.length > 0);
 }
 
 type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
@@ -297,11 +315,68 @@ interface ProblemSubmitProgressStep {
 }
 
 type SqlAutocompleteKind = 'keyword' | 'table' | 'column';
+type SqlAutocompleteKindPriority = Record<SqlAutocompleteKind, number>;
 
 interface SqlAutocompleteItem {
   value: string;
   kind: SqlAutocompleteKind;
   detail?: string;
+}
+
+interface SqlAutocompleteTokenRange {
+  tokenStart: number;
+  tokenEnd: number;
+  currentToken: string;
+  typedToken: string;
+  qualifier: string | null;
+}
+
+type SolveIndexMethod = 'BTREE' | 'HASH' | 'GIN' | 'GIST' | 'BRIN';
+type SolveIndexSortDirection = 'ASC' | 'DESC';
+type SolveIndexNullsPosition = 'DEFAULT' | 'FIRST' | 'LAST';
+type SolveIndexSource = 'builder' | 'editor';
+type SolveIndexOperation = 'CREATE' | 'ALTER' | 'DROP';
+
+interface SolveIndexTableOption {
+  name: string;
+  columns: string[];
+}
+
+interface SolveIndexColumn {
+  name: string;
+  direction: SolveIndexSortDirection;
+  nulls: SolveIndexNullsPosition;
+}
+
+interface SolveIndexDefinition {
+  id: string;
+  name: string;
+  tableName: string;
+  method: SolveIndexMethod;
+  unique: boolean;
+  columns: SolveIndexColumn[];
+  includeColumns: string[];
+  whereClause: string;
+  source: SolveIndexSource;
+  operation: SolveIndexOperation;
+  rawSql?: string;
+  start?: number;
+  end?: number;
+}
+
+interface SolveIndexDraft {
+  name: string;
+  tableName: string;
+  method: SolveIndexMethod;
+  unique: boolean;
+  columns: SolveIndexColumn[];
+  includeColumns: string[];
+  whereClause: string;
+}
+
+interface EditorIndexParseResult {
+  definitions: SolveIndexDefinition[];
+  errorRanges: SqlHighlightRange[];
 }
 
 type SqlExecutionPickerOptionKind = 'statement' | 'all';
@@ -445,19 +520,36 @@ const SQL_AUTOCOMPLETE_KEYWORDS = [
   'EXPLAIN ANALYZE',
   'EXPLAIN ANALYSE',
   'CREATE INDEX',
+  'ALTER INDEX',
   'DROP INDEX',
 ];
+const DEFAULT_AUTOCOMPLETE_KIND_PRIORITY: SqlAutocompleteKindPriority = { keyword: 0, table: 1, column: 2 };
+const TABLE_FIRST_AUTOCOMPLETE_KIND_PRIORITY: SqlAutocompleteKindPriority = { table: 0, column: 1, keyword: 2 };
+const COLUMN_FIRST_AUTOCOMPLETE_KIND_PRIORITY: SqlAutocompleteKindPriority = { column: 0, table: 1, keyword: 2 };
 const SQL_EDITOR_INDENT = '    ';
 const SQL_EDITOR_MIN_HEIGHT = 256;
 const SQL_EDITOR_DEFAULT_FONT_SIZE = 13.5;
 const SQL_EDITOR_MIN_FONT_SIZE = 11;
 const SQL_EDITOR_MAX_FONT_SIZE = 24;
 const SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT = 4;
+const POSTGRESQL_INDEX_METHODS: SolveIndexMethod[] = ['BTREE', 'HASH', 'GIN', 'GIST', 'BRIN'];
+const MYSQL_INDEX_METHODS: SolveIndexMethod[] = ['BTREE', 'HASH'];
 const FLOATING_EDITOR_BACKGROUND_MIN_ALPHA = 0.12;
 const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 1;
 const SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO = 1.7;
-const SUBMIT_STEP_ORDER = ['validate', 'answer', 'ddl', 'plan'] as const;
-const SUBMIT_INDEX_DDL_PATTERN = /^(CREATE|DROP|ALTER)\s+INDEX\b/i;
+const SUBMIT_HIDDEN_CASE_STEP_PATTERN = /^answer-hidden-(\d+)$/;
+const SUBMIT_INDEX_DDL_PATTERN = /^(CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX|ALTER\s+INDEX)\b/i;
+const SQL_IDENTIFIER_PATTERN = String.raw`(?:"[^"]+"|` + '`[^`]+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:"[^"]+"|` + '`[^`]+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$]*))?`;
+const PLAN_SELECTED_ATTEMPT_PREFIX = '__selected_plan_attempt__:';
+const PLAN_MEASUREMENT_PATTERN = /^실행계획 분석\s+(\d+)회\s*:\s*Cost\s+(.+)$/;
+const PLAN_DETAIL_SECTIONS = [
+  { sectionKey: 'scan', sectionLabel: 'Scan' },
+  { sectionKey: 'join', sectionLabel: 'Join' },
+  { sectionKey: 'filter', sectionLabel: 'Filter' },
+  { sectionKey: 'sort', sectionLabel: 'Sort' },
+  { sectionKey: 'aggregate', sectionLabel: 'Aggregate' },
+  { sectionKey: 'hint', sectionLabel: 'Hint' },
+];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -483,6 +575,31 @@ function resolvePreferredDbms(availableDbms: DbmsType[], fallbackDbms: DbmsType[
 
 function formatGroupedNumber(value?: number) {
   return formatInteger(value, 'en-US');
+}
+
+function RelatedViewIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.4 8s1.9-3.7 5.6-3.7S13.6 8 13.6 8 11.7 11.7 8 11.7 2.4 8 2.4 8Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 9.75A1.75 1.75 0 1 0 8 6.25a1.75 1.75 0 0 0 0 3.5Z" stroke="currentColor" strokeWidth="1.35" />
+    </svg>
+  );
+}
+
+function RelatedLikeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 13.3 3.5 9.1a2.8 2.8 0 0 1 4-4L8 5.6l.5-.5a2.8 2.8 0 0 1 4 4L8 13.3Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function RelatedCommentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.5 3.9h9v6.1H7.4l-3.1 2.35V10h-.8V3.9Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function getExecutionResultPageCount(rowCount: number) {
@@ -698,7 +815,7 @@ function consumeSolvePageAuthReturn(problemId: string) {
 }
 
 function resolveProblemDdl(detail: ProblemDetailData | null, dbms: DbmsType) {
-  const preferredDdl = dbms === 'mysql' ? detail?.ddlMysql ?? '' : detail?.ddlPostgresql ?? '';
+  const preferredDdl = detail?.dbms === dbms ? detail.ddl : '';
 
   return preferredDdl;
 }
@@ -750,7 +867,392 @@ function extractAutocompleteItemsFromDdl(ddl: string): SqlAutocompleteItem[] {
   );
 }
 
-function getAutocompleteTokenRange(value: string, caretIndex: number) {
+function extractIndexTableOptionsFromDdl(ddl: string): SolveIndexTableOption[] {
+  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\(([\s\S]*?)\);/gi;
+  const tableOptions: SolveIndexTableOption[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = createTablePattern.exec(ddl)) != null) {
+    const tableName = match[1];
+    const columns = match[2]
+      .split('\n')
+      .map((line) => line.trim().replace(/,$/, ''))
+      .filter(Boolean)
+      .filter((line) => !/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK|COMMENT)\b/i.test(line))
+      .map((line) => line.match(/^("?[\w]+"?)\s+/)?.[1]?.replace(/"/g, '') ?? '')
+      .filter(Boolean);
+
+    tableOptions.push({
+      name: tableName,
+      columns: columns.filter((column, index, source) => source.indexOf(column) === index),
+    });
+  }
+
+  return tableOptions;
+}
+
+function createTableAutocompleteItems(tableOptions: SolveIndexTableOption[]): SqlAutocompleteItem[] {
+  return tableOptions.map((tableOption) => ({
+    value: tableOption.name,
+    kind: 'table',
+  }));
+}
+
+function createColumnAutocompleteItems(tableName: string, columns: string[], detailPrefix?: string): SqlAutocompleteItem[] {
+  return columns.map((columnName) => ({
+    value: columnName,
+    kind: 'column',
+    detail: detailPrefix ? `${detailPrefix} · ${tableName}` : tableName,
+  }));
+}
+
+function createAllColumnAutocompleteItems(tableOptions: SolveIndexTableOption[]): SqlAutocompleteItem[] {
+  return tableOptions.flatMap((tableOption) => createColumnAutocompleteItems(tableOption.name, tableOption.columns));
+}
+
+function normalizeSqlName(name: string) {
+  return normalizeSqlIdentifier(name).toLowerCase();
+}
+
+function getIndexMethodOptions(dbms: DbmsType) {
+  return dbms === 'postgresql' ? POSTGRESQL_INDEX_METHODS : MYSQL_INDEX_METHODS;
+}
+
+function supportsIndexColumnOrdering(method: SolveIndexMethod) {
+  return method === 'BTREE';
+}
+
+function createIndexDefaultName(indexCount: number) {
+  return `index_${String(indexCount + 1).padStart(2, '0')}`;
+}
+
+function createDefaultIndexDraft(tableOptions: SolveIndexTableOption[], dbms: DbmsType, indexCount = 0): SolveIndexDraft {
+  const tableName = tableOptions[0]?.name ?? '';
+  const firstColumn = tableOptions[0]?.columns[0] ?? '';
+  const method = getIndexMethodOptions(dbms)[0] ?? 'BTREE';
+  const columns = firstColumn ? [createIndexColumn(firstColumn)] : [];
+
+  return {
+    name: createIndexDefaultName(indexCount),
+    tableName,
+    method,
+    unique: false,
+    columns,
+    includeColumns: [],
+    whereClause: '',
+  };
+}
+
+function createIndexColumn(name: string): SolveIndexColumn {
+  return {
+    name,
+    direction: 'ASC',
+    nulls: 'DEFAULT',
+  };
+}
+
+function toIdentifierSql(identifier: string) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier) ? identifier : `"${identifier.replace(/"/g, '""')}"`;
+}
+
+function normalizeSqlIdentifier(identifier: string) {
+  const lastToken = identifier.trim().split('.').pop() ?? identifier.trim();
+  return lastToken.replace(/^["`]|["`]$/g, '');
+}
+
+function normalizeComparableSql(sql: string) {
+  return sql.trim().replace(/;+\s*$/, '').replace(/\s+/g, ' ').toLowerCase();
+}
+
+function splitTopLevelComma(value: string) {
+  const parts: string[] = [];
+  let partStart = 0;
+  let depth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const currentChar = value[index];
+    const nextChar = value[index + 1];
+
+    if (inSingleQuote) {
+      if (currentChar === "'" && nextChar === "'") {
+        index += 1;
+        continue;
+      }
+
+      if (currentChar === "'") {
+        inSingleQuote = false;
+      }
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (currentChar === '"' && nextChar === '"') {
+        index += 1;
+        continue;
+      }
+
+      if (currentChar === '"') {
+        inDoubleQuote = false;
+      }
+      continue;
+    }
+
+    if (currentChar === "'") {
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (currentChar === '"') {
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (currentChar === '(') {
+      depth += 1;
+      continue;
+    }
+
+    if (currentChar === ')') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (currentChar === ',' && depth === 0) {
+      parts.push(value.slice(partStart, index).trim());
+      partStart = index + 1;
+    }
+  }
+
+  parts.push(value.slice(partStart).trim());
+  return parts.filter(Boolean);
+}
+
+function buildCreateIndexSql(indexDefinition: SolveIndexDraft | SolveIndexDefinition, dbms: DbmsType) {
+  const indexName = indexDefinition.name.trim() || createIndexDefaultName(0);
+  const tableName = indexDefinition.tableName.trim();
+  const columnOrderingEnabled = supportsIndexColumnOrdering(indexDefinition.method);
+  const columnSql = indexDefinition.columns
+    .map((column) => {
+      const directionSql = columnOrderingEnabled ? ` ${column.direction}` : '';
+      const nullsSql = columnOrderingEnabled && dbms === 'postgresql' && column.nulls !== 'DEFAULT' ? ` NULLS ${column.nulls}` : '';
+
+      return `${toIdentifierSql(column.name)}${directionSql}${nullsSql}`;
+    })
+    .join(', ');
+  const uniqueSql = indexDefinition.unique ? 'UNIQUE ' : '';
+  const usingSql = indexDefinition.method ? ` USING ${indexDefinition.method}` : '';
+  const includeSql =
+    dbms === 'postgresql' && indexDefinition.includeColumns.length > 0
+      ? ` INCLUDE (${indexDefinition.includeColumns.map(toIdentifierSql).join(', ')})`
+      : '';
+  const whereSql = dbms === 'postgresql' && indexDefinition.whereClause.trim() ? ` WHERE ${indexDefinition.whereClause.trim()}` : '';
+
+  if (!tableName || !columnSql) {
+    return '';
+  }
+
+  if (dbms === 'mysql') {
+    return `CREATE ${uniqueSql}INDEX ${toIdentifierSql(indexName)}${usingSql} ON ${toIdentifierSql(tableName)} (${columnSql})${whereSql};`;
+  }
+
+  return `CREATE ${uniqueSql}INDEX ${toIdentifierSql(indexName)} ON ${toIdentifierSql(tableName)}${usingSql} (${columnSql})${includeSql}${whereSql};`;
+}
+
+function resolveIndexDefinitionSql(indexDefinition: SolveIndexDefinition, dbms: DbmsType) {
+  return indexDefinition.rawSql ?? buildCreateIndexSql(indexDefinition, dbms);
+}
+
+function isKnownIndexColumn(tableOptions: SolveIndexTableOption[], tableName: string, columnName: string) {
+  const tableOption = tableOptions.find((option) => option.name.toLowerCase() === tableName.toLowerCase());
+  return tableOption?.columns.some((column) => column.toLowerCase() === columnName.toLowerCase()) ?? false;
+}
+
+function parseIndexColumnDefinition(rawColumn: string): SolveIndexColumn | null {
+  const columnMatch = rawColumn.trim().match(/^("[^"]+"|`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(ASC|DESC))?(?:\s+NULLS\s+(FIRST|LAST))?$/i);
+  if (columnMatch == null) {
+    return null;
+  }
+
+  return {
+    name: normalizeSqlIdentifier(columnMatch[1]),
+    direction: (columnMatch[2]?.toUpperCase() as SolveIndexSortDirection | undefined) ?? 'ASC',
+    nulls: (columnMatch[3]?.toUpperCase() as SolveIndexNullsPosition | undefined) ?? 'DEFAULT',
+  };
+}
+
+function parseCreateIndexStatement(statement: SqlStatementSegment, tableOptions: SolveIndexTableOption[], dbms: DbmsType): SolveIndexDefinition | null {
+  const createIndexPattern = new RegExp(
+    String.raw`^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})(?:\s+USING\s+(\w+))?\s+ON\s+(${SQL_IDENTIFIER_PATTERN})(?:\s+USING\s+(\w+))?\s*\(([\s\S]*?)\)\s*([\s\S]*)$`,
+    'i',
+  );
+  const createIndexMatch = statement.sql.match(createIndexPattern);
+  if (createIndexMatch == null) {
+    return null;
+  }
+
+  const tableName = normalizeSqlIdentifier(createIndexMatch[4]);
+  const method = ((createIndexMatch[3] ?? createIndexMatch[5] ?? 'BTREE').toUpperCase() as SolveIndexMethod);
+  const parsedColumns = splitTopLevelComma(createIndexMatch[6])
+    .map(parseIndexColumnDefinition);
+  const tail = createIndexMatch[7].trim();
+  const includeMatch = tail.match(/^INCLUDE\s*\(([\s\S]*?)\)\s*(.*)$/i);
+  const whereSource = includeMatch?.[2]?.trim() ?? tail;
+  const whereMatch = whereSource.match(/^WHERE\s+([\s\S]+)$/i);
+  const unknownTail = whereSource.length > 0 && whereMatch == null;
+
+  if (
+    !getIndexMethodOptions(dbms).includes(method) ||
+    parsedColumns.length === 0 ||
+    parsedColumns.some((column) => column == null) ||
+    unknownTail
+  ) {
+    return null;
+  }
+  const columns = parsedColumns.filter((column): column is SolveIndexColumn => column != null);
+
+  if (columns.some((column) => !isKnownIndexColumn(tableOptions, tableName, column.name))) {
+    return null;
+  }
+
+  return {
+    id: `editor-index-${statement.start}-${statement.end}`,
+    name: normalizeSqlIdentifier(createIndexMatch[2]),
+    tableName,
+    method,
+    unique: createIndexMatch[1] != null,
+    columns,
+    includeColumns: includeMatch?.[1] ? splitTopLevelComma(includeMatch[1]).map(normalizeSqlIdentifier) : [],
+    whereClause: whereMatch?.[1]?.trim() ?? '',
+    source: 'editor',
+    operation: 'CREATE',
+    rawSql: `${statement.sql};`,
+    start: statement.start,
+    end: statement.end,
+  };
+}
+
+function parseEditorIndexStatement(statement: SqlStatementSegment, tableOptions: SolveIndexTableOption[], dbms: DbmsType): SolveIndexDefinition | null {
+  if (/^CREATE\s+(?:UNIQUE\s+)?INDEX\b/i.test(statement.sql)) {
+    return parseCreateIndexStatement(statement, tableOptions, dbms);
+  }
+
+  const alterIndexPattern = new RegExp(String.raw`^ALTER\s+INDEX\s+(?:IF\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})\b[\s\S]+$`, 'i');
+  const alterIndexMatch = statement.sql.match(alterIndexPattern);
+  if (alterIndexMatch != null) {
+    return {
+      id: `editor-index-${statement.start}-${statement.end}`,
+      name: normalizeSqlIdentifier(alterIndexMatch[1]),
+      tableName: '',
+      method: 'BTREE',
+      unique: false,
+      columns: [],
+      includeColumns: [],
+      whereClause: '',
+      source: 'editor',
+      operation: 'ALTER',
+      rawSql: `${statement.sql};`,
+      start: statement.start,
+      end: statement.end,
+    };
+  }
+
+  const dropIndexPattern = new RegExp(String.raw`^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})(?:\s+ON\s+(${SQL_IDENTIFIER_PATTERN}))?\s*$`, 'i');
+  const dropIndexMatch = statement.sql.match(dropIndexPattern);
+  if (dropIndexMatch == null || (dbms === 'mysql' && dropIndexMatch[2] == null)) {
+    return null;
+  }
+
+  return {
+    id: `editor-index-${statement.start}-${statement.end}`,
+    name: normalizeSqlIdentifier(dropIndexMatch[1]),
+    tableName: dropIndexMatch[2] ? normalizeSqlIdentifier(dropIndexMatch[2]) : '',
+    method: 'BTREE',
+    unique: false,
+    columns: [],
+    includeColumns: [],
+    whereClause: '',
+    source: 'editor',
+    operation: 'DROP',
+    rawSql: `${statement.sql};`,
+    start: statement.start,
+    end: statement.end,
+  };
+}
+
+function parseEditorIndexStatements(sql: string, tableOptions: SolveIndexTableOption[], dbms: DbmsType): EditorIndexParseResult {
+  return parseSqlStatements(sql).reduce<EditorIndexParseResult>(
+    (result, statement) => {
+      if (!SUBMIT_INDEX_DDL_PATTERN.test(statement.sql.trim())) {
+        return result;
+      }
+
+      const indexDefinition = parseEditorIndexStatement(statement, tableOptions, dbms);
+      if (indexDefinition == null) {
+        result.errorRanges.push({ start: statement.start, end: statement.end });
+        return result;
+      }
+
+      result.definitions.push(indexDefinition);
+      return result;
+    },
+    { definitions: [], errorRanges: [] },
+  );
+}
+
+function mergeIndexSqlsWithStatementSql(indexSqls: string[], statementSql: string) {
+  const statementComparableSqls = new Set(parseSqlStatements(statementSql).map((statement) => normalizeComparableSql(statement.sql)));
+  const mergedSqls = indexSqls.filter((indexSql) => !statementComparableSqls.has(normalizeComparableSql(indexSql)));
+
+  return [...mergedSqls, statementSql.trim()].filter(Boolean).join(';\n');
+}
+
+function uniqueSqls(sqls: string[]) {
+  const seenSqls = new Set<string>();
+
+  return sqls.filter((sql) => {
+    const normalizedSql = normalizeComparableSql(sql);
+    if (!normalizedSql || seenSqls.has(normalizedSql)) {
+      return false;
+    }
+
+    seenSqls.add(normalizedSql);
+    return true;
+  });
+}
+
+function removeSqlRanges(value: string, ranges: SqlHighlightRange[]) {
+  const nextValue = [...ranges]
+    .sort((left, right) => right.start - left.start)
+    .reduce((currentValue, range) => {
+      const safeStart = Math.max(0, Math.min(range.start, currentValue.length));
+      const safeEnd = Math.max(safeStart, Math.min(range.end, currentValue.length));
+      const lineStart = currentValue.lastIndexOf('\n', safeStart - 1) + 1;
+      const nextLineIndex = currentValue.indexOf('\n', safeEnd);
+      const lineEnd = nextLineIndex === -1 ? currentValue.length : nextLineIndex + 1;
+      const canRemoveFullLine =
+        currentValue.slice(lineStart, safeStart).trim() === '' &&
+        currentValue.slice(safeEnd, lineEnd).trim() === '';
+
+      return canRemoveFullLine
+        ? currentValue.slice(0, lineStart) + currentValue.slice(lineEnd)
+        : currentValue.slice(0, safeStart) + currentValue.slice(safeEnd);
+    }, value);
+
+  return nextValue.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function hasAutocompleteTokenAfterCaret(value: string, caretIndex: number) {
+  return caretIndex < value.length && /[A-Za-z0-9_]/.test(value[caretIndex]);
+}
+
+function isAutocompleteTablePosition(value: string, caretIndex: number) {
+  const beforeCaret = value.slice(0, caretIndex).replace(/'[^']*'/g, "''").toUpperCase();
+  return /\b(FROM|JOIN)\s+$/.test(beforeCaret);
+}
+
+function getAutocompleteTokenRange(value: string, caretIndex: number): SqlAutocompleteTokenRange | null {
   let tokenStart = caretIndex;
   let tokenEnd = caretIndex;
 
@@ -764,8 +1266,13 @@ function getAutocompleteTokenRange(value: string, caretIndex: number) {
 
   const currentToken = value.slice(tokenStart, tokenEnd);
   const typedToken = value.slice(tokenStart, caretIndex);
+  const qualifier = resolveAutocompleteQualifier(value, tokenStart);
 
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(currentToken) || typedToken.length === 0) {
+  if (currentToken.length > 0 && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(currentToken)) {
+    return null;
+  }
+
+  if (qualifier == null && typedToken.length === 0 && !isAutocompleteTablePosition(value, caretIndex)) {
     return null;
   }
 
@@ -774,20 +1281,142 @@ function getAutocompleteTokenRange(value: string, caretIndex: number) {
     tokenEnd,
     currentToken,
     typedToken,
+    qualifier,
   };
 }
 
-function createAutocompleteSuggestions(items: SqlAutocompleteItem[], typedToken: string) {
-  const normalizedTypedToken = typedToken.toLowerCase();
-  const kindPriority: Record<SqlAutocompleteKind, number> = {
-    keyword: 0,
-    table: 1,
-    column: 2,
+function resolveAutocompleteQualifier(value: string, tokenStart: number) {
+  if (tokenStart <= 1 || value[tokenStart - 1] !== '.') {
+    return null;
+  }
+
+  let qualifierStart = tokenStart - 1;
+  while (qualifierStart > 0 && /[A-Za-z0-9_]/.test(value[qualifierStart - 1])) {
+    qualifierStart -= 1;
+  }
+
+  const qualifier = value.slice(qualifierStart, tokenStart - 1);
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(qualifier) ? qualifier : null;
+}
+
+function resolveCurrentSqlStatement(value: string, caretIndex: number) {
+  const statements = parseSqlStatements(value);
+  return statements.find((statement) => statement.start <= caretIndex && caretIndex <= statement.end)
+    ?? statements.find((statement) => statement.start <= caretIndex)
+    ?? null;
+}
+
+function resolveAutocompleteClause(statementSql: string, statementOffset: number) {
+  const beforeCaret = statementSql.slice(0, statementOffset).replace(/'[^']*'/g, "''");
+  const upperBeforeCaret = beforeCaret.toUpperCase();
+  const fromJoinMatch = upperBeforeCaret.match(/\b(FROM|JOIN)\s+[A-Z0-9_"]*$/);
+  if (fromJoinMatch != null) {
+    return fromJoinMatch[1] === 'JOIN' ? 'join' : 'from';
+  }
+
+  const clauseMatches = [...upperBeforeCaret.matchAll(/\b(SELECT|FROM|JOIN|WHERE|ON|HAVING|GROUP\s+BY|ORDER\s+BY)\b/g)];
+  const lastClauseMatch = clauseMatches[clauseMatches.length - 1];
+  const lastClause = lastClauseMatch?.[1]?.replace(/\s+/g, ' ') ?? '';
+  if (lastClause === 'FROM') {
+    return 'from';
+  }
+
+  if (lastClause === 'JOIN') {
+    return 'join';
+  }
+
+  if (lastClause === 'SELECT') {
+    return 'select';
+  }
+
+  return 'expression';
+}
+
+function createAliasMap(statementSql: string, tableOptions: SolveIndexTableOption[]) {
+  const tableByName = new Map(tableOptions.map((tableOption) => [normalizeSqlName(tableOption.name), tableOption]));
+  const aliasMap = new Map<string, SolveIndexTableOption>();
+  const reservedAliasPattern = 'ON|WHERE|JOIN|INNER|LEFT|RIGHT|FULL|CROSS|GROUP|ORDER|HAVING|LIMIT';
+  const tableReferencePattern = new RegExp(
+    String.raw`\b(?:FROM|JOIN)\s+(${SQL_IDENTIFIER_PATTERN})(?:\s+(?:AS\s+)?(?!${reservedAliasPattern}\b)([A-Za-z_][A-Za-z0-9_]*))?`,
+    'gi',
+  );
+  let match: RegExpExecArray | null;
+
+  while ((match = tableReferencePattern.exec(statementSql)) != null) {
+    const tableOption = tableByName.get(normalizeSqlName(match[1]));
+    const alias = match[2]?.toUpperCase();
+    if (tableOption == null) {
+      continue;
+    }
+
+    aliasMap.set(normalizeSqlName(tableOption.name), tableOption);
+    if (alias != null) {
+      aliasMap.set(normalizeSqlName(match[2]), tableOption);
+    }
+  }
+
+  return aliasMap;
+}
+
+function createContextualAutocompleteContext(value: string, caretIndex: number, tokenRange: SqlAutocompleteTokenRange,
+                                             tableOptions: SolveIndexTableOption[], defaultItems: SqlAutocompleteItem[]) {
+  const currentStatement = resolveCurrentSqlStatement(value, caretIndex);
+  const statementSql = currentStatement?.sql ?? value;
+  const statementOffset = currentStatement == null ? caretIndex : Math.max(0, caretIndex - currentStatement.start);
+
+  if (tokenRange.qualifier != null) {
+    const aliasMap = createAliasMap(statementSql, tableOptions);
+    const tableByName = new Map(tableOptions.map((tableOption) => [normalizeSqlName(tableOption.name), tableOption]));
+    const tableOption = aliasMap.get(normalizeSqlName(tokenRange.qualifier)) ?? tableByName.get(normalizeSqlName(tokenRange.qualifier));
+    return tableOption == null
+      ? { items: [], kindPriority: COLUMN_FIRST_AUTOCOMPLETE_KIND_PRIORITY }
+      : {
+          items: createColumnAutocompleteItems(tableOption.name, tableOption.columns, tokenRange.qualifier),
+          kindPriority: COLUMN_FIRST_AUTOCOMPLETE_KIND_PRIORITY,
+        };
+  }
+
+  const clause = resolveAutocompleteClause(statementSql, statementOffset);
+  if (clause === 'from' || clause === 'join') {
+    return {
+      items: [
+        ...createTableAutocompleteItems(tableOptions),
+        ...defaultItems.filter((item) => item.kind === 'keyword'),
+      ],
+      kindPriority: TABLE_FIRST_AUTOCOMPLETE_KIND_PRIORITY,
+    };
+  }
+
+  if (clause === 'select') {
+    return {
+      items: [
+        ...createAllColumnAutocompleteItems(tableOptions),
+        ...defaultItems,
+      ],
+      kindPriority: COLUMN_FIRST_AUTOCOMPLETE_KIND_PRIORITY,
+    };
+  }
+
+  return {
+    items: defaultItems,
+    kindPriority: DEFAULT_AUTOCOMPLETE_KIND_PRIORITY,
   };
+}
+
+function createAutocompleteSuggestions(items: SqlAutocompleteItem[], typedToken: string,
+                                       kindPriority: SqlAutocompleteKindPriority) {
+  const normalizedTypedToken = typedToken.toLowerCase();
+  const seenItems = new Set<string>();
 
   return items
     .filter((item) => {
-      if (!item.value.toLowerCase().startsWith(normalizedTypedToken)) {
+      const itemKey = `${item.kind}:${item.value.toLowerCase()}:${item.detail ?? ''}`;
+      if (seenItems.has(itemKey)) {
+        return false;
+      }
+
+      seenItems.add(itemKey);
+      if (normalizedTypedToken !== '' && !item.value.toLowerCase().startsWith(normalizedTypedToken)) {
         return false;
       }
 
@@ -814,8 +1443,8 @@ function createAutocompleteSuggestions(items: SqlAutocompleteItem[], typedToken:
       }
 
       return left.value.localeCompare(right.value);
-      })
-      .slice(0, 6);
+    })
+    .slice(0, 6);
 }
 
 function createSqlStatementPreview(sql: string, maxLength = 60) {
@@ -1449,18 +2078,109 @@ function upsertSubmitProgressStep(
   }
 
   const nextSteps = [...currentSteps, nextStep];
-  const orderedKeys = new Map<string, number>(SUBMIT_STEP_ORDER.map((stepKey, index) => [stepKey, index]));
 
   return nextSteps.sort((left, right) => {
-    const leftIndex = orderedKeys.get(left.stepKey) ?? Number.MAX_SAFE_INTEGER;
-    const rightIndex = orderedKeys.get(right.stepKey) ?? Number.MAX_SAFE_INTEGER;
+    const leftIndex = getSubmitProgressStepOrder(left.stepKey);
+    const rightIndex = getSubmitProgressStepOrder(right.stepKey);
     return leftIndex - rightIndex;
   });
 }
 
+function getSubmitProgressStepOrder(stepKey: string) {
+  if (stepKey === 'validate') return 0;
+  const hiddenCaseMatch = stepKey.match(SUBMIT_HIDDEN_CASE_STEP_PATTERN);
+  if (hiddenCaseMatch != null) return 10 + Number(hiddenCaseMatch[1]);
+  if (stepKey === 'answer-open') return 100;
+  if (stepKey === 'plan') return 200;
+  return 300;
+}
+
+function isAnswerCaseProgressStep(stepKey: string) {
+  return stepKey === 'answer-open' || SUBMIT_HIDDEN_CASE_STEP_PATTERN.test(stepKey);
+}
+
+function createPlanProgressView(detailLines: string[]) {
+  const selectedAttemptLine = detailLines.find((detailLine) => detailLine.startsWith(PLAN_SELECTED_ATTEMPT_PREFIX));
+  const selectedAttempt = selectedAttemptLine == null
+    ? null
+    : Number(selectedAttemptLine.slice(PLAN_SELECTED_ATTEMPT_PREFIX.length));
+  const measurements = detailLines
+    .map((detailLine) => detailLine.match(PLAN_MEASUREMENT_PATTERN))
+    .filter((match): match is RegExpMatchArray => match != null)
+    .map((match) => ({
+      attempt: Number(match[1]),
+      cost: match[2],
+      selected: selectedAttempt != null && Number(match[1]) === selectedAttempt,
+    }));
+  const selectedCost = measurements.find((measurement) => measurement.selected)?.cost ?? null;
+  const detailGroupsBySection = new Map<string, string[]>();
+  detailLines
+    .filter((detailLine) => !detailLine.startsWith(PLAN_SELECTED_ATTEMPT_PREFIX))
+    .filter((detailLine) => !PLAN_MEASUREMENT_PATTERN.test(detailLine))
+    .filter((detailLine) => !/^Cost\s*·/i.test(detailLine.trim()))
+    .map((detailLine) => detailLine.replace(/^✓\s*/, '').trim())
+    .filter((detailLine) => detailLine !== '' && !/^-+$/.test(detailLine))
+    .map((detailLine) => detailLine.split('·').map((token) => token.trim()).filter(Boolean))
+    .filter(([sectionLabel]) => PLAN_DETAIL_SECTIONS.some((section) => section.sectionLabel === sectionLabel))
+    .forEach(([sectionLabel, ...labelTokens]) => {
+      detailGroupsBySection.set(sectionLabel, [
+        ...(detailGroupsBySection.get(sectionLabel) ?? []),
+        ...labelTokens.map(formatPlanDetailLabel),
+      ]);
+    });
+  const detailGroups = PLAN_DETAIL_SECTIONS.map((section) => ({
+    ...section,
+    labels: detailGroupsBySection.get(section.sectionLabel) ?? [],
+  }));
+
+  return {
+    selectedAttempt,
+    selectedCost,
+    measurements,
+    detailGroups,
+  };
+}
+
+function formatPlanDetailLabel(label: string) {
+  const normalizedLabel = label.trim();
+  const planDetailLabelBySource = new Map([
+    ['Full Scan', 'FULL_SCAN'],
+    ['Index Scan', 'INDEX_SCAN'],
+    ['Bitmap Scan', 'BITMAP_SCAN'],
+    ['Tid Scan', 'TID_SCAN'],
+    ['Derived Scan', 'DERIVED_SCAN'],
+    ['Nested Loop', 'NESTED_LOOP'],
+    ['Merge Join', 'MERGE_JOIN'],
+    ['Hash Join', 'HASH_JOIN'],
+    ['Access Filter', 'ACCESS_FILTER'],
+    ['Post Filter', 'POST_FILTER'],
+    ['Plain Sort', 'PLAIN_SORT'],
+    ['Incremental Sort', 'INCREMENTAL_SORT'],
+    ['Hash Agg', 'HASH_AGG'],
+    ['Group Agg', 'GROUP_AGG'],
+    ['Unique Agg', 'UNIQUE_AGG'],
+    ['Used', getUiTextValue('RUNTIME_USED_LABEL', '사용')],
+  ]);
+
+  return planDetailLabelBySource.get(normalizedLabel) ?? normalizedLabel.toUpperCase().replaceAll(' ', '_');
+}
+
+function formatSubmitProgressDetailLine(detailLine: string) {
+  const hiddenCaseMatch = detailLine.match(/^Case\s+\d+\s*:\s*Hidden\s+(\d+)\s+(.+)$/i);
+  if (hiddenCaseMatch != null) {
+    return `Case Hidden ${hiddenCaseMatch[1]} : ${hiddenCaseMatch[2].trim()}`;
+  }
+
+  const openCaseMatch = detailLine.match(/^Case\s+\d+\s*:\s*Open\s+(.+)$/i);
+  if (openCaseMatch != null) {
+    return `Case Open : ${openCaseMatch[1].trim()}`;
+  }
+
+  return detailLine;
+}
+
 function SubmitProgressItem({ step }: { step: ProblemSubmitProgressStep }) {
-  const isExpandable = step.stepKey === 'ddl' && step.detailLines.length > 0;
-  const [collapsed, setCollapsed] = useState(step.stepKey === 'ddl');
+  const [isPlanDetailModalOpen, setPlanDetailModalOpen] = useState(false);
   const toneClass =
     step.status === 'running'
       ? 'is-pending'
@@ -1468,49 +2188,100 @@ function SubmitProgressItem({ step }: { step: ProblemSubmitProgressStep }) {
         ? 'is-success'
         : 'is-error';
   const indicator = step.status === 'running' ? <span className="solve-editor-statement-spinner" /> : step.status === 'success' ? '✓' : '✕';
-
-  useEffect(() => {
-    if (!isExpandable) {
-      setCollapsed(false);
-    }
-  }, [isExpandable]);
-
-  useEffect(() => {
-    if (isExpandable) {
-      setCollapsed(true);
-    }
-  }, [isExpandable, step.detailLines.length]);
+  const planProgressView = step.stepKey === 'plan' ? createPlanProgressView(step.detailLines) : null;
+  const displayMessage = step.stepKey === 'plan' && step.status === 'success'
+    ? getUiTextValue('PROBLEM_SOLVE_PLAN_PROGRESS_SUCCESS_TITLE', '실행계획 분석 완료')
+    : step.message;
+  const shouldRenderPlanProgress = planProgressView != null && planProgressView.measurements.length > 0;
+  const shouldRenderDetailLines = step.detailLines.length > 0 && !shouldRenderPlanProgress && !isAnswerCaseProgressStep(step.stepKey);
+  const canOpenPlanDetails = step.stepKey === 'plan' && step.status === 'success' && planProgressView != null && planProgressView.selectedAttempt != null;
 
   return (
-    <div className={`solve-editor-inline-result-group solve-submit-progress-item ${collapsed ? 'is-collapsed' : ''} ${toneClass}`.trim()}>
+    <div className={`solve-editor-inline-result-group solve-submit-progress-item ${toneClass}`.trim()}>
       <div className="solve-editor-inline-result-header">
-        {isExpandable ? (
-          <button
-            type="button"
-            className="solve-detail-section-divider-button solve-pane-section-divider-button"
-            aria-label={collapsed ? getUiTextValue('COMMON_EXPAND_ACTION', '펼치기') : getUiTextValue('COMMON_COLLAPSE_ACTION', '접기')}
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed((current) => !current)}
-          >
-            <CollapseChevronIcon collapsed={collapsed} />
-          </button>
-        ) : null}
-        <div className="solve-pane-summary-row">
+        <div className={`solve-pane-summary-row ${canOpenPlanDetails ? 'is-plan-detail-action' : ''}`.trim()}>
           <span className={`solve-pane-summary-status-button ${toneClass}`.trim()} aria-hidden="true">
             {indicator}
           </span>
-          <span className={`solve-pane-summary-statement-title ${toneClass}`.trim()}>{step.message}</span>
+          {canOpenPlanDetails ? (
+            <span className="solve-submit-plan-title-action">
+              <span className={`solve-pane-summary-statement-title ${toneClass}`.trim()}>{displayMessage}</span>
+              <button
+                type="button"
+                className="submit-history-detail-button solve-submit-plan-detail-button"
+                aria-label={getUiTextValue('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
+                title={getUiTextValue('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
+                onClick={() => setPlanDetailModalOpen(true)}
+              >
+                ↗
+              </button>
+            </span>
+          ) : (
+            <span className={`solve-pane-summary-statement-title ${toneClass}`.trim()}>{displayMessage}</span>
+          )}
         </div>
       </div>
-      {step.detailLines.length > 0 && (!isExpandable || !collapsed) ? (
+      {shouldRenderPlanProgress ? (
+        <div className="solve-submit-plan-progress">
+          <div className="solve-submit-plan-measurements">
+            {planProgressView.measurements.map((measurement) => (
+              <div
+                key={`plan-measurement-${measurement.attempt}`}
+                className={`solve-submit-plan-measurement ${measurement.selected ? 'is-selected' : planProgressView.selectedAttempt == null ? '' : 'is-discarded'}`.trim()}
+              >
+                {`실행계획 분석 ${measurement.attempt}회 : Cost ${measurement.cost}${measurement.selected ? ' (중앙값)' : ''}`}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {shouldRenderDetailLines ? (
         <div className="solve-editor-inline-result-body solve-pane-result-stack">
           {step.detailLines.map((detailLine) => (
             <p key={`${step.stepKey}-${detailLine}`} className={`solve-pane-result-message ${toneClass === 'is-error' ? 'is-error' : ''}`.trim()}>
-              {detailLine}
+              {formatSubmitProgressDetailLine(detailLine)}
             </p>
           ))}
         </div>
       ) : null}
+      {isPlanDetailModalOpen && planProgressView != null && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="submit-history-modal-overlay"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setPlanDetailModalOpen(false);
+                }
+              }}
+            >
+              <div className="submit-history-modal submit-history-plan-modal solve-submit-plan-modal" role="dialog" aria-modal="true" aria-label={getUiTextValue('SUBMIT_HISTORY_PLAN_MODAL_LABEL', '실행 계획 요소 보기')}>
+                <div className="submit-history-modal-header">
+                  <div className="submit-history-modal-copy">
+                    <strong>{getUiTextValue('SUBMIT_HISTORY_PLAN_TITLE', '실행 계획 요소')}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="submit-history-modal-close"
+                    aria-label={getUiTextValue('SUBMIT_HISTORY_PLAN_MODAL_CLOSE_LABEL', '실행 계획 요소 닫기')}
+                    onClick={() => setPlanDetailModalOpen(false)}
+                  >
+                    {getUiTextValue('COMMON_CLOSE_BUTTON', '닫기')}
+                  </button>
+                </div>
+
+                <div className="submit-history-modal-body submit-history-plan-modal-body">
+                  <ExecutionPlanDetailBoard
+                    sections={planProgressView.detailGroups}
+                    noneLabel={getUiTextValue('COMMON_NONE_LABEL', '없음')}
+                    className="submit-history-plan-detail-board solve-submit-plan-detail-board"
+                  />
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -3097,6 +3868,41 @@ function OpacityIcon() {
   );
 }
 
+function PlusGlyphIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 3.5v9" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      <path d="M3.5 8h9" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3.4 11.6 3 13l1.4-.4 6.9-6.9-1-1-6.9 6.9Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.4"
+      />
+      <path d="m10.2 4.8 1.1-1.1a.9.9 0 0 1 1.3 0l.2.2a.9.9 0 0 1 0 1.3l-1.1 1.1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3.5 4.8h9" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+      <path d="M6.4 3.2h3.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+      <path d="M5 5.5 5.4 13h5.2l.4-7.5" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.5" />
+      <path d="M7.2 7.2v3.8M8.8 7.2v3.8" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 function ExecutionResultGrid({ columns, rows, emptyMessage, resetKey }: { columns: GridColumn[]; rows: string[][]; emptyMessage: string; resetKey: number }) {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>([]);
@@ -3367,6 +4173,38 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       : text('PROBLEM_SOLVE_PANEL_RESULT_LABEL', '제출 결과');
   const selectedDdl = useMemo(() => resolveProblemDdl(problemDetail, selectedDbms), [problemDetail, selectedDbms]);
   const ddlAutocompleteItems = useMemo(() => extractAutocompleteItemsFromDdl(selectedDdl), [selectedDdl]);
+  const indexTableOptions = useMemo(() => extractIndexTableOptionsFromDdl(selectedDdl), [selectedDdl]);
+  const [indexDefinitions, setIndexDefinitions] = useState<SolveIndexDefinition[]>([]);
+  const [indexDraft, setIndexDraft] = useState<SolveIndexDraft>(() => createDefaultIndexDraft([], selectedDbms));
+  const [isIndexDraftOpen, setIsIndexDraftOpen] = useState(false);
+  const [editingIndexId, setEditingIndexId] = useState<string | null>(null);
+  const indexDraftHistoryEntryRef = useRef(false);
+  const indexAutoParseSkippedSqlRef = useRef<string | null>(null);
+  const indexColumnPickerRef = useRef<HTMLDivElement | null>(null);
+  const indexColumnPickerDragRef = useRef<{ pointerId: number; startY: number; startScrollTop: number; moved: boolean } | null>(null);
+  const indexColumnPickerDragMovedRef = useRef(false);
+  const indexMethodOptions = useMemo(() => getIndexMethodOptions(selectedDbms), [selectedDbms]);
+  const selectedIndexTable = useMemo(
+    () => indexTableOptions.find((tableOption) => tableOption.name === indexDraft.tableName) ?? indexTableOptions[0] ?? null,
+    [indexDraft.tableName, indexTableOptions],
+  );
+  const draftAvailableColumns = selectedIndexTable?.columns ?? [];
+  const indexDraftSql = buildCreateIndexSql(indexDraft, selectedDbms);
+  const editorIndexParseResult = useMemo(
+    () => parseEditorIndexStatements(sql, indexTableOptions, selectedDbms),
+    [indexTableOptions, selectedDbms, sql],
+  );
+  const editorIndexDefinitions = editorIndexParseResult.definitions;
+  const editorIndexErrorRanges = editorIndexParseResult.errorRanges;
+  const hasParsingIndexStatement = editorIndexErrorRanges.length > 0;
+  const visibleIndexDefinitions = indexDefinitions;
+  const submitIndexSqls = useMemo(
+    () => uniqueSqls([
+      ...indexDefinitions.map((indexDefinition) => buildCreateIndexSql(indexDefinition, selectedDbms)),
+      ...editorIndexDefinitions.map((indexDefinition) => resolveIndexDefinitionSql(indexDefinition, selectedDbms)),
+    ]),
+    [editorIndexDefinitions, indexDefinitions, selectedDbms],
+  );
   const sqlHighlightTableNames = useMemo(
     () => new Set(ddlAutocompleteItems.filter((item) => item.kind === 'table').map((item) => item.value.toLowerCase())),
     [ddlAutocompleteItems],
@@ -3391,9 +4229,109 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }));
   }, [executionPickerState]);
   const highlightedSql = useMemo(
-    () => renderHighlightedSql(sql, sqlHighlightTableNames, sqlHighlightColumnNames, pickerHighlightRanges),
-    [pickerHighlightRanges, sql, sqlHighlightColumnNames, sqlHighlightTableNames],
+    () => renderHighlightedSql(sql, sqlHighlightTableNames, sqlHighlightColumnNames, pickerHighlightRanges, editorIndexErrorRanges),
+    [editorIndexErrorRanges, pickerHighlightRanges, sql, sqlHighlightColumnNames, sqlHighlightTableNames],
   );
+  useEffect(() => {
+    setIndexDefinitions([]);
+    setIndexDraft(createDefaultIndexDraft(indexTableOptions, selectedDbms));
+    setIsIndexDraftOpen(false);
+    setEditingIndexId(null);
+  }, [indexTableOptions, selectedDbms]);
+
+  useEffect(() => {
+    if (indexAutoParseSkippedSqlRef.current === sql) {
+      indexAutoParseSkippedSqlRef.current = null;
+      return;
+    }
+
+    if (editorIndexDefinitions.length === 0) {
+      return;
+    }
+
+    setIndexDefinitions((current) => {
+      const currentSqls = new Set(current.map((indexDefinition) =>
+        normalizeComparableSql(resolveIndexDefinitionSql(indexDefinition, selectedDbms))
+      ));
+      const nextIndexDefinitions = editorIndexDefinitions.filter((indexDefinition) =>
+        !currentSqls.has(normalizeComparableSql(resolveIndexDefinitionSql(indexDefinition, selectedDbms)))
+      );
+
+      return nextIndexDefinitions.length > 0 ? [...current, ...nextIndexDefinitions] : current;
+    });
+    setSql((currentSql) =>
+      currentSql === sql
+        ? removeSqlRanges(
+            currentSql,
+            editorIndexDefinitions
+              .filter((indexDefinition) => indexDefinition.start != null && indexDefinition.end != null)
+              .map((indexDefinition) => ({
+                start: indexDefinition.start ?? 0,
+                end: indexDefinition.end ?? 0,
+              })),
+          )
+        : currentSql
+    );
+  }, [editorIndexDefinitions, selectedDbms, sql]);
+
+  useEffect(() => {
+    const pickerElement = indexColumnPickerRef.current;
+    if (!isIndexDraftOpen || pickerElement == null) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      const wheelTarget = event.target instanceof Element
+        ? event.target.closest('.solve-index-column-picker')
+        : null;
+      if (wheelTarget !== pickerElement || pickerElement.scrollHeight <= pickerElement.clientHeight) {
+        return;
+      }
+
+      const wheelDelta = event.deltaMode === 1
+        ? event.deltaY * 16
+        : event.deltaMode === 2
+          ? event.deltaY * pickerElement.clientHeight
+          : event.deltaY;
+      const previousScrollTop = pickerElement.scrollTop;
+      const maxScrollTop = pickerElement.scrollHeight - pickerElement.clientHeight;
+      const nextScrollTop = Math.min(Math.max(previousScrollTop + wheelDelta, 0), maxScrollTop);
+
+      if (nextScrollTop === previousScrollTop) {
+        return;
+      }
+
+      pickerElement.scrollTop = nextScrollTop;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    document.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+    return () => document.removeEventListener('wheel', handleWheel, true);
+  }, [isIndexDraftOpen, draftAvailableColumns.length]);
+
+  useEffect(() => {
+    if (!isIndexDraftOpen || typeof window === 'undefined') {
+      return;
+    }
+
+    if (!indexDraftHistoryEntryRef.current) {
+      const currentHistoryState = typeof window.history.state === 'object' && window.history.state != null
+        ? window.history.state
+        : {};
+      window.history.pushState({ ...currentHistoryState, solveIndexDraftModal: true }, '', window.location.href);
+      indexDraftHistoryEntryRef.current = true;
+    }
+
+    const closeIndexDraftByHistory = () => {
+      indexDraftHistoryEntryRef.current = false;
+      setIsIndexDraftOpen(false);
+    };
+
+    window.addEventListener('popstate', closeIndexDraftByHistory);
+    return () => window.removeEventListener('popstate', closeIndexDraftByHistory);
+  }, [isIndexDraftOpen]);
+
   const updateSqlEditorSelection = useCallback((selectionStart: number, selectionEnd = selectionStart) => {
     sqlEditorSelectionRef.current = {
       start: selectionStart,
@@ -3456,8 +4394,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const displayProblemNumber = problemDetail?.problemId ?? problem.problemNumber ?? problemId;
   const displayProblemTitle =
     problemDetail?.title ?? problem.title ?? text('HEADER_MENU_PROBLEMS', '문제');
-  const taggedPostPrimarySearchTerm = displayProblemNumber;
-  const taggedPostFallbackSearchTerm = getSolveRelatedCommunitySearchTerm(displayProblemNumber);
 
   const shouldRenderPanel = (panelKey: PanelKey) => panelKey === 'editor' || submitMessage != null || submitProgressSteps.length > 0;
   const visibleFloatingPanels = panelOrder.filter(
@@ -3467,7 +4403,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const visibleExternalWindows = panelOrder.filter(
     (panelKey) => shouldRenderPanel(panelKey) && panelVisibility[panelKey] && externalWindowPanels[panelKey],
   );
-  const focusPanelSection = (resolveElement: () => HTMLElement | null) => {
+  const scrollPanelSectionIntoView = (resolveElement: () => HTMLElement | null) => {
     requestAnimationFrame(() => {
       const element = resolveElement();
       if (!element) {
@@ -3475,7 +4411,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       }
 
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      element.focus({ preventScroll: true });
     });
   };
 
@@ -3728,27 +4663,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     async function loadTaggedPosts() {
       try {
-        let nextPage = await fetchCommunityPosts({
+        const nextPage = await fetchCommunityPosts({
           page: taggedPostRequestedPage,
-          search: taggedPostPrimarySearchTerm,
-          tag: '',
+          search: '',
+          tag: displayProblemNumber,
           category: 'all',
           sortKey: 'default',
         });
-
-        if (
-          nextPage.totalCount === 0
-          && taggedPostFallbackSearchTerm !== taggedPostPrimarySearchTerm
-          && taggedPostFallbackSearchTerm.trim() !== ''
-        ) {
-          nextPage = await fetchCommunityPosts({
-            page: taggedPostRequestedPage,
-            search: taggedPostFallbackSearchTerm,
-            tag: '',
-            category: 'all',
-            sortKey: 'default',
-          });
-        }
 
         if (cancelled) {
           return;
@@ -3778,7 +4699,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     return () => {
       cancelled = true;
     };
-  }, [contentTab, taggedPostFallbackSearchTerm, taggedPostPrimarySearchTerm, taggedPostRequestedPage]);
+  }, [contentTab, displayProblemNumber, taggedPostRequestedPage]);
 
   useEffect(() => {
     if (!sqlEditorElement) {
@@ -3920,17 +4841,20 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         setSubmitMessage(null);
         const stepKey = progressMessage.stepKey;
         if (stepKey) {
-          setSubmitProgressSteps((current) =>
-            upsertSubmitProgressStep(
-              current,
-              createSubmitProgressStep(
-                stepKey,
-                progressMessage.status ?? 'running',
-                progressMessage.message ?? '',
-                Array.isArray(progressMessage.detailLines) ? progressMessage.detailLines : [],
-              ),
-            ),
-          );
+          setSubmitProgressSteps((current) => {
+            const nextProgressStep = createSubmitProgressStep(
+              stepKey,
+              progressMessage.status ?? 'running',
+              progressMessage.message ?? '',
+              Array.isArray(progressMessage.detailLines) ? progressMessage.detailLines : [],
+            );
+
+            if (stepKey === 'validate' && progressMessage.status === 'error') {
+              return [nextProgressStep];
+            }
+
+            return upsertSubmitProgressStep(current, nextProgressStep);
+          });
         }
         setCollapsedCards((current) => ({
           ...current,
@@ -3957,13 +4881,30 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           return;
         }
 
-        setIsSubmitting(false);
-        setSubmitMessage(
-          submitMessage.success === false
-            && nextSubmitMessage !== text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')
+        const failureMessage =
+          submitMessage.success === false && nextSubmitMessage !== text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')
             ? nextSubmitMessage
-            : null,
-        );
+            : null;
+        setIsSubmitting(false);
+        setSubmitMessage(null);
+        if (failureMessage) {
+          setSubmitProgressSteps((current) => {
+            if (current.some((step) => step.status === 'error' || step.status === 'incorrect')) {
+              return current;
+            }
+
+            const failureStep = [...current].reverse().find((step) => step.status === 'running') ?? current.at(-1);
+            return upsertSubmitProgressStep(
+              current,
+              createSubmitProgressStep(
+                failureStep?.stepKey ?? 'answer',
+                'error',
+                failureMessage,
+                Array.isArray(submitMessage.reasons) ? submitMessage.reasons : [failureMessage],
+              ),
+            );
+          });
+        }
         setCollapsedCards((current) => ({
           ...current,
           submit: false,
@@ -3980,7 +4921,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           ...current,
           submit: false,
         }));
-        focusPanelSection(() => submitPanelRef.current);
+        scrollPanelSectionIntoView(() => submitPanelRef.current);
         return;
       }
 
@@ -4182,13 +5123,24 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
   const updateAutocompleteState = (nextSql: string, caretIndex: number) => {
     try {
+      if (hasAutocompleteTokenAfterCaret(nextSql, caretIndex)) {
+        setAutocompleteState(null);
+        return;
+      }
+
       const tokenRange = getAutocompleteTokenRange(nextSql, caretIndex);
       if (!tokenRange) {
         setAutocompleteState(null);
         return;
       }
 
-      const suggestions = createAutocompleteSuggestions(autocompleteItems, tokenRange.typedToken);
+      const autocompleteContext = createContextualAutocompleteContext(
+        nextSql, caretIndex, tokenRange,
+        indexTableOptions, autocompleteItems,
+      );
+      const suggestions = createAutocompleteSuggestions(
+        autocompleteContext.items, tokenRange.typedToken, autocompleteContext.kindPriority,
+      );
       if (suggestions.length === 0) {
         setAutocompleteState(null);
         return;
@@ -4369,11 +5321,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       const destination = page === 1
         ? SESSION_SOCKET_DESTINATION.problemExecute
         : SESSION_SOCKET_DESTINATION.problemExecutePage;
+      const executionSql = mergeIndexSqlsWithStatementSql(submitIndexSqls, statementSql);
 
       try {
         await sendSessionSocketMessage(destination, {
           problemId,
-          sql: statementSql,
+          sql: executionSql,
           dbms: selectedDbms,
           page,
           pageSize: EXECUTION_RESULT_PAGE_SIZE,
@@ -4601,7 +5554,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const submitStatementSegments = async (statementSegments: SqlStatementSegment[]) => {
-    const submitSql = statementSegments.map((statement) => statement.sql).join(';\n');
+    const selectedSubmitSql = statementSegments.map((statement) => statement.sql).join(';\n');
+    const submitSql = mergeIndexSqlsWithStatementSql(submitIndexSqls, selectedSubmitSql);
 
     if (submitSql.trim().length === 0) {
       setSubmitProgressSteps([]);
@@ -4620,7 +5574,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setIsSubmitting(true);
     setSubmitMessage(null);
     setSubmitProgressSteps([
-      createSubmitProgressStep('validate', 'running', text('PROBLEM_SOLVE_SUBMIT_REQUESTING_MESSAGE', '제출 요청을 전송하는 중입니다.')),
+      createSubmitProgressStep('validate', 'running', text('PROBLEM_SOLVE_SQL_VALIDATE_RUNNING_MESSAGE', 'SQL 오류 검사 중')),
     ]);
     setCollapsedCards((current) => ({
       ...current,
@@ -4630,7 +5584,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       ...current,
       submit: true,
     }));
-    focusPanelSection(() => submitPanelRef.current);
+    scrollPanelSectionIntoView(() => submitPanelRef.current);
 
     try {
       await sendSessionSocketMessage(SESSION_SOCKET_DESTINATION.problemSubmit, {
@@ -4898,6 +5852,185 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     changeSqlEditorFontSize(event.deltaY < 0 ? 1 : -1);
   };
 
+  const handleIndexDraftTableChange = (tableName: string) => {
+    const tableOption = indexTableOptions.find((option) => option.name === tableName);
+    const columns = tableOption?.columns[0] ? [createIndexColumn(tableOption.columns[0])] : [];
+
+    setIndexDraft((current) => ({
+      ...current,
+      tableName,
+      columns,
+      includeColumns: [],
+    }));
+  };
+
+  const toggleIndexDraftColumn = (columnName: string) => {
+    setIndexDraft((current) => {
+      const exists = current.columns.some((column) => column.name === columnName);
+      const columns = exists
+        ? current.columns.filter((column) => column.name !== columnName)
+        : [...current.columns, createIndexColumn(columnName)];
+
+      return {
+        ...current,
+        columns,
+        includeColumns: current.includeColumns.filter((includeColumn) => includeColumn !== columnName),
+      };
+    });
+  };
+
+  const updateIndexDraftColumn = (columnName: string, patch: Partial<Pick<SolveIndexColumn, 'direction' | 'nulls'>>) => {
+    setIndexDraft((current) => ({
+      ...current,
+      columns: current.columns.map((column) =>
+        column.name === columnName
+          ? {
+              ...column,
+              ...patch,
+            }
+          : column,
+      ),
+    }));
+  };
+
+  const toggleIndexDraftIncludeColumn = (columnName: string) => {
+    setIndexDraft((current) => ({
+      ...current,
+      includeColumns: current.includeColumns.includes(columnName)
+        ? current.includeColumns.filter((includeColumn) => includeColumn !== columnName)
+        : [...current.includeColumns, columnName],
+    }));
+  };
+
+  const openIndexCreateModal = () => {
+    setEditingIndexId(null);
+    setIndexDraft(createDefaultIndexDraft(indexTableOptions, selectedDbms, indexDefinitions.length));
+    setIsIndexDraftOpen(true);
+  };
+
+  const closeIndexDraftModal = () => {
+    setEditingIndexId(null);
+    setIndexDraft(createDefaultIndexDraft(indexTableOptions, selectedDbms));
+    setIsIndexDraftOpen(false);
+    if (indexDraftHistoryEntryRef.current && typeof window !== 'undefined') {
+      indexDraftHistoryEntryRef.current = false;
+      window.history.back();
+    }
+  };
+
+  const saveIndexDefinition = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!indexDraft.tableName || indexDraft.columns.length === 0) {
+      return;
+    }
+
+    setIndexDefinitions((current) => {
+      const nextIndexDefinition = {
+        ...indexDraft,
+        id: editingIndexId ?? `index-${Date.now().toString(36)}-${current.length}`,
+        name: indexDraft.name.trim() || createIndexDefaultName(current.length),
+        whereClause: selectedDbms === 'postgresql' ? indexDraft.whereClause : '',
+        includeColumns: selectedDbms === 'postgresql' ? indexDraft.includeColumns : [],
+        source: 'builder' as const,
+        operation: 'CREATE' as const,
+      };
+
+      return editingIndexId == null
+        ? [...current, nextIndexDefinition]
+        : current.map((indexDefinition) =>
+            indexDefinition.id === editingIndexId ? nextIndexDefinition : indexDefinition,
+          );
+    });
+    closeIndexDraftModal();
+  };
+
+  const editIndexDefinition = (indexDefinition: SolveIndexDefinition) => {
+    if (indexDefinition.operation !== 'CREATE' || indexDefinition.columns.length === 0) {
+      setSql((currentSql) => {
+        const nextSql = [currentSql.trimEnd(), resolveIndexDefinitionSql(indexDefinition, selectedDbms)]
+          .filter(Boolean)
+          .join(currentSql.trimEnd() ? '\n\n' : '');
+        indexAutoParseSkippedSqlRef.current = nextSql;
+        return nextSql;
+      });
+      removeIndexDefinition(indexDefinition.id);
+      window.setTimeout(() => sqlEditorRef.current?.focus(), 0);
+      return;
+    }
+
+    setEditingIndexId(indexDefinition.id);
+    setIndexDraft({
+      name: indexDefinition.name,
+      tableName: indexDefinition.tableName,
+      method: indexDefinition.method,
+      unique: indexDefinition.unique,
+      columns: indexDefinition.columns,
+      includeColumns: indexDefinition.includeColumns,
+      whereClause: indexDefinition.whereClause,
+    });
+    setIsIndexDraftOpen(true);
+  };
+
+  const removeIndexDefinition = (indexId: string) => {
+    setIndexDefinitions((current) => current.filter((indexDefinition) => indexDefinition.id !== indexId));
+  };
+
+  const startIndexColumnPickerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target instanceof Element && event.target.closest('input, select, button'))) {
+      return;
+    }
+
+    indexColumnPickerDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startScrollTop: event.currentTarget.scrollTop,
+      moved: false,
+    };
+    indexColumnPickerDragMovedRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveIndexColumnPickerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = indexColumnPickerDragRef.current;
+    if (dragState == null || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaY = event.clientY - dragState.startY;
+    if (Math.abs(deltaY) > 3) {
+      dragState.moved = true;
+      indexColumnPickerDragMovedRef.current = true;
+      event.currentTarget.classList.add('is-dragging');
+    }
+
+    if (!dragState.moved) {
+      return;
+    }
+
+    event.currentTarget.scrollTop = dragState.startScrollTop - deltaY;
+    event.preventDefault();
+  };
+
+  const stopIndexColumnPickerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = indexColumnPickerDragRef.current;
+    if (dragState == null || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.currentTarget.classList.remove('is-dragging');
+    indexColumnPickerDragRef.current = null;
+  };
+
+  const preventIndexColumnPickerClickAfterDrag = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!indexColumnPickerDragMovedRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    indexColumnPickerDragMovedRef.current = false;
+  };
+
   const togglePanelVisibility = (panelKey: PanelKey) => {
     if (panelVisibility[panelKey] && (detachedPanels[panelKey] || externalWindowPanels[panelKey])) {
       setDetachedPanels((current) => ({
@@ -5018,35 +6151,40 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     });
   };
 
-  const renderPanelActions = (panelKey: PanelKey) =>
-    panelKey === 'submit' ? null : (
-    <div className="solve-pane-actions">
-      <button
-        type="button"
-        className={`mini-toggle solve-pane-action solve-pane-action-icon ${externalWindowPanels[panelKey] ? 'is-selected' : ''}`}
-        aria-label={externalWindowPanels[panelKey] ? `Restore ${getPanelTitle(panelKey)} from external window` : `Open ${getPanelTitle(panelKey)} in external window`}
-        onClick={() => togglePanelExternalWindow(panelKey)}
-      >
-        <ExternalWindowIcon />
-      </button>
-      <button
-        type="button"
-        className={`mini-toggle solve-pane-action solve-pane-action-icon ${detachedPanels[panelKey] ? 'is-selected' : ''}`}
-        aria-label={detachedPanels[panelKey] ? `Restore ${getPanelTitle(panelKey)} from PIP` : `Open ${getPanelTitle(panelKey)} in PIP`}
-        onClick={() => togglePanelDetach(panelKey)}
-      >
-        <PipIcon />
-      </button>
-      <button
-        type="button"
-        className="mini-toggle solve-pane-action solve-pane-action-icon"
-        aria-label={text('PROBLEM_SOLVE_PANEL_CLOSE_LABEL', { label: getPanelTitle(panelKey) }, '{label} 닫기')}
-        onClick={() => togglePanelVisibility(panelKey)}
-      >
-        <CloseIcon />
-      </button>
-    </div>
+  const renderPanelActions = (panelKey: PanelKey) => {
+    const showCloseButton = panelKey !== 'editor' || detachedPanels[panelKey] || externalWindowPanels[panelKey];
+
+    return panelKey === 'submit' ? null : (
+      <div className="solve-pane-actions">
+        <button
+          type="button"
+          className={`mini-toggle solve-pane-action solve-pane-action-icon is-external-window ${externalWindowPanels[panelKey] ? 'is-selected' : ''}`}
+          aria-label={externalWindowPanels[panelKey] ? `Restore ${getPanelTitle(panelKey)} from external window` : `Open ${getPanelTitle(panelKey)} in external window`}
+          onClick={() => togglePanelExternalWindow(panelKey)}
+        >
+          <ExternalWindowIcon />
+        </button>
+        <button
+          type="button"
+          className={`mini-toggle solve-pane-action solve-pane-action-icon is-pip ${detachedPanels[panelKey] ? 'is-selected' : ''}`}
+          aria-label={detachedPanels[panelKey] ? `Restore ${getPanelTitle(panelKey)} from PIP` : `Open ${getPanelTitle(panelKey)} in PIP`}
+          onClick={() => togglePanelDetach(panelKey)}
+        >
+          <PipIcon />
+        </button>
+        {showCloseButton ? (
+          <button
+            type="button"
+            className="mini-toggle solve-pane-action solve-pane-action-icon"
+            aria-label={text('PROBLEM_SOLVE_PANEL_CLOSE_LABEL', { label: getPanelTitle(panelKey) }, '{label} 닫기')}
+            onClick={() => togglePanelVisibility(panelKey)}
+          >
+            <CloseIcon />
+          </button>
+        ) : null}
+      </div>
     );
+  };
 
   const renderFloatingOpacityControl = () => {
     const sliderRange = FLOATING_EDITOR_BACKGROUND_MAX_ALPHA - FLOATING_EDITOR_BACKGROUND_MIN_ALPHA;
@@ -5139,6 +6277,218 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     );
   };
 
+  const renderIndexSettingsPanel = (isFloating: boolean) => {
+    const hasTableOptions = indexTableOptions.length > 0;
+    const availableIncludeColumns = draftAvailableColumns.filter(
+      (columnName) => !indexDraft.columns.some((column) => column.name === columnName),
+    );
+
+    return (
+      <div className={`solve-index-settings ${isFloating ? 'is-floating' : ''}`.trim()}>
+        <div className="solve-index-list">
+          {visibleIndexDefinitions.length > 0 ? (
+            visibleIndexDefinitions.map((indexDefinition) => (
+              <article key={indexDefinition.id} className="solve-index-card">
+                <div className="solve-index-card-main">
+                  <div className="solve-index-card-title-row">
+                    <strong>{indexDefinition.name}</strong>
+                    <span>{indexDefinition.operation === 'CREATE' ? indexDefinition.method : indexDefinition.operation}</span>
+                    {indexDefinition.unique ? <span>{text('PROBLEM_SOLVE_INDEX_UNIQUE_BADGE', 'UNIQUE')}</span> : null}
+                  </div>
+                  <p>
+                    {indexDefinition.operation === 'CREATE'
+                      ? `${indexDefinition.tableName} · ${indexDefinition.columns.map((column) => supportsIndexColumnOrdering(indexDefinition.method) ? `${column.name} ${column.direction}` : column.name).join(', ')}`
+                      : `${indexDefinition.operation === 'ALTER' ? 'INDEX 변경' : 'INDEX 제거'}${indexDefinition.tableName ? ` · ${indexDefinition.tableName}` : ''}`}
+                  </p>
+                  <code>{resolveIndexDefinitionSql(indexDefinition, selectedDbms)}</code>
+                </div>
+                <div className="solve-index-card-actions">
+                  <button type="button" aria-label={text('COMMON_EDIT_ACTION', '수정')} onClick={() => editIndexDefinition(indexDefinition)}>
+                    <PencilIcon />
+                  </button>
+                  <button type="button" aria-label={text('COMMON_DELETE_ACTION', '삭제')} onClick={() => removeIndexDefinition(indexDefinition.id)}>
+                    <TrashIcon />
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="solve-index-empty">
+              {hasTableOptions
+                ? text('PROBLEM_SOLVE_INDEX_EMPTY_STATE', '설정된 인덱스가 없습니다.')
+                : text('PROBLEM_SOLVE_INDEX_DDL_EMPTY_STATE', 'DDL을 불러오면 인덱스 설정을 구성할 수 있습니다.')}
+            </div>
+          )}
+        </div>
+
+        {isIndexDraftOpen && hasTableOptions && typeof document !== 'undefined'
+          ? createPortal(
+              <div className="submit-history-modal-overlay solve-index-modal-overlay" role="presentation">
+                <form className="submit-history-modal solve-index-modal" role="dialog" aria-modal="true" aria-label={text('PROBLEM_SOLVE_INDEX_MODAL_LABEL', '인덱스 편집')} onSubmit={saveIndexDefinition}>
+                  <div className="submit-history-modal-header solve-index-modal-header">
+                    <div className="submit-history-modal-copy">
+                      <strong>{editingIndexId == null ? text('PROBLEM_SOLVE_INDEX_ADD_BUTTON', '인덱스 추가') : text('PROBLEM_SOLVE_INDEX_EDIT_BUTTON', '인덱스 수정')}</strong>
+                    </div>
+                    <button type="button" className="submit-history-modal-close" onClick={closeIndexDraftModal}>
+                      {text('COMMON_CLOSE_BUTTON', '닫기')}
+                    </button>
+                  </div>
+
+                  <div className="solve-index-draft">
+                    <div className="solve-index-draft-grid">
+                      <label className="solve-index-field is-wide">
+                        <span>{text('PROBLEM_SOLVE_INDEX_NAME_LABEL', '인덱스명')}</span>
+                        <input
+                          value={indexDraft.name}
+                          onChange={(event) => setIndexDraft((current) => ({ ...current, name: event.target.value }))}
+                          placeholder="idx_table_column"
+                          name="indexName"
+                          autoComplete="off"
+                        />
+                      </label>
+                      <label className="solve-index-field">
+                        <span>{text('PROBLEM_SOLVE_INDEX_TABLE_LABEL', '테이블')}</span>
+                        <select name="indexTable" value={indexDraft.tableName} onChange={(event) => handleIndexDraftTableChange(event.target.value)}>
+                          {indexTableOptions.map((tableOption) => (
+                            <option key={tableOption.name} value={tableOption.name}>{tableOption.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="solve-index-method-row">
+                      <label className="solve-index-field">
+                        <span>{text('PROBLEM_SOLVE_INDEX_METHOD_LABEL', '방식')}</span>
+                        <select
+                          name="indexMethod"
+                          value={indexDraft.method}
+                          onChange={(event) => setIndexDraft((current) => ({ ...current, method: event.target.value as SolveIndexMethod }))}
+                        >
+                          {indexMethodOptions.map((method) => (
+                            <option key={method} value={method}>{method}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="solve-index-toggle-field">
+                        <input
+                          type="checkbox"
+                          checked={indexDraft.unique}
+                          onChange={(event) => setIndexDraft((current) => ({ ...current, unique: event.target.checked }))}
+                        />
+                        <span>{text('PROBLEM_SOLVE_INDEX_UNIQUE_LABEL', 'UNIQUE')}</span>
+                      </label>
+                    </div>
+
+                    <div className="solve-index-option-block">
+                      <span>{text('PROBLEM_SOLVE_INDEX_COLUMNS_LABEL', '컬럼')}</span>
+                      <div
+                        ref={indexColumnPickerRef}
+                        className={`solve-index-column-picker ${selectedDbms === 'postgresql' ? 'is-postgresql' : 'is-mysql'} ${supportsIndexColumnOrdering(indexDraft.method) ? 'has-column-ordering' : 'has-no-column-ordering'}`.trim()}
+                        onPointerDown={startIndexColumnPickerDrag}
+                        onPointerMove={moveIndexColumnPickerDrag}
+                        onPointerUp={stopIndexColumnPickerDrag}
+                        onPointerCancel={stopIndexColumnPickerDrag}
+                        onClickCapture={preventIndexColumnPickerClickAfterDrag}
+                      >
+                        {draftAvailableColumns.map((columnName) => {
+                          const selectedColumn = indexDraft.columns.find((column) => column.name === columnName);
+
+                          return (
+                            <div key={columnName} className={`solve-index-column-option ${selectedColumn ? 'is-selected' : ''}`.trim()}>
+                              <label className="solve-index-column-name-cell">
+                                <input type="checkbox" checked={selectedColumn != null} onChange={() => toggleIndexDraftColumn(columnName)} />
+                                <span>{columnName}</span>
+                              </label>
+                              {supportsIndexColumnOrdering(indexDraft.method) ? (
+                                <select
+                                  className="solve-index-column-select"
+                                  aria-label={`${columnName} 정렬`}
+                                  value={selectedColumn?.direction ?? 'ASC'}
+                                  disabled={selectedColumn == null}
+                                  onChange={(event) =>
+                                    updateIndexDraftColumn(columnName, { direction: event.target.value as SolveIndexSortDirection })
+                                  }
+                                >
+                                  <option value="ASC">ASC</option>
+                                  <option value="DESC">DESC</option>
+                                </select>
+                              ) : null}
+                              {supportsIndexColumnOrdering(indexDraft.method) && selectedDbms === 'postgresql' ? (
+                                <select
+                                  className="solve-index-column-select"
+                                  aria-label={`${columnName} NULL 정렬`}
+                                  value={selectedColumn?.nulls ?? 'DEFAULT'}
+                                  disabled={selectedColumn == null}
+                                  onChange={(event) =>
+                                    updateIndexDraftColumn(columnName, { nulls: event.target.value as SolveIndexNullsPosition })
+                                  }
+                                >
+                                  <option value="DEFAULT">기본값</option>
+                                  <option value="FIRST">FIRST</option>
+                                  <option value="LAST">LAST</option>
+                                </select>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {selectedDbms === 'postgresql' ? (
+                      <div className="solve-index-draft-grid">
+                        <div className="solve-index-field is-wide">
+                          <span>{text('PROBLEM_SOLVE_INDEX_INCLUDE_LABEL', 'INCLUDE')}</span>
+                          <div className="solve-index-chip-picker">
+                            {availableIncludeColumns.length > 0 ? (
+                              availableIncludeColumns.map((columnName) => (
+                                <button
+                                  key={columnName}
+                                  type="button"
+                                  className={indexDraft.includeColumns.includes(columnName) ? 'is-selected' : ''}
+                                  onClick={() => toggleIndexDraftIncludeColumn(columnName)}
+                                >
+                                  {columnName}
+                                </button>
+                              ))
+                            ) : (
+                              <span>{text('PROBLEM_SOLVE_INDEX_INCLUDE_EMPTY', '선택 가능한 INCLUDE 컬럼 없음')}</span>
+                            )}
+                          </div>
+                        </div>
+                        <label className="solve-index-field is-wide">
+                          <span>{text('PROBLEM_SOLVE_INDEX_WHERE_LABEL', 'WHERE')}</span>
+                          <input
+                            value={indexDraft.whereClause}
+                            onChange={(event) => setIndexDraft((current) => ({ ...current, whereClause: event.target.value }))}
+                            placeholder={text('PROBLEM_SOLVE_INDEX_WHERE_PLACEHOLDER', '예: is_active = true')}
+                            name="indexWhere"
+                            autoComplete="off"
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+
+                    <div className="solve-index-preview-row">
+                      <code>{indexDraftSql || text('PROBLEM_SOLVE_INDEX_PREVIEW_EMPTY', '테이블과 컬럼을 선택하면 CREATE INDEX 미리보기가 표시됩니다.')}</code>
+                      <div className="solve-index-draft-actions">
+                        <button type="button" className="solve-index-action-button" onClick={closeIndexDraftModal}>
+                          {text('COMMON_CANCEL_ACTION', '취소')}
+                        </button>
+                        <button type="submit" className="solve-index-action-button is-primary" disabled={!indexDraftSql}>
+                          {editingIndexId == null ? text('COMMON_ADD_ACTION', '추가') : text('COMMON_SAVE_ACTION', '저장')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>,
+              document.body,
+            )
+          : null}
+      </div>
+    );
+  };
+
   const renderEditorPanel = (isFloating: boolean) => {
     const executionStatementMarkers = executionStatementMarkerRuns.map((marker) => ({
       ...marker,
@@ -5167,10 +6517,19 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     -
                   </button>
                 </div>
+                <button
+                  type="button"
+                  className={`btn secondary solve-editor-toolbar-index-button ${hasParsingIndexStatement ? 'is-parsing-attention' : ''}`.trim()}
+                  onClick={openIndexCreateModal}
+                  disabled={indexTableOptions.length === 0}
+                >
+                  <PlusGlyphIcon />
+                  <span>{text('PROBLEM_SOLVE_INDEX_ADD_BUTTON', '인덱스 추가')}</span>
+                </button>
                 <div className="solve-editor-actions">
                   <button
                     type="button"
-                    className="mini-toggle solve-editor-zoom-button is-stop"
+                    className="btn secondary solve-editor-action-button is-stop"
                     onClick={handleStopExecution}
                     disabled={!isExecuting}
                   >
@@ -5178,20 +6537,25 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                   </button>
                   <button type="button" className="btn secondary solve-editor-action-button" onClick={executeSql} disabled={sql.trim().length === 0 || isExecuting}>
                     {isExecuting ? <span className="solve-editor-statement-spinner" aria-hidden="true" /> : null}
-                    <span className="solve-action-label">
-                      {isExecuting ? text('PROBLEM_SOLVE_EXECUTING_LABEL', '실행 중') : text('PROBLEM_SOLVE_EXECUTE_BUTTON', '실행')}
+                    <span className="solve-action-copy">
+                      <span className="solve-action-text">
+                        {isExecuting ? text('PROBLEM_SOLVE_EXECUTING_LABEL', '실행 중') : text('PROBLEM_SOLVE_EXECUTE_BUTTON', '실행')}
+                      </span>
+                      {!isExecuting ? <span className="solve-action-text is-shortcut">Ctrl + Enter</span> : null}
                     </span>
-                    {!isExecuting ? <span className="solve-action-shortcut">Ctrl + Enter</span> : null}
                   </button>
                   <button type="button" className="btn primary solve-editor-action-button" onClick={handleSubmit} disabled={sql.trim().length === 0 || isSubmitting}>
                     {isSubmitting ? <span className="solve-editor-statement-spinner" aria-hidden="true" /> : null}
-                    <span className="solve-action-label">
-                      {isSubmitting ? text('PROBLEM_SOLVE_SUBMITTING_LABEL', '제출 중') : text('PROBLEM_SOLVE_SUBMIT_BUTTON', '제출')}
+                    <span className="solve-action-copy">
+                      <span className="solve-action-text">
+                        {isSubmitting ? text('PROBLEM_SOLVE_SUBMITTING_LABEL', '제출 중') : text('PROBLEM_SOLVE_SUBMIT_BUTTON', '제출')}
+                      </span>
+                      {!isSubmitting ? <span className="solve-action-text is-shortcut">Ctrl + Shift + Enter</span> : null}
                     </span>
-                    {!isSubmitting ? <span className="solve-action-shortcut">Ctrl + Shift + Enter</span> : null}
                   </button>
                 </div>
               </div>
+              {renderIndexSettingsPanel(isFloating)}
               <div className="solve-editor-surface">
                 <div
                   className={`solve-editor-surface-body ${isFloating && executionRuns.length > 0 ? 'has-inline-result' : ''}`.trim()}
@@ -5393,13 +6757,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             submitProgressSteps.length > 0 || submitMessage ? (
               <div className="solve-submit-panel-stack">
                 {submitProgressSteps.length > 0 ? (
-                  <div className="solve-submit-progress-list">
+                  <div className="solve-submit-progress-list" aria-live="polite">
                     {submitProgressSteps.map((step) => (
                       <SubmitProgressItem key={step.stepKey} step={step} />
                     ))}
                   </div>
                 ) : null}
-                {submitMessage ? (
+                {submitMessage && submitProgressSteps.length === 0 ? (
                   <div className="solve-pane-result-stack">
                     <p className={`solve-pane-result-message ${submitMessage === text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답') ? 'is-error' : ''}`.trim()}>{submitMessage}</p>
                   </div>
@@ -5421,9 +6785,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     return renderSubmitPanel(isFloating);
   };
-
-  const hasRelatedExecutionPlanDetails = (history: SubmitHistoryEntry) =>
-    getExecutionPlanDetailGroups(history.dbms, history.executionPlanElement).length > 0;
 
   const relatedModalContent =
     relatedModalState == null || typeof document === 'undefined'
@@ -5449,27 +6810,16 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                           ? text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답')
                           : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                       </span>
-                    </div>
-                    <span>{`${relatedModalState.history.submitId} · ${relatedModalState.history.handle} · ${text('PROBLEM_SOLVE_PROBLEM_NUMBER_LABEL', { problemId: relatedModalState.history.problemId }, '문제 {problemId}')}`}</span>
-                    <div className="submit-history-modal-meta">
-                      <div className="submit-history-modal-meta-stack">
-                        <span className="submit-history-modal-meta-line">{getDbmsLabel(relatedModalState.history.dbms)}</span>
-                        {relatedModalState.history.success || relatedModalState.history.cost > 0 ? (
-                          <span className="submit-history-modal-meta-line">{formatCost(relatedModalState.history.cost)}</span>
-                        ) : null}
-                        <span className="submit-history-modal-meta-line">{formatSubmittedAt(relatedModalState.history.submittedAt)}</span>
-                        {hasRelatedExecutionPlanDetails(relatedModalState.history) ? (
-                          <button
-                            type="button"
-                            className="submit-history-modal-meta-action submit-history-modal-meta-icon"
-                            aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
-                            title={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
-                            onClick={() => setRelatedModalState({ type: 'plan', history: relatedModalState.history })}
-                          >
-                            ↗
-                          </button>
-                        ) : null}
-                      </div>
+                      <button
+                        type="button"
+                        className="submit-history-modal-plan-action"
+                        aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행계획 요소 자세히 보기')}
+                        title={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행계획 요소 자세히 보기')}
+                        disabled={!hasSolveRelatedExecutionPlanDetails(relatedModalState.history)}
+                        onClick={() => setRelatedModalState({ type: 'plan', history: relatedModalState.history })}
+                      >
+                        ↗
+                      </button>
                     </div>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
@@ -5478,7 +6828,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 </div>
 
                 <div className="submit-history-modal-body submit-history-sql-modal-body">
-                  <pre className="solve-related-sql-viewer" aria-label={text('SUBMIT_HISTORY_SQL_VIEWER_LABEL', '제출 SQL')}>{relatedModalState.history.submittedSql}</pre>
+                  <pre className="submit-history-sql-viewer submit-history-sql-highlight" aria-label={text('SUBMIT_HISTORY_SQL_VIEWER_LABEL', '제출 SQL')}>
+                    {renderStaticHighlightedSql(relatedModalState.history.submittedSql)}
+                  </pre>
                 </div>
               </div>
             ) : (
@@ -5486,7 +6838,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 <div className="submit-history-modal-header">
                   <div className="submit-history-modal-copy">
                     <strong>{text('SUBMIT_HISTORY_PLAN_TITLE', '실행 계획 요소')}</strong>
-                    <span>{`${relatedModalState.history.handle} · ${getDbmsLabel(relatedModalState.history.dbms)} · ${text('PROBLEM_SOLVE_PROBLEM_NUMBER_LABEL', { problemId: relatedModalState.history.problemId }, '문제 {problemId}')}`}</span>
                   </div>
                   <button type="button" className="submit-history-modal-close" onClick={() => setRelatedModalState(null)}>
                     {text('COMMON_CLOSE_BUTTON', '닫기')}
@@ -5494,23 +6845,11 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                 </div>
 
                 <div className="submit-history-modal-body submit-history-plan-modal-body">
-                  <div className="submit-history-plan-modal-summary">
-                    <span className="submit-history-plan-modal-label">{text('COMMON_COST_LABEL', 'Cost')}</span>
-                    <strong>{formatCost(relatedModalState.history.cost)}</strong>
-                  </div>
-
-                  {getExecutionPlanDetailGroups(relatedModalState.history.dbms, relatedModalState.history.executionPlanElement).length > 0 ? (
-                    <div className="solve-related-plan-group-list">
-                      {getExecutionPlanDetailGroups(relatedModalState.history.dbms, relatedModalState.history.executionPlanElement).map((group) => (
-                        <div key={`${group.sectionKey}-${group.sectionLabel}`} className="solve-related-plan-group">
-                          <span className="solve-related-plan-group-label">{group.sectionLabel}</span>
-                          <span className="solve-related-plan-group-values">{group.labels.join(', ')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="submit-history-empty-state submit-history-modal-empty-state">{text('PROBLEM_SOLVE_RELATED_PLAN_EMPTY_STATE', '감지된 대표 실행계획 요소가 없습니다.')}</div>
-                  )}
+                  <ExecutionPlanDetailBoard
+                    sections={buildSolveRelatedPlanSections(relatedModalState.history)}
+                    noneLabel={text('COMMON_NONE_LABEL', '없음')}
+                    className="submit-history-plan-detail-board"
+                  />
                 </div>
               </div>
             )}
@@ -5539,8 +6878,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           <div className="submit-history-table solve-related-submit-table" role="table" aria-label={text('PROBLEM_SOLVE_RELATED_SUBMIT_TABLE_LABEL', '내 제출 목록')}>
             <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
               <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}</div>
-              <div role="columnheader" className="submit-history-head-cell">{text('COMMON_HANDLE_LABEL', 'Handle')}</div>
-              <div role="columnheader" className="submit-history-head-cell">{text('PROBLEM_SOLVE_RELATED_PROBLEM_ID_COLUMN_LABEL', '문제 번호')}</div>
               <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}</div>
               <div role="columnheader" className="submit-history-head-cell">{text('COMMON_COST_LABEL', 'Cost')}</div>
               <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
@@ -5551,8 +6888,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               solveRelatedLoadingRows.map((rowIndex) => (
                 <div key={`solve-related-submit-loading-${rowIndex}`} className="submit-history-row submit-history-body solve-related-table-row" role="row" aria-hidden="true">
                   <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
-                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
-                  <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
                   <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
                   <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-short" /></span>
                   <span className="submit-history-cell" role="cell"><span className="wave-loading-placeholder is-medium" /></span>
@@ -5567,26 +6902,6 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               mySubmitHistoryPage.histories.map((history) => (
                 <article key={history.submitId} className="submit-history-row submit-history-body solve-related-table-row" role="row">
                   <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}>{history.submitId}</span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
-                    <button
-                      type="button"
-                      className="submit-history-link-button"
-                      onClick={() => navigate(getProfilePath(history.handle))}
-                      aria-label={text('SUBMIT_HISTORY_HANDLE_PROFILE_MOVE_LABEL', { handle: history.handle }, '{handle} 프로필 이동')}
-                    >
-                      {history.handle}
-                    </button>
-                  </span>
-                  <span className="submit-history-cell" role="cell" data-label={text('PROBLEM_SOLVE_RELATED_PROBLEM_ID_COLUMN_LABEL', '문제 번호')}>
-                    <button
-                      type="button"
-                      className="submit-history-link-button"
-                      onClick={() => navigate(`/problems/${encodeURIComponent(history.problemId)}`)}
-                      aria-label={text('SUBMIT_HISTORY_PROBLEM_MOVE_LABEL', { problemId: history.problemId }, '문제 {problemId} 이동')}
-                    >
-                      {history.problemId}
-                    </button>
-                  </span>
                   <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}>
                     <button
                       type="button"
@@ -5597,17 +6912,22 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     </button>
                   </span>
                   <span className="submit-history-cell" role="cell" data-label={text('COMMON_COST_LABEL', 'Cost')}>
-                    {history.success || history.cost > 0 ? formatCost(history.cost) : '-'}
+                    {history.success ? formatCost(history.cost) : '-'}
                   </span>
                   <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
                     {formatSubmittedAt(history.submittedAt)}
                   </span>
                   <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label={text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}>
-                    {hasRelatedExecutionPlanDetails(history) ? (
+                    {hasSolveRelatedExecutionPlanDetails(history) ? (
                       <button
                         type="button"
                         className="submit-history-detail-button"
-                        aria-label={text('SUBMIT_HISTORY_PLAN_DETAIL_BUTTON_LABEL', '실행 계획 요소 자세히 보기')}
+                        aria-label={text(
+                          'SUBMIT_HISTORY_PLAN_DETAIL_MOVE_LABEL',
+                          { label: getPlanElementButtonLabel(history.dbms, history.executionPlanElement) },
+                          `${getPlanElementButtonLabel(history.dbms, history.executionPlanElement)} 자세히 보기`,
+                        )}
+                        title={getPlanElementButtonLabel(history.dbms, history.executionPlanElement)}
                         onClick={() => setRelatedModalState({ type: 'plan', history })}
                       >
                         ↗
@@ -5654,7 +6974,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
     return (
       <div className="solve-related-tab-panel">
-        <div className={`submit-history-table-shell solve-related-table-shell ${isTaggedPostLoading ? 'is-loading' : ''}`.trim()}>
+        <div className={`submit-history-table-shell solve-related-table-shell solve-related-community-table-shell ${isTaggedPostLoading ? 'is-loading' : ''}`.trim()}>
           <div className="submit-history-table solve-related-community-table" role="table" aria-label={text('PROBLEM_SOLVE_RELATED_TAGGED_POST_TABLE_LABEL', '태그된 게시글 목록')}>
             <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
               <div role="columnheader" className="submit-history-head-cell">{text('PROBLEM_SOLVE_COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}</div>
@@ -5687,7 +7007,20 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               </div>
             ) : (
               taggedPostPage.posts.map((post) => (
-                <article key={post.id} className="submit-history-row submit-history-body solve-related-table-row" role="row">
+                <article
+                  key={post.id}
+                  className="submit-history-row submit-history-body solve-related-table-row"
+                  role="row"
+                  tabIndex={0}
+                  aria-label={text('COMMUNITY_POST_OPEN_LABEL', { title: post.title }, '{title} 상세보기')}
+                  onClick={() => navigate(getCommunityPostPath(post.id))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(getCommunityPostPath(post.id));
+                    }
+                  }}
+                >
                   <span className="submit-history-cell solve-related-community-category" role="cell" data-label={text('PROBLEM_SOLVE_COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}>
                     <span className={`solve-related-community-category-text is-${post.category}`}>{getSolveRelatedCommunityCategoryLabel(post.category)}</span>
                   </span>
@@ -5702,25 +7035,47 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                     <button
                       type="button"
                       className="solve-related-community-title-link"
-                      onClick={() => navigate(getCommunityPostPath(post.id))}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(getCommunityPostPath(post.id));
+                      }}
                     >
                       <span className="solve-related-community-title-text">{post.title}</span>
                     </button>
                   </div>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
+                  <span className="submit-history-cell solve-related-community-handle-cell" role="cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
                     <button
                       type="button"
                       className="submit-history-link-button"
-                      onClick={() => navigate(getProfilePath(post.authorHandle))}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(getProfilePath(post.authorHandle));
+                      }}
                       aria-label={text('SUBMIT_HISTORY_HANDLE_PROFILE_MOVE_LABEL', { handle: post.authorHandle }, '{handle} 프로필 이동')}
                     >
                       {post.authorHandle}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>{formatCompactBoardDate(post.updatedAt ?? post.createdAt)}</span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>{formatGroupedNumber(post.views)}</span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>{formatGroupedNumber(post.likes)}</span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>{formatGroupedNumber(post.comments)}</span>
+                  <span className="submit-history-cell solve-related-community-date-cell" role="cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>{formatBoardDate(post.createdAt)}</span>
+                  <span className="submit-history-cell solve-related-community-metric-cell" role="cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>{formatGroupedNumber(post.views)}</span>
+                  <span className="submit-history-cell solve-related-community-metric-cell" role="cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>{formatGroupedNumber(post.likes)}</span>
+                  <span className="submit-history-cell solve-related-community-metric-cell" role="cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>{formatGroupedNumber(post.comments)}</span>
+                  <div className="submit-history-cell solve-related-community-mobile-meta-cell" role="cell" data-label={text('PROBLEM_SOLVE_COMMUNITY_MOBILE_META_LABEL', '게시글 정보')}>
+                    <span className="solve-related-community-mobile-author">{post.authorHandle}</span>
+                    <span className="solve-related-community-mobile-date">{formatBoardDate(post.createdAt)}</span>
+                    <span className="solve-related-community-mobile-metric" aria-label={text('COMMUNITY_VIEWS_COUNT_LABEL', { count: formatGroupedNumber(post.views) }, '조회수 {count}개')}>
+                      <RelatedViewIcon />
+                      {formatGroupedNumber(post.views)}
+                    </span>
+                    <span className="solve-related-community-mobile-metric" aria-label={text('COMMUNITY_LIKES_COUNT_LABEL', { count: formatGroupedNumber(post.likes) }, '좋아요 {count}개')}>
+                      <RelatedLikeIcon />
+                      {formatGroupedNumber(post.likes)}
+                    </span>
+                    <span className="solve-related-community-mobile-metric" aria-label={text('COMMUNITY_COMMENTS_COUNT_LABEL', { count: formatGroupedNumber(post.comments) }, '댓글 {count}개')}>
+                      <RelatedCommentIcon />
+                      {formatGroupedNumber(post.comments)}
+                    </span>
+                  </div>
                 </article>
               ))
             )}

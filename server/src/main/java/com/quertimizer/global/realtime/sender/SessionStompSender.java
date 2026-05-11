@@ -69,7 +69,7 @@ public class SessionStompSender {
                 try {
                     sendToSession(entry.getKey(), stompSessionId, Map.of("type", "session.closed"));
                 } catch (Exception exception) {
-                    log.warn("STOMP 세션 종료 메시지 전송에 실패했다.", exception);
+                    log.warn("STOMP 세션 종료 메시지 전송에 실패했습니다.", exception);
                 }
             }
         }

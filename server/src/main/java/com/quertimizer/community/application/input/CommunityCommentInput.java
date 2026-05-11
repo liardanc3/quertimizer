@@ -1,10 +1,8 @@
 package com.quertimizer.community.application.input;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class CommunityCommentInput {
 
     private final Long parentCommentId;

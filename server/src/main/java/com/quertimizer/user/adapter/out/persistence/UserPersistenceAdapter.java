@@ -99,4 +99,10 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
         users.forEach(user -> savedUsers.add(save(user)));
         return savedUsers;
     }
+
+    @Override
+    public void deleteByEmail(String email) {
+        // 이메일 기준 사용자 JPA 엔티티 삭제
+        userJpaRepository.deleteById(email);
+    }
 }

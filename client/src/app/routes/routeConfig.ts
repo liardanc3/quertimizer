@@ -4,7 +4,6 @@ import {
   COMMUNITY_WRITE_PATH,
   DASHBOARD_PATH,
   FAVORITES_PATH,
-  GUIDE_PATH,
   PROFILE_ACTIVITY_PATH,
   PROFILE_PATH,
   PROBLEMS_PATH,
@@ -43,10 +42,6 @@ export interface FavoritesRoute {
 
 export interface CommunityRoute {
   type: 'community';
-}
-
-export interface GuideRoute {
-  type: 'guide';
 }
 
 export interface AdminRoute {
@@ -89,7 +84,6 @@ export type AppRoute =
   | FavoritesRoute
   | RankingRoute
   | CommunityRoute
-  | GuideRoute
   | AdminRoute
   | CommunityWriteRoute
   | CommunityEditRoute
@@ -160,8 +154,6 @@ export function parseRoute(pathname: string): AppRoute {
       return { type: 'favorites' };
     case COMMUNITY_PATH:
       return { type: 'community' };
-    case GUIDE_PATH:
-      return { type: 'guide' };
     case ADMIN_PATH:
       return { type: 'admin' };
     case COMMUNITY_WRITE_PATH:

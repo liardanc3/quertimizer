@@ -30,13 +30,4 @@ public class JpaJudgeTemplateStore implements JudgeTemplateStorePort {
         return datasetTemplateRepository.findById(datasetId.getValue())
                 .map(JudgeDatasetTemplateEntity::toDefinition);
     }
-
-    @Override
-    @Transactional
-    public void deleteDatasetTemplate(JudgeDatasetId datasetId) {
-        // judge 템플릿 메타데이터 제거
-        if (datasetTemplateRepository.existsById(datasetId.getValue())) {
-            datasetTemplateRepository.deleteById(datasetId.getValue());
-        }
-    }
 }

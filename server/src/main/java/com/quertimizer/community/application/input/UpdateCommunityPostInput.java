@@ -1,10 +1,8 @@
 package com.quertimizer.community.application.input;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Data;
 
-@Getter
-@RequiredArgsConstructor
+@Data
 public class UpdateCommunityPostInput {
 
     private final Long postId;

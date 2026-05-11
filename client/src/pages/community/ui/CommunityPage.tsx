@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { FavoriteTabButton } from '@/features/favorite-tab';
 import { DataTable } from '@/shared/ui';
 import { ContentLoading } from '@/shared/ui';
@@ -7,6 +7,7 @@ import { Pagination } from '@/shared/ui';
 import { SearchForm } from '@/shared/ui';
 import { SortIcon } from '@/shared/ui/icons';
 import { useLocationSearch } from '@/shared/lib/hooks/use-location-state';
+import useDismissableLayer from '@/shared/lib/hooks/use-dismissable-layer';
 import useRequestState from '@/shared/lib/hooks/use-request-state';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '@/features/favorite-tab';
 import { fetchCommunityPosts, type CommunityPostPage } from '@/shared/api/community-api';
@@ -14,8 +15,6 @@ import { COMMUNITY_PATH, COMMUNITY_WRITE_PATH, getCommunityPostPath, getProfileP
 import { useSession } from '@/shared/auth/session';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import { formatBoardDate, formatInteger } from '@/shared/lib/formatters';
-import '@/shared/ui/styles/problem-list-page.css';
-import '@/shared/ui/styles/submit-history-page.css';
 import './CommunityPage.css';
 
 type CommunitySortKey = 'default' | 'latest' | 'oldest' | 'views' | 'viewsAsc' | 'likes' | 'likesAsc' | 'comments' | 'commentsAsc';
@@ -127,6 +126,31 @@ function getCategoryLabel(value: string) {
   return getUiTextValue('COMMUNITY_CATEGORY_FREE_LABEL', '자유');
 }
 
+function ViewIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.4 8s1.9-3.7 5.6-3.7S13.6 8 13.6 8 11.7 11.7 8 11.7 2.4 8 2.4 8Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 9.75A1.75 1.75 0 1 0 8 6.25a1.75 1.75 0 0 0 0 3.5Z" stroke="currentColor" strokeWidth="1.35" />
+    </svg>
+  );
+}
+
+function LikeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 13.3 3.5 9.1a2.8 2.8 0 0 1 4-4L8 5.6l.5-.5a2.8 2.8 0 0 1 4 4L8 13.3Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.5 3.9h9v6.1H7.4l-3.1 2.35V10h-.8V3.9Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 const emptyPage: CommunityPostPage = {
   currentPage: 1,
   pageSize: PAGE_SIZE,
@@ -134,6 +158,14 @@ const emptyPage: CommunityPostPage = {
   totalPages: 1,
   posts: [],
 };
+
+function ProblemFilterIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3.5 5.5h13M6 10h8M8.5 14.5h3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export default function CommunityPage() {
   const { text } = useUiText();
@@ -155,6 +187,9 @@ export default function CommunityPage() {
   const [selectedCategory, setSelectedCategory] = useState<CommunityCategoryTab>(initialState.category);
   const [sortKey, setSortKey] = useState<CommunitySortKey>(initialState.sortKey);
   const [requestedPage, setRequestedPage] = useState(initialState.page);
+  const [isMobileSortOpen, setIsMobileSortOpen] = useState(false);
+  const mobileSortRef = useRef<HTMLDivElement | null>(null);
+  const mobileSortLayerRefs = useMemo(() => [mobileSortRef], []);
   const {
     data: postPage,
     setData: setPostPage,
@@ -303,6 +338,46 @@ export default function CommunityPage() {
     moveList(searchQuery, selectedCategory, nextSortKey, 1);
   }
 
+  function renderMobileSortRow(label: string, descKey: CommunitySortKey, ascKey: CommunitySortKey) {
+    return (
+      <div className="problem-mobile-sort-row">
+        <span className="problem-mobile-sort-label">{label}</span>
+        <div className="problem-mobile-sort-options">
+          <label className="problem-mobile-sort-option">
+            <input
+              type="radio"
+              name={`community-mobile-sort-${descKey}`}
+              checked={sortKey === descKey}
+              onChange={() => moveList(searchQuery, selectedCategory, descKey, 1)}
+              aria-label={text('COMMUNITY_MOBILE_SORT_DESC_LABEL', { label }, `${label} 내림차순`)}
+            />
+            <span className="problem-status-check-ui" aria-hidden="true" />
+            <span>{text('COMMON_DESC_SORT_FULL_LABEL', '내림차순')}</span>
+          </label>
+
+          <label className="problem-mobile-sort-option">
+            <input
+              type="radio"
+              name={`community-mobile-sort-${descKey}`}
+              checked={sortKey === ascKey}
+              onChange={() => moveList(searchQuery, selectedCategory, ascKey, 1)}
+              aria-label={text('COMMUNITY_MOBILE_SORT_ASC_LABEL', { label }, `${label} 오름차순`)}
+            />
+            <span className="problem-status-check-ui" aria-hidden="true" />
+            <span>{text('COMMON_ASC_SORT_FULL_LABEL', '오름차순')}</span>
+          </label>
+        </div>
+      </div>
+    );
+  }
+
+  useDismissableLayer({
+    enabled: isMobileSortOpen,
+    refs: mobileSortLayerRefs,
+    onDismiss: () => setIsMobileSortOpen(false),
+    dismissOnResize: true,
+  });
+
   useEffect(() => {
     if (!favoriteRestoreSnapshot || didApplyFavoriteRestoreRef.current || isWriteMode) {
       return;
@@ -335,8 +410,17 @@ export default function CommunityPage() {
     });
   }
 
+  function handlePostRowKeyDown(event: KeyboardEvent<HTMLElement>, postId: string) {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    handleOpenPost(postId);
+  }
+
   return (
-    <div className="page page-stack home-page community-page">
+    <div className="page page-stack data-page community-page">
       <section className="panel-card compact community-toolbar-card">
         <div className="problem-toolbar community-toolbar submit-history-toolbar-stack">
           <div className="solve-dbms-tab-row community-tab-row tab-row" role="tablist" aria-label={text('COMMUNITY_TABLIST_LABEL', '커뮤니티 구분 선택')}>
@@ -392,19 +476,42 @@ export default function CommunityPage() {
           </div>
 
           {!isWriteMode ? (
-            <SearchForm
-              className="problem-search-form home-problem-search-form community-search-form"
-              fieldClassName="problem-search-field home-problem-search-field community-search-field"
-              inputClassName="problem-search-input home-problem-search-input community-search-input"
-              buttonClassName="problem-search-button home-problem-search-button"
-              value={draftSearchValue}
-              onChange={setDraftSearchValue}
-              onSubmit={applySearch}
-              placeholder={text('COMMUNITY_SEARCH_PLACEHOLDER', '제목, 작성자, 태그, 내용 검색')}
-              label={text('COMMUNITY_SEARCH_LABEL', '커뮤니티 검색')}
-              submitLabel={text('COMMUNITY_SEARCH_SUBMIT_LABEL', '커뮤니티 검색 실행')}
-              buttonLabel={text('COMMON_SEARCH_BUTTON', '검색')}
-            />
+            <div className="home-problem-search-row community-search-row" ref={mobileSortRef}>
+              <SearchForm
+                className="problem-search-form home-problem-search-form community-search-form"
+                fieldClassName="problem-search-field home-problem-search-field community-search-field"
+                inputClassName="problem-search-input home-problem-search-input community-search-input"
+                buttonClassName="problem-search-button home-problem-search-button"
+                value={draftSearchValue}
+                onChange={setDraftSearchValue}
+                onSubmit={applySearch}
+                placeholder={text('COMMUNITY_SEARCH_PLACEHOLDER', '제목, 작성자, 태그, 내용 검색')}
+                label={text('COMMUNITY_SEARCH_LABEL', '커뮤니티 검색')}
+                submitLabel={text('COMMUNITY_SEARCH_SUBMIT_LABEL', '커뮤니티 검색 실행')}
+                buttonLabel={text('COMMON_SEARCH_BUTTON', '검색')}
+              />
+
+              <button
+                type="button"
+                className={`problem-mobile-filter-button community-mobile-sort-button ${isMobileSortOpen ? 'is-open' : ''} ${sortKey !== 'default' ? 'is-active' : ''}`.trim()}
+                aria-label={text('COMMUNITY_MOBILE_SORT_OPEN_LABEL', '커뮤니티 정렬 필터 열기')}
+                aria-expanded={isMobileSortOpen}
+                onClick={() => setIsMobileSortOpen((value) => !value)}
+              >
+                <ProblemFilterIcon />
+              </button>
+
+              {isMobileSortOpen ? (
+                <div className="problem-mobile-filter-menu community-mobile-sort-menu" role="dialog" aria-label={text('COMMUNITY_MOBILE_SORT_MENU_LABEL', '커뮤니티 정렬 필터')}>
+                  <div className="problem-mobile-sort-list">
+                    {renderMobileSortRow(text('COMMUNITY_DATE_COLUMN_LABEL', '작성일'), 'latest', 'oldest')}
+                    {renderMobileSortRow(text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수'), 'views', 'viewsAsc')}
+                    {renderMobileSortRow(text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요'), 'likes', 'likesAsc')}
+                    {renderMobileSortRow(text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글'), 'comments', 'commentsAsc')}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </section>
@@ -505,13 +612,28 @@ export default function CommunityPage() {
                   </div>
                 ) : (
                   postPage.posts.map((post) => (
-                    <article key={post.id} className="submit-history-row submit-history-body community-table-row" role="row">
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}>
+                    <article
+                      key={post.id}
+                      className="submit-history-row submit-history-body community-table-row"
+                      role="row"
+                      tabIndex={0}
+                      aria-label={text('COMMUNITY_POST_OPEN_LABEL', { title: post.title }, `${post.title} 상세보기`)}
+                      onClick={() => handleOpenPost(post.id)}
+                      onKeyDown={(event) => handlePostRowKeyDown(event, post.id)}
+                    >
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-category-cell" data-label={text('COMMUNITY_CATEGORY_COLUMN_LABEL', '구분')}>
                         <span className={`community-category-text is-${post.category}`}>{getCategoryLabel(post.category)}</span>
                       </div>
 
                       <div role="cell" className="submit-history-cell community-table-cell community-table-title-cell" data-label={text('COMMUNITY_TITLE_COLUMN_LABEL', '제목')}>
-                        <button type="button" className="community-post-title-link" onClick={() => handleOpenPost(post.id)}>
+                        <button
+                          type="button"
+                          className="community-post-title-link"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenPost(post.id);
+                          }}
+                        >
                           <span className="community-post-title-text">{post.title}</span>
                         </button>
 
@@ -524,30 +646,50 @@ export default function CommunityPage() {
                         ) : null}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-handle-cell" data-label={text('COMMON_HANDLE_LABEL', 'Handle')}>
                         <button
                           type="button"
                           className="community-handle-link"
-                          onClick={() => navigate(getProfilePath(post.authorHandle))}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(getProfilePath(post.authorHandle));
+                          }}
                         >
                           {post.authorHandle}
                         </button>
                       </div>
 
                       <div role="cell" className="submit-history-cell community-table-cell community-table-date-cell" data-label={text('COMMUNITY_DATE_COLUMN_LABEL', '작성일')}>
-                        {formatBoardDate(post.updatedAt ?? post.createdAt)}
+                        {formatBoardDate(post.createdAt)}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-views-cell" data-label={text('COMMUNITY_VIEWS_COLUMN_LABEL', '조회수')}>
                         {formatInteger(post.views)}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-likes-cell" data-label={text('COMMUNITY_LIKES_COLUMN_LABEL', '좋아요')}>
                         {formatInteger(post.likes)}
                       </div>
 
-                      <div role="cell" className="submit-history-cell community-table-cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-comments-cell" data-label={text('COMMUNITY_COMMENTS_COLUMN_LABEL', '댓글')}>
                         {formatInteger(post.comments)}
+                      </div>
+
+                      <div role="cell" className="submit-history-cell community-table-cell community-table-mobile-meta-cell" data-label={text('COMMUNITY_MOBILE_META_LABEL', '게시글 정보')}>
+                        <span className="community-mobile-meta-author">{post.authorHandle}</span>
+                        <span>{formatBoardDate(post.createdAt)}</span>
+                        <span className="community-mobile-metric" aria-label={text('COMMUNITY_VIEW_COUNT_LABEL', { count: formatInteger(post.views) }, `조회수 ${formatInteger(post.views)}`)}>
+                          <ViewIcon />
+                          <span>{formatInteger(post.views)}</span>
+                        </span>
+                        <span className="community-mobile-metric" aria-label={text('COMMUNITY_LIKE_COUNT_LABEL', { count: formatInteger(post.likes) }, `좋아요 ${formatInteger(post.likes)}`)}>
+                          <LikeIcon />
+                          <span>{formatInteger(post.likes)}</span>
+                        </span>
+                        <span className="community-mobile-metric" aria-label={text('COMMUNITY_COMMENT_COUNT_LABEL', { count: formatInteger(post.comments) }, `댓글 ${formatInteger(post.comments)}`)}>
+                          <CommentIcon />
+                          <span>{formatInteger(post.comments)}</span>
+                        </span>
                       </div>
                     </article>
                   ))

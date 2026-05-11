@@ -49,8 +49,14 @@ public class ProblemJpaEntity {
     @Column(columnDefinition = "TEXT")
     private String output;
 
-    @Column(name = "output_sample", columnDefinition = "TEXT")
-    private String sampleOutput;
+    @Column(name = "data_example", columnDefinition = "TEXT")
+    private String dataExample;
+
+    @Column(name = "output_example", columnDefinition = "TEXT")
+    private String outputExample;
+
+    @Column(name = "schema_metadata", columnDefinition = "TEXT")
+    private String schemaMetadata;
 
     @Column(columnDefinition = "TEXT")
     private String answerHash;
@@ -58,35 +64,23 @@ public class ProblemJpaEntity {
     @Column(name = "answer_sql", columnDefinition = "TEXT")
     private String answerSql;
 
-    @Column(name = "sample_data_sql", columnDefinition = "TEXT")
-    private String sampleDataSql;
-
     public static ProblemJpaEntity create(String problemId, String problemSetId,
                                           String title, String description,
                                           String ddl, DbmsType dbmsType,
                                           String condition, String output,
-                                          String sampleDataSql, String sampleOutput,
+                                          String dataExample, String outputExample,
+                                          String schemaMetadata,
                                           String answerHash, String answerSql) {
         // 문제 JPA 엔티티 생성
         return new ProblemJpaEntity(
                 problemId, problemSetId, title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+                condition, output, dataExample, outputExample, schemaMetadata, answerHash, answerSql
         );
     }
 
-    public void assignProblemId() {
-        // DB 생성 ID 기반 문제 번호 부여 대상 여부 검사
-        if (problemId != null && !problemId.isBlank()) {
-            return;
-        }
-
-        // 문제 테이블셋 번호와 DB 생성 ID 조합
-        problemId = problemSetId + "-" + "%05d".formatted(id);
-    }
-
     public void update(String title, String description, String ddl, DbmsType dbmsType,
-                       String condition, String output, String sampleDataSql,
-                       String sampleOutput, String answerHash, String answerSql) {
+                       String condition, String output, String dataExample,
+                       String outputExample, String schemaMetadata, String answerHash, String answerSql) {
         // 문제 JPA 엔티티 내용 변경
         this.title = title;
         this.description = description;
@@ -94,8 +88,9 @@ public class ProblemJpaEntity {
         this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
-        this.sampleDataSql = sampleDataSql;
-        this.sampleOutput = sampleOutput;
+        this.dataExample = dataExample;
+        this.outputExample = outputExample;
+        this.schemaMetadata = schemaMetadata;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
     }
@@ -104,7 +99,8 @@ public class ProblemJpaEntity {
                              String title, String description,
                              String ddl, DbmsType dbmsType,
                              String condition, String output,
-                             String sampleDataSql, String sampleOutput,
+                             String dataExample, String outputExample,
+                             String schemaMetadata,
                              String answerHash, String answerSql) {
         this.problemId = problemId;
         this.problemSetId = problemSetId;
@@ -114,8 +110,9 @@ public class ProblemJpaEntity {
         this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
-        this.sampleDataSql = sampleDataSql;
-        this.sampleOutput = sampleOutput;
+        this.dataExample = dataExample;
+        this.outputExample = outputExample;
+        this.schemaMetadata = schemaMetadata;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
     }

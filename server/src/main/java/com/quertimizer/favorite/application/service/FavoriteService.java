@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 public class FavoriteService {
 
     private final ObjectMapper objectMapper;
+
     public String serialize(JsonNode snapshot) {
         // 스냅샷 null 여부 검사
         if (snapshot == null || snapshot.isNull()) {

@@ -1,10 +1,9 @@
 package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
-import com.quertimizer.auth.application.service.AuthRateLimitService;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.domain.model.AuthUser;
 import com.quertimizer.global.exception.BusinessException;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,7 +27,7 @@ import static com.quertimizer.auth.domain.model.SignupFailReason.SIGNUP_VERIFICA
 @Transactional
 public class AuthService {
 
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final PasswordEncodingPort passwordEncodingPort;
     private final VerificationCodeRepositoryPort verificationCodeRepository;
     private final AuthRateLimitService authRateLimitPolicy;
@@ -38,12 +37,12 @@ public class AuthService {
         verificationCodeRepository.deleteExpired(LocalDateTime.now());
     }
 
-    public Optional<User> findUserByEmail(String email) {
+    public Optional<AuthUser> findUserByEmail(String email) {
         // 인증 전반에서 이메일을 사용자 식별자처럼 사용하므로 항상 normalize 후 조회
         return userRepository.findByEmailIgnoreCase(normalizeEmail(email));
     }
 
-    public Optional<User> findUserByHandle(String handle) {
+    public Optional<AuthUser> findUserByHandle(String handle) {
         // 프로필, Handle 설정, 검색 등 handle 기반 진입점용 조회
         return userRepository.findByHandle(normalizeHandle(handle));
     }
@@ -55,12 +54,12 @@ public class AuthService {
         }
 
         return findUserByEmail(authenticatedEmail)
-                .map(User::getHandle)
+                .map(AuthUser::getHandle)
                 .filter(handle -> !handle.isBlank())
                 .orElse(null);
     }
 
-    public Optional<User> findAuthenticatedUser(String authenticatedEmail) {
+    public Optional<AuthUser> findAuthenticatedUser(String authenticatedEmail) {
         // 세션 복원 응답, 권한 확인, 프로필 후속 처리에서 공통으로 쓰는 현재 사용자 조회
         if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
             return Optional.empty();
@@ -122,14 +121,14 @@ public class AuthService {
         verificationCodeRepository.clear(email);
     }
 
-    public User findOrCreateOAuth2User(String provider, Map<String, Object> attributes) {
+    public AuthUser findOrCreateOAuth2User(String provider, Map<String, Object> attributes) {
         // OAuth2 사용자 계정을 조회 또는 생성
         String oauth2ProviderId = resolveOAuth2ProviderId(provider, attributes);
         String resolvedEmail = resolveOAuth2Email(provider, attributes, oauth2ProviderId);
 
         return userRepository.findById(resolvedEmail)
                 .orElseGet(() -> userRepository.save(
-                        User.create(
+                        AuthUser.create(
                                 passwordEncodingPort.encode(UUID.randomUUID().toString()),
                                 resolvedEmail
                         )

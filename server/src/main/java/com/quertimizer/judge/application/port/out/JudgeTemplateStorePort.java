@@ -10,6 +10,4 @@ public interface JudgeTemplateStorePort {
     void saveDatasetTemplate(DatasetTemplateDefinition templateDefinition);
 
     Optional<DatasetTemplateDefinition> findDatasetTemplate(JudgeDatasetId datasetId);
-
-    void deleteDatasetTemplate(JudgeDatasetId datasetId);
 }

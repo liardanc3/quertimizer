@@ -1,10 +1,8 @@
 package com.quertimizer.user.application.input;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserProfileLinkInput {
 
     private final String type;

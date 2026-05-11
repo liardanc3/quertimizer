@@ -2,7 +2,7 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.ValidateAvailableEmailUseCase;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class ValidateAvailableEmail implements ValidateAvailableEmailUseCase {
 
     private final SignupPolicy signupPolicy;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 회원가입 가능한 이메일인지 검증한다.

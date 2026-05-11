@@ -1,7 +1,7 @@
 package com.quertimizer.user.application.port.in;
 
-import com.quertimizer.auth.application.output.BlockedUserPageOutput;
 import com.quertimizer.user.application.input.BlockedAccountPageInput;
+import com.quertimizer.user.application.output.BlockedUserPageOutput;
 
 public interface GetBlockedUsersUseCase {
 

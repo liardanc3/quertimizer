@@ -1,12 +1,12 @@
 package com.quertimizer.judge.application.output;
 
-import lombok.Getter;
+import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
-@Getter
+@Data
 public class SqlExecutionResult {
 
     private final ExecutionMode mode;
@@ -30,23 +30,23 @@ public class SqlExecutionResult {
                               BigDecimal cost,
                               List<String> planLines,
                               String message) {
-        this.mode = Objects.requireNonNull(mode, "필수 값이 없다.");
-        this.columns = List.copyOf(Objects.requireNonNull(columns, "필수 값이 없다."));
+        this.mode = Objects.requireNonNull(mode, "필수 값이 없습니다.");
+        this.columns = List.copyOf(Objects.requireNonNull(columns, "필수 값이 없습니다."));
         this.rows = copyRows(rows);
         this.rowCount = rowCount;
         this.currentPage = currentPage;
         this.pageSize = pageSize;
         this.executionTimeMs = executionTimeMs;
         this.cost = cost;
-        this.planLines = List.copyOf(Objects.requireNonNull(planLines, "필수 값이 없다."));
+        this.planLines = List.copyOf(Objects.requireNonNull(planLines, "필수 값이 없습니다."));
         this.message = message;
     }
 
     private List<List<String>> copyRows(List<List<String>> rows) {
-        Objects.requireNonNull(rows, "필수 값이 없다.");
+        Objects.requireNonNull(rows, "필수 값이 없습니다.");
 
         return rows.stream()
-                .map(row -> List.copyOf(Objects.requireNonNull(row, "필수 값이 없다."))).
-                toList();
+                .map(row -> List.copyOf(Objects.requireNonNull(row, "필수 값이 없습니다.")))
+                .toList();
     }
 }

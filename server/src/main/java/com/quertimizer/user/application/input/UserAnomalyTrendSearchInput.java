@@ -1,10 +1,8 @@
 package com.quertimizer.user.application.input;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Data;
 
-@Getter
-@RequiredArgsConstructor
+@Data
 public class UserAnomalyTrendSearchInput {
 
     private final String range;

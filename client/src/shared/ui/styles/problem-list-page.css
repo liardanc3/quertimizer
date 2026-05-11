@@ -1,37 +1,37 @@
-.home-page .panel-card.problem-toolbar-card,
-.home-page .panel-card.problem-board {
+:is(.home-page, .data-page) .panel-card.problem-toolbar-card,
+:is(.home-page, .data-page) .panel-card.problem-board {
   padding: 0;
   border: 0;
   background: none;
   box-shadow: none;
 }
 
-.home-page.page-stack {
+:is(.home-page, .data-page).page-stack {
   gap: 0.5rem;
 }
 
-.home-page .problem-toolbar {
+:is(.home-page, .data-page) .problem-toolbar {
   display: grid;
   gap: 0.9rem;
   align-items: center;
 }
 
-.home-page .problem-toolbar-card .problem-toolbar {
+:is(.home-page, .data-page) .problem-toolbar-card .problem-toolbar {
   width: 100%;
 }
 
-.home-page .problem-toolbar-card .problem-search-form {
+:is(.home-page, .data-page) .problem-toolbar-card .problem-search-form {
   width: 100%;
   grid-column: 1 / -1;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
 }
 
-.home-page .problem-toolbar-card .problem-search-field {
+:is(.home-page, .data-page) .problem-toolbar-card .problem-search-field {
   min-height: 2.26rem;
 }
 
-.home-page .home-problem-search-form {
+:is(.home-page, .data-page) .home-problem-search-form {
   display: grid;
   width: 100%;
   grid-template-columns: minmax(0, 1fr);
@@ -39,11 +39,11 @@
   min-width: 0;
 }
 
-.home-page .home-problem-search-form .problem-search-icon {
+:is(.home-page, .data-page) .home-problem-search-form .problem-search-icon {
   display: none;
 }
 
-.home-page .home-problem-search-form .home-problem-search-field {
+:is(.home-page, .data-page) .home-problem-search-form .home-problem-search-field {
   display: block;
   width: 100%;
   min-height: 2.26rem;
@@ -51,7 +51,7 @@
   height: 2.26rem;
 }
 
-.home-page .home-problem-search-form .home-problem-search-input {
+:is(.home-page, .data-page) .home-problem-search-form .home-problem-search-input {
   min-height: 2.26rem;
   height: 2.26rem;
   padding-left: 0.78rem;
@@ -64,13 +64,13 @@
   box-shadow: none;
 }
 
-.home-page .problem-toolbar-card .problem-search-button {
+:is(.home-page, .data-page) .problem-toolbar-card .problem-search-button {
   width: auto;
   min-height: 2.26rem;
   align-self: stretch;
 }
 
-.home-page .home-problem-search-form .home-problem-search-button {
+:is(.home-page, .data-page) .home-problem-search-form .home-problem-search-button {
   position: absolute;
   top: 50%;
   right: 0.64rem;
@@ -88,7 +88,7 @@
   transform: translateY(-50%);
 }
 
-.home-page .home-problem-search-form .home-problem-search-button::before {
+:is(.home-page, .data-page) .home-problem-search-form .home-problem-search-button::before {
   content: '';
   display: block;
   width: 0.92rem;
@@ -100,18 +100,18 @@
   background-size: contain;
 }
 
-.home-page .home-problem-search-form .home-problem-search-button:not(:disabled):hover {
+:is(.home-page, .data-page) .home-problem-search-form .home-problem-search-button:not(:disabled):hover {
   transform: translateY(-50%);
   border: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.home-page .problem-domain-tabs {
+:is(.home-page, .data-page) .problem-domain-tabs {
   width: fit-content;
 }
 
-.home-page .problem-board-header {
+:is(.home-page, .data-page) .problem-board-header {
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -120,7 +120,7 @@
   width: 100%;
 }
 
-.home-page .problem-board-controls {
+:is(.home-page, .data-page) .problem-board-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 0.48rem;
@@ -128,7 +128,7 @@
   align-items: center;
 }
 
-.home-page .problem-control-group {
+:is(.home-page, .data-page) .problem-control-group {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -141,15 +141,15 @@
   box-shadow: none;
 }
 
-.home-page .problem-board-controls .problem-control-group {
+:is(.home-page, .data-page) .problem-board-controls .problem-control-group {
   flex: 0 0 auto;
 }
 
-.home-page .problem-control-group::before {
+:is(.home-page, .data-page) .problem-control-group::before {
   content: none;
 }
 
-.home-page .problem-control-label {
+:is(.home-page, .data-page) .problem-control-label {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -168,20 +168,20 @@
   box-shadow: none;
 }
 
-.home-page .problem-tag-control {
+:is(.home-page, .data-page) .problem-tag-control {
   justify-content: flex-start;
   min-width: auto;
 }
 
-.home-page .problem-status-group {
+:is(.home-page, .data-page) .problem-status-group {
   gap: 0.6rem;
 }
 
-.home-page .problem-sort-group {
+:is(.home-page, .data-page) .problem-sort-group {
   gap: 0.58rem;
 }
 
-.home-page .problem-checkbox-wrap {
+:is(.home-page, .data-page) .problem-checkbox-wrap {
   position: relative;
   display: inline-flex;
   justify-content: center;
@@ -189,7 +189,7 @@
   flex: 0 0 auto;
 }
 
-.home-page .problem-checkbox-input {
+:is(.home-page, .data-page) .problem-checkbox-input {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -197,7 +197,7 @@
   cursor: pointer;
 }
 
-.home-page .problem-checkbox-ui {
+:is(.home-page, .data-page) .problem-checkbox-ui {
   position: relative;
   display: inline-flex;
   width: 0.76rem;
@@ -208,7 +208,7 @@
   box-shadow: none;
 }
 
-.home-page .problem-checkbox-ui::after {
+:is(.home-page, .data-page) .problem-checkbox-ui::after {
   content: '';
   position: absolute;
   left: 0.13rem;
@@ -224,29 +224,29 @@
     transform 0.18s ease;
 }
 
-.home-page .problem-checkbox-input:checked + .problem-checkbox-ui {
+:is(.home-page, .data-page) .problem-checkbox-input:checked + .problem-checkbox-ui {
   border-color: #1976d2;
   background: linear-gradient(135deg, #1976d2 0%, #2563eb 100%);
 }
 
-.home-page .problem-checkbox-input:checked + .problem-checkbox-ui::after {
+:is(.home-page, .data-page) .problem-checkbox-input:checked + .problem-checkbox-ui::after {
   opacity: 1;
   transform: rotate(-45deg) scale(1);
 }
 
-.home-page .problem-checkbox-input:focus-visible + .problem-checkbox-ui {
+:is(.home-page, .data-page) .problem-checkbox-input:focus-visible + .problem-checkbox-ui {
   outline: 3px solid rgba(66, 165, 245, 0.28);
   outline-offset: 2px;
 }
 
-.home-page .problem-status-checks {
+:is(.home-page, .data-page) .problem-status-checks {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
   flex-wrap: nowrap;
 }
 
-.home-page .problem-status-check {
+:is(.home-page, .data-page) .problem-status-check {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -259,7 +259,7 @@
   white-space: nowrap;
 }
 
-.home-page .problem-status-check-input {
+:is(.home-page, .data-page) .problem-status-check-input {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -267,7 +267,7 @@
   cursor: pointer;
 }
 
-.home-page .problem-status-check-ui {
+:is(.home-page, .data-page) .problem-status-check-ui {
   position: relative;
   display: inline-flex;
   width: 0.76rem;
@@ -279,7 +279,7 @@
   flex: 0 0 auto;
 }
 
-.home-page .problem-status-check-ui::after {
+:is(.home-page, .data-page) .problem-status-check-ui::after {
   content: '';
   position: absolute;
   left: 0.13rem;
@@ -295,32 +295,32 @@
     transform 0.18s ease;
 }
 
-.home-page .problem-status-check-input:checked ~ .problem-status-check-ui {
+:is(.home-page, .data-page) .problem-status-check-input:checked ~ .problem-status-check-ui {
   border-color: #1976d2;
   background: linear-gradient(135deg, #1976d2 0%, #2563eb 100%);
 }
 
-.home-page .problem-status-check-input:checked ~ .problem-status-check-ui::after {
+:is(.home-page, .data-page) .problem-status-check-input:checked ~ .problem-status-check-ui::after {
   opacity: 1;
   transform: rotate(-45deg) scale(1);
 }
 
-.home-page .problem-status-check-input:focus-visible ~ .problem-status-check-ui {
+:is(.home-page, .data-page) .problem-status-check-input:focus-visible ~ .problem-status-check-ui {
   outline: 3px solid rgba(66, 165, 245, 0.28);
   outline-offset: 2px;
 }
 
-.home-page .problem-status-check-text {
+:is(.home-page, .data-page) .problem-status-check-text {
   line-height: 1;
 }
 
-.home-page .problem-sort-controls {
+:is(.home-page, .data-page) .problem-sort-controls {
   display: inline-flex;
   align-items: center;
   gap: 0;
 }
 
-.home-page .problem-sort-toggle-button {
+:is(.home-page, .data-page) .problem-sort-toggle-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -340,33 +340,33 @@
     opacity 0.18s ease;
 }
 
-.home-page .problem-sort-toggle-button:hover {
+:is(.home-page, .data-page) .problem-sort-toggle-button:hover {
   background: transparent;
   color: #0f172a;
 }
 
-.home-page .problem-sort-toggle-button:focus-visible {
+:is(.home-page, .data-page) .problem-sort-toggle-button:focus-visible {
   outline: 2px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-sort-toggle-button svg {
+:is(.home-page, .data-page) .problem-sort-toggle-button svg {
   width: 0.84rem;
   height: 1.02rem;
 }
 
-.home-page .problem-sort-toggle-button.is-selected {
+:is(.home-page, .data-page) .problem-sort-toggle-button.is-selected {
   background: transparent;
   color: #0f172a;
 }
 
-.home-page .problem-variance-group {
+:is(.home-page, .data-page) .problem-variance-group {
   align-items: stretch;
   min-height: auto;
   padding: 0.18rem 0.08rem 0.18rem 0.62rem;
 }
 
-.home-page .problem-variance-heading {
+:is(.home-page, .data-page) .problem-variance-heading {
   display: inline-flex;
   align-items: center;
   gap: 0.08rem;
@@ -375,7 +375,7 @@
   border-right: 1px solid #dbe5f0;
 }
 
-.home-page .problem-variance-group .problem-control-label {
+:is(.home-page, .data-page) .problem-variance-group .problem-control-label {
   align-self: center;
   min-height: 1.16rem;
   padding-top: 0;
@@ -383,7 +383,7 @@
   border-right: 0;
 }
 
-.home-page .problem-variance-controls {
+:is(.home-page, .data-page) .problem-variance-controls {
   display: grid;
   grid-template-columns: auto minmax(11rem, 14rem) max-content;
   align-items: center;
@@ -391,7 +391,7 @@
   min-width: 0;
 }
 
-.home-page .problem-variance-slider-shell {
+:is(.home-page, .data-page) .problem-variance-slider-shell {
   position: relative;
   display: flex;
   align-items: center;
@@ -399,7 +399,7 @@
   height: 1.48rem;
 }
 
-.home-page .problem-variance-slider-track {
+:is(.home-page, .data-page) .problem-variance-slider-track {
   position: absolute;
   inset: 50% 0 auto 0;
   height: 0.22rem;
@@ -408,7 +408,7 @@
   transform: translateY(-50%);
 }
 
-.home-page .problem-variance-slider-active {
+:is(.home-page, .data-page) .problem-variance-slider-active {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -418,7 +418,7 @@
   background: linear-gradient(90deg, #1976d2 0%, #2563eb 100%);
 }
 
-.home-page .problem-variance-slider-input {
+:is(.home-page, .data-page) .problem-variance-slider-input {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -432,12 +432,12 @@
   min-width: 0;
 }
 
-.home-page .problem-variance-slider-input::-webkit-slider-runnable-track {
+:is(.home-page, .data-page) .problem-variance-slider-input::-webkit-slider-runnable-track {
   height: 0.22rem;
   background: transparent;
 }
 
-.home-page .problem-variance-slider-input::-webkit-slider-thumb {
+:is(.home-page, .data-page) .problem-variance-slider-input::-webkit-slider-thumb {
   width: 0.76rem;
   height: 0.76rem;
   margin-top: calc((0.22rem - 0.76rem) / 2);
@@ -451,12 +451,12 @@
   appearance: none;
 }
 
-.home-page .problem-variance-slider-input::-moz-range-track {
+:is(.home-page, .data-page) .problem-variance-slider-input::-moz-range-track {
   height: 0.22rem;
   background: transparent;
 }
 
-.home-page .problem-variance-slider-input::-moz-range-thumb {
+:is(.home-page, .data-page) .problem-variance-slider-input::-moz-range-thumb {
   width: 0.76rem;
   height: 0.76rem;
   border: 1px solid rgba(25, 118, 210, 0.22);
@@ -467,21 +467,21 @@
   pointer-events: auto;
 }
 
-.home-page .problem-variance-slider-input:focus-visible {
+:is(.home-page, .data-page) .problem-variance-slider-input:focus-visible {
   outline: none;
 }
 
-.home-page .problem-variance-slider-input:focus-visible::-webkit-slider-thumb {
+:is(.home-page, .data-page) .problem-variance-slider-input:focus-visible::-webkit-slider-thumb {
   outline: 3px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-variance-slider-input:focus-visible::-moz-range-thumb {
+:is(.home-page, .data-page) .problem-variance-slider-input:focus-visible::-moz-range-thumb {
   outline: 3px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-variance-actions {
+:is(.home-page, .data-page) .problem-variance-actions {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -492,7 +492,7 @@
   padding: 0 0.16rem 0 0.16rem;
 }
 
-.home-page .problem-variance-value-button {
+:is(.home-page, .data-page) .problem-variance-value-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -510,12 +510,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.home-page .problem-variance-value-button {
+:is(.home-page, .data-page) .problem-variance-value-button {
   cursor: text;
   text-align: center;
 }
 
-.home-page .problem-variance-value-editor {
+:is(.home-page, .data-page) .problem-variance-value-editor {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -534,7 +534,7 @@
   gap: 0.2rem;
 }
 
-.home-page .problem-variance-value-input {
+:is(.home-page, .data-page) .problem-variance-value-input {
   width: 2.28rem;
   min-height: 1.2rem;
   padding: 0 0.22rem;
@@ -549,23 +549,23 @@
   font-variant-numeric: tabular-nums;
 }
 
-.home-page .problem-variance-value-input:focus-visible {
+:is(.home-page, .data-page) .problem-variance-value-input:focus-visible {
   outline: 2px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-variance-value-input::-webkit-outer-spin-button,
-.home-page .problem-variance-value-input::-webkit-inner-spin-button {
+:is(.home-page, .data-page) .problem-variance-value-input::-webkit-outer-spin-button,
+:is(.home-page, .data-page) .problem-variance-value-input::-webkit-inner-spin-button {
   margin: 0;
   -webkit-appearance: none;
 }
 
-.home-page .problem-variance-value-separator,
-.home-page .problem-variance-value-unit {
+:is(.home-page, .data-page) .problem-variance-value-separator,
+:is(.home-page, .data-page) .problem-variance-value-unit {
   color: #475569;
 }
 
-.home-page .problem-variance-apply-button {
+:is(.home-page, .data-page) .problem-variance-apply-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -584,66 +584,71 @@
   transition: color 0.18s ease;
 }
 
-.home-page .problem-variance-apply-button svg {
+:is(.home-page, .data-page) .problem-variance-apply-button svg {
   width: 0.8rem;
   height: 0.8rem;
 }
 
-.home-page .problem-variance-apply-button.is-pending {
+:is(.home-page, .data-page) .problem-variance-apply-button.is-pending {
   color: #0f172a;
 }
 
-.home-page .problem-variance-apply-button:not(:disabled):hover {
+:is(.home-page, .data-page) .problem-variance-apply-button:not(:disabled):hover {
   color: #1976d2;
 }
 
-.home-page .problem-variance-apply-button:focus-visible {
+:is(.home-page, .data-page) .problem-variance-apply-button:focus-visible {
   outline: 2px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-variance-apply-button:disabled {
+:is(.home-page, .data-page) .problem-variance-apply-button:disabled {
   cursor: default;
 }
 
-.home-page .problem-list {
+:is(.home-page, .data-page) .problem-list {
   display: grid;
   gap: 0;
   margin-top: 0.5rem;
 }
 
-.home-page .problem-list.is-empty {
+:is(.home-page, .data-page) .problem-list.is-empty {
   grid-template-columns: 1fr;
 }
 
-.home-page .problem-table-shell {
+:is(.home-page, .data-page) .problem-table-shell {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
 
-.home-page .problem-table {
+:is(.home-page, .data-page) .problem-table {
   display: grid;
   gap: 0;
   min-width: 64rem;
 }
 
-.home-page .problem-table-entry {
+:is(.home-page, .data-page) .problem-table-entry {
   display: grid;
   gap: 0;
   border-bottom: 1px solid rgba(219, 230, 242, 0.82);
 }
 
-.home-page .problem-table-entry.is-solved {
+:is(.home-page, .data-page) .problem-table-entry:focus-visible {
+  outline: 3px solid rgba(66, 165, 245, 0.24);
+  outline-offset: 2px;
+}
+
+:is(.home-page, .data-page) .problem-table-entry.is-solved {
   border-bottom-color: rgba(148, 208, 168, 0.9);
 }
 
-.home-page .problem-table-entry.is-stats-hidden {
+:is(.home-page, .data-page) .problem-table-entry.is-stats-hidden {
   gap: 0;
 }
 
-.home-page .problem-table-row {
+:is(.home-page, .data-page) .problem-table-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.44rem;
@@ -651,7 +656,7 @@
   padding: 0.58rem 0.14rem;
 }
 
-.home-page .problem-table-head {
+:is(.home-page, .data-page) .problem-table-head {
   padding-top: 0.12rem;
   padding-bottom: 0.58rem;
   border-bottom: 1px solid rgba(219, 230, 242, 0.82);
@@ -663,20 +668,20 @@
   text-align: left;
 }
 
-.home-page .problem-table-head-cell,
-.home-page .problem-table-cell {
+:is(.home-page, .data-page) .problem-table-head-cell,
+:is(.home-page, .data-page) .problem-table-cell {
   min-width: 0;
   text-align: left;
 }
 
-.home-page .problem-table-head-cell-filter {
+:is(.home-page, .data-page) .problem-table-head-cell-filter {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
 }
 
-.home-page .problem-table-head-filter-trigger {
+:is(.home-page, .data-page) .problem-table-head-filter-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -694,23 +699,23 @@
   transition: color 0.18s ease;
 }
 
-.home-page .problem-table-head-filter-trigger:hover,
-.home-page .problem-table-head-filter-trigger.is-open,
-.home-page .problem-table-head-filter-trigger.is-active {
+:is(.home-page, .data-page) .problem-table-head-filter-trigger:hover,
+:is(.home-page, .data-page) .problem-table-head-filter-trigger.is-open,
+:is(.home-page, .data-page) .problem-table-head-filter-trigger.is-active {
   color: #0f5db3;
 }
 
-.home-page .problem-table-head-filter-trigger:focus-visible {
+:is(.home-page, .data-page) .problem-table-head-filter-trigger:focus-visible {
   outline: 2px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-table-head-sort-trigger svg {
+:is(.home-page, .data-page) .problem-table-head-sort-trigger svg {
   width: 0.84rem;
   height: 0.84rem;
 }
 
-.home-page .problem-table-header-menu {
+:is(.home-page, .data-page) .problem-table-header-menu {
   position: absolute;
   top: calc(100% + 0.34rem);
   left: 0;
@@ -724,13 +729,13 @@
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
 }
 
-.home-page .problem-table-header-menu .problem-status-checks {
+:is(.home-page, .data-page) .problem-table-header-menu .problem-status-checks {
   display: grid;
   gap: 0.34rem;
   justify-items: start;
 }
 
-.home-page .problem-table-cell {
+:is(.home-page, .data-page) .problem-table-cell {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -739,12 +744,12 @@
   line-height: 1.35;
 }
 
-.home-page .problem-table-cell-status,
-.home-page .problem-table-cell-metric {
+:is(.home-page, .data-page) .problem-table-cell-status,
+:is(.home-page, .data-page) .problem-table-cell-metric {
   font-variant-numeric: tabular-nums;
 }
 
-.home-page .problem-table-status-text {
+:is(.home-page, .data-page) .problem-table-status-text {
   display: inline-flex;
   align-items: center;
   font-size: 0.72rem;
@@ -752,19 +757,19 @@
   line-height: 1;
 }
 
-.home-page .problem-table-status-text.is-solved {
+:is(.home-page, .data-page) .problem-table-status-text.is-solved {
   color: #15803d;
 }
 
-.home-page .problem-table-status-text.is-unsolved {
+:is(.home-page, .data-page) .problem-table-status-text.is-unsolved {
   color: #b42318;
 }
 
-.home-page .problem-table-status-text.is-unknown {
+:is(.home-page, .data-page) .problem-table-status-text.is-unknown {
   color: #94a3b8;
 }
 
-.home-page .problem-card-link-area {
+:is(.home-page, .data-page) .problem-card-link-area {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -778,41 +783,41 @@
   cursor: pointer;
 }
 
-.home-page .problem-card-link-area.is-title {
+:is(.home-page, .data-page) .problem-card-link-area.is-title {
   width: auto;
   max-width: 100%;
   flex: 0 1 auto;
   min-width: 0;
 }
 
-.home-page .problem-card-link-area.is-problem-id {
+:is(.home-page, .data-page) .problem-card-link-area.is-problem-id {
   width: fit-content;
 }
 
-.home-page .problem-card-link-area:hover .problem-number,
-.home-page .problem-card-link-area:hover .problem-title {
+:is(.home-page, .data-page) .problem-card-link-area:hover .problem-number,
+:is(.home-page, .data-page) .problem-card-link-area:hover .problem-title {
   color: #0f5db3;
 }
 
-.home-page .problem-card-link-area:focus-visible {
+:is(.home-page, .data-page) .problem-card-link-area:focus-visible {
   outline: 3px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
   border-radius: 0.5rem;
 }
 
-.home-page .problem-number {
+:is(.home-page, .data-page) .problem-number {
   margin: 0;
   color: #1976d2;
   font-size: 0.74rem;
   font-weight: 700;
 }
 
-.home-page .problem-table-cell-title {
+:is(.home-page, .data-page) .problem-table-cell-title {
   align-items: stretch;
   overflow: hidden;
 }
 
-.home-page .problem-table-title-row {
+:is(.home-page, .data-page) .problem-table-title-row {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -822,7 +827,7 @@
   min-width: 0;
 }
 
-.home-page .problem-table-title-link-slot {
+:is(.home-page, .data-page) .problem-table-title-link-slot {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -830,7 +835,7 @@
   flex: 0 1 auto;
 }
 
-.home-page .problem-card-actions {
+:is(.home-page, .data-page) .problem-card-actions {
   display: inline-flex;
   flex-wrap: nowrap;
   justify-content: flex-start;
@@ -841,43 +846,43 @@
   flex: 0 0 auto;
 }
 
-.home-page .problem-card-action {
+:is(.home-page, .data-page) .problem-card-action {
   min-height: 1.36rem;
   padding-inline: 0.42rem;
   padding-block: 0;
   font-size: 0.58rem;
 }
 
-.home-page .problem-table-stats {
+:is(.home-page, .data-page) .problem-table-stats {
   padding: 0.22rem 0 0.98rem;
 }
 
-.home-page .problem-table-stats.is-hidden {
+:is(.home-page, .data-page) .problem-table-stats.is-hidden {
   display: none;
 }
 
-.home-page .problem-table-stats .problem-runtime-shell {
+:is(.home-page, .data-page) .problem-table-stats .problem-runtime-shell {
   margin-top: 0;
 }
 
-.home-page .problem-pagination {
+:is(.home-page, .data-page) .problem-pagination {
   display: flex;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.58rem;
   width: 100%;
-  margin-top: 1rem;
+  margin-top: 1.55rem;
 }
 
-.home-page .problem-page-numbers {
+:is(.home-page, .data-page) .problem-page-numbers {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.28rem;
 }
 
-.home-page .problem-page-button {
+:is(.home-page, .data-page) .problem-page-button {
   min-width: auto;
   min-height: auto;
   padding: 0.14rem 0.22rem;
@@ -890,7 +895,7 @@
   font-weight: 700;
 }
 
-.home-page .problem-page-button.is-selected {
+:is(.home-page, .data-page) .problem-page-button.is-selected {
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -899,13 +904,13 @@
   text-underline-offset: 0.18rem;
 }
 
-.home-page .problem-page-button:disabled {
+:is(.home-page, .data-page) .problem-page-button:disabled {
   border: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.home-page .problem-pagination-meta {
+:is(.home-page, .data-page) .problem-pagination-meta {
   color: #64748b;
   font-size: 0.78rem;
   font-weight: 700;
@@ -915,7 +920,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.home-page .problem-pagination-meta-button {
+:is(.home-page, .data-page) .problem-pagination-meta-button {
   padding: 0;
   border: 0;
   background: transparent;
@@ -923,7 +928,7 @@
   cursor: pointer;
 }
 
-.home-page .problem-pagination-meta-input {
+:is(.home-page, .data-page) .problem-pagination-meta-input {
   width: 4rem;
   min-height: 1.4rem;
   padding: 0 0.24rem;
@@ -938,12 +943,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.home-page .problem-pagination-meta-input:focus-visible {
+:is(.home-page, .data-page) .problem-pagination-meta-input:focus-visible {
   outline: 2px solid rgba(66, 165, 245, 0.24);
   outline-offset: 2px;
 }
 
-.home-page .problem-solved-badge {
+:is(.home-page, .data-page) .problem-solved-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -953,19 +958,19 @@
   font-weight: 800;
 }
 
-.home-page .problem-solved-badge.is-solved {
+:is(.home-page, .data-page) .problem-solved-badge.is-solved {
   border: 1px solid rgba(22, 163, 74, 0.22);
   background: rgba(22, 163, 74, 0.08);
   color: #15803d;
 }
 
-.home-page .problem-solved-badge.is-unsolved {
+:is(.home-page, .data-page) .problem-solved-badge.is-unsolved {
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(148, 163, 184, 0.12);
   color: #64748b;
 }
 
-.home-page .problem-title {
+:is(.home-page, .data-page) .problem-title {
   margin: 0;
   display: flex;
   align-items: center;
@@ -984,7 +989,7 @@ body.handle-setup-locked {
   overflow: hidden;
 }
 
-.home-page .handle-setup-overlay {
+:is(.home-page, .data-page) .handle-setup-overlay {
   position: fixed;
   inset: 0;
   z-index: 80;
@@ -993,14 +998,14 @@ body.handle-setup-locked {
   padding: 1.5rem;
 }
 
-.home-page .handle-setup-backdrop {
+:is(.home-page, .data-page) .handle-setup-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(248, 250, 252, 0.18);
   backdrop-filter: blur(2px);
 }
 
-.home-page .handle-setup-dialog {
+:is(.home-page, .data-page) .handle-setup-dialog {
   position: relative;
   z-index: 1;
   width: min(100%, 31rem);
@@ -1013,14 +1018,14 @@ body.handle-setup-locked {
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
 }
 
-.home-page .handle-setup-header {
+:is(.home-page, .data-page) .handle-setup-header {
   display: grid;
   gap: 0.26rem;
   justify-items: center;
   text-align: center;
 }
 
-.home-page .handle-setup-title {
+:is(.home-page, .data-page) .handle-setup-title {
   margin: 0;
   color: #0f172a;
   font-size: 1.04rem;
@@ -1028,448 +1033,448 @@ body.handle-setup-locked {
   line-height: 1.2;
 }
 
-.home-page .handle-setup-copy {
+:is(.home-page, .data-page) .handle-setup-copy {
   margin: 0;
   color: #5b6b82;
   font-size: 0.76rem;
   line-height: 1.38;
 }
 
-.home-page .handle-setup-field-stack {
+:is(.home-page, .data-page) .handle-setup-field-stack {
   gap: 0.34rem;
 }
 
-.home-page .handle-setup-input {
+:is(.home-page, .data-page) .handle-setup-input {
   min-height: 2.56rem;
   padding: 0.48rem 0.78rem;
   border-radius: 0;
 }
 
-.home-page .handle-setup-input:focus-visible {
+:is(.home-page, .data-page) .handle-setup-input:focus-visible {
   outline-width: 2px;
   outline-offset: 0;
 }
 
-.home-page .handle-setup-hint {
+:is(.home-page, .data-page) .handle-setup-hint {
   margin-top: 0.08rem;
   font-size: 0.7rem;
   line-height: 1.24;
 }
 
-.home-page .handle-setup-hint.is-error {
+:is(.home-page, .data-page) .handle-setup-hint.is-error {
   color: #c2410c;
 }
 
-.home-page .handle-setup-hint.is-success {
+:is(.home-page, .data-page) .handle-setup-hint.is-success {
   color: #16a34a;
 }
 
-.home-page .handle-setup-feedback {
+:is(.home-page, .data-page) .handle-setup-feedback {
   gap: 0.18rem;
   padding: 0.46rem 0.62rem;
 }
 
-.home-page .handle-setup-submit {
+:is(.home-page, .data-page) .handle-setup-submit {
   min-height: 2.14rem;
   border-radius: 0;
   box-shadow: none;
 }
 
 @media (min-width: 960px) {
-  .home-page .problem-list {
+  :is(.home-page, .data-page) .problem-list {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 1180px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 60rem;
   }
 
-  .home-page .problem-toolbar {
+  :is(.home-page, .data-page) .problem-toolbar {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
 
-  .home-page .problem-domain-tabs {
+  :is(.home-page, .data-page) .problem-domain-tabs {
     width: 100%;
   }
 
-  .home-page .problem-domain-tabs .tab-button {
+  :is(.home-page, .data-page) .problem-domain-tabs .tab-button {
     flex: 1 1 0;
   }
 
-  .home-page .problem-board-header,
-  .home-page .problem-board-controls {
+  :is(.home-page, .data-page) .problem-board-header,
+  :is(.home-page, .data-page) .problem-board-controls {
     width: 100%;
   }
 
-  .home-page .problem-card {
+  :is(.home-page, .data-page) .problem-card {
     padding: 1.05rem 1.08rem;
   }
 
-  .home-page .problem-title-link-slot {
+  :is(.home-page, .data-page) .problem-title-link-slot {
     max-width: min(100%, 34rem);
   }
 }
 
 @media (max-width: 960px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 56rem;
   }
 
-  .home-page .problem-card-header {
+  :is(.home-page, .data-page) .problem-card-header {
     display: grid;
     grid-template-columns: 1fr;
     gap: 0.7rem;
   }
 
-  .home-page .problem-card-status {
+  :is(.home-page, .data-page) .problem-card-status {
     justify-items: start;
   }
 
-  .home-page .problem-title-row {
+  :is(.home-page, .data-page) .problem-title-row {
     flex-wrap: wrap;
     align-items: flex-start;
     gap: 0.48rem;
   }
 
-  .home-page .problem-title-link-slot {
+  :is(.home-page, .data-page) .problem-title-link-slot {
     flex: 1 1 100%;
     max-width: 100%;
   }
 
-  .home-page .problem-card-actions {
+  :is(.home-page, .data-page) .problem-card-actions {
     margin-left: 0;
   }
 }
 
 @media (max-width: 639px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 52rem;
   }
 
-  .home-page .problem-domain-tabs {
+  :is(.home-page, .data-page) .problem-domain-tabs {
     width: 100%;
   }
 
-  .home-page .problem-domain-tabs .tab-button {
+  :is(.home-page, .data-page) .problem-domain-tabs .tab-button {
     flex: 1 1 140px;
   }
 
-  .home-page .problem-board-controls {
+  :is(.home-page, .data-page) .problem-board-controls {
     display: grid;
     grid-template-columns: 1fr;
     gap: 0.5rem;
   }
 
-  .home-page .problem-control-group {
+  :is(.home-page, .data-page) .problem-control-group {
     width: 100%;
     min-height: auto;
     justify-content: space-between;
     padding: 0.34rem 0.68rem;
   }
 
-  .home-page .problem-status-group,
-  .home-page .problem-sort-group {
+  :is(.home-page, .data-page) .problem-status-group,
+  :is(.home-page, .data-page) .problem-sort-group {
     gap: 0.56rem;
   }
 
-  .home-page .problem-variance-controls {
+  :is(.home-page, .data-page) .problem-variance-controls {
     grid-template-columns: auto minmax(0, 1fr) max-content;
   }
 
-  .home-page .problem-variance-group {
+  :is(.home-page, .data-page) .problem-variance-group {
     padding: 0.34rem 0.12rem 0.34rem 0.68rem;
   }
 
-  .home-page .problem-variance-actions {
+  :is(.home-page, .data-page) .problem-variance-actions {
     width: auto;
     min-width: 0;
     max-width: none;
   }
 
-  .home-page .problem-variance-value-button {
+  :is(.home-page, .data-page) .problem-variance-value-button {
     width: 7rem;
     min-width: 7rem;
   }
 
-  .home-page .problem-variance-value-editor {
+  :is(.home-page, .data-page) .problem-variance-value-editor {
     width: 7rem;
     min-width: 7rem;
   }
 
-  .home-page .problem-status-checks {
+  :is(.home-page, .data-page) .problem-status-checks {
     justify-content: flex-end;
     gap: 0.55rem;
   }
 
-  .home-page .problem-sort-controls {
+  :is(.home-page, .data-page) .problem-sort-controls {
     justify-content: flex-end;
   }
 
-  .home-page .problem-card {
+  :is(.home-page, .data-page) .problem-card {
     padding: 0.92rem;
   }
 
-  .home-page .problem-card-header {
+  :is(.home-page, .data-page) .problem-card-header {
     gap: 0.62rem;
   }
 
-  .home-page .problem-card-status {
+  :is(.home-page, .data-page) .problem-card-status {
     justify-items: start;
   }
 
-  .home-page .problem-title-row {
+  :is(.home-page, .data-page) .problem-title-row {
     gap: 0.42rem;
   }
 
-  .home-page .problem-title {
+  :is(.home-page, .data-page) .problem-title {
     font-size: 0.84rem;
     line-height: 1.28;
   }
 
-  .home-page .handle-setup-overlay {
+  :is(.home-page, .data-page) .handle-setup-overlay {
     padding: 1rem;
   }
 
-  .home-page .handle-setup-dialog {
+  :is(.home-page, .data-page) .handle-setup-dialog {
     width: min(100%, 26rem);
     padding: 1rem 0.92rem 0.9rem;
   }
 
-  .home-page .handle-setup-title {
+  :is(.home-page, .data-page) .handle-setup-title {
     font-size: 0.98rem;
   }
 
-  .home-page .handle-setup-copy {
+  :is(.home-page, .data-page) .handle-setup-copy {
     font-size: 0.72rem;
   }
 
-  .home-page .handle-setup-input {
+  :is(.home-page, .data-page) .handle-setup-input {
     min-height: 2.3rem;
   }
 
-  .home-page .handle-setup-submit {
+  :is(.home-page, .data-page) .handle-setup-submit {
     min-height: 1.98rem;
   }
 
-  .home-page .problem-number {
+  :is(.home-page, .data-page) .problem-number {
     font-size: 0.76rem;
   }
 
-  .home-page .problem-card-actions {
+  :is(.home-page, .data-page) .problem-card-actions {
     justify-content: flex-start;
     margin-left: 0;
     gap: 0.28rem;
   }
 
-  .home-page .problem-card-action {
+  :is(.home-page, .data-page) .problem-card-action {
     min-height: 1.42rem;
     padding-inline: 0.5rem;
     font-size: 0.68rem;
   }
 
-  .home-page .problem-solved-count {
+  :is(.home-page, .data-page) .problem-solved-count {
     font-size: 0.82rem;
     white-space: normal;
   }
 }
 
 @media (prefers-color-scheme: dark) {
-  .home-page .home-problem-search-form .home-problem-search-field,
-  .home-page .home-problem-search-form .home-problem-search-input {
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-field,
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-input {
     background: var(--surface-muted);
     color: var(--ink-strong);
   }
 
-  .home-page .home-problem-search-form .home-problem-search-input {
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-input {
     border-color: var(--line-strong);
   }
 
-  .home-page .home-problem-search-form .home-problem-search-input::placeholder {
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-input::placeholder {
     color: var(--ink-faint);
   }
 
-  .home-page .home-problem-search-form .home-problem-search-button,
-  .home-page .problem-control-label,
-  .home-page .problem-variance-value-separator,
-  .home-page .problem-variance-value-unit,
-  .home-page .problem-sort-toggle-button,
-  .home-page .problem-status-check,
-  .home-page .problem-status-check-text,
-  .home-page .problem-solved-count,
-  .home-page .handle-setup-copy {
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-button,
+  :is(.home-page, .data-page) .problem-control-label,
+  :is(.home-page, .data-page) .problem-variance-value-separator,
+  :is(.home-page, .data-page) .problem-variance-value-unit,
+  :is(.home-page, .data-page) .problem-sort-toggle-button,
+  :is(.home-page, .data-page) .problem-status-check,
+  :is(.home-page, .data-page) .problem-status-check-text,
+  :is(.home-page, .data-page) .problem-solved-count,
+  :is(.home-page, .data-page) .handle-setup-copy {
     color: var(--ink-subtle);
   }
 
-  .home-page .home-problem-search-form .home-problem-search-button::before {
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-button::before {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e2e8f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E");
   }
 
-  .home-page .problem-control-group,
-  .home-page .problem-variance-group {
+  :is(.home-page, .data-page) .problem-control-group,
+  :is(.home-page, .data-page) .problem-variance-group {
     border-color: var(--line-soft);
     background: var(--surface-soft);
   }
 
-  .home-page .problem-checkbox-ui,
-  .home-page .problem-status-check-ui,
-  .home-page .problem-variance-value-input {
+  :is(.home-page, .data-page) .problem-checkbox-ui,
+  :is(.home-page, .data-page) .problem-status-check-ui,
+  :is(.home-page, .data-page) .problem-variance-value-input {
     border-color: var(--line-strong);
     background: var(--surface);
   }
 
-  .home-page .problem-sort-toggle-button:hover,
-  .home-page .problem-sort-toggle-button.is-selected,
-  .home-page .problem-status-check-input:checked ~ .problem-status-check-text,
-  .home-page .problem-number,
-  .home-page .problem-title {
+  :is(.home-page, .data-page) .problem-sort-toggle-button:hover,
+  :is(.home-page, .data-page) .problem-sort-toggle-button.is-selected,
+  :is(.home-page, .data-page) .problem-status-check-input:checked ~ .problem-status-check-text,
+  :is(.home-page, .data-page) .problem-number,
+  :is(.home-page, .data-page) .problem-title {
     color: var(--ink-strong);
   }
 
-  .home-page .problem-variance-heading {
+  :is(.home-page, .data-page) .problem-variance-heading {
     border-right-color: var(--line-soft);
   }
 
-  .home-page .problem-variance-slider-track {
+  :is(.home-page, .data-page) .problem-variance-slider-track {
     background: rgba(148, 163, 184, 0.34);
   }
 
-  .home-page .problem-variance-slider-active {
+  :is(.home-page, .data-page) .problem-variance-slider-active {
     background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
   }
 
-  .home-page .problem-variance-slider-input::-webkit-slider-thumb,
-  .home-page .problem-variance-slider-input::-moz-range-thumb {
+  :is(.home-page, .data-page) .problem-variance-slider-input::-webkit-slider-thumb,
+  :is(.home-page, .data-page) .problem-variance-slider-input::-moz-range-thumb {
     border-color: var(--accent-border-strong);
     background: var(--surface);
     box-shadow: none;
   }
 
-  .home-page .problem-variance-value-button,
-  .home-page .problem-variance-value-editor,
-  .home-page .problem-variance-value-input,
-  .home-page .problem-card-action {
+  :is(.home-page, .data-page) .problem-variance-value-button,
+  :is(.home-page, .data-page) .problem-variance-value-editor,
+  :is(.home-page, .data-page) .problem-variance-value-input,
+  :is(.home-page, .data-page) .problem-card-action {
     color: var(--ink-strong);
   }
 
-  .home-page .problem-variance-apply-button {
+  :is(.home-page, .data-page) .problem-variance-apply-button {
     color: var(--accent-ink);
   }
 
-  .home-page .problem-table-head {
+  :is(.home-page, .data-page) .problem-table-head {
     border-bottom-color: var(--line-soft);
     color: var(--ink-faint);
   }
 
-  .home-page .problem-table-entry {
+  :is(.home-page, .data-page) .problem-table-entry {
     border-bottom-color: var(--line-soft);
   }
 
-  .home-page .problem-table-cell,
-  .home-page .problem-table-status-text.is-unknown {
+  :is(.home-page, .data-page) .problem-table-cell,
+  :is(.home-page, .data-page) .problem-table-status-text.is-unknown {
     color: var(--ink-subtle);
   }
 
-  .home-page .problem-table-status-text.is-solved {
+  :is(.home-page, .data-page) .problem-table-status-text.is-solved {
     color: #4ade80;
   }
 
-  .home-page .problem-table-status-text.is-unsolved {
+  :is(.home-page, .data-page) .problem-table-status-text.is-unsolved {
     color: #fca5a5;
   }
 
-  .home-page .problem-card-link-area:hover .problem-number,
-  .home-page .problem-card-link-area:hover .problem-title {
+  :is(.home-page, .data-page) .problem-card-link-area:hover .problem-number,
+  :is(.home-page, .data-page) .problem-card-link-area:hover .problem-title {
     color: var(--accent-ink);
   }
 
-  .home-page .problem-table-head-filter-trigger {
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger {
     color: var(--ink-faint);
   }
 
-  .home-page .problem-table-head-filter-trigger:hover,
-  .home-page .problem-table-head-filter-trigger.is-open,
-  .home-page .problem-table-head-filter-trigger.is-active {
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger:hover,
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger.is-open,
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger.is-active {
     color: var(--accent-ink);
   }
 
-  .home-page .problem-table-header-menu {
+  :is(.home-page, .data-page) .problem-table-header-menu {
     border-color: var(--line-soft);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-elevated);
   }
 
-  .home-page .handle-setup-backdrop {
+  :is(.home-page, .data-page) .handle-setup-backdrop {
     background: rgba(2, 6, 23, 0.2);
     backdrop-filter: blur(1px);
   }
 
-  .home-page .handle-setup-dialog {
+  :is(.home-page, .data-page) .handle-setup-dialog {
     border-color: var(--line-soft);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-elevated);
   }
 
-  .home-page .handle-setup-title,
-  .home-page .handle-setup-input {
+  :is(.home-page, .data-page) .handle-setup-title,
+  :is(.home-page, .data-page) .handle-setup-input {
     color: var(--ink-strong);
   }
 
-  .home-page .handle-setup-input {
+  :is(.home-page, .data-page) .handle-setup-input {
     border-color: var(--line-strong);
     background: var(--surface-muted);
   }
 
-  .home-page .handle-setup-hint {
+  :is(.home-page, .data-page) .handle-setup-hint {
     color: var(--ink-subtle);
   }
 
-  .home-page .handle-setup-hint.is-error,
-  .home-page .handle-setup-feedback {
+  :is(.home-page, .data-page) .handle-setup-hint.is-error,
+  :is(.home-page, .data-page) .handle-setup-feedback {
     color: var(--danger-strong);
   }
 }
 
 /* 2026-04 problem list dbms split overrides */
-.home-page .problem-table {
+:is(.home-page, .data-page) .problem-table {
   min-width: 70rem;
 }
 
-.home-page .problem-table-row {
+:is(.home-page, .data-page) .problem-table-row {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.home-page .problem-table-entry.is-solved {
+:is(.home-page, .data-page) .problem-table-entry.is-solved {
   border-bottom-color: rgba(219, 230, 242, 0.82);
 }
 
-.home-page .problem-table-header-menu .problem-status-checks {
+:is(.home-page, .data-page) .problem-table-header-menu .problem-status-checks {
   display: inline-flex;
   align-items: center;
   gap: 0.68rem;
   justify-items: initial;
 }
 
-.home-page .problem-table-status-text {
+:is(.home-page, .data-page) .problem-table-status-text {
   font-weight: 700;
 }
 
-.home-page .problem-table-status-text.is-solved {
+:is(.home-page, .data-page) .problem-table-status-text.is-solved {
   color: #2f7fd3;
 }
 
-.home-page .problem-table-status-text.is-unsolved {
+:is(.home-page, .data-page) .problem-table-status-text.is-unsolved {
   color: #334155;
 }
 
-.home-page .problem-number {
+:is(.home-page, .data-page) .problem-number {
   color: #334155;
   font-weight: 500;
 }
 
-.home-page .problem-title {
+:is(.home-page, .data-page) .problem-title {
   color: #334155;
   font-size: 0.82rem;
   font-weight: 500;
@@ -1477,67 +1482,67 @@ body.handle-setup-locked {
   text-decoration: none;
 }
 
-.home-page .problem-table-title-row {
+:is(.home-page, .data-page) .problem-table-title-row {
   gap: 0.12rem;
 }
 
-.home-page .problem-card-actions {
+:is(.home-page, .data-page) .problem-card-actions {
   gap: 0.18rem;
 }
 
-.home-page .problem-card-action {
+:is(.home-page, .data-page) .problem-card-action {
   padding-inline: 0.24rem;
   color: #64748b;
 }
 
 @media (max-width: 1180px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 66rem;
   }
 }
 
 @media (max-width: 960px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 62rem;
   }
 }
 
 @media (max-width: 639px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 58rem;
   }
 }
 
 @media (prefers-color-scheme: dark) {
-  .home-page .problem-table-entry.is-solved {
+  :is(.home-page, .data-page) .problem-table-entry.is-solved {
     border-bottom-color: var(--line-soft);
   }
 
-  .home-page .problem-table-status-text.is-solved {
+  :is(.home-page, .data-page) .problem-table-status-text.is-solved {
     color: var(--accent-ink);
   }
 
-  .home-page .problem-table-status-text.is-unsolved,
-  .home-page .problem-number,
-  .home-page .problem-title {
+  :is(.home-page, .data-page) .problem-table-status-text.is-unsolved,
+  :is(.home-page, .data-page) .problem-number,
+  :is(.home-page, .data-page) .problem-title {
     color: var(--ink-strong);
   }
 
-  .home-page .problem-card-action {
+  :is(.home-page, .data-page) .problem-card-action {
     color: var(--ink-subtle);
   }
 }
 
 /* 2026-04-20 home table header/popover/loading overrides */
-.home-page.page-stack {
+:is(.home-page, .data-page).page-stack {
   gap: 0.92rem;
 }
 
-.home-page .problem-list {
+:is(.home-page, .data-page) .problem-list {
   margin-top: 0;
 }
 
-.home-page .problem-table-shell {
+:is(.home-page, .data-page) .problem-table-shell {
   position: relative;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -1545,59 +1550,66 @@ body.handle-setup-locked {
   -webkit-overflow-scrolling: touch;
 }
 
-.home-page .problem-table-shell-inner {
+:is(.home-page, .data-page) .problem-table-shell-inner {
   position: relative;
 }
 
-.home-page .problem-table {
+:is(.home-page, .data-page) .problem-table {
   min-width: 74rem;
 }
 
-.home-page .problem-table-row {
+:is(.home-page, .data-page) .problem-table-row {
   grid-template-columns: minmax(0, 0.76fr) minmax(0, 1.05fr) minmax(0, 2.94fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) 48px;
 }
 
-.home-page .problem-table-entry,
-.home-page .problem-table-entry.is-solved {
+:is(.home-page, .data-page) .problem-table-entry,
+:is(.home-page, .data-page) .problem-table-entry.is-solved {
   border-bottom: 0;
 }
 
-.home-page .problem-table-entry {
+:is(.home-page, .data-page) .problem-table-entry {
   position: relative;
 }
 
-.home-page .problem-table-entry:not(.is-stats-hidden) {
+:is(.home-page, .data-page) .problem-table-entry:not(.is-stats-hidden) {
   background: transparent;
   box-shadow: none;
 }
 
-.home-page .problem-table-entry.is-solved:not(.is-stats-hidden) {
+:is(.home-page, .data-page) .problem-table-entry.is-solved:not(.is-stats-hidden) {
   background: transparent;
 }
 
-.home-page .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
+:is(.home-page, .data-page) .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
   margin-top: 0;
   padding: 0.18rem 0 0.56rem;
   border-top: 0;
 }
 
-.home-page .problem-table-head-cell-stats,
-.home-page .problem-table-cell-stats {
+:is(.home-page, .data-page) .problem-table-head-cell-stats,
+:is(.home-page, .data-page) .problem-table-cell-stats {
   justify-content: flex-start;
 }
 
-.home-page .problem-table-head-cell-spread {
+:is(.home-page, .data-page) .problem-table-head-cell-spread {
   position: relative;
 }
 
-.home-page .problem-table-header-menu-spread {
-  left: auto;
-  right: 0;
-  min-width: 22rem;
+:is(.home-page, .data-page) .problem-table-header-menu-spread {
+  position: fixed;
+  top: var(--problem-spread-menu-top, 4rem);
+  left: var(--problem-spread-menu-left, 1rem);
+  right: auto;
+  z-index: 140;
+  width: var(--problem-spread-menu-width, min(22rem, calc(100vw - 1.75rem)));
+  min-width: 0;
+  max-width: calc(100vw - 1.75rem);
+  max-height: min(70dvh, 24rem);
+  overflow-y: auto;
   padding: 0.56rem 0.7rem;
 }
 
-.home-page .problem-table-header-menu-spread .problem-variance-group {
+:is(.home-page, .data-page) .problem-table-header-menu-spread .problem-variance-group {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1605,11 +1617,11 @@ body.handle-setup-locked {
   box-shadow: none;
 }
 
-.home-page .problem-table-header-menu-spread .problem-variance-heading {
+:is(.home-page, .data-page) .problem-table-header-menu-spread .problem-variance-heading {
   padding-right: 0.46rem;
 }
 
-.home-page .problem-table-empty-row {
+:is(.home-page, .data-page) .problem-table-empty-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   place-items: center;
@@ -1619,7 +1631,7 @@ body.handle-setup-locked {
   background: transparent;
 }
 
-.home-page .problem-empty-state-inline {
+:is(.home-page, .data-page) .problem-empty-state-inline {
   display: grid;
   place-items: center;
   justify-self: stretch;
@@ -1636,15 +1648,15 @@ body.handle-setup-locked {
   text-wrap: balance;
 }
 
-.home-page .problem-table-title-row {
+:is(.home-page, .data-page) .problem-table-title-row {
   gap: 0;
 }
 
-.home-page .problem-table-cell-title {
+:is(.home-page, .data-page) .problem-table-cell-title {
   padding-right: 0.18rem;
 }
 
-.home-page .problem-stats-toggle-button {
+:is(.home-page, .data-page) .problem-stats-toggle-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1660,46 +1672,46 @@ body.handle-setup-locked {
   cursor: pointer;
 }
 
-.home-page .problem-stats-toggle-button:hover:not(:disabled),
-.home-page .problem-stats-toggle-button.is-open {
+:is(.home-page, .data-page) .problem-stats-toggle-button:hover:not(:disabled),
+:is(.home-page, .data-page) .problem-stats-toggle-button.is-open {
   color: #0f5db3;
 }
 
-.home-page .problem-stats-toggle-button:disabled {
+:is(.home-page, .data-page) .problem-stats-toggle-button:disabled {
   color: #cbd5e1;
   cursor: default;
 }
 
-.home-page .problem-stats-toggle-button svg {
+:is(.home-page, .data-page) .problem-stats-toggle-button svg {
   width: 0.94rem;
   height: 0.94rem;
 }
 
-.home-page .problem-table-header-menu .problem-status-checks {
+:is(.home-page, .data-page) .problem-table-header-menu .problem-status-checks {
   display: inline-flex;
   align-items: center;
   gap: 0.68rem;
   justify-items: initial;
 }
 
-.home-page .problem-table-status-text {
+:is(.home-page, .data-page) .problem-table-status-text {
   font-weight: 700;
 }
 
-.home-page .problem-table-status-text.is-solved {
+:is(.home-page, .data-page) .problem-table-status-text.is-solved {
   color: #2f7fd3;
 }
 
-.home-page .problem-table-status-text.is-unsolved {
+:is(.home-page, .data-page) .problem-table-status-text.is-unsolved {
   color: #334155;
 }
 
-.home-page .problem-number {
+:is(.home-page, .data-page) .problem-number {
   color: #334155;
   font-weight: 500;
 }
 
-.home-page .problem-title {
+:is(.home-page, .data-page) .problem-title {
   color: #334155;
   font-size: 0.82rem;
   font-weight: 500;
@@ -1708,122 +1720,624 @@ body.handle-setup-locked {
 }
 
 @media (max-width: 1180px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 64rem;
   }
 }
 
 @media (max-width: 960px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 58rem;
   }
 }
 
 @media (max-width: 639px) {
-  .home-page .problem-table {
+  :is(.home-page, .data-page) .problem-table {
     min-width: 50rem;
   }
 }
 
 @media (prefers-color-scheme: dark) {
-  .home-page .problem-table-header-menu-spread {
+  :is(.home-page, .data-page) .problem-table-header-menu-spread {
     border-color: var(--line-soft);
     background: var(--surface-elevated);
   }
 
-  .home-page .problem-table-entry:not(.is-stats-hidden) {
+  :is(.home-page, .data-page) .problem-table-entry:not(.is-stats-hidden) {
     background: transparent;
     box-shadow: none;
   }
 
-  .home-page .problem-table-entry.is-solved:not(.is-stats-hidden) {
+  :is(.home-page, .data-page) .problem-table-entry.is-solved:not(.is-stats-hidden) {
     background: transparent;
   }
 
-  .home-page .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
+  :is(.home-page, .data-page) .problem-table-entry:not(.is-stats-hidden) .problem-table-stats {
     border-top-color: transparent;
   }
 
-  .home-page .problem-table-status-text.is-solved {
+  :is(.home-page, .data-page) .problem-table-status-text.is-solved {
     color: var(--accent-ink);
   }
 
-  .home-page .problem-table-status-text.is-unsolved,
-  .home-page .problem-number,
-  .home-page .problem-title {
+  :is(.home-page, .data-page) .problem-table-status-text.is-unsolved,
+  :is(.home-page, .data-page) .problem-number,
+  :is(.home-page, .data-page) .problem-title {
     color: var(--ink-strong);
   }
 
-  .home-page .problem-stats-toggle-button:hover:not(:disabled),
-  .home-page .problem-stats-toggle-button.is-open {
+  :is(.home-page, .data-page) .problem-stats-toggle-button:hover:not(:disabled),
+  :is(.home-page, .data-page) .problem-stats-toggle-button.is-open {
     color: var(--accent-ink);
   }
 
-  .home-page .problem-stats-toggle-button:disabled {
+  :is(.home-page, .data-page) .problem-stats-toggle-button:disabled {
     color: var(--line-strong);
   }
 }
 
 @media (prefers-color-scheme: dark) {
-  .home-page .home-problem-search-form .home-problem-search-button,
-  .home-page .problem-control-label,
-  .home-page .problem-variance-value-separator,
-  .home-page .problem-variance-value-unit,
-  .home-page .problem-sort-toggle-button,
-  .home-page .problem-status-check,
-  .home-page .problem-status-check-text,
-  .home-page .problem-solved-count {
+  :is(.home-page, .data-page) .home-problem-search-form .home-problem-search-button,
+  :is(.home-page, .data-page) .problem-control-label,
+  :is(.home-page, .data-page) .problem-variance-value-separator,
+  :is(.home-page, .data-page) .problem-variance-value-unit,
+  :is(.home-page, .data-page) .problem-sort-toggle-button,
+  :is(.home-page, .data-page) .problem-status-check,
+  :is(.home-page, .data-page) .problem-status-check-text,
+  :is(.home-page, .data-page) .problem-solved-count {
     color: #cbd5e1;
   }
 
-  .home-page .problem-table-head {
+  :is(.home-page, .data-page) .problem-table-head {
     border-bottom-color: rgba(148, 163, 184, 0.5);
     color: #cbd5e1;
   }
 
-  .home-page .problem-table-cell {
+  :is(.home-page, .data-page) .problem-table-cell {
     color: #dbe4f0;
   }
 
-  .home-page .problem-table-status-text.is-solved {
+  :is(.home-page, .data-page) .problem-table-status-text.is-solved {
     color: #93c5fd;
   }
 
-  .home-page .problem-table-status-text.is-unsolved,
-  .home-page .problem-number,
-  .home-page .problem-title {
+  :is(.home-page, .data-page) .problem-table-status-text.is-unsolved,
+  :is(.home-page, .data-page) .problem-number,
+  :is(.home-page, .data-page) .problem-title {
     color: #f1f5f9;
   }
 
-  .home-page .problem-table-head-filter-trigger,
-  .home-page .problem-stats-toggle-button {
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger,
+  :is(.home-page, .data-page) .problem-stats-toggle-button {
     color: #cbd5e1;
   }
 
-  .home-page .problem-table-head-filter-trigger:hover,
-  .home-page .problem-table-head-filter-trigger.is-open,
-  .home-page .problem-table-head-filter-trigger.is-active,
-  .home-page .problem-stats-toggle-button:hover:not(:disabled),
-  .home-page .problem-stats-toggle-button.is-open {
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger:hover,
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger.is-open,
+  :is(.home-page, .data-page) .problem-table-head-filter-trigger.is-active,
+  :is(.home-page, .data-page) .problem-stats-toggle-button:hover:not(:disabled),
+  :is(.home-page, .data-page) .problem-stats-toggle-button.is-open {
     color: #93c5fd;
   }
 
-  .home-page .problem-table-header-menu,
-  .home-page .problem-table-header-menu-spread {
+  :is(.home-page, .data-page) .problem-table-header-menu,
+  :is(.home-page, .data-page) .problem-table-header-menu-spread {
     border-color: rgba(148, 163, 184, 0.52);
     background: rgba(15, 23, 42, 0.98);
   }
 
-  .home-page .problem-checkbox-ui,
-  .home-page .problem-status-check-ui,
-  .home-page .problem-variance-value-input {
+  :is(.home-page, .data-page) .problem-checkbox-ui,
+  :is(.home-page, .data-page) .problem-status-check-ui,
+  :is(.home-page, .data-page) .problem-variance-value-input {
     border-color: rgba(148, 163, 184, 0.64);
   }
 
-  .home-page .problem-variance-value-button,
-  .home-page .problem-variance-value-editor,
-  .home-page .problem-variance-value-input,
-  .home-page .problem-card-action {
+  :is(.home-page, .data-page) .problem-variance-value-button,
+  :is(.home-page, .data-page) .problem-variance-value-editor,
+  :is(.home-page, .data-page) .problem-variance-value-input,
+  :is(.home-page, .data-page) .problem-card-action {
     color: #f1f5f9;
+  }
+}
+
+:is(.home-page, .data-page) .home-problem-search-row {
+  position: relative;
+  display: grid;
+  width: 100%;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+:is(.home-page, .data-page) .problem-mobile-filter-button,
+:is(.home-page, .data-page) .problem-mobile-filter-menu {
+  display: none;
+}
+
+:is(.home-page, .data-page) .problem-table-metric-value {
+  display: inline;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 640px) {
+  :is(.home-page, .data-page) .problem-table-head {
+    overflow: visible;
+  }
+
+  :is(.home-page, .data-page) .problem-table-header-menu-spread {
+    z-index: 140;
+  }
+}
+
+@media (max-width: 639px) {
+  :is(.home-page, .data-page) {
+    overflow-x: hidden;
+  }
+
+  :is(.home-page, .data-page) .home-problem-search-row {
+    grid-template-columns: minmax(0, 1fr) 2.26rem;
+    gap: 0.42rem;
+    align-items: stretch;
+  }
+
+  :is(.home-page, .data-page) .home-problem-search-row .home-problem-search-form {
+    grid-column: auto;
+    min-width: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.26rem;
+    min-width: 2.26rem;
+    height: 2.26rem;
+    min-height: 2.26rem;
+    padding: 0;
+    border: 1px solid #d7e2ef;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+    color: #334155;
+    touch-action: manipulation;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-button svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-button:hover,
+  :is(.home-page, .data-page) .problem-mobile-filter-button.is-open,
+  :is(.home-page, .data-page) .problem-mobile-filter-button.is-active {
+    color: #0f5db3;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-button:focus-visible {
+    outline: 2px solid rgba(66, 165, 245, 0.24);
+    outline-offset: 2px;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu {
+    position: static;
+    grid-column: 1 / -1;
+    z-index: 110;
+    display: grid;
+    gap: 0.52rem;
+    width: 100%;
+    max-height: min(64dvh, 24rem);
+    margin-top: 0.42rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.78rem;
+    border: 1px solid #d7e2ef;
+    background: #fff;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-check,
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-mobile-sort-option {
+    min-height: 1.56rem;
+    gap: 0.3rem;
+    color: #475569;
+    font-size: 0.66rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-check-text,
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-mobile-sort-option > span:not(.problem-status-check-ui) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.56rem;
+    line-height: 1;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-check-input:not(:checked) ~ .problem-status-check-text {
+    color: #475569;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-check-input:checked ~ .problem-status-check-text {
+    color: #0f172a;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-row {
+    display: grid;
+    grid-template-columns: minmax(5.2rem, 1fr) auto;
+    align-items: center;
+    gap: 0.54rem;
+    min-height: 1.86rem;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-checks {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.72rem;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-list {
+    display: grid;
+    gap: 0.52rem;
+    padding-top: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-row {
+    display: grid;
+    grid-template-columns: minmax(5.2rem, 1fr) auto;
+    align-items: center;
+    gap: 0.54rem;
+    min-height: 1.86rem;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-label {
+    color: #475569;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-options {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.58rem;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 1.56rem;
+    color: #475569;
+    font-size: 0.66rem;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option input:checked ~ .problem-status-check-ui {
+    border-color: #1976d2;
+    background: linear-gradient(135deg, #1976d2 0%, #2563eb 100%);
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option input:checked ~ span:not(.problem-status-check-ui) {
+    color: #0f172a;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option input:checked ~ .problem-status-check-ui::after {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1);
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option input:focus-visible ~ .problem-status-check-ui {
+    outline: 3px solid rgba(66, 165, 245, 0.28);
+    outline-offset: 2px;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group.is-number-input-only {
+    display: grid;
+    grid-template-columns: minmax(5.2rem, 1fr) auto;
+    align-items: center;
+    gap: 0.54rem;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group.is-number-input-only .problem-variance-heading {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group.is-number-input-only .problem-variance-controls {
+    grid-template-columns: 1fr;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group.is-number-input-only .problem-variance-actions {
+    justify-content: flex-end;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group.is-number-input-only .problem-variance-value-editor {
+    width: auto;
+    min-width: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-variance-group.is-number-input-only .problem-variance-value-input {
+    width: 2.2rem;
+  }
+
+  :is(.home-page, .data-page) .problem-board,
+  :is(.home-page, .data-page) .problem-table-shell,
+  :is(.home-page, .data-page) .problem-table-shell-inner,
+  :is(.home-page, .data-page) .problem-table {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  :is(.home-page, .data-page) .problem-table-shell {
+    overflow-x: visible;
+    scrollbar-gutter: auto;
+  }
+
+  :is(.home-page, .data-page) .problem-list {
+    padding-bottom: 0.62rem;
+  }
+
+  :is(.home-page, .data-page) .problem-table {
+    gap: 0.62rem;
+    min-width: 0;
+    padding-bottom: 0.5rem;
+  }
+
+  :is(.home-page, .data-page) .problem-table-head {
+    display: none;
+  }
+
+  :is(.home-page, .data-page) .problem-table-entry {
+    overflow: hidden;
+    border: 1px solid rgba(219, 230, 242, 0.9);
+    border-radius: 0.58rem;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  :is(.home-page, .data-page) .problem-table-entry:focus-visible {
+    outline: 3px solid rgba(66, 165, 245, 0.24);
+    outline-offset: 2px;
+  }
+
+  :is(.home-page, .data-page) .problem-table-entry:last-child {
+    margin-bottom: 0.16rem;
+  }
+
+  :is(.home-page, .data-page) .problem-table-entry.is-solved {
+    border-color: rgba(219, 230, 242, 0.9);
+  }
+
+  :is(.home-page, .data-page) .problem-table-row.problem-table-body {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.58rem 0.74rem;
+    align-items: start;
+    padding: 0.78rem 0.82rem;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell {
+    min-width: 0;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-status {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-title {
+    grid-column: 2 / 4;
+    grid-row: 1;
+    align-self: center;
+    padding-right: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-number {
+    grid-column: 4;
+    grid-row: 1;
+    align-self: center;
+    justify-content: flex-end;
+  }
+
+  :is(.home-page, .data-page) .problem-table-status-text {
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  :is(.home-page, .data-page) .problem-table-status-text.is-solved {
+    color: #2f7fd3;
+  }
+
+  :is(.home-page, .data-page) .problem-table-status-text.is-unsolved {
+    color: #334155;
+  }
+
+  :is(.home-page, .data-page) .problem-title {
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+    color: #243247;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.34;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :is(.home-page, .data-page) .problem-number {
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  :is(.home-page, .data-page) .problem-card-link-area,
+  :is(.home-page, .data-page) .problem-card-link-area.is-title,
+  :is(.home-page, .data-page) .problem-table-title-link-slot,
+  :is(.home-page, .data-page) .problem-table-title-row {
+    width: 100%;
+    min-width: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric {
+    display: grid;
+    grid-template-rows: auto auto;
+    justify-items: start;
+    gap: 0.14rem;
+    padding-top: 0.12rem;
+    color: #475569;
+    font-size: 0.66rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric::before {
+    content: attr(data-label);
+    color: #64748b;
+    font-size: 0.56rem;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  :is(.home-page, .data-page) .problem-table-metric-value {
+    color: #0f172a;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.16;
+    text-align: left;
+    min-width: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric.is-solved-count {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric.is-spread-rate {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric.is-success-submit {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric.is-total-submit {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-stats,
+  :is(.home-page, .data-page) .problem-table-stats {
+    display: none;
+  }
+
+  :is(.home-page, .data-page) .problem-table-row.problem-table-entry {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.48rem;
+    padding: 0.78rem 0.82rem;
+    border: 1px solid rgba(219, 230, 242, 0.9);
+    border-radius: 0.58rem;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  :is(.home-page, .data-page) .problem-table-row.problem-table-entry > span {
+    width: 100%;
+    min-width: 0;
+  }
+
+  :is(.home-page, .data-page) .problem-table-empty-row {
+    min-height: 12rem;
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 639px) and (prefers-color-scheme: dark) {
+  :is(.home-page, .data-page) .problem-mobile-filter-button {
+    border-color: var(--line-strong);
+    background: var(--surface-muted);
+    color: var(--ink-strong);
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-button:hover,
+  :is(.home-page, .data-page) .problem-mobile-filter-button.is-open,
+  :is(.home-page, .data-page) .problem-mobile-filter-button.is-active {
+    color: #93c5fd;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu {
+    border-color: rgba(148, 163, 184, 0.52);
+    background: rgba(15, 23, 42, 0.98);
+  }
+
+  :is(.home-page, .data-page) .problem-table-entry,
+  :is(.home-page, .data-page) .problem-table-row.problem-table-entry {
+    border-color: rgba(148, 163, 184, 0.32);
+    background: rgba(15, 23, 42, 0.82);
+  }
+
+  :is(.home-page, .data-page) .problem-title,
+  :is(.home-page, .data-page) .problem-table-metric-value {
+    color: #f8fafc;
+  }
+
+  :is(.home-page, .data-page) .problem-number {
+    color: #cbd5e1;
+  }
+
+  :is(.home-page, .data-page) .problem-table-status-text.is-solved {
+    color: #93c5fd;
+  }
+
+  :is(.home-page, .data-page) .problem-table-status-text.is-unsolved {
+    color: #cbd5e1;
+  }
+
+  :is(.home-page, .data-page) .problem-table-cell-metric,
+  :is(.home-page, .data-page) .problem-table-cell-metric::before,
+  :is(.home-page, .data-page) .problem-mobile-sort-label,
+  :is(.home-page, .data-page) .problem-mobile-sort-option {
+    color: #cbd5e1;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-sort-option input:checked ~ span:not(.problem-status-check-ui) {
+    color: #f8fafc;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-check-input:not(:checked) ~ .problem-status-check-text {
+    color: #cbd5e1;
+  }
+
+  :is(.home-page, .data-page) .problem-mobile-filter-menu .problem-status-check-input:checked ~ .problem-status-check-text {
+    color: #f8fafc;
   }
 }

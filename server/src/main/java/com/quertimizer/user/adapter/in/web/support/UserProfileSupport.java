@@ -19,4 +19,13 @@ public class UserProfileSupport {
 
         return resolveAuthenticatedHandle.execute(authentication.getName());
     }
+
+    public String resolveCurrentEmail(Authentication authentication) {
+        // Spring Security 인증 정보 기준 현재 사용자 email 확인
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return null;
+        }
+
+        return authentication.getName();
+    }
 }

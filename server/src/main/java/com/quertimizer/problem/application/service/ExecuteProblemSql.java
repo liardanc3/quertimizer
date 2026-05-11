@@ -5,6 +5,7 @@ import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.application.input.ProblemExecutionInput;
 import com.quertimizer.problem.application.output.ProblemExecutionOutput;
 import com.quertimizer.problem.application.output.ProblemJudgeExecutionResult;
+import com.quertimizer.problem.application.output.ProblemJudgeSqlStatement;
 import com.quertimizer.problem.application.port.out.ProblemJudgePort;
 import com.quertimizer.problem.domain.model.ProblemJudgeExecutionMode;
 import com.quertimizer.problem.domain.model.ProblemQueryResultText;
@@ -14,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -29,9 +32,11 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
      * 문제 SQL을 실행한다.
      *
      * <ol>
-     *   <li>데이터셋과 실행 환경 준비
+     *   <li>실행 SQL 분리와 데이터셋 조회
+     *   <li>새 실행 환경 생성
      *   <li>judge SQL 실행
      *   <li>문제 실행 응답 변환
+     *   <li>실행 환경 정리
      * </ol>
      *
      * @param input 문제 SQL 실행 입력
@@ -43,23 +48,26 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                 "문제 SQL 실행 시작 problemId={}, handle={}, dbmsType={}, executionSessionId={}",
                 input.getProblemId(), input.getHandle(), input.getDbmsType(), input.getExecutionSessionId()
         );
-        ProblemDatasetResolver.ResolvedProblemDataset dataset =
-                datasetResolver.resolve(input.getProblemId(), input.getDbmsType());
-        log.info(
-                "문제 SQL 실행 데이터셋 조회 완료 problemId={}, datasetId={}, dbmsType={}",
-                input.getProblemId(), dataset.getDatasetId(), dataset.getDbmsType()
-        );
-        ProblemExecutionSessionStore.ProblemExecutionSession session = prepareEnvironment(input, dataset);
 
         String executionId = "interactive-" + UUID.randomUUID();
         executionSessionStore.markExecution(input.getExecutionSessionId(), executionId);
+        ProblemExecutionSessionStore.ProblemExecutionSession session = null;
         try {
+            ResolvedExecutionSql executionSql = resolveExecutionSql(input);
+            ProblemDatasetResolver.ResolvedProblemDataset dataset =
+                    datasetResolver.resolve(input.getProblemId(), input.getDbmsType());
+            log.info(
+                    "문제 SQL 실행 데이터셋 조회 완료 problemId={}, datasetId={}, dbmsType={}",
+                    input.getProblemId(), dataset.getDatasetId(), dataset.getDbmsType()
+            );
+            session = createFreshEnvironment(input, dataset);
+            applyIndexSqls(executionSql.indexSqls, session, executionId);
             log.info(
                     "문제 SQL 실행 요청 전달 executionId={}, environmentId={}, problemId={}",
                     executionId, session.getEnvironmentId(), input.getProblemId()
             );
             ProblemJudgeExecutionResult result = problemJudgePort.executeInteractiveSql(
-                    executionId, session.getEnvironmentId(), input.getSql(),
+                    executionId, session.getEnvironmentId(), executionSql.sql,
                     normalizePage(input.getPage()), normalizePageSize(input.getPageSize())
             );
             log.info(
@@ -77,26 +85,67 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
             throw new BusinessException(resolveUserErrorMessage(exception), HttpStatus.BAD_REQUEST);
         } finally {
             executionSessionStore.clearExecution(input.getExecutionSessionId(), executionId);
+            if (session != null) {
+                cleanupEnvironment(input.getExecutionSessionId(), session);
+            }
         }
     }
 
-    private synchronized ProblemExecutionSessionStore.ProblemExecutionSession prepareEnvironment(
-            ProblemExecutionInput input, ProblemDatasetResolver.ResolvedProblemDataset dataset) {
-        // 같은 문제 실행 세션과 문제/데이터셋 반복 실행 시 기존 실행 환경 재사용
-        return executionSessionStore.findReusable(input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId())
-                .map(session -> {
-                    log.info(
-                            "문제 SQL 실행 환경 재사용 executionSessionId={}, environmentId={}, datasetId={}",
-                            input.getExecutionSessionId(), session.getEnvironmentId(), dataset.getDatasetId()
-                    );
-                    return session;
-                })
-                .orElseGet(() -> createFreshEnvironment(input, dataset));
+    private ResolvedExecutionSql resolveExecutionSql(ProblemExecutionInput input) {
+        // 실행 SQL 문장 분리와 기존 index DDL 목록 준비
+        List<ProblemJudgeSqlStatement> statements = problemJudgePort.parseStatements(input.getSql());
+        if (statements.isEmpty()) {
+            throw new IllegalArgumentException(ProblemQueryResultText.PROBLEM_EXECUTION_FAILED.getText());
+        }
+
+        // 단일 문장이면 별도 index DDL 목록만 유지
+        if (statements.size() == 1) {
+            return new ResolvedExecutionSql(statements.get(0).getSql(), input.getIndexSqls());
+        }
+
+        // 마지막 실행문 이전의 INDEX DDL을 실행 환경 선반영 대상으로 분리
+        List<String> indexSqls = new ArrayList<>(input.getIndexSqls());
+        for (int statementIndex = 0; statementIndex < statements.size() - 1; statementIndex++) {
+            ProblemJudgeSqlStatement statement = statements.get(statementIndex);
+            if (statement.getMode() != ProblemJudgeExecutionMode.INDEX_COMMAND) {
+                throw new IllegalArgumentException("실행 SQL은 INDEX DDL 뒤에 하나의 실행문만 허용됩니다.");
+            }
+            indexSqls.add(statement.getSql());
+        }
+
+        // 마지막 문장을 실제 실행 대상으로 반환
+        return new ResolvedExecutionSql(statements.get(statements.size() - 1).getSql(), indexSqls);
     }
 
-    private ProblemExecutionSessionStore.ProblemExecutionSession createFreshEnvironment(
+    private void applyIndexSqls(List<String> indexSqls,
+                                ProblemExecutionSessionStore.ProblemExecutionSession session,
+                                String executionId) {
+        // 실행 전 반영할 index DDL 없으면 생략
+        if (indexSqls.isEmpty()) {
+            return;
+        }
+
+        // 같은 실행 환경에 index DDL 순차 반영
+        log.info(
+                "문제 SQL 실행 INDEX DDL 반영 시작 executionId={}, environmentId={}, indexDdlCount={}",
+                executionId, session.getEnvironmentId(), indexSqls.size()
+        );
+        for (String indexSql : indexSqls) {
+            log.info(
+                    "문제 SQL 실행 INDEX DDL 실행 executionId={}, environmentId={}, sqlLength={}",
+                    executionId, session.getEnvironmentId(), indexSql.length()
+            );
+            problemJudgePort.executeInteractiveSql(executionId, session.getEnvironmentId(), indexSql, 1, 1);
+        }
+        log.info(
+                "문제 SQL 실행 INDEX DDL 반영 완료 executionId={}, environmentId={}",
+                executionId, session.getEnvironmentId()
+        );
+    }
+
+    private synchronized ProblemExecutionSessionStore.ProblemExecutionSession createFreshEnvironment(
             ProblemExecutionInput input, ProblemDatasetResolver.ResolvedProblemDataset dataset) {
-        // 문제 실행 세션의 다른 문제 이동 시 이전 실행 환경 선제 정리
+        // 같은 실행 세션에 남아 있는 이전 실행 환경 선제 정리
         executionSessionStore.remove(input.getExecutionSessionId())
                 .ifPresent(session -> {
                     log.info(
@@ -111,7 +160,13 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                 "문제 SQL 실행 환경 생성 시작 executionSessionId={}, problemId={}, datasetId={}",
                 input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId()
         );
-        String environmentId = problemJudgePort.createInteractiveEnvironment(dataset.getDatasetId());
+        String environmentId = problemJudgePort.createInteractiveEnvironment(
+                dataset.getDatasetId(),
+                remainingTasks -> log.info(
+                        "문제 SQL 실행 환경 생성 대기 executionSessionId={}, problemId={}, remainingTasks={}",
+                        input.getExecutionSessionId(), input.getProblemId(), remainingTasks
+                )
+        );
         ProblemExecutionSessionStore.ProblemExecutionSession session =
                 executionSessionStore.save(input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId(), environmentId);
         log.info(
@@ -119,6 +174,13 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                 input.getExecutionSessionId(), environmentId, dataset.getDatasetId()
         );
         return session;
+    }
+
+    private void cleanupEnvironment(String executionSessionId,
+                                    ProblemExecutionSessionStore.ProblemExecutionSession session) {
+        // 실행 완료 후 세션 상태 제거와 judge 실행 환경 반납
+        executionSessionStore.remove(executionSessionId, session);
+        dropQuietly(executionSessionId, session.getEnvironmentId());
     }
 
     private ProblemExecutionOutput toProblemExecutionOutput(String problemId, ProblemJudgeExecutionResult result) {
@@ -191,5 +253,16 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         return exception.getMessage() != null && !exception.getMessage().isBlank()
                 ? exception.getMessage()
                 : ProblemQueryResultText.PROBLEM_EXECUTION_FAILED.getText();
+    }
+
+    private static final class ResolvedExecutionSql {
+
+        private final String sql;
+        private final List<String> indexSqls;
+
+        private ResolvedExecutionSql(String sql, List<String> indexSqls) {
+            this.sql = sql;
+            this.indexSqls = List.copyOf(indexSqls);
+        }
     }
 }

@@ -1,9 +1,10 @@
 package com.quertimizer.problem.adapter.out.persistence;
 
-import java.util.List;
-import java.util.Optional;
+import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.problem.application.port.out.ProblemSetRepositoryPort;
 import com.quertimizer.problem.domain.entity.ProblemSet;
+import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +29,12 @@ public class ProblemSetPersistenceAdapter implements ProblemSetRepositoryPort {
     }
 
     @Override
+    public Optional<String> findLatestProblemSetIdByDbmsType(DbmsType dbmsType) {
+        return problemSetJpaRepository.findFirstByDbmsTypeOrderByProblemSetIdDesc(dbmsType)
+                .map(ProblemSetJpaEntity::getProblemSetId);
+    }
+
+    @Override
     public ProblemSet save(ProblemSet problemSet) {
         ProblemSetJpaEntity savedEntity = problemSetJpaRepository.findByProblemSetId(problemSet.getProblemSetId())
                 .map(entity -> {
@@ -35,8 +42,6 @@ public class ProblemSetPersistenceAdapter implements ProblemSetRepositoryPort {
                     return entity;
                 })
                 .orElseGet(() -> problemSetPersistenceMapper.toEntity(problemSet));
-        savedEntity = problemSetJpaRepository.saveAndFlush(savedEntity);
-        savedEntity.assignProblemSetId();
         return problemSetPersistenceMapper.toDomain(problemSetJpaRepository.saveAndFlush(savedEntity));
     }
 }

@@ -16,9 +16,10 @@ import { ContentLoading, LoadingOverlay } from '@/shared/ui';
 import { Pagination } from '@/shared/ui';
 import { PageLoadFailureState } from '@/shared/ui';
 import { getApiErrorStatus, isCommonHttpErrorStatus } from '@/shared/api/api-error';
-import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '@/shared/config/navigation';
+import { DASHBOARD_PATH, getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '@/shared/config/navigation';
 import { createCroppedImageFile, type ImageCropAreaPixels } from '@/shared/lib/image-crop';
 import {
+  deleteMyAccount,
   fetchProfileSummary,
   fetchSolvedProblems,
   fetchSubmissionSummary,
@@ -30,13 +31,12 @@ import {
   type UserProfileSubmissionSummary,
   type UserProfileSummary,
 } from '@/shared/api/profile-api';
-import { PageStatePanel } from '@/shared/ui';
-import { patchSessionSnapshot, showSessionErrorToast, showSessionToast, useSession } from '@/shared/auth/session';
+import { logout as requestLogout } from '@/shared/api/auth-api';
+import { patchSessionSnapshot, prepareLogoutReload, showSessionErrorToast, showSessionToast, useSession } from '@/shared/auth/session';
 import { fetchAlarms, markAlarmRead, type AlarmEntry, type AlarmPageData, type AlarmSortDirection } from '@/shared/api/alarm-api';
 import { formatBoardDate, formatInteger } from '@/shared/lib/formatters';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import type { DbmsType } from '@/shared/api/domain';
-import '@/shared/ui/styles/submit-history-page.css';
 import './ProfilePage.css';
 
 interface ProfilePageProps {
@@ -97,6 +97,7 @@ const PROFILE_ALARM_PAGE_SIZE = 10;
 const PROFILE_COMMUNITY_ACTIVITY_PAGE_SIZE = 10;
 const PROFILE_IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 const SUPPORTED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
+const profileRelativeTimeFormatter = new Intl.RelativeTimeFormat('ko-KR', { numeric: 'always' });
 const emptySolvedProblems: UserProfileSolvedProblems = {
   solvedProblemCount: 0,
   solvedProblemIds: [],
@@ -175,6 +176,28 @@ function buildTextSnippet(value: string, maxLength: number) {
   }
 
   return `${normalizedValue.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function formatProfileRelativeDate(value: string) {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '-';
+  }
+
+  const diffMs = parsedDate.getTime() - Date.now();
+  const absoluteDiffMs = Math.abs(diffMs);
+  const units = [
+    { unit: 'year' as const, ms: 365 * 24 * 60 * 60 * 1000 },
+    { unit: 'month' as const, ms: 30 * 24 * 60 * 60 * 1000 },
+    { unit: 'day' as const, ms: 24 * 60 * 60 * 1000 },
+    { unit: 'hour' as const, ms: 60 * 60 * 1000 },
+    { unit: 'minute' as const, ms: 60 * 1000 },
+  ];
+  const selectedUnit = units.find((unit) => absoluteDiffMs >= unit.ms) ?? units[units.length - 1];
+  const amount = Math.max(1, Math.floor(absoluteDiffMs / selectedUnit.ms));
+
+  return profileRelativeTimeFormatter.format(diffMs < 0 ? -amount : amount, selectedUnit.unit);
 }
 
 function createFallbackAvatarLabel(handle: string) {
@@ -435,6 +458,15 @@ function truncateAlarmHoverText(value: string) {
   return `${normalizedValue.slice(0, 15)}…`;
 }
 
+function truncateAlarmDisplayText(value: string) {
+  const normalizedValue = value.trim();
+  if (normalizedValue.length <= 40) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, 40).trimEnd()}…`;
+}
+
 function createHeatmapYears(signupAt: string) {
   const currentYear = new Date().getFullYear();
   const signupDate = new Date(signupAt);
@@ -443,25 +475,9 @@ function createHeatmapYears(signupAt: string) {
   return Array.from({ length: currentYear - firstYear + 1 }, (_, index) => currentYear - index);
 }
 
-function ProfileStatePage({
-  label,
-  title,
-  description,
-  actionLabel,
-  onAction,
-}: {
-  label: string;
-  title: string;
-  description: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return <PageStatePanel fullPage label={label} title={title} description={description} actionLabel={actionLabel} onAction={onAction} />;
-}
-
 function ProfileLoadingShell({ label }: { label: string }) {
   return (
-    <div className="page-stack profile-page submit-history-page home-page">
+    <div className="page-stack data-page submit-data-page profile-page">
       <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
         <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
           <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label={getUiTextValue('PROFILE_HANDLE_TABLIST_LABEL', '프로필 Handle')}>
@@ -523,6 +539,9 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const [savingSection, setSavingSection] = useState<ProfileSaveSection | null>(null);
   const [isLinkEditingMode, setIsLinkEditingMode] = useState(false);
   const [editingLinkSnapshots, setEditingLinkSnapshots] = useState<Record<number, UserProfileLink | null>>({});
+  const [isAccountDeleteDialogOpen, setIsAccountDeleteDialogOpen] = useState(false);
+  const [accountDeleteCountdown, setAccountDeleteCountdown] = useState(5);
+  const [isAccountDeleting, setIsAccountDeleting] = useState(false);
   const resolvedProfileId = profileHandle ?? currentHandle;
   const dbmsOptions: Array<{ value: DbmsType; label: string }> = [
     { value: 'postgresql', label: text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
@@ -538,6 +557,18 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   const activeTopTab = readProfileTopTab(locationSearch || window.location.search, isOwnProfile);
   const isAlarmListOpen = activeTopTab === 'alarms';
   const isProfileEditorBusy = savingSection != null;
+
+  useEffect(() => {
+    if (!isAccountDeleteDialogOpen || accountDeleteCountdown === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAccountDeleteCountdown((currentCount) => Math.max(0, currentCount - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [accountDeleteCountdown, isAccountDeleteDialogOpen]);
 
   useEffect(() => {
     if (!isReady) {
@@ -878,18 +909,12 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
   }
 
   if (!resolvedProfileId) {
-    return (
-      <ProfileStatePage
-        label={text('PROFILE_PROFILE_SECTION_TITLE', '프로필')}
-        title={text('PROFILE_NOT_FOUND_TITLE', '조회할 프로필이 없습니다.')}
-        description={text('PROFILE_NOT_FOUND_DESC', '로그인 후 내 프로필을 열거나 Handle 경로로 접근해 주세요.')}
-      />
-    );
+    return null;
   }
 
   if (!profileSummary) {
     return (
-      <div className="page-stack profile-page submit-history-page home-page">
+      <div className="page-stack data-page submit-data-page profile-page">
         <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
           <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
             <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label={text('PROFILE_HANDLE_TABLIST_LABEL', '프로필 Handle')}>
@@ -1193,12 +1218,12 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
             className={`submit-history-link-button profile-alarm-link-button ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}
             onClick={() => handleProfileAlarmClick(alarm, alarm.targetPath, alarm.targetHash)}
           >
-            {alarm.message}
+            {truncateAlarmDisplayText(alarm.message)}
           </button>
         );
       }
 
-      return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{alarm.message}</span>;
+      return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{truncateAlarmDisplayText(alarm.message)}</span>;
     }
 
     const parts: ReactNode[] = [];
@@ -1217,7 +1242,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       const tokenKey = tokenValue.slice(1, -1).trim();
       const binding = alarm.bindings[tokenKey];
       const linkText = isBraceToken
-        ? (binding?.text && binding.text.trim() !== '' ? binding.text : tokenKey)
+        ? truncateAlarmDisplayText(binding?.text && binding.text.trim() !== '' ? binding.text : tokenKey)
         : tokenValue;
       const tooltipText = !isBraceToken && binding?.text ? truncateAlarmHoverText(binding.text) : undefined;
       const tokenPath = binding?.path ?? alarm.targetPath;
@@ -1242,7 +1267,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
       parts.push(sentence.slice(lastIndex));
     }
 
-    return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{parts.length > 0 ? parts : alarm.message}</span>;
+    return <span className={`profile-alarm-copy ${alarm.alarmType === 'FROM_ADMIN' ? 'is-admin' : ''}`.trim()}>{parts.length > 0 ? parts : truncateAlarmDisplayText(alarm.message)}</span>;
   }
 
   function updateHeatmapSelection(nextSelection: string[], nextAnchor: string | null) {
@@ -1490,6 +1515,40 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
     }
   }
 
+  function openAccountDeleteDialog() {
+    setAccountDeleteCountdown(5);
+    setIsAccountDeleteDialogOpen(true);
+  }
+
+  function closeAccountDeleteDialog() {
+    if (isAccountDeleting) {
+      return;
+    }
+
+    setIsAccountDeleteDialogOpen(false);
+    setAccountDeleteCountdown(5);
+  }
+
+  async function confirmAccountDelete() {
+    if (accountDeleteCountdown > 0 || isAccountDeleting) {
+      return;
+    }
+
+    try {
+      setIsAccountDeleting(true);
+      await deleteMyAccount();
+      try {
+        await requestLogout();
+      } catch {
+      }
+      prepareLogoutReload();
+      window.location.replace(DASHBOARD_PATH);
+    } catch (error) {
+      setIsAccountDeleting(false);
+      showSessionErrorToast(error instanceof Error ? error.message : text('PROFILE_DELETE_FAIL_MESSAGE', '회원탈퇴 처리에 실패했습니다.'));
+    }
+  }
+
   function renderSummarySection() {
     return (
       <section className="profile-flow-section profile-heatmap-section">
@@ -1596,8 +1655,10 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     type="button"
                     className={`profile-solved-chip ${entry.status === 'solved' ? 'is-solved' : 'is-attempted'}`.trim()}
                     onClick={() => navigate(`/problems/${entry.problemId}`)}
+                    title={entry.problemId}
+                    aria-label={entry.problemId}
                   >
-                    {entry.problemId}
+                    <span className="profile-solved-chip-label">{entry.problemId}</span>
                   </button>
                 ))}
               </div>
@@ -1686,7 +1747,10 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                     <span className="submit-history-cell profile-community-activity-cell" role="cell" data-label={text('COMMON_CONTENT_LABEL', '내용')}>
                       <span className="profile-community-activity-copy">{renderCommunityActivitySentence(activity)}</span>
                     </span>
-                    <span className="submit-history-cell profile-community-activity-date" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')}>{formatBoardDate(activity.happenedAt)}</span>
+                    <span className="submit-history-cell profile-community-activity-date" role="cell" data-label={text('COMMON_DATE_LABEL', '날짜')} title={formatBoardDate(activity.happenedAt)}>
+                      <span className="profile-community-activity-date-desktop">{formatBoardDate(activity.happenedAt)}</span>
+                      <span className="profile-community-activity-date-mobile">{formatProfileRelativeDate(activity.happenedAt)}</span>
+                    </span>
                   </article>
                 ))}
               </div>
@@ -1790,7 +1854,7 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
 
   return (
     <>
-      <div className="page-stack profile-page submit-history-page home-page">
+      <div className="page-stack data-page submit-data-page profile-page">
         <section className="panel-card compact problem-toolbar-card submit-history-toolbar-card profile-tab-shell">
           <div className="problem-toolbar submit-history-toolbar-stack profile-tab-toolbar">
             <div className="solve-dbms-tab-row profile-handle-tab-row" role="tablist" aria-label={text('PROFILE_HANDLE_TABLIST_LABEL', '프로필 Handle')}>
@@ -2388,6 +2452,17 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
                 </div>
               </div>
             </div>
+
+            <div className="profile-account-delete-action-row">
+              <button
+                type="button"
+                className="profile-account-delete-open-button"
+                disabled={isProfileEditorBusy || isAccountDeleting}
+                onClick={openAccountDeleteDialog}
+              >
+                {text('PROFILE_DELETE_ACCOUNT_BUTTON', '회원탈퇴')}
+              </button>
+            </div>
           </section>
         ) : isAlarmListOpen ? (
           renderAlarmSection()
@@ -2452,6 +2527,43 @@ export default function ProfilePage({ handle: profileHandle }: ProfilePageProps)
           onCancel={closeImageCropModal}
           onApply={applyImageCrop}
         />
+      ) : null}
+
+      {isAccountDeleteDialogOpen ? (
+        <div className="profile-account-delete-overlay" role="presentation" onMouseDown={closeAccountDeleteDialog}>
+          <section
+            className="profile-account-delete-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-account-delete-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="profile-account-delete-title">{text('PROFILE_DELETE_DIALOG_TITLE', '회원탈퇴')}</h2>
+            <p>{text('PROFILE_DELETE_WARNING_MESSAGE', '회원 탈퇴 시 계정 복구는 불가능합니다.')}</p>
+            <div className="profile-account-delete-dialog-actions">
+              <button
+                type="button"
+                className="profile-account-delete-cancel-button"
+                disabled={isAccountDeleting}
+                onClick={closeAccountDeleteDialog}
+              >
+                {text('COMMON_CANCEL_BUTTON', '취소')}
+              </button>
+              <button
+                type="button"
+                className={`profile-account-delete-confirm-button ${accountDeleteCountdown > 0 ? 'is-waiting' : ''}`.trim()}
+                disabled={accountDeleteCountdown > 0 || isAccountDeleting}
+                onClick={() => void confirmAccountDelete()}
+              >
+                {isAccountDeleting
+                  ? text('COMMON_PROCESSING_LABEL', '처리 중…')
+                  : accountDeleteCountdown > 0
+                    ? accountDeleteCountdown
+                    : text('PROFILE_DELETE_ACCOUNT_BUTTON', '회원탈퇴')}
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
     </>
   );

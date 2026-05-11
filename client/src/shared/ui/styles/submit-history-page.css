@@ -1,5 +1,5 @@
-.submit-history-page,
-.submit-history-page.home-page.page-stack {
+:is(.submit-history-page, .submit-data-page),
+:is(.submit-history-page, .submit-data-page):is(.home-page, .data-page).page-stack {
   gap: 0.92rem;
 }
 
@@ -44,7 +44,7 @@
   justify-content: flex-start;
 }
 
-.submit-history-page.home-page .problem-board-controls.submit-history-filter-controls {
+:is(.submit-history-page, .submit-data-page):is(.home-page, .data-page) .problem-board-controls.submit-history-filter-controls {
   display: grid;
   grid-template-columns: max-content max-content max-content minmax(0, 1fr);
   gap: 0.48rem;
@@ -57,7 +57,7 @@
   gap: 0.48rem;
 }
 
-.submit-history-page.home-page .problem-board-controls.submit-history-filter-controls > .submit-history-plan-shell {
+:is(.submit-history-page, .submit-data-page):is(.home-page, .data-page) .problem-board-controls.submit-history-filter-controls > .submit-history-plan-shell {
   grid-column: 4;
   position: relative;
   display: grid;
@@ -159,6 +159,7 @@
 
 
 .submit-history-search-field {
+  position: relative;
   display: block;
   width: 100%;
   min-height: 2.26rem;
@@ -188,12 +189,57 @@
 
 .submit-history-search-input {
   padding-left: 0.78rem;
-  padding-right: 0.9rem;
+  padding-right: 1.8rem;
   font-weight: 400;
+}
+
+.submit-history-search-input::-webkit-search-cancel-button,
+.submit-history-search-input::-webkit-search-decoration,
+.submit-history-search-input::-webkit-search-results-button,
+.submit-history-search-input::-webkit-search-results-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+  display: none;
 }
 
 .submit-history-search-input::placeholder {
   font-weight: 400;
+}
+
+.submit-history-search-clear-button {
+  position: absolute;
+  top: 50%;
+  right: 0.42rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.08rem;
+  height: 1.08rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.submit-history-search-clear-button:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.submit-history-search-clear-button:hover,
+.submit-history-search-clear-button:focus-visible {
+  color: #0f172a;
+}
+
+.submit-history-search-clear-button:focus-visible {
+  outline: 2px solid rgba(66, 165, 245, 0.22);
+  outline-offset: 1px;
 }
 
 .submit-history-filter-select-trigger,
@@ -471,7 +517,47 @@
 }
 
 .submit-history-plan-detail-board {
+  display: grid;
+  gap: 0.46rem;
   margin-top: 0;
+}
+
+.execution-plan-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
+.execution-plan-detail-label {
+  flex: 0 0 var(--execution-plan-detail-label-width);
+  color: #334155;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.execution-plan-detail-values {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #0f5db3;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.2;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.execution-plan-detail-values::-webkit-scrollbar {
+  display: none;
+}
+
+.execution-plan-detail-values.is-empty {
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .submit-history-plan-detail-options {
@@ -923,16 +1009,28 @@
   width: 100%;
 }
 
+.submit-history-board-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 12rem;
+  color: var(--ink-subtle);
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .submit-history-pagination {
   justify-content: center;
   margin-top: 0.08rem;
 }
 
-.main-content:has(.submit-history-page:not(.ranking-page):not(.profile-page)) {
+.main-content:has(:is(.submit-history-page, .submit-data-page):not(.ranking-page):not(.profile-page)) {
   padding-bottom: 0.72rem;
 }
 
-.app-shell:has(.submit-history-page:not(.ranking-page):not(.profile-page)) .app-footer-inner {
+.app-shell:has(:is(.submit-history-page, .submit-data-page):not(.ranking-page):not(.profile-page)) .app-footer-inner {
   padding-top: 0.48rem;
 }
 
@@ -961,6 +1059,7 @@
 }
 
 .submit-history-plan-modal {
+  --execution-plan-detail-label-width: 5.8rem;
   width: fit-content;
   min-width: min(100%, 28rem);
   max-width: min(100%, 42rem);
@@ -1236,11 +1335,66 @@
 
 @media (max-width: 640px) {
   .submit-history-table {
-    min-width: 58rem;
+    min-width: 36.8rem;
   }
 
   .submit-history-search-row {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr) minmax(0, 1fr) 2rem;
+    gap: 0.22rem;
+    align-items: stretch;
+  }
+
+  .submit-history-search-input {
+    padding-left: 0.36rem;
+    padding-right: 0.98rem;
+    font-size: 0.62rem;
+  }
+
+  .submit-history-search-input:focus,
+  .submit-history-search-input:focus-visible {
+    border-color: #d7e2ef;
+    outline: none;
+    box-shadow: none;
+  }
+
+  .submit-history-search-clear-button {
+    right: 0.22rem;
+    width: 0.86rem;
+    height: 0.86rem;
+    font-size: 0.7rem;
+  }
+
+  .submit-history-row {
+    grid-template-columns: 4.4rem 4.8rem 5.7rem 3.8rem 3.6rem 7.8rem 5.6rem;
+    gap: 0.18rem;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  :is(.submit-history-page, .submit-data-page) .submit-history-row > :nth-child(5) {
+    padding-left: 0.32rem;
+  }
+
+  .submit-history-head-cell,
+  .submit-history-cell {
+    font-size: 0.64rem;
+  }
+
+  .submit-history-head-cell {
+    white-space: nowrap;
+  }
+
+  .submit-history-status-text {
+    font-size: 0.66rem;
+  }
+
+  .submit-history-cell-plan {
+    justify-content: center;
+  }
+
+  .submit-history-board-empty-state {
+    min-height: 12rem;
+    padding: 1.2rem 0.75rem;
   }
 
   .submit-history-modal-overlay {
@@ -1551,6 +1705,15 @@
     color: var(--ink-strong);
   }
 
+  .submit-history-search-clear-button {
+    color: var(--ink-faint);
+  }
+
+  .submit-history-search-clear-button:hover,
+  .submit-history-search-clear-button:focus-visible {
+    color: var(--ink-strong);
+  }
+
   .submit-history-search-input::placeholder {
     color: var(--ink-faint);
   }
@@ -1577,5 +1740,196 @@
 
   .submit-history-empty-value {
     color: var(--ink-faint);
+  }
+}
+
+.solve-submit-plan-modal .runtime-subfilter-row {
+  grid-template-columns: var(--runtime-plan-label-width) minmax(0, 1fr);
+  align-items: center;
+}
+
+.solve-submit-plan-modal .submit-history-plan-detail-options,
+.solve-submit-plan-modal .submit-history-plan-detail-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.solve-submit-plan-modal .runtime-subfilter-option,
+.solve-submit-plan-modal .submit-history-plan-static-item,
+.solve-submit-plan-modal .runtime-check-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.solve-submit-plan-detail-lines {
+  display: grid;
+  gap: 0.46rem;
+  margin-top: 0;
+}
+
+.solve-submit-plan-detail-line {
+  display: grid;
+  grid-template-columns: var(--runtime-plan-label-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
+.solve-submit-plan-detail-label {
+  color: #334155;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.solve-submit-plan-detail-values {
+  min-width: 0;
+  color: #0f5db3;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.2;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.solve-submit-plan-detail-values::-webkit-scrollbar {
+  display: none;
+}
+
+.solve-submit-plan-detail-values.is-empty {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .submit-history-plan-modal {
+    --execution-plan-detail-label-width: 3.6rem;
+  }
+
+  .execution-plan-detail-row {
+    gap: 0.42rem;
+  }
+
+  .solve-submit-plan-detail-line {
+    grid-template-columns: 3.6rem minmax(0, 1fr);
+    gap: 0.42rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .execution-plan-detail-label {
+    color: #cbd5e1;
+  }
+
+  .execution-plan-detail-values {
+    color: #93c5fd;
+  }
+
+  .execution-plan-detail-values.is-empty {
+    color: #e2e8f0;
+  }
+
+  .solve-submit-plan-detail-label {
+    color: #cbd5e1;
+  }
+
+  .solve-submit-plan-detail-values {
+    color: #93c5fd;
+  }
+
+  .solve-submit-plan-detail-values.is-empty {
+    color: #e2e8f0;
+  }
+}
+
+.submit-history-plan-modal .runtime-subfilter-row {
+  display: grid;
+  grid-template-columns: var(--runtime-plan-label-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
+.submit-history-plan-modal .submit-history-plan-detail-options,
+.submit-history-plan-modal .submit-history-plan-detail-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.submit-history-plan-modal .submit-history-plan-detail-options::-webkit-scrollbar,
+.submit-history-plan-modal .submit-history-plan-detail-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.submit-history-plan-modal .runtime-subfilter-option,
+.submit-history-plan-modal .submit-history-plan-static-item,
+.submit-history-plan-modal .runtime-check-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .submit-history-plan-modal .submit-history-modal-header {
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: nowrap;
+  }
+
+  .submit-history-plan-modal .submit-history-modal-copy {
+    align-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .submit-history-plan-modal .submit-history-modal-close {
+    align-self: center !important;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .submit-history-plan-modal .runtime-subfilter-row,
+  .submit-history-plan-modal .solve-submit-plan-detail-line {
+    grid-template-columns: 3.6rem minmax(0, 1fr);
+    gap: 0.42rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .submit-history-table {
+    min-width: 36.8rem;
+  }
+
+  .submit-history-row {
+    grid-template-columns: 4.4rem 4.8rem 5.7rem 3.8rem 3.6rem 7.8rem 5.6rem;
+    gap: 0.18rem;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .submit-history-head-cell,
+  .submit-history-cell {
+    font-size: 0.64rem;
+  }
+
+  .submit-history-head-cell {
+    white-space: nowrap;
+  }
+
+  .submit-history-status-text {
+    font-size: 0.66rem;
+  }
+
+  .submit-history-cell-plan {
+    justify-content: center;
   }
 }

@@ -4,7 +4,6 @@ import com.quertimizer.alarm.application.port.in.UpdateAlarmTemplateUseCase;
 import com.quertimizer.alarm.application.input.AlarmTemplateInput;
 import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
 import com.quertimizer.alarm.application.port.out.AlarmTemplateRepositoryPort;
-import com.quertimizer.alarm.application.service.AlarmTemplateService;
 import com.quertimizer.alarm.domain.entity.AlarmTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

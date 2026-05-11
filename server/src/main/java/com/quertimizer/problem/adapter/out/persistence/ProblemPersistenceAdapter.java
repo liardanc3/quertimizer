@@ -35,6 +35,12 @@ public class ProblemPersistenceAdapter implements ProblemRepositoryPort {
     }
 
     @Override
+    public Optional<String> findLatestProblemIdByProblemSetId(String problemSetId) {
+        return problemJpaRepository.findFirstByProblemSetIdOrderByProblemIdDesc(problemSetId)
+                .map(ProblemJpaEntity::getProblemId);
+    }
+
+    @Override
     public Problem save(Problem problem) {
         ProblemJpaEntity savedEntity = problemJpaRepository.findByProblemId(problem.getProblemId())
                 .map(entity -> {
@@ -42,8 +48,6 @@ public class ProblemPersistenceAdapter implements ProblemRepositoryPort {
                     return entity;
                 })
                 .orElseGet(() -> problemPersistenceMapper.toEntity(problem));
-        savedEntity = problemJpaRepository.saveAndFlush(savedEntity);
-        savedEntity.assignProblemId();
         return problemPersistenceMapper.toDomain(problemJpaRepository.saveAndFlush(savedEntity));
     }
 }

@@ -40,6 +40,9 @@ public class AlarmService {
             return;
         }
 
+        // 알람 저장 전 기본 템플릿 보장
+        alarmTemplateService.ensureDefaultTemplates();
+
         // 알람 저장 후 미확인 알람 수 조회
         UserAlarm alarm = userAlarmRepository.save(UserAlarm.create(alarmSpec, serializeBindings(alarmSpec.bindings())));
         long unreadCount = userAlarmRepository.countByHandleAndReadFalse(alarm.getHandle());

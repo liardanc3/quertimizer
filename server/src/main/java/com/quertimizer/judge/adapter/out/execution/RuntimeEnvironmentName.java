@@ -8,7 +8,7 @@ public class RuntimeEnvironmentName {
 
     public RuntimeEnvironmentName(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("런타임 실행 환경 이름이 비어 있다.");
+            throw new IllegalArgumentException("런타임 실행 환경 이름이 비어 있습니다.");
         }
 
         this.value = value;

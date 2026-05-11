@@ -3,10 +3,9 @@ package com.quertimizer.auth.application.service;
 import com.quertimizer.auth.application.port.in.UpdateUserRoleUseCase;
 import com.quertimizer.auth.application.input.UpdateUserRoleInput;
 import com.quertimizer.auth.domain.policy.AuthManagePolicy;
-import com.quertimizer.auth.application.service.AuthManageService;
 import com.quertimizer.global.constant.UserRole;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,7 +18,7 @@ public class UpdateUserRole implements UpdateUserRoleUseCase {
 
     private final AuthManageService authManageService;
     private final AuthManagePolicy authManagePolicy;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 사용자 역할을 수정한다.
@@ -35,7 +34,7 @@ public class UpdateUserRole implements UpdateUserRoleUseCase {
     @Transactional
     @Override
     public void execute(UpdateUserRoleInput input) {
-        User user = authManageService.findUser(input.getHandle());
+        AuthUser user = authManageService.findUser(input.getHandle());
         UserRole nextRole = authManageService.normalizeRole(input.getRole());
         UserRole currentRole = user.getResolvedRole();
         long adminCount = userRepository.findAllByOrderByHandleAsc().stream()

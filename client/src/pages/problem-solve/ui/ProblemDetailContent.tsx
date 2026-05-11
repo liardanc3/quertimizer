@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import type { ProblemDetailData, ProblemOutputSampleData, ProblemSampleTableData } from '@/shared/api/problem-api';
+import type { ProblemDataExampleTableData, ProblemDetailData, ProblemOutputExampleData } from '@/shared/api/problem-api';
 import type { DbmsType } from '@/shared/api/domain';
 import { getUiText, useUiText } from '@/shared/config/ui-text';
 import ReactFlowDiagram from './ReactFlowDiagram';
@@ -84,153 +84,65 @@ interface ResizableGridProps {
   resetKey?: number;
 }
 
+const DEFAULT_RESIZABLE_GRID_COLUMN_WIDTH = 104;
 const DEFAULT_COLUMN_WEIGHTS = [2, 3.4, 1.6, 1, 2];
 const MINIMUM_COLUMN_WEIGHTS = [1.2, 1.9, 1, 0.7, 1.2];
+const ROW_COUNT_FORMATTER = new Intl.NumberFormat('ko-KR');
 
-function parseTableDefinitionSql(ddl: string): ParsedDdl {
-  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\(([\s\S]*?)\);/gi;
-  const tableComments = parseTableComments(ddl);
-  const columnComments = parseColumnComments(ddl);
-  const tables: ParsedTable[] = [];
-  const relations: ParsedTableRelation[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = createTablePattern.exec(ddl)) != null) {
-    const tableName = match[1];
-    const lines = match[2]
-      .split('\n')
-      .map((line) => line.trim().replace(/,$/, ''))
-      .filter(Boolean);
-
-    const columns: ParsedTableColumn[] = [];
-
-    lines.forEach((line) => {
-      if (/^CONSTRAINT\s+/i.test(line) || /^FOREIGN KEY\s+/i.test(line)) {
-        const foreignKeyMatch =
-          line.match(/FOREIGN KEY\s+\((\w+)\)\s+REFERENCES\s+(?:[\w]+\.)?(\w+)\s+\((\w+)\)/i);
-
-        if (!foreignKeyMatch) {
-          return;
-        }
-
-        const [, sourceColumnName, targetTableName, targetColumnName] = foreignKeyMatch;
-        const sourceColumn = columns.find((column) => column.name === sourceColumnName);
-
-        if (sourceColumn) {
-          sourceColumn.foreignKey = true;
-          sourceColumn.reference = {
-            tableName: targetTableName,
-            columnName: targetColumnName,
-          };
-        }
-
-        relations.push({
-          sourceTableName: targetTableName,
-          sourceColumnName: targetColumnName,
-          targetTableName: tableName,
-          targetColumnName: sourceColumnName,
-        });
-        return;
-      }
-
-      if (/^PRIMARY KEY\s*\(/i.test(line)) {
-        const primaryKeyColumns = (line.match(/\(([^)]+)\)/)?.[1] ?? '')
-          .split(',')
-          .map((columnName) => columnName.trim())
-          .filter(Boolean);
-
-        primaryKeyColumns.forEach((primaryKeyColumnName) => {
-          const targetColumn = columns.find((column) => column.name === primaryKeyColumnName);
-          if (targetColumn) {
-            targetColumn.primaryKey = true;
-          }
-        });
-        return;
-      }
-
-      const columnMatch = line.match(/^(\w+)\s+(.+)$/);
-      if (!columnMatch) {
-        return;
-      }
-
-      const [, columnName, remainder] = columnMatch;
-      const referenceMatch = remainder.match(/REFERENCES\s+(?:[\w]+\.)?(\w+)\s+\((\w+)\)/i);
-
-      columns.push({
-        name: columnName,
-        type: extractColumnType(remainder),
-        description: columnComments.get(`${tableName}.${columnName}`) ?? describeColumn(columnName),
-        primaryKey: /PRIMARY KEY/i.test(remainder),
-        foreignKey: referenceMatch != null,
-        reference:
-          referenceMatch == null
-            ? undefined
-            : {
-                tableName: referenceMatch[1],
-                columnName: referenceMatch[2],
-              },
-      });
-
-      if (referenceMatch != null) {
-        relations.push({
-          sourceTableName: referenceMatch[1],
-          sourceColumnName: referenceMatch[2],
-          targetTableName: tableName,
-          targetColumnName: columnName,
-        });
-      }
-    });
-
-    tables.push({
-      name: tableName,
-      description: tableComments.get(tableName) ?? getUiText('PROBLEM_DETAIL_TABLE_NAME_FALLBACK', { tableName: formatIdentifier(tableName) }, `${formatIdentifier(tableName)} 테이블`),
-      columns,
-    });
+function parseSchemaMetadata(rawSchemaMetadata: string): ParsedDdl {
+  if (rawSchemaMetadata.trim() === '') {
+    return { tables: [], relations: [] };
   }
 
-  return {
-    tables,
-    relations: dedupeRelations(relations),
-  };
-}
+  try {
+    const parsed = JSON.parse(rawSchemaMetadata) as { tables?: unknown; relations?: unknown };
+    const tables = Array.isArray(parsed.tables)
+      ? parsed.tables
+          .filter((table): table is Record<string, unknown> => typeof table === 'object' && table != null)
+          .map((table) => ({
+            name: typeof table.name === 'string' ? table.name : '',
+            description: typeof table.description === 'string' ? table.description : '',
+            columns: Array.isArray(table.columns)
+              ? table.columns
+                  .filter((column): column is Record<string, unknown> => typeof column === 'object' && column != null)
+                  .map((column) => {
+                    const reference = typeof column.reference === 'object' && column.reference != null
+                      ? column.reference as Record<string, unknown>
+                      : null;
 
-function parseTableComments(ddl: string) {
-  const tableCommentPattern = /COMMENT ON TABLE\s+(?:[\w]+\.)?(\w+)\s+IS\s+'((?:''|[^'])*)';/gi;
-  const tableComments = new Map<string, string>();
-  let match: RegExpExecArray | null;
+                    return {
+                      name: typeof column.name === 'string' ? column.name : '',
+                      type: typeof column.type === 'string' ? column.type : '',
+                      description: typeof column.description === 'string' ? column.description : '',
+                      primaryKey: column.primaryKey === true,
+                      foreignKey: column.foreignKey === true,
+                      reference: reference == null ? undefined : {
+                        tableName: typeof reference.tableName === 'string' ? reference.tableName : '',
+                        columnName: typeof reference.columnName === 'string' ? reference.columnName : '',
+                      },
+                    };
+                  })
+                  .filter((column) => column.name !== '')
+              : [],
+          }))
+          .filter((table) => table.name !== '')
+      : [];
+    const relations = Array.isArray(parsed.relations)
+      ? parsed.relations
+          .filter((relation): relation is Record<string, unknown> => typeof relation === 'object' && relation != null)
+          .map((relation) => ({
+            sourceTableName: typeof relation.sourceTableName === 'string' ? relation.sourceTableName : '',
+            sourceColumnName: typeof relation.sourceColumnName === 'string' ? relation.sourceColumnName : '',
+            targetTableName: typeof relation.targetTableName === 'string' ? relation.targetTableName : '',
+            targetColumnName: typeof relation.targetColumnName === 'string' ? relation.targetColumnName : '',
+          }))
+          .filter((relation) => relation.sourceTableName !== '' && relation.targetTableName !== '')
+      : [];
 
-  while ((match = tableCommentPattern.exec(ddl)) != null) {
-    tableComments.set(match[1], decodeSqlComment(match[2]));
+    return { tables, relations: dedupeRelations(relations) };
+  } catch {
+    return { tables: [], relations: [] };
   }
-
-  return tableComments;
-}
-
-function parseColumnComments(ddl: string) {
-  const columnCommentPattern = /COMMENT ON COLUMN\s+(?:[\w]+\.)?(\w+)\.(\w+)\s+IS\s+'((?:''|[^'])*)';/gi;
-  const columnComments = new Map<string, string>();
-  let match: RegExpExecArray | null;
-
-  while ((match = columnCommentPattern.exec(ddl)) != null) {
-    columnComments.set(`${match[1]}.${match[2]}`, decodeSqlComment(match[3]));
-  }
-
-  return columnComments;
-}
-
-function decodeSqlComment(value: string) {
-  return value.replace(/''/g, "'");
-}
-
-function extractColumnType(remainder: string) {
-  return remainder
-    .replace(/\s+NOT NULL/gi, '')
-    .replace(/\s+NULL/gi, '')
-    .replace(/\s+PRIMARY KEY/gi, '')
-    .replace(/\s+CHECK\s*\(.+$/gi, '')
-    .replace(/\s+DEFAULT\s+.+$/gi, '')
-    .replace(/\s+REFERENCES\s+.+$/gi, '')
-    .trim();
 }
 
 function dedupeRelations(relations: ParsedTableRelation[]) {
@@ -250,34 +162,6 @@ function dedupeRelations(relations: ParsedTableRelation[]) {
   return Array.from(relationMap.values());
 }
 
-function describeColumn(columnName: string) {
-  if (columnName.endsWith('_id')) {
-    return `${formatIdentifier(columnName.replace(/_id$/, ''))} ID`;
-  }
-
-  if (columnName.endsWith('_at')) {
-    return getUiText('PROBLEM_DETAIL_COLUMN_TIME_FALLBACK', { columnName: formatIdentifier(columnName.replace(/_at$/, '')) }, `${formatIdentifier(columnName.replace(/_at$/, ''))} 시각`);
-  }
-
-  if (columnName.endsWith('_date')) {
-    return getUiText('PROBLEM_DETAIL_COLUMN_DATE_FALLBACK', { columnName: formatIdentifier(columnName.replace(/_date$/, '')) }, `${formatIdentifier(columnName.replace(/_date$/, ''))} 날짜`);
-  }
-
-  if (columnName.endsWith('_amount')) {
-    return getUiText('PROBLEM_DETAIL_COLUMN_AMOUNT_FALLBACK', { columnName: formatIdentifier(columnName.replace(/_amount$/, '')) }, `${formatIdentifier(columnName.replace(/_amount$/, ''))} 금액`);
-  }
-
-  return formatIdentifier(columnName);
-}
-
-function formatIdentifier(value: string) {
-  return value
-    .split('_')
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
-}
-
 function parseLineItems(value: string) {
   return value
     .split('\n')
@@ -285,220 +169,91 @@ function parseLineItems(value: string) {
     .filter(Boolean);
 }
 
-function parseDataSampleSql(dataSampleSql: string): ProblemSampleTableData[] {
+function normalizeExampleRows(rows: unknown): Array<Array<string | number | boolean | null>> {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.map((row) =>
+    Array.isArray(row)
+      ? row.map((value) =>
+          typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null
+            ? value
+            : String(value),
+        )
+      : [],
+  );
+}
+
+function parseDataExample(rawDataExample: string): ProblemDataExampleTableData[] {
+  if (rawDataExample.trim() === '') {
+    return [];
+  }
+
   try {
-    const insertPattern = /INSERT INTO\s+(?:[\w]+\.)?(\w+)\s*\(([^)]+)\)\s*VALUES\s*([\s\S]*?);/gi;
-    const sampleTableMap = new Map<string, ProblemSampleTableData>();
-    let match: RegExpExecArray | null;
-
-    while ((match = insertPattern.exec(dataSampleSql)) != null) {
-      const tableName = match[1];
-      const columns = match[2]
-        .split(',')
-        .map((column) => column.trim())
-        .filter(Boolean);
-      const rows = extractValueRows(match[3]).map((rowValue) => splitRowValues(rowValue).map(parseSqlValue));
-      const existingTable = sampleTableMap.get(tableName);
-
-      if (existingTable != null) {
-        existingTable.rows.push(...rows);
-        continue;
-      }
-
-      sampleTableMap.set(tableName, {
-        name: tableName,
-        columns,
-        rows,
-      });
+    const parsed = JSON.parse(rawDataExample) as { tables?: unknown };
+    if (!Array.isArray(parsed.tables)) {
+      return [];
     }
 
-    return Array.from(sampleTableMap.values());
+    return parsed.tables
+      .filter((table): table is { name: unknown; columns: unknown; rows: unknown; totalRows?: unknown; visibleRows?: unknown } =>
+        typeof table === 'object' && table != null,
+      )
+      .map((table) => {
+        const rows = normalizeExampleRows(table.rows);
+        return {
+          name: typeof table.name === 'string' ? table.name : '',
+          columns: Array.isArray(table.columns) ? table.columns.filter((column): column is string => typeof column === 'string') : [],
+          rows,
+          totalRows: typeof table.totalRows === 'number' ? table.totalRows : rows.length,
+          visibleRows: typeof table.visibleRows === 'number' ? table.visibleRows : rows.length,
+        };
+      })
+      .filter((table) => table.name !== '' && table.columns.length > 0);
   } catch {
     return [];
   }
 }
 
-function extractValueRows(valuesSection: string) {
-  const rowValues: string[] = [];
-  let inQuote = false;
-  let depth = 0;
-  let rowStartIndex = -1;
-
-  for (let index = 0; index < valuesSection.length; index += 1) {
-    const currentCharacter = valuesSection[index];
-    const nextCharacter = valuesSection[index + 1];
-
-    if (currentCharacter === "'") {
-      if (inQuote && nextCharacter === "'") {
-        index += 1;
-        continue;
-      }
-
-      inQuote = !inQuote;
-      continue;
-    }
-
-    if (inQuote) {
-      continue;
-    }
-
-    if (currentCharacter === '(') {
-      if (depth === 0) {
-        rowStartIndex = index + 1;
-      }
-
-      depth += 1;
-      continue;
-    }
-
-    if (currentCharacter === ')') {
-      depth -= 1;
-
-      if (depth === 0 && rowStartIndex >= 0) {
-        rowValues.push(valuesSection.slice(rowStartIndex, index));
-        rowStartIndex = -1;
-      }
-    }
-  }
-
-  return rowValues;
-}
-
-function splitRowValues(rowValue: string) {
-  const tokens: string[] = [];
-  let inQuote = false;
-  let tokenStartIndex = 0;
-
-  for (let index = 0; index < rowValue.length; index += 1) {
-    const currentCharacter = rowValue[index];
-    const nextCharacter = rowValue[index + 1];
-
-    if (currentCharacter === "'") {
-      if (inQuote && nextCharacter === "'") {
-        index += 1;
-        continue;
-      }
-
-      inQuote = !inQuote;
-      continue;
-    }
-
-    if (!inQuote && currentCharacter === ',') {
-      tokens.push(rowValue.slice(tokenStartIndex, index).trim());
-      tokenStartIndex = index + 1;
-    }
-  }
-
-  tokens.push(rowValue.slice(tokenStartIndex).trim());
-  return tokens;
-}
-
-function parseSqlValue(token: string): string | number | boolean | null {
-  const normalizedToken = token.trim();
-
-  if (/^null$/i.test(normalizedToken)) return null;
-  if (/^true$/i.test(normalizedToken)) return true;
-  if (/^false$/i.test(normalizedToken)) return false;
-  if (/^-?\d+(?:\.\d+)?$/.test(normalizedToken)) return Number(normalizedToken);
-
-  const typedLiteralMatch = normalizedToken.match(/^(?:DATE|TIMESTAMP)\s+'((?:''|[^'])*)'$/i);
-  if (typedLiteralMatch) {
-    return decodeSqlComment(typedLiteralMatch[1]);
-  }
-
-  const stringLiteralMatch = normalizedToken.match(/^'((?:''|[^'])*)'$/s);
-  if (stringLiteralMatch) {
-    return decodeSqlComment(stringLiteralMatch[1]);
-  }
-
-  return normalizedToken;
-}
-
-function parseOutputSampleCsv(outputSampleCsv: string): ProblemOutputSampleData {
-  try {
-    const structuredOutput = JSON.parse(outputSampleCsv) as { columns?: unknown; rows?: unknown };
-    if (Array.isArray(structuredOutput.columns) && Array.isArray(structuredOutput.rows)) {
-      return {
-        columns: structuredOutput.columns.filter((column): column is string => typeof column === 'string'),
-        rows: structuredOutput.rows.map((row) =>
-          Array.isArray(row)
-            ? row.map((value) =>
-                typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null
-                  ? value
-                  : String(value),
-              )
-            : [],
-        ),
-      };
-    }
-  } catch {
+function parseOutputExample(rawOutputExample: string): ProblemOutputExampleData {
+  if (rawOutputExample.trim() === '') {
+    return { columns: [], rows: [], totalRows: 0, visibleRows: 0, rowLimit: 10 };
   }
 
   try {
-    const lines = outputSampleCsv
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (lines.length === 0) {
-      return { columns: [], rows: [] };
-    }
-
-    const [headerLine, ...dataLines] = lines;
+    const parsed = JSON.parse(rawOutputExample) as {
+      columns?: unknown;
+      rows?: unknown;
+      totalRows?: unknown;
+      visibleRows?: unknown;
+      rowLimit?: unknown;
+    };
+    const rows = normalizeExampleRows(parsed.rows);
 
     return {
-      columns: parseCsvLine(headerLine),
-      rows: dataLines.map((line) => parseCsvLine(line).map(parseCsvValue)),
+      columns: Array.isArray(parsed.columns) ? parsed.columns.filter((column): column is string => typeof column === 'string') : [],
+      rows,
+      totalRows: typeof parsed.totalRows === 'number' ? parsed.totalRows : rows.length,
+      visibleRows: typeof parsed.visibleRows === 'number' ? parsed.visibleRows : rows.length,
+      rowLimit: typeof parsed.rowLimit === 'number' ? parsed.rowLimit : 10,
     };
   } catch {
-    return { columns: [], rows: [] };
+    return { columns: [], rows: [], totalRows: 0, visibleRows: 0, rowLimit: 10 };
   }
 }
 
-function parseCsvLine(line: string) {
-  const cells: string[] = [];
-  let currentValue = '';
-  let inQuote = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const currentCharacter = line[index];
-    const nextCharacter = line[index + 1];
-
-    if (currentCharacter === '"') {
-      if (inQuote && nextCharacter === '"') {
-        currentValue += '"';
-        index += 1;
-        continue;
-      }
-
-      inQuote = !inQuote;
-      continue;
-    }
-
-    if (!inQuote && currentCharacter === ',') {
-      cells.push(currentValue.trim());
-      currentValue = '';
-      continue;
-    }
-
-    currentValue += currentCharacter;
-  }
-
-  cells.push(currentValue.trim());
-  return cells;
-}
-
-function parseCsvValue(value: string): string | number | boolean | null {
-  if (/^null$/i.test(value)) return null;
-  if (/^true$/i.test(value)) return true;
-  if (/^false$/i.test(value)) return false;
-  if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value);
-  return value;
+function formatExampleSummary(totalRows: number, visibleRows: number) {
+  return `… 총 ${ROW_COUNT_FORMATTER.format(totalRows)}행 중 ${ROW_COUNT_FORMATTER.format(visibleRows)}행 표시`;
 }
 
 function formatCellValue(value: ReactNode) {
-  if (value == null || typeof value === 'boolean') {
+  if (value == null) {
     return '';
+  }
+
+  if (typeof value === 'boolean') {
+    return String(value);
   }
 
   return value;
@@ -513,10 +268,10 @@ function resolveColumnWidths(containerWidth: number, columnCount: number, initia
   const totalWeight = fallbackWeights.reduce((sum, weight) => sum + weight, 0);
 
   if (containerWidth <= 0 || totalWeight <= 0) {
-    return fallbackWeights.map(() => 160);
+    return fallbackWeights.map(() => DEFAULT_RESIZABLE_GRID_COLUMN_WIDTH);
   }
 
-  return fallbackWeights.map((weight) => (weight / totalWeight) * containerWidth);
+  return fallbackWeights.map((weight) => Math.max((weight / totalWeight) * containerWidth, DEFAULT_RESIZABLE_GRID_COLUMN_WIDTH));
 }
 
 function renderTextBlock(lines: string[], emptyMessage: string) {
@@ -725,7 +480,6 @@ function ResizableGrid({ columns, rows, emptyMessage, initialWeights, minimumWei
 
 const ProblemDetailContent = memo(function ProblemDetailContent({
   detail,
-  selectedDbms,
   descriptionContent,
   tableBeforeContent,
   dataSampleBeforeContent,
@@ -756,33 +510,17 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
   const [collapsedSampleTableNames, setCollapsedSampleTableNames] = useState<string[]>([]);
   const [openedTableNames, setOpenedTableNames] = useState<string[]>([]);
   const [openedSampleTableNames, setOpenedSampleTableNames] = useState<string[]>([]);
-  const selectedDdl = useMemo(
-    () => {
-      const preferredDdl = selectedDbms === 'mysql' ? detail?.ddlMysql ?? '' : detail?.ddlPostgresql ?? '';
-
-      return preferredDdl;
-    },
-    [detail?.ddlMysql, detail?.ddlPostgresql, selectedDbms],
-  );
-  const parsedDdl = useMemo(() => parseTableDefinitionSql(selectedDdl), [selectedDdl]);
+  const parsedDdl = useMemo(() => parseSchemaMetadata(detail?.schemaMetadata ?? ''), [detail?.schemaMetadata]);
   const descriptionLines = useMemo(() => parseLineItems(detail?.description ?? ''), [detail?.description]);
   const conditionLines = useMemo(() => parseLineItems(detail?.condition ?? ''), [detail?.condition]);
   const outputLines = useMemo(() => parseLineItems(detail?.output ?? ''), [detail?.output]);
-  const selectedDataSampleSql = useMemo(
-    () => {
-      const preferredData = selectedDbms === 'mysql' ? detail?.dataMysql ?? '' : detail?.dataPostgresql ?? '';
-
-      return preferredData;
-    },
-    [detail?.dataMysql, detail?.dataPostgresql, selectedDbms],
-  );
   const sampleTables = useMemo(() => {
-    const availableTables = parseDataSampleSql(selectedDataSampleSql);
+    const availableTables = parseDataExample(detail?.dataExample ?? '');
     const allowedTableNames = new Set(parsedDdl.tables.map((table) => table.name));
 
     return availableTables.filter((table) => allowedTableNames.has(table.name));
-  }, [parsedDdl.tables, selectedDataSampleSql]);
-  const outputSample = useMemo(() => parseOutputSampleCsv(detail?.outputSample ?? ''), [detail?.outputSample]);
+  }, [detail?.dataExample, parsedDdl.tables]);
+  const outputExample = useMemo(() => parseOutputExample(detail?.outputExample ?? ''), [detail?.outputExample]);
   const tableNames = useMemo(() => parsedDdl.tables.map((table) => table.name), [parsedDdl.tables]);
   const sampleTableNames = useMemo(() => sampleTables.map((table) => table.name), [sampleTables]);
 
@@ -825,7 +563,7 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
     [openedTableNames, parsedDdl.tables],
   );
   const openedSampleTables = useMemo(
-    () => openedSampleTableNames.map((tableName) => sampleTables.find((table) => table.name === tableName)).filter((table): table is ProblemSampleTableData => table != null),
+    () => openedSampleTableNames.map((tableName) => sampleTables.find((table) => table.name === tableName)).filter((table): table is ProblemDataExampleTableData => table != null),
     [openedSampleTableNames, sampleTables],
   );
   const tableDefinitionColumns: GridColumn[] = useMemo(
@@ -838,9 +576,9 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
     ],
     [text],
   );
-  const outputSampleColumns: GridColumn[] = useMemo(
-    () => outputSample.columns.map((column) => ({ key: column, label: column })),
-    [outputSample.columns],
+  const outputExampleColumns: GridColumn[] = useMemo(
+    () => outputExample.columns.map((column) => ({ key: column, label: column })),
+    [outputExample.columns],
   );
 
   const toggleSection = (sectionKey: keyof CollapsedSectionState) => {
@@ -1201,12 +939,17 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
                       setSampleDragState(null);
                       setSampleDropTargetName(null);
                     },
-                    <ResizableGrid
-                      columns={table.columns.map((column) => ({ key: column, label: column }))}
-                      rows={table.rows}
-                      emptyMessage={text('PROBLEM_DETAIL_SAMPLE_EMPTY_STATE', '표시할 데이터 예시가 없습니다.')}
-                      resetKey={gridResetKeys.dataSample}
-                    />,
+                    <div className="solve-detail-example-table">
+                      <ResizableGrid
+                        columns={table.columns.map((column) => ({ key: column, label: column }))}
+                        rows={table.rows}
+                        emptyMessage={text('PROBLEM_DETAIL_SAMPLE_EMPTY_STATE', '표시할 데이터 예시가 없습니다.')}
+                        resetKey={gridResetKeys.dataSample}
+                      />
+                      <div className="solve-detail-example-summary">
+                        {formatExampleSummary(table.totalRows, table.visibleRows)}
+                      </div>
+                    </div>,
                     sampleDragState,
                     'sample',
                   );
@@ -1326,11 +1069,14 @@ const ProblemDetailContent = memo(function ProblemDetailContent({
             {outputSampleBeforeContent}
             <div className="solve-detail-table-block solve-detail-output-example-block">
               <ResizableGrid
-                columns={outputSampleColumns}
-                rows={outputSample.rows}
+                columns={outputExampleColumns}
+                rows={outputExample.rows}
                 emptyMessage={text('PROBLEM_DETAIL_OUTPUT_SAMPLE_EMPTY_STATE', '표시할 출력 예시가 없습니다.')}
                 resetKey={gridResetKeys.outputSample}
               />
+              <div className="solve-detail-example-summary">
+                {formatExampleSummary(outputExample.totalRows, outputExample.visibleRows)}
+              </div>
             </div>
           </div>
         ) : null}

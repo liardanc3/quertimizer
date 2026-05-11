@@ -1,11 +1,9 @@
 package com.quertimizer.community.adapter.in.web.response;
 
 import com.quertimizer.community.application.output.CommunityReactionOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class CommunityReactionRes {
 
     private final boolean liked;

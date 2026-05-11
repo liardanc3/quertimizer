@@ -2,12 +2,11 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.SignupUseCase;
 import com.quertimizer.auth.application.input.SignupInput;
-import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
 import com.quertimizer.global.lock.Lock;
 import com.quertimizer.global.lock.LockKey;
-import com.quertimizer.user.domain.entity.User;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.auth.domain.model.AuthUser;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
 import lombok.RequiredArgsConstructor;
 import com.quertimizer.auth.application.port.out.PasswordEncodingPort;
 import org.springframework.stereotype.Component;
@@ -18,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class Signup implements SignupUseCase {
 
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
     private final PasswordEncodingPort passwordEncodingPort;
     private final AuthService authService;
     private final SignupPolicy signupPolicy;
@@ -42,6 +41,6 @@ public class Signup implements SignupUseCase {
         authService.validateVerifiedSignupCode(input.getEmail(), input.getCode());
         authService.clearVerifiedSignupCode(input.getEmail(), input.getCode());
 
-        userRepository.save(User.create(passwordEncodingPort.encode(input.getPassword()), input.getEmail()));
+        userRepository.save(AuthUser.create(passwordEncodingPort.encode(input.getPassword()), input.getEmail()));
     }
 }

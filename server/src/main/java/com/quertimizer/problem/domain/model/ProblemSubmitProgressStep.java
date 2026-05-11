@@ -3,6 +3,7 @@ package com.quertimizer.problem.domain.model;
 public enum ProblemSubmitProgressStep {
 
     VALIDATE("validate"),
+    ENVIRONMENT("environment"),
     ANSWER("answer"),
     DDL("ddl"),
     PLAN("plan");

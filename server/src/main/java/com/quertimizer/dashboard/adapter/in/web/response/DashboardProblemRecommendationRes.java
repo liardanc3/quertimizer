@@ -1,11 +1,9 @@
 package com.quertimizer.dashboard.adapter.in.web.response;
 
 import com.quertimizer.dashboard.application.output.DashboardProblemRecommendationOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class DashboardProblemRecommendationRes {
 
     private final String problemId;

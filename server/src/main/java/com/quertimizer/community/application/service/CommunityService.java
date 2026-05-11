@@ -1,11 +1,7 @@
 package com.quertimizer.community.application.service;
 
-import com.quertimizer.alarm.application.service.AlarmService;
-import com.quertimizer.alarm.domain.model.CommunityCommentLikeAlarm;
-import com.quertimizer.alarm.domain.model.CommunityCommentReplyAlarm;
-import com.quertimizer.alarm.domain.model.CommunityPostCommentAlarm;
-import com.quertimizer.alarm.domain.model.CommunityPostLikeAlarm;
 import com.quertimizer.community.application.output.CommunityCommentOutput;
+import com.quertimizer.community.application.port.out.CommunityAlarmPort;
 import com.quertimizer.community.application.port.out.CommunityCommentLikeRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostLikeRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostTagRepositoryPort;
@@ -37,7 +33,8 @@ public class CommunityService {
     private final CommunityPostTagRepositoryPort communityPostTagRepository;
     private final CommunityPostLikeRepositoryPort communityPostLikeRepository;
     private final CommunityCommentLikeRepositoryPort communityCommentLikeRepository;
-    private final AlarmService alarmService;
+    private final CommunityAlarmPort communityAlarmPort;
+
     public Map<Long, List<String>> createTagsByPostId(List<Long> postIds) {
         // 게시글 번호별 태그 저장소 준비
         Map<Long, List<String>> tagsByPostId = new HashMap<>();
@@ -221,10 +218,10 @@ public class CommunityService {
         }
 
         // 게시글 좋아요 알람 발행
-        alarmService.publish(new CommunityPostLikeAlarm(
+        communityAlarmPort.publishPostLike(
                 post.getHandle(), actorHandle,
                 CommunityPostIdPolicy.format(post.getPostId()), post.getTitle()
-        ));
+        );
     }
 
     public void publishCommentAlarms(CommunityPost post, CommunityComment comment,
@@ -243,10 +240,10 @@ public class CommunityService {
         }
 
         // 게시글 댓글 알람 발행
-        alarmService.publish(new CommunityPostCommentAlarm(
+        communityAlarmPort.publishPostComment(
                 post.getHandle(), actorHandle,
-                CommunityPostIdPolicy.format(post.getPostId()), comment.getContent(), comment.getCommentId()
-        ));
+                CommunityPostIdPolicy.format(post.getPostId()), post.getTitle(), comment.getCommentId()
+        );
     }
 
     public void publishCommentLikeAlarm(CommunityComment comment, String actorHandle) {
@@ -256,10 +253,10 @@ public class CommunityService {
         }
 
         // 댓글 좋아요 알람 발행
-        alarmService.publish(new CommunityCommentLikeAlarm(
+        communityAlarmPort.publishCommentLike(
                 comment.getHandle(), actorHandle,
                 CommunityPostIdPolicy.format(comment.getPostId()), comment.getContent(), comment.getCommentId()
-        ));
+        );
     }
 
     private CommunityCommentOutput createCommentResponse(CommunityComment comment,
@@ -286,10 +283,10 @@ public class CommunityService {
         }
 
         // 대댓글 알람 발행
-        alarmService.publish(new CommunityCommentReplyAlarm(
+        communityAlarmPort.publishCommentReply(
                 parentComment.get().getHandle(), actorHandle,
                 CommunityPostIdPolicy.format(post.getPostId()), comment.getContent(), comment.getCommentId()
-        ));
+        );
         return true;
     }
 }

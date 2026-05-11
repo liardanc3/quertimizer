@@ -2,13 +2,12 @@ package com.quertimizer.auth.application.service;
 
 import com.quertimizer.auth.application.port.in.SetupHandleUseCase;
 import com.quertimizer.auth.application.input.SetupHandleInput;
-import com.quertimizer.auth.application.service.AuthService;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.global.lock.Lock;
 import com.quertimizer.global.lock.LockKey;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
+import com.quertimizer.auth.application.port.out.AuthUserPort;
+import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -23,7 +22,7 @@ public class SetupHandle implements SetupHandleUseCase {
 
     private final AuthService authService;
     private final SignupPolicy signupPolicy;
-    private final UserRepositoryPort userRepository;
+    private final AuthUserPort userRepository;
 
     /**
      * 가입 직후 필요한 Handle을 설정한다.
@@ -40,7 +39,7 @@ public class SetupHandle implements SetupHandleUseCase {
     @Lock(prefix = LockKey.SIGNUP, key = "#p0.authenticatedEmail", timeout = 500)
     @Override
     public void execute(SetupHandleInput input) {
-        User user = authService.findUserByEmail(input.getAuthenticatedEmail())
+        AuthUser user = authService.findUserByEmail(input.getAuthenticatedEmail())
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
         if (user.hasHandle()) {

@@ -24,7 +24,7 @@ public class LvmSnapshotRuntimeOptions {
         this.thinPool = LvmSnapshotNameSupport.scriptName(requireText(thinPool, "thinPool"));
         this.baseTemplateVersion = LvmSnapshotNameSupport.scriptName(requireText(baseTemplateVersion, "baseTemplateVersion"));
         if (startupTimeoutSeconds <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 한다.");
+            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
         }
 
         this.startupTimeoutSeconds = startupTimeoutSeconds;
@@ -61,15 +61,15 @@ public class LvmSnapshotRuntimeOptions {
 
     public LvmSnapshotRuntimeNode requireNode(String databaseId) {
         return findNode(databaseId)
-                .orElseThrow(() -> new IllegalStateException("LVM 스냅샷 실행 노드 설정이 없다: " + databaseId));
+                .orElseThrow(() -> new IllegalStateException("LVM 스냅샷 실행 노드 설정이 없습니다: " + databaseId));
     }
 
     private Map<String, LvmSnapshotRuntimeNode> createNodeMap(List<LvmSnapshotRuntimeNode> runtimeNodes) {
         Map<String, LvmSnapshotRuntimeNode> nodeMap = new LinkedHashMap<>();
-        for (LvmSnapshotRuntimeNode runtimeNode : Objects.requireNonNull(runtimeNodes, "필수 값이 없다.")) {
-            Objects.requireNonNull(runtimeNode, "필수 값이 없다.");
+        for (LvmSnapshotRuntimeNode runtimeNode : Objects.requireNonNull(runtimeNodes, "필수 값이 없습니다.")) {
+            Objects.requireNonNull(runtimeNode, "필수 값이 없습니다.");
             if (nodeMap.putIfAbsent(runtimeNode.getDatabaseId(), runtimeNode) != null) {
-                throw new IllegalArgumentException("LVM 스냅샷 런타임 DB ID가 중복됐다: " + runtimeNode.getDatabaseId());
+                throw new IllegalArgumentException("LVM 스냅샷 런타임 DB ID가 중복되었습니다: " + runtimeNode.getDatabaseId());
             }
         }
 
@@ -78,7 +78,7 @@ public class LvmSnapshotRuntimeOptions {
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있다.");
+            throw new IllegalArgumentException(name + "이 비어 있습니다.");
         }
 
         return value.trim();

@@ -7,5 +7,6 @@ public interface CommunityPostTagJpaRepository extends JpaRepository<CommunityPo
     List<CommunityPostTagJpaEntity> findAllByPostIdOrderByTagOrderAsc(Long postId);
     List<CommunityPostTagJpaEntity> findAllByPostIdInOrderByPostIdAscTagOrderAsc(List<Long> postIds);
     void deleteAllByPostId(Long postId);
+    List<CommunityPostTagJpaEntity> findAllByTagOrderByPostIdAscTagOrderAsc(String tag);
     List<CommunityPostTagJpaEntity> findAllByTagContainingIgnoreCaseOrderByTagAsc(String tag);
 }

@@ -1,24 +1,21 @@
 package com.quertimizer.problem.adapter.in.web.response;
 
 import com.quertimizer.problem.application.output.ProblemDetailOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class ProblemDetailRes {
 
     private final String problemId;
     private final String title;
     private final String description;
-    private final String ddlPostgresql;
-    private final String ddlMysql;
-    private final String dataPostgresql;
-    private final String dataMysql;
+    private final String ddl;
+    private final String actualDataSql;
     private final String condition;
     private final String output;
-    private final String outputSample;
-    private final String sampleDataSql;
+    private final String dataExample;
+    private final String outputExample;
+    private final String schemaMetadata;
     private final String answerSql;
     private final String answerHash;
     private final String dbms;
@@ -26,9 +23,9 @@ public class ProblemDetailRes {
     public static ProblemDetailRes from(ProblemDetailOutput result) {
         return new ProblemDetailRes(
                 result.problemId(), result.title(), result.description(),
-                result.ddlPostgresql(), result.ddlMysql(), result.dataPostgresql(), result.dataMysql(),
-                result.condition(), result.output(), result.outputSample(), result.sampleDataSql(),
-                result.answerSql(), result.answerHash(), result.dbms()
+                result.ddl(), result.actualDataSql(), result.condition(),
+                result.output(), result.dataExample(), result.outputExample(),
+                result.schemaMetadata(), result.answerSql(), result.answerHash(), result.dbms()
         );
     }
 

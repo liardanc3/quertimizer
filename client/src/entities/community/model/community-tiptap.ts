@@ -1,4 +1,4 @@
-import { Node, mergeAttributes, type Editor, type JSONContent } from '@tiptap/core';
+import { Node, mergeAttributes, type Editor, type JSONContent, type NodeViewRenderer } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
@@ -24,6 +24,8 @@ export interface CommunityUploadedImage {
 
 const lowlight = createLowlight(common);
 const utf8Encoder = new TextEncoder();
+export const COMMUNITY_IMAGE_MIN_WIDTH = 120;
+export const COMMUNITY_IMAGE_MAX_WIDTH = 1200;
 
 export const COMMUNITY_EMPTY_DOC: JSONContent = {
   type: 'doc',
@@ -99,64 +101,80 @@ const DetailsContent = Node.create({
   },
 });
 
-const CommunityImage = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      imageId: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-image-id'),
-        renderHTML: (attributes) => (attributes.imageId ? { 'data-image-id': attributes.imageId } : {}),
-      },
-      class: {
-        default: 'community-content-image',
-        parseHTML: (element) => element.getAttribute('class') ?? 'community-content-image',
-        renderHTML: () => ({ class: 'community-content-image' }),
-      },
-    };
-  },
-});
+function createCommunityImageExtension(imageNodeView?: NodeViewRenderer) {
+  return Image.extend({
+    addAttributes() {
+      return {
+        ...this.parent?.(),
+        imageId: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-image-id'),
+          renderHTML: (attributes) => (attributes.imageId ? { 'data-image-id': attributes.imageId } : {}),
+        },
+        class: {
+          default: 'community-content-image',
+          parseHTML: (element) => element.getAttribute('class') ?? 'community-content-image',
+          renderHTML: () => ({ class: 'community-content-image' }),
+        },
+      };
+    },
+    ...(imageNodeView
+      ? {
+          addNodeView() {
+            return imageNodeView;
+          },
+        }
+      : {}),
+  });
+}
 
-export const communityTiptapExtensions = [
-  StarterKit.configure({
-    codeBlock: false,
-    link: {
-      autolink: true,
-      linkOnPaste: true,
-      openOnClick: false,
-    },
-    underline: false,
-  }),
-  Underline,
-  Highlight.configure({
-    multicolor: false,
-  }),
-  CodeBlockLowlight.configure({
-    lowlight,
-    defaultLanguage: 'sql',
-    HTMLAttributes: {
-      class: 'community-code-block',
-    },
-  }),
-  CommunityImage.configure({
-    allowBase64: false,
-    inline: false,
-  }),
-  TaskList.configure({
-    HTMLAttributes: {
-      class: 'community-task-list',
-    },
-  }),
-  TaskItem.configure({
-    nested: true,
-    HTMLAttributes: {
-      class: 'community-task-item',
-    },
-  }),
-  Details,
-  DetailsSummary,
-  DetailsContent,
-];
+export function createCommunityTiptapExtensions(imageNodeView?: NodeViewRenderer) {
+  return [
+    StarterKit.configure({
+      blockquote: false,
+      code: false,
+      codeBlock: false,
+      italic: false,
+      link: {
+        autolink: true,
+        linkOnPaste: true,
+        openOnClick: false,
+      },
+      underline: false,
+    }),
+    Underline,
+    Highlight.configure({
+      multicolor: false,
+    }),
+    CodeBlockLowlight.configure({
+      lowlight,
+      defaultLanguage: 'sql',
+      HTMLAttributes: {
+        class: 'community-code-block',
+      },
+    }),
+    createCommunityImageExtension(imageNodeView).configure({
+      allowBase64: false,
+      inline: false,
+    }),
+    TaskList.configure({
+      HTMLAttributes: {
+        class: 'community-task-list',
+      },
+    }),
+    TaskItem.configure({
+      nested: true,
+      HTMLAttributes: {
+        class: 'community-task-item',
+      },
+    }),
+    Details,
+    DetailsSummary,
+    DetailsContent,
+  ];
+}
+
+export const communityTiptapExtensions = createCommunityTiptapExtensions();
 
 export function parseCommunityContentJson(contentJson?: string | null): JSONContent {
   if (!contentJson?.trim()) {
@@ -165,7 +183,7 @@ export function parseCommunityContentJson(contentJson?: string | null): JSONCont
 
   try {
     const parsedContent = JSON.parse(contentJson) as JSONContent;
-    return parsedContent.type === 'doc' ? parsedContent : COMMUNITY_EMPTY_DOC;
+    return parsedContent.type === 'doc' ? stripItalicMarks(parsedContent) : COMMUNITY_EMPTY_DOC;
   } catch {
     return COMMUNITY_EMPTY_DOC;
   }
@@ -221,6 +239,14 @@ function createCommunityEditorSnapshotFromContent(content: JSONContent): Communi
     imageIds: extractCommunityImageIds(content),
     contentByteLength: utf8Encoder.encode(contentJson).length,
     empty: !hasMeaningfulCommunityContent(content),
+  };
+}
+
+function stripItalicMarks(content: JSONContent): JSONContent {
+  return {
+    ...content,
+    marks: content.marks?.filter((mark) => mark.type !== 'italic'),
+    content: content.content?.map(stripItalicMarks),
   };
 }
 

@@ -30,6 +30,7 @@ import com.quertimizer.community.adapter.in.web.response.CommunityPostPageRes;
 import com.quertimizer.community.adapter.in.web.response.CommunityReactionRes;
 import com.quertimizer.community.adapter.in.web.response.CommunityTagSuggestionRes;
 import com.quertimizer.community.adapter.in.web.support.CommunitySupport;
+import com.quertimizer.global.constant.GlobalFailReason;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.global.support.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -51,6 +52,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.util.List;
@@ -130,7 +132,7 @@ public class CommunityController {
     @PostMapping("/community/posts")
     public ResponseEntity<Void> createPost(@Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String currentHandle = communitySupport.requireCurrentHandle(authentication);
 
         CreateCommunityPostInput input = new CreateCommunityPostInput(currentHandle, request.toCommunityPostInput());
         Long createdPostId = createCommunityPost.execute(input);
@@ -141,17 +143,25 @@ public class CommunityController {
      * 커뮤니티 게시글 작성용 이미지를 업로드한다.
      *
      * <ol>
-     *   <li>이미지 업로드 응답 생성
+     *   <li>현재 사용자 handle 확인
+     *   <li>이미지 업로드
+     *   <li>절대 이미지 URL 응답 생성
      * </ol>
      *
      * @param file 업로드할 이미지 파일
+     * @param authentication 현재 요청의 인증 정보
      */
     @PostMapping("/community/images")
-    public ResponseEntity<CommunityImageUploadRes> uploadImage(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<CommunityImageUploadRes> uploadImage(@RequestParam("file") MultipartFile file,
+                                                               Authentication authentication) {
+        communitySupport.requireCurrentHandle(authentication);
+
         try {
-            return ResponseEntity.ok(CommunityImageUploadRes.from(
-                    uploadCommunityImage.execute(new CommunityImageUploadInput(file.getSize(), file.getBytes()))
-            ));
+            var output = uploadCommunityImage.execute(new CommunityImageUploadInput(file.getSize(), file.getBytes()));
+            String imageUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(output.getImageUrl())
+                    .toUriString();
+            return ResponseEntity.ok(CommunityImageUploadRes.from(output, imageUrl));
         } catch (IOException exception) {
             throw new BusinessException("이미지 업로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -188,14 +198,14 @@ public class CommunityController {
     public ResponseEntity<Void> updatePost(@PathVariable Long postId,
                                            @Valid @RequestBody CommunityPostSaveReq request,
                                            Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String currentHandle = communitySupport.requireCurrentHandle(authentication);
 
         UpdateCommunityPostInput input = new UpdateCommunityPostInput(postId, currentHandle, request.toCommunityPostInput());
         if (updateCommunityPost.execute(input).isPresent()) {
             return ResponseEntity.noContent().build();
         }
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        throw new BusinessException(GlobalFailReason.ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     /**
@@ -211,11 +221,13 @@ public class CommunityController {
      */
     @DeleteMapping("/community/posts/{postId}")
     public ResponseEntity<Void> deletePost(@PathVariable Long postId, Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String currentHandle = communitySupport.requireCurrentHandle(authentication);
 
-        return deleteCommunityPost.execute(new DeleteCommunityPostInput(postId, currentHandle))
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        if (deleteCommunityPost.execute(new DeleteCommunityPostInput(postId, currentHandle))) {
+            return ResponseEntity.noContent().build();
+        }
+
+        throw new BusinessException(GlobalFailReason.ACCESS_DENIED.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     /**
@@ -233,7 +245,7 @@ public class CommunityController {
     @PostMapping("/community/posts/{postId}/likes")
     public ResponseEntity<CommunityReactionRes> togglePostLike(@PathVariable Long postId,
                                                                Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String currentHandle = communitySupport.requireCurrentHandle(authentication);
 
         ToggleCommunityPostLikeInput input = new ToggleCommunityPostLikeInput(postId, currentHandle);
         return ResponseEntity.of(toggleCommunityPostLike.execute(input).map(CommunityReactionRes::from));
@@ -256,7 +268,7 @@ public class CommunityController {
     public ResponseEntity<CommunityCommentRes> addComment(@PathVariable Long postId,
                                                           @Valid @RequestBody CommunityCommentCreateReq request,
                                                           Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String currentHandle = communitySupport.requireCurrentHandle(authentication);
 
         AddCommunityCommentInput input = new AddCommunityCommentInput(postId, currentHandle, request.toCommunityCommentInput());
         return ResponseEntity.of(addCommunityComment.execute(input)
@@ -278,7 +290,7 @@ public class CommunityController {
     @PostMapping("/community/comments/{commentId}/likes")
     public ResponseEntity<CommunityReactionRes> toggleCommentLike(@PathVariable Long commentId,
                                                                   Authentication authentication) {
-        String currentHandle = communitySupport.resolveCurrentHandle(authentication);
+        String currentHandle = communitySupport.requireCurrentHandle(authentication);
 
         ToggleCommunityCommentLikeInput input = new ToggleCommunityCommentLikeInput(commentId, currentHandle);
         return ResponseEntity.of(toggleCommunityCommentLike.execute(input).map(CommunityReactionRes::from));

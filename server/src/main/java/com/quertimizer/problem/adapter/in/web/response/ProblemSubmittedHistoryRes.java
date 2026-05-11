@@ -1,11 +1,9 @@
 package com.quertimizer.problem.adapter.in.web.response;
 
 import com.quertimizer.problem.application.output.ProblemSubmittedHistoryOutput;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class ProblemSubmittedHistoryRes {
 
     private final String dbms;

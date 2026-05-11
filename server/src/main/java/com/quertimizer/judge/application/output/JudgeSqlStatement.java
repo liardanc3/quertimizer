@@ -9,7 +9,7 @@ public class JudgeSqlStatement {
 
     public JudgeSqlStatement(String sql, ExecutionMode mode) {
         this.sql = requireText(sql);
-        this.mode = Objects.requireNonNull(mode, "필수 값이 없다.");
+        this.mode = Objects.requireNonNull(mode, "필수 값이 없습니다.");
     }
 
     public String getSql() {
@@ -22,7 +22,7 @@ public class JudgeSqlStatement {
 
     private String requireText(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("필수 문자열이 비어 있다.");
+            throw new IllegalArgumentException("필수 문자열이 비어 있습니다.");
         }
 
         return value;

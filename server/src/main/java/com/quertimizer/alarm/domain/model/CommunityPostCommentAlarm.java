@@ -10,15 +10,15 @@ public class CommunityPostCommentAlarm implements AlarmSpec {
     String recipientHandle;
     String actorHandle;
     String postId;
-    String commentContent;
+    String postTitle;
     Long commentId;
 
     public CommunityPostCommentAlarm(String recipientHandle, String actorHandle,
-                                     String postId, String commentContent, Long commentId) {
+                                     String postId, String postTitle, Long commentId) {
         this.recipientHandle = recipientHandle;
         this.actorHandle = actorHandle;
         this.postId = postId;
-        this.commentContent = commentContent;
+        this.postTitle = postTitle;
         this.commentId = commentId;
     }
 
@@ -51,7 +51,7 @@ public class CommunityPostCommentAlarm implements AlarmSpec {
     public Map<String, AlarmBinding> bindings() {
         return Map.of(
                 "handle", AlarmBinding.of(actorHandle, "/profile/" + actorHandle),
-                "comment", AlarmBinding.of(commentContent, "/community/" + postId, "#community-comment-" + commentId)
+                "title", AlarmBinding.of(postTitle, "/community/" + postId, "#community-comment-" + commentId)
         );
     }
 

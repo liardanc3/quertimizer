@@ -19,10 +19,11 @@ public class Problem {
     private DbmsType dbmsType;
     private String condition;
     private String output;
-    private String sampleOutput;
+    private String dataExample;
+    private String outputExample;
+    private String schemaMetadata;
     private String answerHash;
     private String answerSql;
-    private String sampleDataSql;
 
     public static Problem create(String problemSetId) {
         // 문제 테이블셋 번호 기준 DBMS 유형을 가진 빈 문제 엔티티 생성
@@ -31,7 +32,7 @@ public class Problem {
         return new Problem(
                 "", normalizedProblemSetId,
                 "", "", "", dbmsType,
-                "", "", "", "", "", ""
+                "", "", "", "", "", "", ""
         );
     }
 
@@ -42,26 +43,9 @@ public class Problem {
                                  DbmsType dbmsType,
                                  String condition,
                                  String output,
-                                 String sampleDataSql,
-                                 String answerSql) {
-        // 문제 테이블셋과 요청 입력값을 가진 신규 문제 엔티티 생성
-        String normalizedProblemSetId = requireProblemSetId(problemSetId);
-        return new Problem(
-                "", normalizedProblemSetId,
-                title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, "", "", answerSql
-        );
-    }
-
-    public static Problem create(String problemSetId,
-                                 String title,
-                                 String description,
-                                 String ddl,
-                                 DbmsType dbmsType,
-                                 String condition,
-                                 String output,
-                                 String sampleDataSql,
-                                 String sampleOutput,
+                                 String dataExample,
+                                 String outputExample,
+                                 String schemaMetadata,
                                  String answerHash,
                                  String answerSql) {
         // 문제 테이블셋과 judge 산출물을 가진 신규 문제 엔티티 생성
@@ -69,13 +53,13 @@ public class Problem {
         return new Problem(
                 "", normalizedProblemSetId,
                 title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+                condition, output, dataExample, outputExample, schemaMetadata, answerHash, answerSql
         );
     }
 
     public static Problem create(String problemId, String title, String description, DbmsType dbmsType) {
         // 문제 생성
-        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "");
+        return new Problem(problemId, resolveProblemSetId(problemId), title, description, "", dbmsType, "", "", "", "", "", "", "");
     }
 
     public static Problem create(String problemId,
@@ -86,26 +70,28 @@ public class Problem {
                                  DbmsType dbmsType,
                                  String condition,
                                  String output,
-                                 String sampleDataSql,
-                                 String sampleOutput,
+                                 String dataExample,
+                                 String outputExample,
+                                 String schemaMetadata,
                                  String answerHash,
                                  String answerSql) {
         return new Problem(
                 problemId, problemSetId, title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+                condition, output, dataExample, outputExample, schemaMetadata, answerHash, answerSql
         );
     }
 
     public static Problem restore(Long id, String problemId, String problemSetId,
                                   String title, String description, String ddl,
                                   DbmsType dbmsType, String condition,
-                                  String output, String sampleDataSql,
-                                  String sampleOutput, String answerHash,
+                                  String output, String dataExample,
+                                  String outputExample, String schemaMetadata,
+                                  String answerHash,
                                   String answerSql) {
         // 저장된 문제 상태 복원
         Problem problem = new Problem(
                 problemId, problemSetId, title, description, ddl, dbmsType,
-                condition, output, sampleDataSql, sampleOutput, answerHash, answerSql
+                condition, output, dataExample, outputExample, schemaMetadata, answerHash, answerSql
         );
         problem.id = id;
         return problem;
@@ -117,7 +103,6 @@ public class Problem {
                               DbmsType dbmsType,
                               String condition,
                               String output,
-                              String sampleDataSql,
                               String answerSql) {
         // 요청 입력값으로 문제 기본 정보 전체 교체
         this.title = title;
@@ -126,7 +111,6 @@ public class Problem {
         this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
-        this.sampleDataSql = sampleDataSql;
         this.answerSql = answerSql;
         return this;
     }
@@ -137,8 +121,9 @@ public class Problem {
                               DbmsType dbmsType,
                               String condition,
                               String output,
-                              String sampleDataSql,
-                              String sampleOutput,
+                              String dataExample,
+                              String outputExample,
+                              String schemaMetadata,
                               String answerHash,
                               String answerSql) {
         // 요청 입력값과 judge 산출물로 문제 정보 전체 교체
@@ -148,8 +133,9 @@ public class Problem {
         this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
-        this.sampleDataSql = sampleDataSql;
-        this.sampleOutput = sampleOutput;
+        this.dataExample = dataExample;
+        this.outputExample = outputExample;
+        this.schemaMetadata = schemaMetadata;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
         return this;
@@ -170,16 +156,9 @@ public class Problem {
         return this;
     }
 
-    public Problem updateSampleOutput(String sampleOutput) {
-        // 문제 예시 출력 교체
-        this.sampleOutput = sampleOutput;
-        return this;
-    }
-
     public Problem validateSql() {
         // 문제 SQL 자료 유효성 검증
         validateText(ddl);
-        validateText(sampleDataSql);
         validateText(answerSql);
 
         return this;
@@ -191,8 +170,9 @@ public class Problem {
                               DbmsType dbmsType,
                               String condition,
                               String output,
-                              String sampleDataSql,
-                              String sampleOutput,
+                              String dataExample,
+                              String outputExample,
+                              String schemaMetadata,
                               String answerHash,
                               String answerSql) {
         // 요청 입력값과 judge 산출물로 문제 정보 전체 교체
@@ -202,15 +182,11 @@ public class Problem {
         this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
-        this.sampleDataSql = sampleDataSql;
-        this.sampleOutput = sampleOutput;
+        this.dataExample = dataExample;
+        this.outputExample = outputExample;
+        this.schemaMetadata = schemaMetadata;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
-    }
-
-    public String getOutputSample() {
-        // 기존 outputSample 접근 코드를 위한 호환 getter
-        return sampleOutput;
     }
 
     public String getAnswer() {
@@ -268,22 +244,6 @@ public class Problem {
         return problemSetId.trim();
     }
 
-    public void assignProblemId(Long id) {
-        // DB 생성 ID 기반 문제 번호 부여 대상 여부 검사
-        if (problemId != null && !problemId.isBlank()) {
-            return;
-        }
-
-        // 문제 테이블셋 번호와 DB 생성 ID 조합
-        this.id = id;
-        problemId = problemSetId + "-" + formatFiveDigits(id);
-    }
-
-    private static String formatFiveDigits(Long value) {
-        // 다섯 자리 문자열 포맷
-        return "%05d".formatted(value);
-    }
-
     private void validateText(String value) {
         // 문제 업데이트 필수 문자열 존재 여부 검사
         if (value == null || value.isBlank()) {
@@ -299,8 +259,9 @@ public class Problem {
                     DbmsType dbmsType,
                     String condition,
                     String output,
-                    String sampleDataSql,
-                    String sampleOutput,
+                    String dataExample,
+                    String outputExample,
+                    String schemaMetadata,
                     String answerHash,
                     String answerSql) {
         this.problemId = problemId;
@@ -311,8 +272,9 @@ public class Problem {
         this.dbmsType = dbmsType;
         this.condition = condition;
         this.output = output;
-        this.sampleDataSql = sampleDataSql;
-        this.sampleOutput = sampleOutput;
+        this.dataExample = dataExample;
+        this.outputExample = outputExample;
+        this.schemaMetadata = schemaMetadata;
         this.answerHash = answerHash;
         this.answerSql = answerSql;
     }
