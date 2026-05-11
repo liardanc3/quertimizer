@@ -1,0 +1,10 @@
+package com.quertimizer.monitoring.application.port.out;
+
+import com.quertimizer.monitoring.application.output.DockerContainerOutput;
+
+import java.util.List;
+
+public interface DockerContainerPort {
+
+    List<DockerContainerOutput> findJudgeContainers();
+}

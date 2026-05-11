@@ -1,0 +1,419 @@
+.admin-monitoring-panel {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.admin-monitoring-layout {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.95fr) minmax(0, 4.6fr);
+  gap: 1.18rem;
+  align-items: start;
+}
+
+.admin-monitoring-content,
+.monitoring-section-stack {
+  position: relative;
+  display: grid;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
+.monitoring-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.68rem;
+}
+
+.monitoring-metric-card {
+  display: grid;
+  gap: 0.32rem;
+  min-height: 6.15rem;
+  padding: 0.86rem 0.92rem;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.monitoring-metric-label {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.monitoring-metric-value {
+  color: #0f172a;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.18;
+}
+
+.monitoring-metric-detail {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.monitoring-meter {
+  display: block;
+  width: 100%;
+  height: 0.28rem;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.monitoring-meter span {
+  display: block;
+  height: 100%;
+  background: #2563eb;
+}
+
+.monitoring-inline-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.monitoring-toast {
+  justify-self: end;
+  padding: 0.48rem 0.72rem;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: #eff6ff;
+  color: #0f5db3;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.14);
+}
+
+.monitoring-initial-loading {
+  position: relative;
+  min-height: 18rem;
+}
+
+.monitoring-resource-body {
+  display: grid;
+  gap: 0.72rem;
+}
+
+.monitoring-runtime-table {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.monitoring-runtime-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(4.2rem, 0.56fr) minmax(0, 1.35fr) minmax(4.2rem, 0.5fr) 1.9rem;
+  grid-template-areas: "dbms container usage action";
+  gap: 0.42rem;
+  align-items: center;
+  min-height: 3.1rem;
+  padding: 0.48rem 0.68rem;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.monitoring-runtime-card.is-saving > :not(.monitoring-runtime-card-wave) {
+  filter: blur(1.2px);
+  opacity: 0.62;
+}
+
+.monitoring-runtime-card-wave {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.62);
+  pointer-events: none;
+}
+
+.monitoring-runtime-card-wave .wave-loading-placeholder {
+  width: min(12rem, 58%);
+  height: 0.58rem;
+}
+
+.monitoring-runtime-card-controls {
+  grid-area: action;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  position: relative;
+  justify-content: flex-end;
+}
+
+.monitoring-dbms-text {
+  grid-area: dbms;
+  min-width: 0;
+  color: #0f5db3;
+  font-size: 0.64rem;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.monitoring-dbms-text.is-mysql {
+  color: #946200;
+}
+
+.monitoring-runtime-container-name {
+  grid-area: container;
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 0.8rem;
+  font-weight: 760;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitoring-runtime-usage {
+  grid-area: usage;
+  color: #0f172a;
+  font-size: 1.04rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.monitoring-runtime-edit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.86rem;
+  height: 1.86rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+}
+
+.monitoring-runtime-edit-button:hover,
+.monitoring-runtime-edit-button:focus-visible {
+  color: #0f5db3;
+  outline: 0;
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.monitoring-runtime-edit-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.monitoring-config-popover {
+  position: absolute;
+  top: 2.28rem;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 0.62rem;
+  width: 12.4rem;
+  padding: 0.76rem;
+  border: 1px solid #d7e2ef;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+
+.monitoring-config-popover label {
+  display: grid;
+  gap: 0.32rem;
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.monitoring-config-popover input {
+  width: 100%;
+  height: 2rem;
+  padding: 0 0.52rem;
+  border: 1px solid #d7e2ef;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.monitoring-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.38rem;
+}
+
+.monitoring-config-actions button {
+  min-height: 1.8rem;
+  padding: 0 0.62rem;
+  border: 1px solid #d7e2ef;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.monitoring-config-actions button:last-child {
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.08);
+  color: #0f5db3;
+}
+
+.monitoring-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.68rem;
+  flex-wrap: wrap;
+}
+
+.monitoring-log-level-tabs {
+  width: auto;
+  justify-content: flex-start;
+  gap: 0.34rem;
+}
+
+.monitoring-log-date-input {
+  min-height: 2rem;
+  padding: 0.32rem 0.54rem;
+  border: 1px solid #d7e2ef;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.monitoring-log-initial-loading {
+  position: relative;
+  min-height: 28rem;
+}
+
+.monitoring-log-viewer {
+  min-height: 28rem;
+  max-height: 42rem;
+  margin: 0;
+  padding: 0.86rem;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  background: #08111f;
+  color: #dbeafe;
+  font-size: 0.68rem;
+  line-height: 1.65;
+  white-space: pre;
+}
+
+@media (prefers-color-scheme: dark) {
+  .monitoring-metric-card,
+  .monitoring-runtime-card {
+    border-color: var(--border-subtle);
+    background: var(--surface-panel);
+  }
+
+  .monitoring-metric-value,
+  .monitoring-runtime-container-name,
+  .monitoring-runtime-usage {
+    color: var(--ink-strong);
+  }
+
+  .monitoring-metric-label,
+  .monitoring-metric-detail,
+  .monitoring-config-popover label {
+    color: var(--ink-subtle);
+  }
+
+  .monitoring-meter {
+    background: rgba(148, 163, 184, 0.22);
+  }
+
+  .monitoring-config-popover,
+  .monitoring-config-popover input,
+  .monitoring-config-actions button,
+  .monitoring-log-date-input {
+    border-color: var(--border-subtle);
+    background: var(--surface-elevated);
+    color: var(--ink-strong);
+  }
+
+  .monitoring-config-actions button:last-child {
+    background: rgba(37, 99, 235, 0.16);
+  }
+
+  .monitoring-toast {
+    border-color: rgba(96, 165, 250, 0.24);
+    background: rgba(30, 64, 175, 0.22);
+    color: #bfdbfe;
+  }
+
+  .monitoring-runtime-card-wave {
+    background: rgba(15, 23, 42, 0.56);
+  }
+}
+
+@media (max-width: 1120px) {
+  .monitoring-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .monitoring-runtime-card-controls {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-monitoring-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .monitoring-runtime-table {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .monitoring-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.52rem;
+  }
+
+  .monitoring-metric-card {
+    min-height: 5.35rem;
+    padding: 0.72rem 0.68rem;
+  }
+
+  .monitoring-metric-value {
+    font-size: 0.88rem;
+  }
+
+  .monitoring-metric-detail {
+    font-size: 0.66rem;
+  }
+
+  .monitoring-runtime-card {
+    grid-template-columns: minmax(5.2rem, 0.8fr) minmax(0, 1fr) minmax(4.5rem, 0.55fr) 2rem;
+    grid-template-areas: "dbms container usage action";
+    gap: 0.38rem;
+    min-height: 3.1rem;
+    padding: 0.46rem 0.52rem;
+  }
+
+  .monitoring-config-popover {
+    right: -0.3rem;
+    width: min(12.4rem, calc(100vw - 2.4rem));
+  }
+}
