@@ -34,11 +34,11 @@ public class ProblemSearchService {
     private final ProblemSetRepositoryPort problemSetRepository;
     private final ProblemSolveHistoryRepositoryPort problemSolveHistoryRepository;
     private final ProblemSubmitHistoryRepositoryPort problemSubmitHistoryRepository;
+
     public ProblemPage findProblemPage(int requestedPage, String searchKeyword, DbmsType dbmsType,
                                        String solveState, String currentHandle,
                                        String solvedCountSort, String totalSubmitSort,
-                                       String successSubmitSort, String spreadRateSort,
-                                       Double spreadRateMin, Double spreadRateMax) {
+                                       String successSubmitSort) {
         // DB에서 문제와 제출 통계 원천 데이터 직접 조회
         Map<String, List<ProblemSolveHistory>> bestHistoriesByProblemId =
                 createBestSubmittedHistoriesByProblemId(problemSolveHistoryRepository.findAll());
@@ -53,18 +53,11 @@ public class ProblemSearchService {
                 .map(problem -> createProblemListEntry(problem, currentHandle, bestHistoriesByProblemId, submissionStatsByProblemId))
                 .filter(problemEntry -> matchesSearch(problemEntry, searchKeyword))
                 .filter(problemEntry -> matchesSolveState(problemEntry, solveState, currentHandle))
-                .toList();
-
-        // 비용 분산률 범위와 필터 적용
-        SpreadRateBounds spreadRateBounds = createSpreadRateBounds(searchableProblems);
-        SpreadRateFilter spreadRateFilter = createSpreadRateFilter(spreadRateMin, spreadRateMax);
-        List<ProblemListEntry> filteredProblems = searchableProblems.stream()
-                .filter(problemEntry -> matchesSpreadRate(problemEntry, spreadRateFilter))
-                .sorted(createProblemComparator(solvedCountSort, totalSubmitSort, successSubmitSort, spreadRateSort))
+                .sorted(createProblemComparator(solvedCountSort, totalSubmitSort, successSubmitSort))
                 .toList();
 
         // 페이지 경계 계산
-        int totalCount = filteredProblems.size();
+        int totalCount = searchableProblems.size();
         int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) ProblemPageConstant.PAGE_SIZE));
         int currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
         int fromIndex = Math.min((currentPage - 1) * ProblemPageConstant.PAGE_SIZE, totalCount);
@@ -72,9 +65,8 @@ public class ProblemSearchService {
 
         // 현재 페이지 데이터 반환
         return new ProblemPage(
-                currentPage, ProblemPageConstant.PAGE_SIZE, totalCount, totalPages,
-                spreadRateBounds.getMin(), spreadRateBounds.getMax(),
-                filteredProblems.subList(fromIndex, toIndex)
+                currentPage, ProblemPageConstant.PAGE_SIZE,
+                totalCount, totalPages, searchableProblems.subList(fromIndex, toIndex)
         );
     }
 
@@ -111,8 +103,7 @@ public class ProblemSearchService {
         // 문제 목록 항목 반환
         return new ProblemListEntry(
                 problem, submittedHistories, solvedUserCount, solvedByCurrentUser,
-                submissionStats.getTotalSubmitCount(), submissionStats.getSuccessSubmitCount(),
-                calculateSpreadRate(submittedHistories)
+                submissionStats.getTotalSubmitCount(), submissionStats.getSuccessSubmitCount()
         );
     }
 
@@ -151,29 +142,14 @@ public class ProblemSearchService {
         return true;
     }
 
-    private boolean matchesSpreadRate(ProblemListEntry problemEntry, SpreadRateFilter spreadRateFilter) {
-        // 비용 분산률 범위 일치 여부 반환
-        return problemEntry.getSpreadRate() >= spreadRateFilter.getMin()
-                && problemEntry.getSpreadRate() <= spreadRateFilter.getMax();
-    }
-
     private Comparator<ProblemListEntry> createProblemComparator(String solvedCountSort,
                                                                 String totalSubmitSort,
-                                                                String successSubmitSort,
-                                                                String spreadRateSort) {
+                                                                String successSubmitSort) {
         // 문제 번호 보조 정렬 기준 준비
         Comparator<ProblemListEntry> problemIdComparator =
                 Comparator.comparing(problemEntry -> problemEntry.getProblem().getProblemId());
 
         // 요청 정렬 조건별 comparator 반환
-        if ("asc".equalsIgnoreCase(spreadRateSort)) {
-            return Comparator.comparingDouble(ProblemListEntry::getSpreadRate).thenComparing(problemIdComparator);
-        }
-
-        if ("desc".equalsIgnoreCase(spreadRateSort)) {
-            return Comparator.comparingDouble(ProblemListEntry::getSpreadRate).reversed().thenComparing(problemIdComparator);
-        }
-
         if ("asc".equalsIgnoreCase(totalSubmitSort)) {
             return Comparator.comparingInt(ProblemListEntry::getTotalSubmitCount).thenComparing(problemIdComparator);
         }
@@ -195,56 +171,6 @@ public class ProblemSearchService {
         }
 
         return Comparator.comparingInt(ProblemListEntry::getSolvedUserCount).reversed().thenComparing(problemIdComparator);
-    }
-
-    private SpreadRateBounds createSpreadRateBounds(List<ProblemListEntry> problemEntries) {
-        // 문제 항목이 없으면 빈 범위 반환
-        if (problemEntries.isEmpty()) {
-            return new SpreadRateBounds(0d, 0d);
-        }
-
-        // 문제 항목의 비용 분산률 최소/최대 반환
-        return new SpreadRateBounds(
-                roundToOneDecimal(problemEntries.stream().mapToDouble(ProblemListEntry::getSpreadRate).min().orElse(0d)),
-                roundToOneDecimal(problemEntries.stream().mapToDouble(ProblemListEntry::getSpreadRate).max().orElse(0d))
-        );
-    }
-
-    private SpreadRateFilter createSpreadRateFilter(Double spreadRateMin, Double spreadRateMax) {
-        // 요청 비용 분산률 필터 기본값 구성
-        double min = spreadRateMin != null ? spreadRateMin : Double.NEGATIVE_INFINITY;
-        double max = spreadRateMax != null ? spreadRateMax : Double.POSITIVE_INFINITY;
-
-        // 입력 순서 보정 후 범위 반환
-        if (min <= max) {
-            return new SpreadRateFilter(min, max);
-        }
-
-        return new SpreadRateFilter(max, min);
-    }
-
-    private double calculateSpreadRate(List<ProblemSolveHistory> submittedHistories) {
-        // 제출 기록이 없으면 분산률 0 반환
-        if (submittedHistories.isEmpty()) {
-            return 0d;
-        }
-
-        // 최고 비용, 중앙값, 90 백분위 기준 분산률 계산
-        List<Double> costs = submittedHistories.stream()
-                .map(ProblemSolveHistory::getCost)
-                .sorted()
-                .toList();
-        double min = costs.get(0);
-        int size = costs.size();
-        double median = (costs.get((size - 1) / 2) + costs.get(size / 2)) / 2d;
-        double percentile90 = costs.get(Math.max(0, (int) Math.floor(size * 0.9d) - 1));
-
-        return roundToOneDecimal(((percentile90 - min) / Math.max(Math.abs(median), 1d)) * 100d);
-    }
-
-    private double roundToOneDecimal(double value) {
-        // 소수 첫째 자리 반올림 처리
-        return Math.round(value * 10d) / 10d;
     }
 
     private Map<String, List<ProblemSolveHistory>> createBestSubmittedHistoriesByProblemId(List<ProblemSolveHistory> histories) {
@@ -347,19 +273,5 @@ public class ProblemSearchService {
                     successSubmitCount + other.successSubmitCount
             );
         }
-    }
-
-    @Getter
-    @RequiredArgsConstructor
-    private static class SpreadRateBounds {
-        private final double min;
-        private final double max;
-    }
-
-    @Getter
-    @RequiredArgsConstructor
-    private static class SpreadRateFilter {
-        private final double min;
-        private final double max;
     }
 }

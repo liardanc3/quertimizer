@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.alarm.application.port.in.MarkAlarmReadUseCase;
 import com.quertimizer.alarm.application.input.MarkAlarmReadInput;
 import com.quertimizer.alarm.application.port.out.UserAlarmRepositoryPort;
@@ -26,6 +27,7 @@ public class MarkAlarmRead implements MarkAlarmReadUseCase {
      */
     @Transactional
     @Override
+    @Log("알람 읽음 처리")
     public boolean execute(MarkAlarmReadInput input) {
         return userAlarmRepository.findByAlarmIdAndHandle(input.getAlarmId(), input.getHandle())
                 .map(this::markReadIfUnread)

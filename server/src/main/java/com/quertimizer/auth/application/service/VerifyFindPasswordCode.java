@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.VerifyFindPasswordCodeUseCase;
 import com.quertimizer.auth.application.input.VerifyCodeInput;
 import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
@@ -34,6 +35,7 @@ public class VerifyFindPasswordCode implements VerifyFindPasswordCodeUseCase {
      */
     @Transactional
     @Override
+    @Log("비밀번호 찾기 코드 검증")
     public void execute(VerifyCodeInput input) {
         userRepository.findByEmailIgnoreCase(input.getEmail())
                 .orElseThrow(() -> new BusinessException(EMAIL_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));

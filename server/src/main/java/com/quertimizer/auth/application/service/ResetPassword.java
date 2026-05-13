@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.ResetPasswordUseCase;
 import com.quertimizer.auth.application.input.ResetPasswordInput;
 import com.quertimizer.global.exception.BusinessException;
@@ -35,6 +36,7 @@ public class ResetPassword implements ResetPasswordUseCase {
      */
     @Transactional
     @Override
+    @Log("비밀번호 재설정")
     public void execute(ResetPasswordInput input) {
         authRateLimitPolicy.recordPasswordReset(input.getEmail(), input.getClientIp());
         authService.validateVerifiedEmail(input.getEmail(), PASSWORD_RESET_VERIFICATION_REQUIRED.getMessage());

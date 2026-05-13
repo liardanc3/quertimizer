@@ -119,94 +119,25 @@ server:
   forward-headers-strategy: framework
 
 judge:
-  runtime:
-    provisioner: lvm-snapshot
-    lvm-snapshot:
-      mount-root: /mnt/sqljudge
-      volume-group: vg_sqljudge
-      thin-pool: pool
-      base-template-version: base
-      command-timeout-seconds: 60
-      startup-timeout-seconds: 30
-  databases:
-    - id: pg-worker-1
-      name: pg-worker-1
-      engine: postgresql
-      url: ${SQL_JUDGE_POSTGRESQL_WORKER_1_URL:}
-      username: ${SQL_JUDGE_POSTGRESQL_WORKER_1_USERNAME:}
-      password: ${SQL_JUDGE_POSTGRESQL_WORKER_1_PASSWORD:}
-      runner-container: judge-postgres-1
-      runtime-host: 127.0.0.1
-      runtime-port-start: 56000
-      runtime-port-end: 56004
-      runtime-database-name: postgres
-      enabled: true
-      max-concurrency: 5
-    - id: pg-worker-2
-      name: pg-worker-2
-      engine: postgresql
-      url: ${SQL_JUDGE_POSTGRESQL_WORKER_2_URL:}
-      username: ${SQL_JUDGE_POSTGRESQL_WORKER_2_USERNAME:}
-      password: ${SQL_JUDGE_POSTGRESQL_WORKER_2_PASSWORD:}
-      runner-container: judge-postgres-2
-      runtime-host: 127.0.0.1
-      runtime-port-start: 56005
-      runtime-port-end: 56009
-      runtime-database-name: postgres
-      enabled: true
-      max-concurrency: 5
-    - id: pg-worker-3
-      name: pg-worker-3
-      engine: postgresql
-      url: ${SQL_JUDGE_POSTGRESQL_WORKER_3_URL:}
-      username: ${SQL_JUDGE_POSTGRESQL_WORKER_3_USERNAME:}
-      password: ${SQL_JUDGE_POSTGRESQL_WORKER_3_PASSWORD:}
-      runner-container: judge-postgres-3
-      runtime-host: 127.0.0.1
-      runtime-port-start: 56010
-      runtime-port-end: 56014
-      runtime-database-name: postgres
-      enabled: true
-      max-concurrency: 5
-    - id: mysql-worker-1
-      name: mysql-worker-1
-      engine: mysql
-      url: ${SQL_JUDGE_MYSQL_WORKER_1_URL:}
-      username: ${SQL_JUDGE_MYSQL_WORKER_1_USERNAME:}
-      password: ${SQL_JUDGE_MYSQL_WORKER_1_PASSWORD:}
-      runner-container: judge-mysql-1
-      runtime-host: 127.0.0.1
-      runtime-port-start: 57000
-      runtime-port-end: 57004
-      runtime-database-name:
-      root-password: ${SQL_JUDGE_MYSQL_WORKER_1_ROOT_PASSWORD:${SQL_JUDGE_MYSQL_WORKER_1_PASSWORD:}}
-      enabled: true
-      max-concurrency: 5
-    - id: mysql-worker-2
-      name: mysql-worker-2
-      engine: mysql
-      url: ${SQL_JUDGE_MYSQL_WORKER_2_URL:}
-      username: ${SQL_JUDGE_MYSQL_WORKER_2_USERNAME:}
-      password: ${SQL_JUDGE_MYSQL_WORKER_2_PASSWORD:}
-      runner-container: judge-mysql-2
-      runtime-host: 127.0.0.1
-      runtime-port-start: 57005
-      runtime-port-end: 57009
-      runtime-database-name:
-      root-password: ${SQL_JUDGE_MYSQL_WORKER_2_ROOT_PASSWORD:${SQL_JUDGE_MYSQL_WORKER_2_PASSWORD:}}
-      enabled: true
-      max-concurrency: 5
-    - id: mysql-worker-3
-      name: mysql-worker-3
-      engine: mysql
-      url: ${SQL_JUDGE_MYSQL_WORKER_3_URL:}
-      username: ${SQL_JUDGE_MYSQL_WORKER_3_USERNAME:}
-      password: ${SQL_JUDGE_MYSQL_WORKER_3_PASSWORD:}
-      runner-container: judge-mysql-3
-      runtime-host: 127.0.0.1
-      runtime-port-start: 57010
-      runtime-port-end: 57014
-      runtime-database-name:
-      root-password: ${SQL_JUDGE_MYSQL_WORKER_3_ROOT_PASSWORD:${SQL_JUDGE_MYSQL_WORKER_3_PASSWORD:}}
-      enabled: true
-      max-concurrency: 5
+  secrets:
+    JUDGE_POSTGRESQL_NODE_1_URL: ${JUDGE_POSTGRESQL_NODE_1_URL:}
+    JUDGE_POSTGRESQL_NODE_1_USERNAME: ${JUDGE_POSTGRESQL_NODE_1_USERNAME:}
+    JUDGE_POSTGRESQL_NODE_1_PASSWORD: ${JUDGE_POSTGRESQL_NODE_1_PASSWORD:}
+    JUDGE_POSTGRESQL_NODE_2_URL: ${JUDGE_POSTGRESQL_NODE_2_URL:}
+    JUDGE_POSTGRESQL_NODE_2_USERNAME: ${JUDGE_POSTGRESQL_NODE_2_USERNAME:}
+    JUDGE_POSTGRESQL_NODE_2_PASSWORD: ${JUDGE_POSTGRESQL_NODE_2_PASSWORD:}
+    JUDGE_POSTGRESQL_NODE_3_URL: ${JUDGE_POSTGRESQL_NODE_3_URL:}
+    JUDGE_POSTGRESQL_NODE_3_USERNAME: ${JUDGE_POSTGRESQL_NODE_3_USERNAME:}
+    JUDGE_POSTGRESQL_NODE_3_PASSWORD: ${JUDGE_POSTGRESQL_NODE_3_PASSWORD:}
+    JUDGE_MYSQL_NODE_1_URL: ${JUDGE_MYSQL_NODE_1_URL:}
+    JUDGE_MYSQL_NODE_1_USERNAME: ${JUDGE_MYSQL_NODE_1_USERNAME:}
+    JUDGE_MYSQL_NODE_1_PASSWORD: ${JUDGE_MYSQL_NODE_1_PASSWORD:}
+    JUDGE_MYSQL_NODE_1_ROOT_PASSWORD: ${JUDGE_MYSQL_NODE_1_ROOT_PASSWORD:${JUDGE_MYSQL_NODE_1_PASSWORD:}}
+    JUDGE_MYSQL_NODE_2_URL: ${JUDGE_MYSQL_NODE_2_URL:}
+    JUDGE_MYSQL_NODE_2_USERNAME: ${JUDGE_MYSQL_NODE_2_USERNAME:}
+    JUDGE_MYSQL_NODE_2_PASSWORD: ${JUDGE_MYSQL_NODE_2_PASSWORD:}
+    JUDGE_MYSQL_NODE_2_ROOT_PASSWORD: ${JUDGE_MYSQL_NODE_2_ROOT_PASSWORD:${JUDGE_MYSQL_NODE_2_PASSWORD:}}
+    JUDGE_MYSQL_NODE_3_URL: ${JUDGE_MYSQL_NODE_3_URL:}
+    JUDGE_MYSQL_NODE_3_USERNAME: ${JUDGE_MYSQL_NODE_3_USERNAME:}
+    JUDGE_MYSQL_NODE_3_PASSWORD: ${JUDGE_MYSQL_NODE_3_PASSWORD:}
+    JUDGE_MYSQL_NODE_3_ROOT_PASSWORD: ${JUDGE_MYSQL_NODE_3_ROOT_PASSWORD:${JUDGE_MYSQL_NODE_3_PASSWORD:}}

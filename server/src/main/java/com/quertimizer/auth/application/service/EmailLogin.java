@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.EmailLoginUseCase;
 import com.quertimizer.auth.application.input.EmailLoginInput;
 import com.quertimizer.auth.application.output.AuthenticatedUserOutput;
@@ -34,6 +35,7 @@ public class EmailLogin implements EmailLoginUseCase {
      * @param input 이메일 로그인 입력
      */
     @Override
+    @Log("이메일 로그인")
     public AuthenticatedUserOutput execute(EmailLoginInput input) {
         authRateLimitPolicy.validateLoginAllowed(input.getEmail(), input.getAccessIp());
 

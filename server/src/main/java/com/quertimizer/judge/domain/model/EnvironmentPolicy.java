@@ -1,5 +1,8 @@
 package com.quertimizer.judge.domain.model;
 
+import lombok.Data;
+
+@Data
 public class EnvironmentPolicy {
 
     private final boolean initializeStatisticsAfterLoad;
@@ -14,17 +17,5 @@ public class EnvironmentPolicy {
 
     public static EnvironmentPolicy interactive() {
         return new EnvironmentPolicy(true, true, false);
-    }
-
-    public boolean isInitializeStatisticsAfterLoad() {
-        return initializeStatisticsAfterLoad;
-    }
-
-    public boolean isApplyBaseIndexes() {
-        return applyBaseIndexes;
-    }
-
-    public boolean isReusable() {
-        return reusable;
     }
 }

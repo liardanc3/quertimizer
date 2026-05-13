@@ -1,13 +1,13 @@
 package com.quertimizer.judge.domain.entity;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.judge.domain.entity.JudgeDatasetId;
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.List;
-import java.util.Objects;
 
-@Getter
+import static com.quertimizer.judge.domain.model.JudgeFailReason.REQUIRED_FIELD_BLANK;
+
+@Data
 public class DatasetDefinition {
 
     private final JudgeDatasetId datasetId;
@@ -21,16 +21,16 @@ public class DatasetDefinition {
                              String ddl,
                              String dataSql,
                              List<String> baseIndexDdls) {
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없습니다.");
+        this.datasetId = datasetId;
+        this.dbmsType = dbmsType;
         this.ddl = requireText(ddl, "ddl");
         this.dataSql = requireText(dataSql, "dataSql");
-        this.baseIndexDdls = List.copyOf(Objects.requireNonNull(baseIndexDdls, "필수 값이 없습니다."));
+        this.baseIndexDdls = List.copyOf(baseIndexDdls);
     }
 
     private String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있습니다.");
+            throw new IllegalArgumentException(REQUIRED_FIELD_BLANK.format(name));
         }
 
         return value;

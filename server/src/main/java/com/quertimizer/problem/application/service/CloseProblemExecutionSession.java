@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.port.in.CloseProblemExecutionSessionUseCase;
 import com.quertimizer.problem.application.port.out.ProblemJudgePort;
 import lombok.RequiredArgsConstructor;
@@ -25,17 +26,18 @@ public class CloseProblemExecutionSession implements CloseProblemExecutionSessio
      * @param executionSessionId 종료할 문제 실행 세션 ID
      */
     @Override
+    @Log("문제 실행 세션 종료")
     public void execute(String executionSessionId) {
         executionSessionStore.remove(executionSessionId)
                 .ifPresentOrElse(
                         session -> {
                             log.info(
-                                    "문제 SQL 실행 세션 정리 시작 executionSessionId={}, environmentId={}",
+                                    "SQL 실행 세션 정리 시작 executionSessionId={}, environmentId={}",
                                     executionSessionId, session.getEnvironmentId()
                             );
                             dropQuietly(executionSessionId, session.getEnvironmentId());
                         },
-                        () -> log.info("문제 SQL 실행 세션 정리 대상 없음 executionSessionId={}", executionSessionId)
+                        () -> log.info("SQL 실행 세션 정리 대상 없음 executionSessionId={}", executionSessionId)
                 );
     }
 
@@ -44,7 +46,7 @@ public class CloseProblemExecutionSession implements CloseProblemExecutionSessio
         try {
             problemJudgePort.dropEnvironment(environmentId);
             log.info(
-                    "문제 SQL 실행 환경 정리 완료 executionSessionId={}, environmentId={}",
+                    "SQL 실행 환경 정리 완료 executionSessionId={}, environmentId={}",
                     executionSessionId, environmentId
             );
         } catch (Exception exception) {

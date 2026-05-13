@@ -1,10 +1,10 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.GetUserProfileLikedPostsUseCase;
 import com.quertimizer.user.application.input.UserProfileAccessInput;
 import com.quertimizer.user.application.output.UserProfileCommunityPostsOutput;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.application.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +30,7 @@ public class GetUserProfileLikedPosts implements GetUserProfileLikedPostsUseCase
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("프로필 좋아요 게시글 조회")
     public Optional<UserProfileCommunityPostsOutput> execute(UserProfileAccessInput input) {
         return userRepository.findByHandle(input.getTargetHandle())
                 .map(user -> userProfileService.buildLikedPosts(user, input.getCurrentHandle()));

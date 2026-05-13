@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.ValidateAvailableHandleUseCase;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
@@ -19,6 +20,7 @@ public class ValidateAvailableHandle implements ValidateAvailableHandleUseCase {
      * @param handle 검증할 Handle
      */
     @Override
+    @Log("Handle 사용가능 검증")
     public void execute(String handle) {
         signupPolicy.validateAvailableHandle(handle, userRepository.existsByHandle(handle.trim()));
     }

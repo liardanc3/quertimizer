@@ -13,8 +13,8 @@ public class CommunityCommentLikeAlarm implements AlarmSpec {
     String commentContent;
     Long commentId;
 
-    public CommunityCommentLikeAlarm(String recipientHandle, String actorHandle,
-                                     String postId, String commentContent, Long commentId) {
+    public CommunityCommentLikeAlarm(String recipientHandle, String actorHandle, String postId,
+                                     String commentContent, Long commentId) {
         this.recipientHandle = recipientHandle;
         this.actorHandle = actorHandle;
         this.postId = postId;

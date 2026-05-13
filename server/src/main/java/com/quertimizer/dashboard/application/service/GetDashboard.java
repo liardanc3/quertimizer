@@ -7,10 +7,10 @@ import com.quertimizer.dashboard.application.output.DashboardProblemRecommendati
 import com.quertimizer.dashboard.application.port.out.DashboardCommunityPort;
 import com.quertimizer.dashboard.application.port.out.DashboardProblemPort;
 import com.quertimizer.dashboard.domain.model.DashboardCommunityPostCandidate;
-import com.quertimizer.dashboard.domain.model.DashboardDisplayConstant;
 import com.quertimizer.dashboard.domain.model.DashboardProblemCandidate;
 import com.quertimizer.dashboard.domain.policy.DashboardHotPostPolicy;
 import com.quertimizer.dashboard.domain.policy.DashboardProblemRecommendationPolicy;
+import com.quertimizer.global.log.Log;
 import com.quertimizer.judge.domain.model.DbmsType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,6 +25,8 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class GetDashboard implements GetDashboardUseCase {
+
+    private static final int COMMUNITY_POST_EXCERPT_LENGTH = 720;
 
     private final DashboardCommunityPort dashboardCommunityPort;
     private final DashboardProblemPort dashboardProblemPort;
@@ -44,6 +46,7 @@ public class GetDashboard implements GetDashboardUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("대시보드 데이터 조회")
     public DashboardOutput execute(String currentHandle) {
         List<DashboardCommunityPostOutput> hotPosts = getHotCommunityPosts();
         List<DashboardProblemRecommendationOutput> recommendedProblems = getRecommendedProblems(currentHandle);
@@ -108,7 +111,7 @@ public class GetDashboard implements GetDashboardUseCase {
                 problemEntry.getProblemId(), problemEntry.getTitle(),
                 problemEntry.getDbms(), problemEntry.getSolvedUserCount(),
                 problemEntry.getTotalSubmitCount(), problemEntry.getSuccessSubmitCount(),
-                problemEntry.getSpreadRate(), problemEntry.isSolvedByCurrentUser()
+                problemEntry.isSolvedByCurrentUser()
         );
     }
 
@@ -122,8 +125,8 @@ public class GetDashboard implements GetDashboardUseCase {
         }
 
         // 대시보드 표시 길이에 맞춰 요약문 반환
-        return normalizedContentText.length() > DashboardDisplayConstant.COMMUNITY_POST_EXCERPT_LENGTH
-                ? normalizedContentText.substring(0, DashboardDisplayConstant.COMMUNITY_POST_EXCERPT_LENGTH).trim() + "..."
+        return normalizedContentText.length() > COMMUNITY_POST_EXCERPT_LENGTH
+                ? normalizedContentText.substring(0, COMMUNITY_POST_EXCERPT_LENGTH).trim() + "..."
                 : normalizedContentText;
     }
 

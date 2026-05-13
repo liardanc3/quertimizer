@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.GetCommunityImageUseCase;
 import com.quertimizer.community.application.output.CommunityImageOutput;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class GetCommunityImage implements GetCommunityImageUseCase {
      * @param imageId 조회할 이미지 ID
      */
     @Override
+    @Log("커뮤니티 이미지 조회")
     public Optional<CommunityImageOutput> execute(String imageId) {
         if (!communityImageService.isSafeImageId(imageId)) {
             return Optional.empty();

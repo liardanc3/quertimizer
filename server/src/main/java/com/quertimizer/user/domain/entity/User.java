@@ -1,7 +1,7 @@
 package com.quertimizer.user.domain.entity;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 import lombok.Getter;
 
 import java.time.LocalDateTime;

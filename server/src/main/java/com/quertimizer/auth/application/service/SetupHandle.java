@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.SetupHandleUseCase;
 import com.quertimizer.auth.application.input.SetupHandleInput;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
@@ -38,6 +39,7 @@ public class SetupHandle implements SetupHandleUseCase {
     @Transactional
     @Lock(prefix = LockKey.SIGNUP, key = "#p0.authenticatedEmail", timeout = 500)
     @Override
+    @Log("Handle 설정")
     public void execute(SetupHandleInput input) {
         AuthUser user = authService.findUserByEmail(input.getAuthenticatedEmail())
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));

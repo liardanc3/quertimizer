@@ -1,21 +1,16 @@
 package com.quertimizer.judge.domain.entity;
 
+import lombok.Data;
+
 import java.util.Objects;
 
+@Data
 public class JudgeExecutionId {
 
     private final String value;
 
     public JudgeExecutionId(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("judge 실행 ID가 비어 있습니다.");
-        }
-
         this.value = value;
-    }
-
-    public String getValue() {
-        return value;
     }
 
     @Override

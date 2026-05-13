@@ -1,10 +1,10 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.port.in.GetProblemUseCase;
 import com.quertimizer.problem.application.output.ProblemDetailOutput;
 import com.quertimizer.problem.application.port.out.ProblemRepositoryPort;
 import com.quertimizer.problem.application.port.out.ProblemSetRepositoryPort;
-import com.quertimizer.problem.application.service.ProblemService;
 import com.quertimizer.problem.domain.entity.Problem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -30,6 +30,7 @@ public class GetProblem implements GetProblemUseCase {
      * @param problemId 조회할 문제 번호
      */
     @Override
+    @Log("문제 상세 조회")
     public Optional<ProblemDetailOutput> execute(String problemId) {
         Optional<Problem> problem = problemRepository.findByProblemId(problemId);
 

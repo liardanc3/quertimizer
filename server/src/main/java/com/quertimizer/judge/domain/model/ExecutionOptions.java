@@ -1,5 +1,10 @@
 package com.quertimizer.judge.domain.model;
 
+import lombok.Data;
+
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.POSITIVE_VALUE_REQUIRED;
+
+@Data
 public class ExecutionOptions {
 
     private final int timeoutSeconds;
@@ -17,15 +22,15 @@ public class ExecutionOptions {
                             boolean includeCost, boolean includePlan,
                             boolean validateSql) {
         if (timeoutSeconds <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
+            throw new IllegalArgumentException(POSITIVE_VALUE_REQUIRED.getMessage());
         }
 
         if (page <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
+            throw new IllegalArgumentException(POSITIVE_VALUE_REQUIRED.getMessage());
         }
 
         if (pageSize <= 0) {
-            throw new IllegalArgumentException("값은 0보다 커야 합니다.");
+            throw new IllegalArgumentException(POSITIVE_VALUE_REQUIRED.getMessage());
         }
 
         this.timeoutSeconds = timeoutSeconds;
@@ -50,29 +55,5 @@ public class ExecutionOptions {
 
     public static ExecutionOptions internalMetadata(int pageSize) {
         return new ExecutionOptions(60, 1, pageSize, false, false, false);
-    }
-
-    public int getTimeoutSeconds() {
-        return timeoutSeconds;
-    }
-
-    public int getPage() {
-        return page;
-    }
-
-    public int getPageSize() {
-        return pageSize;
-    }
-
-    public boolean isIncludeCost() {
-        return includeCost;
-    }
-
-    public boolean isIncludePlan() {
-        return includePlan;
-    }
-
-    public boolean isValidateSql() {
-        return validateSql;
     }
 }

@@ -1,6 +1,6 @@
 package com.quertimizer.global.config;
 
-import com.quertimizer.global.realtime.interceptor.SessionHandshakeInterceptor;
+import com.quertimizer.global.websocket.interceptor.SessionHandshakeInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
@@ -19,16 +19,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private static final String[] ALLOWED_ORIGIN_PATTERNS = {
-            "http://localhost:*", "http://127.0.0.1:*",
-            "https://quertimizer.com", "https://www.quertimizer.com"
-    };
-
     private final SessionHandshakeInterceptor sessionHandshakeInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // STOMP application destination과 사용자별 응답 queue 구성
+        // WebSocket application destination과 사용자별 응답 queue 구성
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
         registry.enableSimpleBroker("/queue");
@@ -36,15 +31,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // 기존 세션 WebSocket endpoint를 STOMP endpoint로 등록
+        // 세션 WebSocket endpoint 등록
         registry.addEndpoint("/ws/session")
                 .addInterceptors(sessionHandshakeInterceptor)
                 .setHandshakeHandler(sessionPrincipalHandshakeHandler())
-                .setAllowedOriginPatterns(ALLOWED_ORIGIN_PATTERNS);
+                .setAllowedOriginPatterns(AllowedOriginPatterns.ARRAY);
     }
 
     private DefaultHandshakeHandler sessionPrincipalHandshakeHandler() {
-        // WebSocket session attribute의 handle을 STOMP Principal로 연결
+        // WebSocket session attribute의 handle을 WebSocket Principal로 연결
         return new DefaultHandshakeHandler() {
 
             @Override

@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import static com.quertimizer.auth.domain.model.AccountRecoveryFailReason.EXPIRED_VERIFICATION_CODE;
 import static com.quertimizer.auth.domain.model.AccountRecoveryFailReason.INVALID_VERIFICATION_CODE;
+import static com.quertimizer.auth.domain.model.AuthFailReason.VERIFICATION_FAILURE_LIMIT_EXCEEDED;
 import static com.quertimizer.auth.domain.model.LoginFailReason.INVALID_EMAIL_OR_PASSWORD;
 import static com.quertimizer.auth.domain.model.SignupFailReason.SIGNUP_VERIFICATION_REQUIRED;
 
@@ -86,7 +87,7 @@ public class AuthService {
         if (savedCode == null || expiredAt == null || !savedCode.equals(code)) {
             if (authRateLimitPolicy.recordCodeVerificationFailure(purpose, email, clientIp)) {
                 clearVerificationCode(email);
-                throw new BusinessException("인증코드 실패 횟수를 초과했습니다. 인증코드를 다시 요청해 주세요.", HttpStatus.TOO_MANY_REQUESTS);
+                throw new BusinessException(VERIFICATION_FAILURE_LIMIT_EXCEEDED.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
             }
             throw new BusinessException(INVALID_VERIFICATION_CODE.getMessage(), HttpStatus.BAD_REQUEST);
         }

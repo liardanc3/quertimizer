@@ -1,10 +1,10 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.UpdateUserProfileUseCase;
 import com.quertimizer.user.application.input.UserProfileUpdateCommandInput;
 import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.application.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +30,7 @@ public class UpdateUserProfile implements UpdateUserProfileUseCase {
      */
     @Transactional
     @Override
+    @Log("프로필 수정")
     public Optional<UserProfileSummaryOutput> execute(UserProfileUpdateCommandInput input) {
         return userRepository.findByHandle(input.getHandle())
                 .map(user -> userProfileService.updateProfile(user, input.getProfile()));

@@ -1,9 +1,11 @@
 package com.quertimizer.problem.domain.policy;
 
 import com.quertimizer.problem.domain.entity.ProblemSolveHistory;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+@Component
 public class ProblemSolveHistoryPolicy {
     public boolean isBetterThanCurrent(ProblemSolveHistory currentHistory,
                                        double candidateCost,

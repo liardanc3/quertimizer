@@ -21,22 +21,15 @@ public class UserAlarm {
 
     public static UserAlarm create(AlarmSpec alarmSpec, String bindingsJson) {
         return new UserAlarm(
-                alarmSpec.recipientHandle(),
-                alarmSpec.alarmType(),
-                alarmSpec.title(),
-                alarmSpec.message(),
-                alarmSpec.target().path(),
-                alarmSpec.target().hash(),
-                bindingsJson,
-                false,
-                LocalDateTime.now()
+                alarmSpec.recipientHandle(), alarmSpec.alarmType(),
+                alarmSpec.title(), alarmSpec.message(),
+                alarmSpec.target().path(), alarmSpec.target().hash(),
+                bindingsJson, false, LocalDateTime.now()
         );
     }
 
-    public static UserAlarm restore(Long alarmId, String handle,
-                                    String alarmType, String title,
-                                    String message, String targetPath,
-                                    String targetHash, String bindingsJson,
+    public static UserAlarm restore(Long alarmId, String handle, String alarmType, String title,
+                                    String message, String targetPath, String targetHash, String bindingsJson,
                                     boolean read, LocalDateTime createdAt) {
         // 저장된 사용자 알람 상태 복원
         UserAlarm userAlarm = new UserAlarm(
@@ -51,15 +44,9 @@ public class UserAlarm {
         this.read = true;
     }
 
-    private UserAlarm(String handle,
-                      String alarmType,
-                      String title,
-                      String message,
-                      String targetPath,
-                      String targetHash,
-                      String bindingsJson,
-                      boolean read,
-                      LocalDateTime createdAt) {
+    private UserAlarm(String handle, String alarmType, String title, String message,
+                      String targetPath, String targetHash, String bindingsJson,
+                      boolean read, LocalDateTime createdAt) {
         this.handle = handle;
         this.alarmType = alarmType;
         this.title = title;

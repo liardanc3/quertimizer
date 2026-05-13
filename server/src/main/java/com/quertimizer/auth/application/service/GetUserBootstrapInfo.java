@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.GetUserBootstrapInfoUseCase;
 import com.quertimizer.auth.application.output.UserBootstrapOutput;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
@@ -24,6 +25,7 @@ public class GetUserBootstrapInfo implements GetUserBootstrapInfoUseCase {
      * @param email 부트스트랩 정보를 조회할 인증 이메일
      */
     @Override
+    @Log("사용자 부트스트랩 조회")
     public UserBootstrapOutput execute(String email) {
         if (email == null || email.isBlank()) {
             return UserBootstrapOutput.unauthenticated();

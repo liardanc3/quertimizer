@@ -2,7 +2,7 @@ package com.quertimizer.problem.application.port.out;
 
 import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.problem.application.output.ProblemJudgeExecutionResult;
-import com.quertimizer.problem.application.output.ProblemJudgeSqlStatement;
+import com.quertimizer.problem.application.output.ProblemSqlStatement;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -44,13 +44,9 @@ public interface ProblemJudgePort {
 
     ProblemJudgeExecutionResult analyzeOfficialEnvironment(String executionId, String environmentId);
 
-    ProblemJudgeExecutionResult executeIsolatedOfficialSql(String executionId, String datasetId, String sql);
-
-    ProblemJudgeExecutionResult executeIsolatedSubmissionAnswerSql(String executionId, String datasetId, String sql);
-
     void dropEnvironment(String environmentId);
 
     void cancelExecution(String executionId);
 
-    List<ProblemJudgeSqlStatement> parseStatements(String sql);
+    List<ProblemSqlStatement> parseStatements(String sql);
 }

@@ -1,11 +1,11 @@
 package com.quertimizer.ui.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.ui.application.port.in.GetAdminUiTextsUseCase;
 import com.quertimizer.ui.application.input.AdminUiTextSearchInput;
 import com.quertimizer.ui.application.output.UiTextPageOutput;
 import com.quertimizer.ui.application.output.UiTextOutput;
 import com.quertimizer.ui.application.port.out.UiTextRepositoryPort;
-import com.quertimizer.ui.application.service.UiTextService;
 import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.model.UiTextKey;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +29,7 @@ public class GetAdminUiTexts implements GetAdminUiTextsUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("관리자 UI 텍스트 조회")
     public UiTextPageOutput execute(AdminUiTextSearchInput input) {
         int pageSize = uiTextService.resolveAdminUiTextPageSize(input.getPageSize());
         String normalizedQuery = uiTextService.normalizeSearchQuery(input.getQuery());

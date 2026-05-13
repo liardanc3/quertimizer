@@ -1,5 +1,6 @@
 package com.quertimizer.favorite.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.favorite.application.port.in.ReplaceFavoriteTabsUseCase;
 import com.quertimizer.favorite.application.input.FavoriteTabInput;
 import com.quertimizer.favorite.application.input.FavoriteTabsReplaceInput;
@@ -34,6 +35,7 @@ public class ReplaceFavoriteTabs implements ReplaceFavoriteTabsUseCase {
      */
     @Transactional
     @Override
+    @Log("즐겨찾기 탭 교체")
     public FavoriteTabsOutput execute(FavoriteTabsReplaceInput input) {
         favoriteTabRepository.deleteByUserEmail(input.getUserEmail());
 

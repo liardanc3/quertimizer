@@ -39,7 +39,7 @@ public class JudgeProblemSetDatasetEntity {
     private DbmsType dbmsType;
 
     public DatasetDefinition toDefinition(List<String> baseIndexDdls) {
-        // 문제셋 데이터셋 원본을 judge 도메인 정의로 복원
+        // 문제셋 데이터셋 원본을 도메인 정의로 복원
         return new DatasetDefinition(new JudgeDatasetId(datasetId), dbmsType, ddl, dataSql, baseIndexDdls);
     }
 }

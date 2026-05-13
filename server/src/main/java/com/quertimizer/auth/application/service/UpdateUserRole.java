@@ -1,9 +1,10 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.UpdateUserRoleUseCase;
 import com.quertimizer.auth.application.input.UpdateUserRoleInput;
 import com.quertimizer.auth.domain.policy.AuthManagePolicy;
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
 import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class UpdateUserRole implements UpdateUserRoleUseCase {
      */
     @Transactional
     @Override
+    @Log("사용자 권한 수정")
     public void execute(UpdateUserRoleInput input) {
         AuthUser user = authManageService.findUser(input.getHandle());
         UserRole nextRole = authManageService.normalizeRole(input.getRole());

@@ -1,6 +1,6 @@
 package com.quertimizer.user.adapter.out.persistence;
 
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 import com.quertimizer.judge.domain.model.DbmsType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -13,7 +13,4 @@ public class ProblemSearchInput {
     private final String solvedCountSort;
     private final String totalSubmitSort;
     private final String successSubmitSort;
-    private final String spreadRateSort;
-    private final Double spreadRateMin;
-    private final Double spreadRateMax;
 }

@@ -2,12 +2,14 @@ package com.quertimizer.auth.domain.policy;
 
 import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.exception.DomainRuleViolationType;
+import org.springframework.stereotype.Component;
 
 import java.util.Locale;
 
 import static com.quertimizer.auth.domain.model.SignupFailReason.DUPLICATED_EMAIL;
 import static com.quertimizer.auth.domain.model.SignupFailReason.DUPLICATED_HANDLE;
 
+@Component
 public class SignupPolicy {
 
     public void validateAvailableHandle(String handle, boolean handleExists) {

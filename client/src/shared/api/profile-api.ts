@@ -7,15 +7,6 @@ interface UserProfileLinkResponse {
   value?: string;
 }
 
-interface UserProfileSolvedRecordResponse {
-  problemId?: string;
-  problemTitle?: string;
-  dbms?: string;
-  executionTimeMs?: number;
-  cost?: number;
-  submittedAt?: string;
-}
-
 interface UserProfileSummaryResponse {
   handle?: string;
   bio?: string;
@@ -41,10 +32,6 @@ interface UserProfileSolvedProblemsResponse {
   solvedProblemIds?: string[];
 }
 
-interface UserProfileSolvedRecordsResponse {
-  solvedRecords?: UserProfileSolvedRecordResponse[];
-}
-
 interface UserProfileSubmissionActivityResponse {
   date?: string;
   count?: number;
@@ -60,15 +47,6 @@ const profileGetRequestPromises = new Map<string, Promise<unknown>>();
 export interface UserProfileLink {
   type: string;
   value: string;
-}
-
-export interface UserProfileSolvedRecord {
-  problemId: string;
-  problemTitle: string;
-  dbms: DbmsType;
-  executionTimeMs: number;
-  cost: number;
-  submittedAt: string;
 }
 
 export interface UserProfileSummary {
@@ -94,10 +72,6 @@ export interface UserProfileSummary {
 export interface UserProfileSolvedProblems {
   solvedProblemCount: number;
   solvedProblemIds: string[];
-}
-
-export interface UserProfileSolvedRecords {
-  solvedRecords: UserProfileSolvedRecord[];
 }
 
 export interface UserProfileSubmissionActivity {
@@ -153,30 +127,6 @@ function normalizeLinks(links?: UserProfileLinkResponse[]) {
     }));
 }
 
-function normalizeSolvedRecords(records?: UserProfileSolvedRecordResponse[]) {
-  if (!Array.isArray(records)) {
-    return [];
-  }
-
-  return records
-    .filter(
-      (record): record is Required<UserProfileSolvedRecordResponse> =>
-        typeof record.problemId === 'string' &&
-        typeof record.problemTitle === 'string' &&
-        typeof record.executionTimeMs === 'number' &&
-        typeof record.cost === 'number' &&
-        typeof record.submittedAt === 'string',
-    )
-    .map((record) => ({
-      problemId: record.problemId,
-      problemTitle: record.problemTitle,
-      dbms: toDbmsType(record.dbms),
-      executionTimeMs: record.executionTimeMs,
-      cost: record.cost,
-      submittedAt: record.submittedAt,
-    }));
-}
-
 function normalizeProfileSummary(data: UserProfileSummaryResponse): UserProfileSummary {
   if (typeof data.handle !== 'string') {
     throw new Error();
@@ -217,12 +167,6 @@ function normalizeSolvedProblems(data: UserProfileSolvedProblemsResponse): UserP
   return {
     solvedProblemCount: typeof data.solvedProblemCount === 'number' ? data.solvedProblemCount : 0,
     solvedProblemIds: Array.isArray(data.solvedProblemIds) ? data.solvedProblemIds.filter((problemId): problemId is string => typeof problemId === 'string') : [],
-  };
-}
-
-function normalizeSolvedRecordsResponse(data: UserProfileSolvedRecordsResponse): UserProfileSolvedRecords {
-  return {
-    solvedRecords: normalizeSolvedRecords(data.solvedRecords),
   };
 }
 
@@ -312,32 +256,12 @@ function createUpdateUserProfileRequestBody(payload: UpdateUserProfilePayload): 
   };
 }
 
-export async function fetchMyProfileSummary() {
-  return requestProfile('/profile/me', (data) => normalizeProfileSummary(data as UserProfileSummaryResponse));
-}
-
 export async function fetchProfileSummary(handle: string) {
   return requestProfile(`/profiles/${encodeURIComponent(handle)}`, (data) => normalizeProfileSummary(data as UserProfileSummaryResponse));
 }
 
-export async function fetchMySolvedProblems() {
-  return requestProfile('/profile/me/solved-problems', (data) => normalizeSolvedProblems(data as UserProfileSolvedProblemsResponse));
-}
-
 export async function fetchSolvedProblems(handle: string) {
   return requestProfile(`/profiles/${encodeURIComponent(handle)}/solved-problems`, (data) => normalizeSolvedProblems(data as UserProfileSolvedProblemsResponse));
-}
-
-export async function fetchMySolvedRecords() {
-  return requestProfile('/profile/me/solved-records', (data) => normalizeSolvedRecordsResponse(data as UserProfileSolvedRecordsResponse));
-}
-
-export async function fetchSolvedRecords(handle: string) {
-  return requestProfile(`/profiles/${encodeURIComponent(handle)}/solved-records`, (data) => normalizeSolvedRecordsResponse(data as UserProfileSolvedRecordsResponse));
-}
-
-export async function fetchMySubmissionSummary() {
-  return requestProfile('/profile/me/submission-summary', (data) => normalizeSubmissionSummary(data as UserProfileSubmissionSummaryResponse));
 }
 
 export async function fetchSubmissionSummary(handle: string) {

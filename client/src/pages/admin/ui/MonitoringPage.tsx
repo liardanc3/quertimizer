@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LoadingOverlay, PageLoadFailureState } from '@/shared/ui';
 import {
-  normalizeDbRuntimeData,
+  normalizeDatabaseStatusData,
   normalizeServerLogData,
   normalizeSystemResourceData,
-  updateJudgeConfig,
-  type DbRuntimeData,
-  type JudgeConfigData,
+  updateDatabaseNodeConfig,
+  type DatabaseStatusData,
+  type DatabaseNodeConfigData,
   type ServerLogData,
   type SystemResourceData,
 } from '@/shared/api/monitoring-api';
@@ -33,7 +33,7 @@ const emptySystemResource: SystemResourceData = {
   usedDiskBytes: 0,
   uptimeSeconds: 0,
 };
-const emptyDbRuntime: DbRuntimeData = {
+const emptyDatabaseStatus: DatabaseStatusData = {
   totalWaitingCount: 0,
   totalRunningCount: 0,
   queues: [],
@@ -115,11 +115,11 @@ export function MonitoringContent() {
   );
   const [activeSection, setActiveSection] = useState<MonitoringSection>('resources');
   const [systemResource, setSystemResource] = useState<SystemResourceData>(emptySystemResource);
-  const [dbRuntime, setDbRuntime] = useState<DbRuntimeData>(emptyDbRuntime);
+  const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatusData>(emptyDatabaseStatus);
   const [resourceError, setResourceError] = useState<string | null>(null);
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [databaseStatusError, setDatabaseStatusError] = useState<string | null>(null);
   const [isResourceLoading, setIsResourceLoading] = useState(true);
-  const [isRuntimeLoading, setIsRuntimeLoading] = useState(true);
+  const [isDatabaseStatusLoading, setIsDatabaseStatusLoading] = useState(true);
   const [savingDatabaseId, setSavingDatabaseId] = useState<string | null>(null);
   const [editingDatabaseId, setEditingDatabaseId] = useState<string | null>(null);
   const [draftMaxConcurrency, setDraftMaxConcurrency] = useState(1);
@@ -147,16 +147,16 @@ export function MonitoringContent() {
         return;
       }
 
-      if (message.type === 'monitoring.db-runtime.result') {
-        setDbRuntime(normalizeDbRuntimeData(message.runtime));
-        setRuntimeError(null);
-        setIsRuntimeLoading(false);
+      if (message.type === 'monitoring.database-status.result') {
+        setDatabaseStatus(normalizeDatabaseStatusData(message.status));
+        setDatabaseStatusError(null);
+        setIsDatabaseStatusLoading(false);
         return;
       }
 
-      if (message.type === 'monitoring.db-runtime.error') {
-        setRuntimeError(resolveSocketErrorMessage(message, text('MONITORING_RUNTIME_LOAD_FAIL_MESSAGE', 'DB Runtime 상태를 불러오지 못했습니다.')));
-        setIsRuntimeLoading(false);
+      if (message.type === 'monitoring.database-status.error') {
+        setDatabaseStatusError(resolveSocketErrorMessage(message, text('MONITORING_DATABASE_STATUS_LOAD_FAIL_MESSAGE', 'DB 상태를 불러오지 못했습니다.')));
+        setIsDatabaseStatusLoading(false);
         return;
       }
 
@@ -215,21 +215,21 @@ export function MonitoringContent() {
   useEffect(() => {
     let cancelled = false;
 
-    async function requestRuntime() {
-      setRuntimeError(null);
+    async function requestDatabaseStatus() {
+      setDatabaseStatusError(null);
       try {
-        await sendSessionSocketMessage(SESSION_SOCKET_DESTINATION.monitoringDbRuntime);
+        await sendSessionSocketMessage(SESSION_SOCKET_DESTINATION.monitoringDatabaseStatus);
       } catch (error) {
         if (!cancelled) {
-          setRuntimeError(error instanceof Error ? error.message : text('MONITORING_RUNTIME_LOAD_FAIL_MESSAGE', 'DB Runtime 상태를 불러오지 못했습니다.'));
-          setIsRuntimeLoading(false);
+          setDatabaseStatusError(error instanceof Error ? error.message : text('MONITORING_DATABASE_STATUS_LOAD_FAIL_MESSAGE', 'DB 상태를 불러오지 못했습니다.'));
+          setIsDatabaseStatusLoading(false);
         }
       }
     }
 
-    void requestRuntime();
+    void requestDatabaseStatus();
     const timer = window.setInterval(() => {
-      void requestRuntime();
+      void requestDatabaseStatus();
     }, 5000);
     return () => {
       cancelled = true;
@@ -278,15 +278,15 @@ export function MonitoringContent() {
     return () => window.cancelAnimationFrame(animationFrame);
   }, [activeSection, serverLog.lines, shouldScrollLogToBottom]);
 
-  async function handleConfigSave(config: JudgeConfigData, nextMaxConcurrency: number, nextEnabled: boolean) {
+  async function handleConfigSave(config: DatabaseNodeConfigData, nextMaxConcurrency: number, nextEnabled: boolean) {
     setSavingDatabaseId(config.databaseId);
 
     try {
-      const savedConfig = await updateJudgeConfig(config.databaseId, {
+      const savedConfig = await updateDatabaseNodeConfig(config.databaseId, {
         enabled: nextEnabled,
         maxConcurrency: nextMaxConcurrency,
       });
-      setDbRuntime((current) => ({
+      setDatabaseStatus((current) => ({
         ...current,
         configs: current.configs.map((item) => (item.databaseId === savedConfig.databaseId ? savedConfig : item)),
       }));
@@ -310,7 +310,7 @@ export function MonitoringContent() {
     setDraftMaxConcurrency(currentMaxConcurrency);
   }
 
-  async function saveConfigEditor(config: JudgeConfigData, currentEnabled: boolean) {
+  async function saveConfigEditor(config: DatabaseNodeConfigData, currentEnabled: boolean) {
     await handleConfigSave(config, Math.max(1, draftMaxConcurrency), currentEnabled);
     setEditingDatabaseId(null);
   }
@@ -318,7 +318,7 @@ export function MonitoringContent() {
   function renderResourceSection() {
     const memoryRatio = usageRatio(systemResource.usedMemoryBytes, systemResource.totalMemoryBytes);
     const diskRatio = usageRatio(systemResource.usedDiskBytes, systemResource.totalDiskBytes);
-    const isInitialMonitoringLoading = isResourceLoading || isRuntimeLoading;
+    const isInitialMonitoringLoading = isResourceLoading || isDatabaseStatusLoading;
     if (isInitialMonitoringLoading) {
       return (
         <div className="monitoring-initial-loading">
@@ -335,7 +335,7 @@ export function MonitoringContent() {
           </div>
         ) : null}
         {resourceError ? <p className="monitoring-inline-error">{resourceError}</p> : null}
-        {runtimeError ? <p className="monitoring-inline-error">{runtimeError}</p> : null}
+        {databaseStatusError ? <p className="monitoring-inline-error">{databaseStatusError}</p> : null}
 
         <div className="monitoring-resource-body">
           <div className="monitoring-metric-grid">
@@ -343,15 +343,15 @@ export function MonitoringContent() {
             <MetricCard label="Memory" value={`${formatBytes(systemResource.usedMemoryBytes)} / ${formatBytes(systemResource.totalMemoryBytes)}`} detail={formatPercent(memoryRatio)} ratio={memoryRatio} />
             <MetricCard label="Disk" value={`${formatBytes(systemResource.usedDiskBytes)} / ${formatBytes(systemResource.totalDiskBytes)}`} detail={formatPercent(diskRatio)} ratio={diskRatio} />
             <MetricCard label="Load / Uptime" value={systemResource.systemLoadAverage.toFixed(2)} detail={formatDuration(systemResource.uptimeSeconds)} />
-            <MetricCard label="Queue" value={`${dbRuntime.totalWaitingCount}`} detail="대기 작업" />
-            <MetricCard label="Running" value={`${dbRuntime.totalRunningCount}`} detail="실행 중" />
-            <MetricCard label="Containers" value={`${dbRuntime.containers.length}`} detail="docker runner" />
-            <MetricCard label="DB Process" value={`${dbRuntime.nodes.reduce((sum, node) => sum + node.effectiveMaxConcurrency, 0)}`} detail="max concurrency" />
+            <MetricCard label="Queue" value={`${databaseStatus.totalWaitingCount}`} detail="대기 작업" />
+            <MetricCard label="Running" value={`${databaseStatus.totalRunningCount}`} detail="실행 중" />
+            <MetricCard label="Containers" value={`${databaseStatus.containers.length}`} detail="docker node" />
+            <MetricCard label="DB Process" value={`${databaseStatus.nodes.reduce((sum, node) => sum + node.effectiveMaxConcurrency, 0)}`} detail="max concurrency" />
           </div>
 
-          <div className="monitoring-runtime-table">
-            {dbRuntime.nodes.map((node) => {
-              const config = dbRuntime.configs.find((item) => item.databaseId === node.databaseId);
+          <div className="monitoring-database-table">
+            {databaseStatus.nodes.map((node) => {
+              const config = databaseStatus.configs.find((item) => item.databaseId === node.databaseId);
               const currentMaxConcurrency = config?.maxConcurrency ?? node.effectiveMaxConcurrency;
               const currentEnabled = config?.enabled ?? node.enabled;
               const editableConfig = config ?? {
@@ -366,16 +366,16 @@ export function MonitoringContent() {
               const isEditing = editingDatabaseId === node.databaseId;
               const isSaving = savingDatabaseId === node.databaseId;
               return (
-                <article key={node.databaseId} className={`monitoring-runtime-card ${isSaving ? 'is-saving' : ''}`}>
+                <article key={node.databaseId} className={`monitoring-database-card ${isSaving ? 'is-saving' : ''}`}>
                   <span className={`monitoring-dbms-text is-${node.dbmsType}`}>{node.dbmsLabel}</span>
-                  <strong className="monitoring-runtime-container-name">{node.runnerContainer}</strong>
-                  <strong className="monitoring-runtime-usage">{`${node.runningCount} / ${currentMaxConcurrency}`}</strong>
-                  <div className="monitoring-runtime-card-controls">
+                  <strong className="monitoring-database-container-name">{node.containerName}</strong>
+                  <strong className="monitoring-database-usage">{`${node.runningCount} / ${currentMaxConcurrency}`}</strong>
+                  <div className="monitoring-database-card-controls">
                     <button
                       type="button"
-                      className="monitoring-runtime-edit-button"
+                      className="monitoring-database-edit-button"
                       disabled={isSaving}
-                      aria-label={`${node.runnerContainer} max concurrency 수정`}
+                      aria-label={`${node.containerName} max concurrency 수정`}
                       onClick={() => openConfigEditor(node.databaseId, currentMaxConcurrency)}
                     >
                       <EditIcon />
@@ -409,7 +409,7 @@ export function MonitoringContent() {
                     ) : null}
                   </div>
                   {isSaving ? (
-                    <div className="monitoring-runtime-card-wave" aria-hidden="true">
+                    <div className="monitoring-database-card-wave" aria-hidden="true">
                       <span className="wave-loading-placeholder is-long" />
                     </div>
                   ) : null}

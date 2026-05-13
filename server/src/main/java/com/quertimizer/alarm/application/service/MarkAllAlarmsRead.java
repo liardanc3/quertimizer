@@ -3,6 +3,7 @@ package com.quertimizer.alarm.application.service;
 import com.quertimizer.alarm.application.port.in.MarkAllAlarmsReadUseCase;
 import com.quertimizer.alarm.application.port.out.UserAlarmRepositoryPort;
 import com.quertimizer.alarm.domain.entity.UserAlarm;
+import com.quertimizer.global.log.Log;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class MarkAllAlarmsRead implements MarkAllAlarmsReadUseCase {
      */
     @Transactional
     @Override
+    @Log("알람 모두읽음 처리")
     public void execute(String handle) {
         List<UserAlarm> unreadAlarms = userAlarmRepository.findAllByHandleAndReadFalseOrderByCreatedAtDescAlarmIdDesc(handle);
         if (unreadAlarms.isEmpty()) {

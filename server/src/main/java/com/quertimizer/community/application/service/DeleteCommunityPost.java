@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.DeleteCommunityPostUseCase;
 import com.quertimizer.community.application.input.DeleteCommunityPostInput;
 import com.quertimizer.community.application.port.out.CommunityCommentLikeRepositoryPort;
@@ -41,6 +42,7 @@ public class DeleteCommunityPost implements DeleteCommunityPostUseCase {
      */
     @Transactional
     @Override
+    @Log("커뮤니티 게시글 삭제")
     public boolean execute(DeleteCommunityPostInput input) {
         Optional<CommunityPost> post = communityPostRepository.findById(input.getPostId())
                 .filter(currentPost -> currentPost.getHandle().equals(input.getHandle()));

@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.AddCommunityCommentUseCase;
 import com.quertimizer.community.application.input.AddCommunityCommentInput;
 import com.quertimizer.community.application.output.CommunityCommentOutput;
@@ -37,6 +38,7 @@ public class AddCommunityComment implements AddCommunityCommentUseCase {
      */
     @Transactional
     @Override
+    @Log("커뮤니티 댓글 생성")
     public Optional<CommunityCommentOutput> execute(AddCommunityCommentInput input) {
         return communityPostRepository.findById(input.getPostId())
                 .map(post -> {

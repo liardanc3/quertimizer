@@ -8,6 +8,8 @@ import com.quertimizer.global.exception.DomainRuleViolationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import static com.quertimizer.community.domain.model.CommunityFailReason.CONTENT_INVALID;
+
 @Service
 @RequiredArgsConstructor
 public class CommunityContentValidationService {
@@ -20,7 +22,7 @@ public class CommunityContentValidationService {
         try {
             communityContentPolicy.validate(contentJson, objectMapper.readValue(contentJson, Object.class));
         } catch (JsonProcessingException exception) {
-            throw new DomainRuleViolationException("본문 형식이 올바르지 않습니다.", DomainRuleViolationType.INVALID_REQUEST);
+            throw new DomainRuleViolationException(CONTENT_INVALID.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
         }
     }
 }

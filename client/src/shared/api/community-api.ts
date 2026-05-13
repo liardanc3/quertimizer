@@ -784,16 +784,8 @@ export function fetchCommunityCommentsByUser(handle: string) {
   return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(handle)}/community/comments`);
 }
 
-export function fetchMyLikedComments() {
-  return fetchProfileCommunityComments('/profile/me/community/liked-comments');
-}
-
 export function fetchLikedCommentsByUser(handle: string) {
   return fetchProfileCommunityComments(`/profiles/${encodeURIComponent(handle)}/community/liked-comments`);
-}
-
-export function fetchMyCommunityActivities(page: number, pageSize: number) {
-  return fetchProfileCommunityActivities('/profile/me/community/activities', page, pageSize);
 }
 
 export function fetchCommunityActivitiesByUser(handle: string, page: number, pageSize: number) {

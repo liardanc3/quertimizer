@@ -1,5 +1,6 @@
 package com.quertimizer.monitoring.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.monitoring.application.input.MonitoringLogSearchInput;
 import com.quertimizer.monitoring.application.output.ServerLogOutput;
 import com.quertimizer.monitoring.application.port.in.GetServerLogsUseCase;

@@ -1,13 +1,15 @@
 package com.quertimizer.auth.domain.policy;
 
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.exception.DomainRuleViolationType;
+import org.springframework.stereotype.Component;
 
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.LAST_ADMIN_PROTECTION;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.SELF_ADMIN_REMOVAL_DENIED;
 import static com.quertimizer.auth.domain.model.AuthManageFailReason.SENSITIVE_CONFIRMATION_REQUIRED;
 
+@Component
 public class AuthManagePolicy {
 
     public void validateSensitiveConfirmation(String confirmationText) {

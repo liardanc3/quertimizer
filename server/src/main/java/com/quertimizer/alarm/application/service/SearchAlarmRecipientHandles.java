@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.alarm.application.port.in.SearchAlarmRecipientHandlesUseCase;
 import com.quertimizer.alarm.application.port.out.AlarmRecipientPort;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class SearchAlarmRecipientHandles implements SearchAlarmRecipientHandlesU
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("알람 수신자 검색")
     public List<String> execute(String keyword) {
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
         if (normalizedKeyword.isBlank()) {

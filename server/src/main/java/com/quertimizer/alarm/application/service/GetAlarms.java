@@ -1,10 +1,10 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.alarm.application.port.in.GetAlarmsUseCase;
 import com.quertimizer.alarm.application.input.AlarmPageInput;
 import com.quertimizer.alarm.application.output.AlarmPageOutput;
 import com.quertimizer.alarm.application.port.out.UserAlarmRepositoryPort;
-import com.quertimizer.alarm.application.service.AlarmService;
 import com.quertimizer.alarm.domain.entity.UserAlarm;
 import com.quertimizer.alarm.domain.model.AlarmPageConstant;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +34,7 @@ public class GetAlarms implements GetAlarmsUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("알람 목록 조회")
     public AlarmPageOutput execute(AlarmPageInput input) {
         int normalizedPage = Math.max(1, input.getPage());
         int pageSize = normalizePageSize(input.getPageSize());

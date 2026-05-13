@@ -1,5 +1,8 @@
 package com.quertimizer.judge.domain.model;
 
+import lombok.Data;
+
+@Data
 public class IsolationPolicy {
 
     private final boolean createTemporaryEnvironment;
@@ -22,25 +25,5 @@ public class IsolationPolicy {
 
     public static IsolationPolicy cleanRoom() {
         return new IsolationPolicy(true, true, true, true, true);
-    }
-
-    public boolean isCreateTemporaryEnvironment() {
-        return createTemporaryEnvironment;
-    }
-
-    public boolean isInitializeStatisticsAfterLoad() {
-        return initializeStatisticsAfterLoad;
-    }
-
-    public boolean isApplySetupSqls() {
-        return applySetupSqls;
-    }
-
-    public boolean isInitializeStatisticsAfterSetup() {
-        return initializeStatisticsAfterSetup;
-    }
-
-    public boolean isDropEnvironmentAfterExecution() {
-        return dropEnvironmentAfterExecution;
     }
 }

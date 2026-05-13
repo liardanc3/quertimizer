@@ -1,10 +1,10 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.GetUserProfileSummaryUseCase;
 import com.quertimizer.user.application.input.UserProfileAccessInput;
 import com.quertimizer.user.application.output.UserProfileSummaryOutput;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.application.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +30,7 @@ public class GetUserProfileSummary implements GetUserProfileSummaryUseCase {
      */
     @Transactional
     @Override
+    @Log("프로필 요약 조회")
     public Optional<UserProfileSummaryOutput> execute(UserProfileAccessInput input) {
         boolean isOwnProfile = input.getTargetHandle().equals(input.getCurrentHandle());
         return userRepository.findByHandle(input.getTargetHandle())

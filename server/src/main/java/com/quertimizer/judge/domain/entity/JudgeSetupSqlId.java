@@ -1,21 +1,16 @@
 package com.quertimizer.judge.domain.entity;
 
+import lombok.Data;
+
 import java.util.Objects;
 
+@Data
 public class JudgeSetupSqlId {
 
     private final String value;
 
     public JudgeSetupSqlId(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("judge 설정 SQL ID가 비어 있습니다.");
-        }
-
         this.value = value;
-    }
-
-    public String getValue() {
-        return value;
     }
 
     @Override

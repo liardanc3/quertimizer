@@ -1,13 +1,11 @@
 package com.quertimizer.dashboard.domain.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class DashboardCommunityPostCandidate {
 
     private final String postId;

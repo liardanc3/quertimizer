@@ -16,7 +16,7 @@ import {
   getProfilePath,
   navigate,
 } from '@/shared/config/navigation';
-import { formatCompactInteger, formatRoundedPercent } from '@/shared/lib/formatters';
+import { formatCompactInteger } from '@/shared/lib/formatters';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import type { DbmsType } from '@/shared/api/domain';
 import './DashboardPage.css';
@@ -212,10 +212,6 @@ function ProblemMeta({ problem }: { problem: DashboardProblemRecommendation }) {
       <span className="dashboard-problem-metric">
         <span>{text('DASHBOARD_METRIC_CORRECT_LABEL', '정답')}</span>
         <strong>{`${formatCount(problem.successSubmitCount)}회`}</strong>
-      </span>
-      <span className="dashboard-problem-metric">
-        <span>{text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}</span>
-        <strong>{formatRoundedPercent(problem.spreadRate)}</strong>
       </span>
     </div>
   );

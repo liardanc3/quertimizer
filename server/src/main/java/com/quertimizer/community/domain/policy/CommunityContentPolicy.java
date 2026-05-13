@@ -2,6 +2,7 @@ package com.quertimizer.community.domain.policy;
 
 import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.exception.DomainRuleViolationType;
+import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -21,7 +22,10 @@ import static com.quertimizer.community.domain.model.CommunityContentConstant.MA
 import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_DEPTH;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_NODE_COUNT;
 import static com.quertimizer.community.domain.model.CommunityContentConstant.MAX_TEXT_LENGTH;
+import static com.quertimizer.community.domain.model.CommunityFailReason.CONTENT_INVALID;
+import static com.quertimizer.community.domain.model.CommunityFailReason.CONTENT_SIZE_EXCEEDED;
 
+@Component
 public class CommunityContentPolicy {
 
     public void validate(String contentJson, Object root) {
@@ -30,7 +34,7 @@ public class CommunityContentPolicy {
         }
 
         if (contentJson.getBytes(StandardCharsets.UTF_8).length > MAX_CONTENT_BYTES) {
-            throw new DomainRuleViolationException("본문은 최대 500000 Byte까지 입력할 수 있습니다.", DomainRuleViolationType.INVALID_REQUEST);
+            throw new DomainRuleViolationException(CONTENT_SIZE_EXCEEDED.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
         }
 
         ContentStats stats = new ContentStats();
@@ -298,7 +302,7 @@ public class CommunityContentPolicy {
     }
 
     private DomainRuleViolationException badContent() {
-        return new DomainRuleViolationException("본문 형식이 올바르지 않습니다.", DomainRuleViolationType.INVALID_REQUEST);
+        return new DomainRuleViolationException(CONTENT_INVALID.getMessage(), DomainRuleViolationType.INVALID_REQUEST);
     }
 
     private static final class ContentStats {

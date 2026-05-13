@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.CreateCommunityPostUseCase;
 import com.quertimizer.community.application.input.CreateCommunityPostInput;
 import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
@@ -37,6 +38,7 @@ public class CreateCommunityPost implements CreateCommunityPostUseCase {
      */
     @Transactional
     @Override
+    @Log("커뮤니티 게시글 생성")
     public Long execute(CreateCommunityPostInput input) {
         String normalizedTitle = input.getPost().getTitle().trim();
         String normalizedContentJson = communityService.normalizeContentJson(input.getPost().getContentJson());

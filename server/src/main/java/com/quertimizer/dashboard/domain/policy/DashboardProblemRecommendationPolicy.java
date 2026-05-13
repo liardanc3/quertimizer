@@ -1,6 +1,7 @@
 package com.quertimizer.dashboard.domain.policy;
 
 import com.quertimizer.dashboard.domain.model.DashboardProblemCandidate;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -12,6 +13,7 @@ import static com.quertimizer.dashboard.domain.model.DashboardProblemRecommendat
 import static com.quertimizer.dashboard.domain.model.DashboardProblemRecommendationConstant.SUCCESS_SUBMIT_WEIGHT;
 import static com.quertimizer.dashboard.domain.model.DashboardProblemRecommendationConstant.TOTAL_SUBMIT_WEIGHT;
 
+@Component
 public class DashboardProblemRecommendationPolicy {
     public int getDisplayLimit() {
         return DISPLAY_LIMIT;

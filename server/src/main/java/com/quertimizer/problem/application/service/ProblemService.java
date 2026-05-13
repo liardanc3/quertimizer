@@ -1,7 +1,7 @@
 package com.quertimizer.problem.application.service;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.global.constant.ExecutionPlanElementIndexes;
+import com.quertimizer.problem.domain.model.ExecutionPlanElementIndexes;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.application.output.ProblemDetailOutput;
 import com.quertimizer.problem.application.output.ProblemListEntry;
@@ -87,7 +87,7 @@ public class ProblemService {
         return new ProblemListItemOutput(
                 problemEntry.getProblem().getProblemId(), problemEntry.getProblem().getTitle(),
                 problemEntry.getProblem().getDescription(), problemEntry.getTotalSubmitCount(),
-                problemEntry.getSuccessSubmitCount(), problemEntry.getSpreadRate(),
+                problemEntry.getSuccessSubmitCount(),
                 problemEntry.getSubmittedHistories().stream().map(this::toProblemSubmittedHistoryOutput).toList()
         );
     }

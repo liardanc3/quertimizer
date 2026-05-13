@@ -1,5 +1,6 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.input.BlockedAccountPageInput;
 import com.quertimizer.user.application.output.BlockedUserItemOutput;
 import com.quertimizer.user.application.output.BlockedUserPageOutput;
@@ -34,6 +35,7 @@ public class GetBlockedUsers implements GetBlockedUsersUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("차단 사용자 목록 조회")
     public BlockedUserPageOutput execute(BlockedAccountPageInput input) {
         int currentPage = Math.max(1, input.getPage());
         int pageSize = normalizePageSize(input.getPageSize());

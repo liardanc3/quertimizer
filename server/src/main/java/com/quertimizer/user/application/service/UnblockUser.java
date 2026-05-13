@@ -1,5 +1,6 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.UnblockUserUseCase;
 import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
@@ -26,6 +27,7 @@ public class UnblockUser implements UnblockUserUseCase {
      */
     @Transactional
     @Override
+    @Log("사용자 차단 해제")
     public void execute(String handle) {
         userRepository.findByHandle(handle)
                 .ifPresent(user -> {

@@ -10,22 +10,29 @@ import { ProblemCreateContent } from './ProblemCreatePage';
 import { AlarmManageContent } from './AlarmManagePage';
 import { AlarmSendContent } from './AlarmSendPage';
 import { AnomalyManageContent } from './AnomalyManagePage';
+import { MonitoringContent } from './MonitoringPage';
 import './AdminPage.css';
 
-type AdminTab = 'problemCreate' | 'globalConfig' | 'alarmManagement' | 'alarmSend' | 'permissionManagement' | 'anomalyDetection';
+type AdminTab = 'monitoring' | 'problemCreate' | 'globalConfig' | 'alarmManagement' | 'alarmSend' | 'permissionManagement' | 'anomalyDetection';
 
 function readAdminTabFromSearch(search: string): AdminTab {
   const tab = new URLSearchParams(search).get('tab');
 
-  if (tab === 'problemCreate' || tab === 'globalConfig' || tab === 'alarmManagement' || tab === 'alarmSend' || tab === 'permissionManagement' || tab === 'anomalyDetection') {
+  if (tab === 'monitoring'
+    || tab === 'problemCreate'
+    || tab === 'globalConfig'
+    || tab === 'alarmManagement'
+    || tab === 'alarmSend'
+    || tab === 'permissionManagement'
+    || tab === 'anomalyDetection') {
     return tab;
   }
 
-  return 'globalConfig';
+  return 'monitoring';
 }
 
 function buildAdminPath(tab: AdminTab) {
-  if (tab === 'globalConfig') {
+  if (tab === 'monitoring') {
     return ADMIN_PATH;
   }
 
@@ -37,6 +44,10 @@ function shouldUseCompactContentGap(tab: AdminTab) {
 }
 
 function getAdminTabLabel(tab: AdminTab) {
+  if (tab === 'monitoring') {
+    return getUiTextValue('ADMIN_MONITORING_TAB', '모니터링');
+  }
+
   if (tab === 'globalConfig') {
     return getUiTextValue('ADMIN_UI_TEXT_TAB', 'UI 텍스트 설정');
   }
@@ -97,6 +108,14 @@ export default function AdminPage() {
       <div className={adminPageClassName}>
         <div className="admin-page-header">
           <div className="solve-dbms-tab-row" role="tablist" aria-label={text('ADMIN_TABLIST_LABEL', '관리자 기능')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selectedTab === 'monitoring'}
+              className={`solve-dbms-tab ${selectedTab === 'monitoring' ? 'is-selected' : ''}`}
+            >
+              {text('ADMIN_MONITORING_TAB', '모니터링')}
+            </button>
             <button
               type="button"
               role="tab"
@@ -185,6 +204,15 @@ export default function AdminPage() {
           <button
             type="button"
             role="tab"
+            aria-selected={selectedTab === 'monitoring'}
+            className={`solve-dbms-tab ${selectedTab === 'monitoring' ? 'is-selected' : ''}`}
+            onClick={() => handleTabSelect('monitoring')}
+          >
+            {text('ADMIN_MONITORING_TAB', '모니터링')}
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={selectedTab === 'problemCreate'}
             className={`solve-dbms-tab ${selectedTab === 'problemCreate' ? 'is-selected' : ''}`}
             onClick={() => handleTabSelect('problemCreate')}
@@ -246,6 +274,8 @@ export default function AdminPage() {
 
       {selectedTab === 'problemCreate' ? (
         <ProblemCreateContent />
+      ) : selectedTab === 'monitoring' ? (
+        <MonitoringContent />
       ) : selectedTab === 'globalConfig' ? (
         <GlobalConfigContent />
       ) : selectedTab === 'alarmManagement' ? (

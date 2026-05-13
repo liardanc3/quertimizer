@@ -13,8 +13,8 @@ public class CommunityPostCommentAlarm implements AlarmSpec {
     String postTitle;
     Long commentId;
 
-    public CommunityPostCommentAlarm(String recipientHandle, String actorHandle,
-                                     String postId, String postTitle, Long commentId) {
+    public CommunityPostCommentAlarm(String recipientHandle, String actorHandle, String postId,
+                                     String postTitle, Long commentId) {
         this.recipientHandle = recipientHandle;
         this.actorHandle = actorHandle;
         this.postId = postId;

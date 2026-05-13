@@ -12,24 +12,24 @@ interface SystemResourceResponse {
   uptimeSeconds?: number;
 }
 
-interface JudgeRuntimeQueueResponse {
+interface DatabaseQueueResponse {
   dbmsType?: string;
   dbmsLabel?: string;
   waitingCount?: number;
 }
 
-interface JudgeRuntimeNodeResponse {
+interface DatabaseNodeResponse {
   databaseId?: string;
   databaseName?: string;
   dbmsType?: string;
   dbmsLabel?: string;
-  runnerContainer?: string;
+  containerName?: string;
   enabled?: boolean;
   ready?: boolean;
   configuredMaxConcurrency?: number;
   effectiveMaxConcurrency?: number;
   runningCount?: number;
-  availableRunnerCount?: number;
+  availableDatabaseCount?: number;
   totalPortCount?: number;
   availablePortCount?: number;
 }
@@ -41,7 +41,7 @@ interface DockerContainerResponse {
   memoryUsage?: string;
 }
 
-interface JudgeConfigResponse {
+interface DatabaseNodeConfigResponse {
   databaseId?: string;
   databaseName?: string;
   dbmsType?: string;
@@ -51,13 +51,13 @@ interface JudgeConfigResponse {
   updatedAt?: string;
 }
 
-interface DbRuntimeResponse {
+interface DatabaseStatusResponse {
   totalWaitingCount?: number;
   totalRunningCount?: number;
-  queues?: JudgeRuntimeQueueResponse[];
-  nodes?: JudgeRuntimeNodeResponse[];
+  queues?: DatabaseQueueResponse[];
+  nodes?: DatabaseNodeResponse[];
   containers?: DockerContainerResponse[];
-  configs?: JudgeConfigResponse[];
+  configs?: DatabaseNodeConfigResponse[];
 }
 
 interface ServerLogResponse {
@@ -78,24 +78,24 @@ export interface SystemResourceData {
   uptimeSeconds: number;
 }
 
-export interface JudgeRuntimeQueueData {
+export interface DatabaseQueueData {
   dbmsType: string;
   dbmsLabel: string;
   waitingCount: number;
 }
 
-export interface JudgeRuntimeNodeData {
+export interface DatabaseNodeData {
   databaseId: string;
   databaseName: string;
   dbmsType: string;
   dbmsLabel: string;
-  runnerContainer: string;
+  containerName: string;
   enabled: boolean;
   ready: boolean;
   configuredMaxConcurrency: number;
   effectiveMaxConcurrency: number;
   runningCount: number;
-  availableRunnerCount: number;
+  availableDatabaseCount: number;
   totalPortCount: number;
   availablePortCount: number;
 }
@@ -107,7 +107,7 @@ export interface DockerContainerData {
   memoryUsage: string;
 }
 
-export interface JudgeConfigData {
+export interface DatabaseNodeConfigData {
   databaseId: string;
   databaseName: string;
   dbmsType: string;
@@ -117,13 +117,13 @@ export interface JudgeConfigData {
   updatedAt: string;
 }
 
-export interface DbRuntimeData {
+export interface DatabaseStatusData {
   totalWaitingCount: number;
   totalRunningCount: number;
-  queues: JudgeRuntimeQueueData[];
-  nodes: JudgeRuntimeNodeData[];
+  queues: DatabaseQueueData[];
+  nodes: DatabaseNodeData[];
   containers: DockerContainerData[];
-  configs: JudgeConfigData[];
+  configs: DatabaseNodeConfigData[];
 }
 
 export interface ServerLogData {
@@ -133,7 +133,7 @@ export interface ServerLogData {
   lines: string[];
 }
 
-export interface JudgeConfigUpdatePayload {
+export interface DatabaseNodeConfigUpdatePayload {
   enabled: boolean;
   maxConcurrency: number;
 }
@@ -151,7 +151,7 @@ function normalizeSystemResource(data: SystemResourceResponse): SystemResourceDa
   };
 }
 
-function normalizeDbRuntime(data: DbRuntimeResponse): DbRuntimeData {
+function normalizeDatabaseStatus(data: DatabaseStatusResponse): DatabaseStatusData {
   return {
     totalWaitingCount: data.totalWaitingCount ?? 0,
     totalRunningCount: data.totalRunningCount ?? 0,
@@ -168,13 +168,13 @@ function normalizeDbRuntime(data: DbRuntimeResponse): DbRuntimeData {
           databaseName: node.databaseName ?? '',
           dbmsType: node.dbmsType ?? '',
           dbmsLabel: node.dbmsLabel ?? '',
-          runnerContainer: node.runnerContainer ?? '',
+          containerName: node.containerName ?? '',
           enabled: Boolean(node.enabled),
           ready: Boolean(node.ready),
           configuredMaxConcurrency: node.configuredMaxConcurrency ?? 0,
           effectiveMaxConcurrency: node.effectiveMaxConcurrency ?? 0,
           runningCount: node.runningCount ?? 0,
-          availableRunnerCount: node.availableRunnerCount ?? 0,
+          availableDatabaseCount: node.availableDatabaseCount ?? 0,
           totalPortCount: node.totalPortCount ?? 0,
           availablePortCount: node.availablePortCount ?? 0,
         }))
@@ -188,7 +188,7 @@ function normalizeDbRuntime(data: DbRuntimeResponse): DbRuntimeData {
         }))
       : [],
     configs: Array.isArray(data.configs)
-      ? data.configs.map(normalizeJudgeConfig)
+      ? data.configs.map(normalizeDatabaseNodeConfig)
       : [],
   };
 }
@@ -197,15 +197,15 @@ export function normalizeSystemResourceData(data: unknown): SystemResourceData {
   return normalizeSystemResource((data ?? {}) as SystemResourceResponse);
 }
 
-export function normalizeDbRuntimeData(data: unknown): DbRuntimeData {
-  return normalizeDbRuntime((data ?? {}) as DbRuntimeResponse);
+export function normalizeDatabaseStatusData(data: unknown): DatabaseStatusData {
+  return normalizeDatabaseStatus((data ?? {}) as DatabaseStatusResponse);
 }
 
 export function normalizeServerLogData(data: unknown): ServerLogData {
   return normalizeServerLog((data ?? {}) as ServerLogResponse);
 }
 
-function normalizeJudgeConfig(data: JudgeConfigResponse): JudgeConfigData {
+function normalizeDatabaseNodeConfig(data: DatabaseNodeConfigResponse): DatabaseNodeConfigData {
   return {
     databaseId: data.databaseId ?? '',
     databaseName: data.databaseName ?? '',
@@ -249,37 +249,9 @@ async function requestMonitoring<T>(path: string, init: RequestInit, fallbackMes
   }
 }
 
-export function fetchSystemResources(): Promise<SystemResourceData> {
+export function updateDatabaseNodeConfig(databaseId: string, payload: DatabaseNodeConfigUpdatePayload): Promise<DatabaseNodeConfigData> {
   return requestMonitoring(
-    '/admin/monitoring/resources',
-    { method: 'GET' },
-    getUiTextValue('MONITORING_RESOURCE_LOAD_FAIL_MESSAGE', '서버 리소스를 불러오지 못했습니다.'),
-    normalizeSystemResourceData,
-  );
-}
-
-export function fetchDbRuntime(): Promise<DbRuntimeData> {
-  return requestMonitoring(
-    '/admin/monitoring/db-runtime',
-    { method: 'GET' },
-    getUiTextValue('MONITORING_RUNTIME_LOAD_FAIL_MESSAGE', 'DB Runtime 상태를 불러오지 못했습니다.'),
-    normalizeDbRuntimeData,
-  );
-}
-
-export function fetchServerLogs(level: string, date: string, size = 500): Promise<ServerLogData> {
-  const params = new URLSearchParams({ level, date, size: String(size) });
-  return requestMonitoring(
-    `/admin/monitoring/logs?${params.toString()}`,
-    { method: 'GET' },
-    getUiTextValue('MONITORING_LOG_LOAD_FAIL_MESSAGE', '서버 로그를 불러오지 못했습니다.'),
-    (data) => normalizeServerLog((data ?? {}) as ServerLogResponse),
-  );
-}
-
-export function updateJudgeConfig(databaseId: string, payload: JudgeConfigUpdatePayload): Promise<JudgeConfigData> {
-  return requestMonitoring(
-    `/admin/monitoring/judge-configs/${encodeURIComponent(databaseId)}`,
+    `/admin/monitoring/database-node-configs/${encodeURIComponent(databaseId)}`,
     {
       method: 'PUT',
       headers: {
@@ -287,7 +259,7 @@ export function updateJudgeConfig(databaseId: string, payload: JudgeConfigUpdate
       },
       body: JSON.stringify(payload),
     },
-    getUiTextValue('MONITORING_CONFIG_SAVE_FAIL_MESSAGE', 'judge 설정을 저장하지 못했습니다.'),
-    (data) => normalizeJudgeConfig((data ?? {}) as JudgeConfigResponse),
+    getUiTextValue('MONITORING_CONFIG_SAVE_FAIL_MESSAGE', 'DB 노드 설정을 저장하지 못했습니다.'),
+    (data) => normalizeDatabaseNodeConfig((data ?? {}) as DatabaseNodeConfigResponse),
   );
 }

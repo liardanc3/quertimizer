@@ -1,19 +1,15 @@
 package com.quertimizer.judge.domain.entity;
 
-import lombok.Getter;
+import lombok.Data;
 
 import java.util.Objects;
 
-@Getter
+@Data
 public class JudgeDatasetId {
 
     private final String value;
 
     public JudgeDatasetId(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("judge 데이터셋 ID가 비어 있습니다.");
-        }
-
         this.value = value;
     }
 

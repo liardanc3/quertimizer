@@ -27,12 +27,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 
-import static com.quertimizer.problem.domain.model.ProblemExampleConstant.MAX_VISIBLE_ROWS;
+import static com.quertimizer.problem.domain.model.ProblemQueryFailReason.PROBLEM_EXAMPLE_SERIALIZATION_FAILED;
 import static com.quertimizer.problem.domain.model.ProblemSqlPattern.CREATE_TABLE_PATTERN;
 
 @Service
 @RequiredArgsConstructor
 public class ProblemExampleService {
+
+    private static final int MAX_VISIBLE_ROWS = 10;
 
     private final ProblemJudgePort problemJudgePort;
     private final ObjectMapper objectMapper;
@@ -353,7 +355,7 @@ public class ProblemExampleService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("문제 예시 직렬화 실패", exception);
+            throw new IllegalStateException(PROBLEM_EXAMPLE_SERIALIZATION_FAILED.getMessage(), exception);
         }
     }
 }

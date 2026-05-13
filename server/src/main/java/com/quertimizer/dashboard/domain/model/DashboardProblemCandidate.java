@@ -1,10 +1,8 @@
 package com.quertimizer.dashboard.domain.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class DashboardProblemCandidate {
 
     private final String problemId;
@@ -13,7 +11,6 @@ public class DashboardProblemCandidate {
     private final int solvedUserCount;
     private final int totalSubmitCount;
     private final int successSubmitCount;
-    private final double spreadRate;
     private final boolean solvedByCurrentUser;
 
 }

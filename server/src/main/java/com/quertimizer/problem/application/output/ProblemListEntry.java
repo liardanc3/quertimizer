@@ -15,5 +15,4 @@ public class ProblemListEntry {
     private final boolean solvedByCurrentUser;
     private final int totalSubmitCount;
     private final int successSubmitCount;
-    private final double spreadRate;
 }

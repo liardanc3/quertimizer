@@ -30,11 +30,12 @@ public class AlarmTemplatePersistenceAdapter implements AlarmTemplateRepositoryP
     @Override
     public AlarmTemplate save(AlarmTemplate alarmTemplate) {
         AlarmTemplateJpaEntity savedEntity = alarmTemplateJpaRepository.findById(alarmTemplate.getAlarmType())
-                .map(entity -> {
-                    alarmTemplatePersistenceMapper.updateEntity(entity, alarmTemplate);
-                    return entity;
-                })
-                .orElseGet(() -> alarmTemplatePersistenceMapper.toEntity(alarmTemplate));
+                        .map(entity -> {
+                            alarmTemplatePersistenceMapper.updateEntity(entity, alarmTemplate);
+                            return entity;
+                        })
+                        .orElseGet(() -> alarmTemplatePersistenceMapper.toEntity(alarmTemplate));
+
         return alarmTemplatePersistenceMapper.toDomain(alarmTemplateJpaRepository.save(savedEntity));
     }
 }

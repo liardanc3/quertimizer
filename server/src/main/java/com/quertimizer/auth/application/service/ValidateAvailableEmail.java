@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.ValidateAvailableEmailUseCase;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
@@ -19,6 +20,7 @@ public class ValidateAvailableEmail implements ValidateAvailableEmailUseCase {
      * @param email 검증할 이메일
      */
     @Override
+    @Log("이메일 사용가능 검증")
     public void execute(String email) {
         signupPolicy.validateAvailableEmail(email, userRepository.existsByEmailIgnoreCase(email.trim()));
     }

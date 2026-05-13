@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.port.in.CancelProblemExecutionUseCase;
 import com.quertimizer.problem.application.port.out.ProblemJudgePort;
 import lombok.RequiredArgsConstructor;
@@ -25,18 +26,19 @@ public class CancelProblemExecution implements CancelProblemExecutionUseCase {
      * @param executionSessionId 취소할 문제 실행 세션 ID
      */
     @Override
+    @Log("문제 실행 취소")
     public void execute(String executionSessionId) {
         executionSessionStore.find(executionSessionId)
                 .filter(session -> session.getLastExecutionId() != null)
                 .ifPresentOrElse(
                         session -> {
                             log.info(
-                                    "문제 SQL 실행 취소 요청 executionSessionId={}, executionId={}",
+                                    "SQL 실행 취소 요청 executionSessionId={}, executionId={}",
                                     executionSessionId, session.getLastExecutionId()
                             );
                             problemJudgePort.cancelExecution(session.getLastExecutionId());
                         },
-                        () -> log.info("문제 SQL 실행 취소 대상 없음 executionSessionId={}", executionSessionId)
+                        () -> log.info("SQL 실행 취소 대상 없음 executionSessionId={}", executionSessionId)
                 );
     }
 }

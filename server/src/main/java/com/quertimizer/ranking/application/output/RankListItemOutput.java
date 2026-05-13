@@ -7,6 +7,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class RankListItemOutput {
 
+    private final int rank;
     private final String handle;
     private final int solvedCount;
     private final double avgExecutionPercentile;

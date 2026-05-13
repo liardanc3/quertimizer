@@ -14,6 +14,5 @@ public class ProblemListItemOutput {
     private final String description;
     private final int totalSubmitCount;
     private final int successSubmitCount;
-    private final double spreadRate;
     private final List<ProblemSubmittedHistoryOutput> submittedHistories;
 }

@@ -1,5 +1,8 @@
 package com.quertimizer.judge.domain.model;
 
+import lombok.Data;
+
+@Data
 public class IndexPolicy {
 
     private final boolean keepBaseIndexes;
@@ -8,13 +11,5 @@ public class IndexPolicy {
     public IndexPolicy(boolean keepBaseIndexes, boolean applySetupIndexesOnly) {
         this.keepBaseIndexes = keepBaseIndexes;
         this.applySetupIndexesOnly = applySetupIndexesOnly;
-    }
-
-    public boolean isKeepBaseIndexes() {
-        return keepBaseIndexes;
-    }
-
-    public boolean isApplySetupIndexesOnly() {
-        return applySetupIndexesOnly;
     }
 }

@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.ResolveAuthenticatedEmailUseCase;
 import com.quertimizer.auth.domain.model.AuthUser;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
@@ -21,6 +22,7 @@ public class ResolveAuthenticatedEmail implements ResolveAuthenticatedEmailUseCa
      * @param authenticatedEmail 현재 요청의 인증 이메일
      */
     @Override
+    @Log("인증 이메일 확인")
     public String execute(String authenticatedEmail) {
         return userRepository.findByEmailIgnoreCase(normalizeEmail(authenticatedEmail))
                 .map(AuthUser::getEmail)

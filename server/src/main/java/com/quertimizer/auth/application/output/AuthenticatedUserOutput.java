@@ -1,6 +1,6 @@
 package com.quertimizer.auth.application.output;
 
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 import com.quertimizer.auth.domain.model.AuthUser;
 import lombok.Data;
 

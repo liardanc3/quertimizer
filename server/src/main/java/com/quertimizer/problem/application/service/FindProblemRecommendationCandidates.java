@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.input.ProblemRecommendationCandidatesInput;
 import com.quertimizer.problem.application.output.ProblemListEntry;
 import com.quertimizer.problem.application.output.ProblemRecommendationCandidateOutput;
@@ -31,6 +32,7 @@ public class FindProblemRecommendationCandidates implements FindProblemRecommend
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("추천 문제 후보 조회")
     public List<ProblemRecommendationCandidateOutput> execute(ProblemRecommendationCandidatesInput input) {
         Map<String, ProblemListEntry> candidatesByProblemId = new LinkedHashMap<>();
         String solveState = input.getCurrentHandle() == null ? "all" : "unsolved";
@@ -50,8 +52,7 @@ public class FindProblemRecommendationCandidates implements FindProblemRecommend
         // 문제 검색 서비스 기준 추천 후보 조회
         return problemSearchService.findProblemPage(
                         1, null, input.getDbmsType(), solveState, input.getCurrentHandle(),
-                        solvedCountSort, totalSubmitSort, successSubmitSort,
-                        "none", null, null
+                        solvedCountSort, totalSubmitSort, successSubmitSort
                 )
                 .getProblems()
                 .stream()
@@ -73,7 +74,7 @@ public class FindProblemRecommendationCandidates implements FindProblemRecommend
                 problemEntry.getProblem().getProblemId(), problemEntry.getProblem().getTitle(),
                 problemEntry.getProblem().getDbmsType().getValue(), problemEntry.getSolvedUserCount(),
                 problemEntry.getTotalSubmitCount(), problemEntry.getSuccessSubmitCount(),
-                problemEntry.getSpreadRate(), problemEntry.isSolvedByCurrentUser()
+                problemEntry.isSolvedByCurrentUser()
         );
     }
 

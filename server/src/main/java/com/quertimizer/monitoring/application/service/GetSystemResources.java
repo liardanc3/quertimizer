@@ -1,5 +1,6 @@
 package com.quertimizer.monitoring.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.monitoring.application.output.SystemResourceOutput;
 import com.quertimizer.monitoring.application.port.in.GetSystemResourcesUseCase;
 import com.quertimizer.monitoring.application.port.out.SystemResourcePort;

@@ -23,7 +23,6 @@ export interface DashboardProblemRecommendation {
   solvedUserCount: number;
   totalSubmitCount: number;
   successSubmitCount: number;
-  spreadRate: number;
   solvedByCurrentUser: boolean;
 }
 
@@ -55,7 +54,6 @@ interface DashboardProblemRecommendationResponse {
   solvedUserCount?: number;
   totalSubmitCount?: number;
   successSubmitCount?: number;
-  spreadRate?: number;
   solvedByCurrentUser?: boolean;
 }
 
@@ -108,7 +106,6 @@ function toProblemRecommendation(data: DashboardProblemRecommendationResponse): 
     solvedUserCount: data.solvedUserCount ?? 0,
     totalSubmitCount: data.totalSubmitCount ?? 0,
     successSubmitCount: data.successSubmitCount ?? 0,
-    spreadRate: data.spreadRate ?? 0,
     solvedByCurrentUser: data.solvedByCurrentUser === true,
   };
 }

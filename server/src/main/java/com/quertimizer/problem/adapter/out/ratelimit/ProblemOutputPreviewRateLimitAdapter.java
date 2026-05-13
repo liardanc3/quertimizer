@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
+import static com.quertimizer.problem.domain.model.ProblemQueryFailReason.OUTPUT_PREVIEW_RATE_LIMITED;
+
 @Component
 @RequiredArgsConstructor
 public class ProblemOutputPreviewRateLimitAdapter implements ProblemOutputPreviewRateLimitPort {
@@ -22,7 +24,7 @@ public class ProblemOutputPreviewRateLimitAdapter implements ProblemOutputPrevie
         Instant now = Instant.now();
         if (authRateLimitRepository.count(key, ProblemOutputPreviewRateLimitRules.WINDOW, now)
                 >= ProblemOutputPreviewRateLimitRules.LIMIT) {
-            throw new BusinessException(ProblemOutputPreviewRateLimitRules.MESSAGE, HttpStatus.TOO_MANY_REQUESTS);
+            throw new BusinessException(OUTPUT_PREVIEW_RATE_LIMITED.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
         }
 
         authRateLimitRepository.add(key, now);

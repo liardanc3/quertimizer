@@ -1,19 +1,25 @@
 package com.quertimizer.judge.domain.policy;
 
-import com.quertimizer.judge.application.output.ExecutionMode;
-import com.quertimizer.judge.application.service.SqlStatementParser;
+import com.quertimizer.judge.domain.model.ExecutionMode;
+import com.quertimizer.judge.domain.service.SqlStatementParser;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.DANGEROUS_SQL_INCLUDED;
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.SINGLE_SQL_ONLY;
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.SQL_LENGTH_EXCEEDED;
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.SQL_REQUIRED;
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.UNSUPPORTED_SQL_COMMAND;
+import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.WRITE_CTE_UNSUPPORTED;
+
+@Component
+@RequiredArgsConstructor
 public class SqlExecutionPolicy {
 
     private final SqlStatementParser statementParser;
-
-    public SqlExecutionPolicy(SqlStatementParser statementParser) {
-        this.statementParser = Objects.requireNonNull(statementParser, "SQL 문장 파서가 필요합니다.");
-    }
 
     public ExecutionMode resolveMode(String sql) {
         String normalizedSql = validateSingleStatement(sql);
@@ -32,7 +38,7 @@ public class SqlExecutionPolicy {
 
         if (normalizedSql.startsWith("WITH ")) {
             if (SqlExecutionRules.containsWritableCte(normalizedSql)) {
-                throw new IllegalArgumentException("쓰기 CTE 문장은 지원하지 않습니다.");
+                throw new IllegalArgumentException(WRITE_CTE_UNSUPPORTED.getMessage());
             }
 
             return ExecutionMode.SELECT;
@@ -40,28 +46,30 @@ public class SqlExecutionPolicy {
 
         if (normalizedSql.startsWith("CREATE INDEX ")
                 || normalizedSql.startsWith("CREATE UNIQUE INDEX ")
+                || normalizedSql.startsWith("CREATE FULLTEXT INDEX ")
+                || normalizedSql.startsWith("CREATE SPATIAL INDEX ")
                 || normalizedSql.startsWith("DROP INDEX ")
                 || normalizedSql.startsWith("ALTER INDEX ")) {
             return ExecutionMode.INDEX_COMMAND;
         }
 
-        throw new IllegalArgumentException("지원하지 않는 SQL 명령입니다.");
+        throw new IllegalArgumentException(UNSUPPORTED_SQL_COMMAND.getMessage());
     }
 
     private String validateSingleStatement(String sql) {
         // SQL 존재 여부와 길이 검증
         if (sql == null || sql.isBlank()) {
-            throw new IllegalArgumentException("SQL이 필요합니다.");
+            throw new IllegalArgumentException(SQL_REQUIRED.getMessage());
         }
 
         if (sql.length() > SqlExecutionRules.MAX_SQL_LENGTH) {
-            throw new IllegalArgumentException("SQL 길이가 제한을 초과했습니다.");
+            throw new IllegalArgumentException(SQL_LENGTH_EXCEEDED.getMessage());
         }
 
         // 단일 문장 여부 검증
         List<String> statements = statementParser.splitStatements(sql);
         if (statements.size() != 1) {
-            throw new IllegalArgumentException("SQL 문장은 하나만 허용됩니다.");
+            throw new IllegalArgumentException(SINGLE_SQL_ONLY.getMessage());
         }
 
         // 위험 키워드 검증 후 정규화 SQL 반환
@@ -73,7 +81,7 @@ public class SqlExecutionPolicy {
     private void validateDangerousKeyword(String normalizedSql) {
         // 실행 금지 키워드 포함 여부 검증
         if (SqlExecutionRules.containsDangerousKeyword(normalizedSql)) {
-            throw new IllegalArgumentException("SQL에 허용되지 않는 문장이 포함되어 있습니다.");
+            throw new IllegalArgumentException(DANGEROUS_SQL_INCLUDED.getMessage());
         }
     }
 

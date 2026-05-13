@@ -1,10 +1,10 @@
 package com.quertimizer.ui.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.ui.application.port.in.DeleteUiTextUseCase;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.ui.application.input.UiTextKeyInput;
 import com.quertimizer.ui.application.port.out.UiTextRepositoryPort;
-import com.quertimizer.ui.application.service.UiTextService;
 import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.entity.ids.UiTextId;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +28,7 @@ public class DeleteUiText implements DeleteUiTextUseCase {
      */
     @Transactional
     @Override
+    @Log("UI 텍스트 삭제")
     public void execute(UiTextKeyInput input) {
         UiTextId uiTextId = uiTextService.createRequiredUiTextId(input.getKey(), input.getLanguage());
         UiText uiText = uiTextRepository.findById(uiTextId)

@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.alarm.application.port.in.PublishAlarmUseCase;
 import com.quertimizer.alarm.domain.model.AlarmSpec;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class PublishAlarm implements PublishAlarmUseCase {
      */
     @Transactional
     @Override
+    @Log("알람 발행")
     public void execute(AlarmSpec alarmSpec) {
         alarmService.publish(alarmSpec);
     }

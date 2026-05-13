@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.input.CommunityImageUploadInput;
 import com.quertimizer.community.application.port.in.UploadCommunityImageUseCase;
 import com.quertimizer.community.application.output.CommunityImageOutput;
@@ -27,6 +28,7 @@ public class UploadCommunityImage implements UploadCommunityImageUseCase {
      * @param input 업로드할 이미지 파일 입력
      */
     @Override
+    @Log("커뮤니티 이미지 업로드")
     public CommunityImageOutput execute(CommunityImageUploadInput input) {
         CommunityImageFileInfo imageFileInfo = communityImageService.validateImageFile(input);
         String imageId = communityImageService.createImageId(imageFileInfo);

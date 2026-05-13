@@ -1,10 +1,10 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.GetUserProfileLikedCommentsUseCase;
 import com.quertimizer.user.application.input.UserProfileAccessInput;
 import com.quertimizer.user.application.output.UserProfileCommunityCommentsOutput;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.application.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +30,7 @@ public class GetUserProfileLikedComments implements GetUserProfileLikedCommentsU
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("프로필 좋아요 댓글 조회")
     public Optional<UserProfileCommunityCommentsOutput> execute(UserProfileAccessInput input) {
         return userRepository.findByHandle(input.getTargetHandle())
                 .map(user -> userProfileService.buildLikedComments(user, input.getCurrentHandle()));

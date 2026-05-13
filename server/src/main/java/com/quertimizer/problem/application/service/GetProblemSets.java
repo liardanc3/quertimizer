@@ -1,8 +1,8 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.port.in.GetProblemSetsUseCase;
 import com.quertimizer.problem.application.output.ProblemSetSummaryOutput;
-import com.quertimizer.problem.application.service.ProblemSearchService;
 import com.quertimizer.problem.domain.entity.ProblemSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,6 +24,7 @@ public class GetProblemSets implements GetProblemSetsUseCase {
      * </ol>
      */
     @Override
+    @Log("문제셋 목록 조회")
     public List<ProblemSetSummaryOutput> execute() {
         return problemSearchService.findAllProblemSets().stream()
                 .map(ProblemSet::getProblemSetId)

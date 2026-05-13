@@ -22,15 +22,6 @@ function formatCount(value: number | undefined) {
   return formatInteger(value ?? 0);
 }
 
-function formatSpreadRate(value: number | undefined) {
-  if (value == null) {
-    return '-';
-  }
-
-  const normalizedValue = Math.round(value * 10) / 10;
-  return Number.isInteger(normalizedValue) ? `${normalizedValue}%` : `${normalizedValue.toFixed(1)}%`;
-}
-
 function isProblemSelectKey(event: KeyboardEvent<HTMLDivElement>) {
   return event.key === 'Enter' || event.key === ' ';
 }
@@ -131,10 +122,6 @@ function ProblemCard({
 
         <div role="cell" className="problem-table-cell problem-table-cell-metric is-success-submit" data-label={text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}>
           <span className="problem-table-metric-value">{formatCount(problem.successSubmitCount)}</span>
-        </div>
-
-        <div role="cell" className="problem-table-cell problem-table-cell-metric is-spread-rate" data-label={text('PROBLEM_TABLE_COST_SPREAD_COLUMN_LABEL', 'Cost 편차')}>
-          <span className="problem-table-metric-value">{formatSpreadRate(problem.spreadRate)}</span>
         </div>
 
         <div role="cell" className="problem-table-cell problem-table-cell-stats" data-label={text('PROBLEM_TABLE_STATS_COLUMN_LABEL', '통계')}>

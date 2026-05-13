@@ -1,5 +1,6 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.BlockUserUseCase;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
@@ -32,6 +33,7 @@ public class BlockUser implements BlockUserUseCase {
      */
     @Transactional
     @Override
+    @Log("사용자 차단")
     public void execute(String handle) {
         User user = userRepository.findByHandle(handle)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));

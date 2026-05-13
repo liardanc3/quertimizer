@@ -1,11 +1,11 @@
 package com.quertimizer.ui.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.ui.application.port.in.UpdateUiTextUseCase;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.ui.application.input.UpdateUiTextInput;
 import com.quertimizer.ui.application.output.UiTextOutput;
 import com.quertimizer.ui.application.port.out.UiTextRepositoryPort;
-import com.quertimizer.ui.application.service.UiTextService;
 import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.entity.ids.UiTextId;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +32,7 @@ public class UpdateUiText implements UpdateUiTextUseCase {
      */
     @Transactional
     @Override
+    @Log("UI 텍스트 수정")
     public UiTextOutput execute(UpdateUiTextInput input) {
         UiTextId originalUiTextId = uiTextService.createRequiredUiTextId(input.getKey(), input.getLanguage());
         UiText existingUiText = uiTextRepository.findById(originalUiTextId)

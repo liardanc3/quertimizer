@@ -1,6 +1,6 @@
 package com.quertimizer.auth.application.service;
 
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
 import com.quertimizer.auth.domain.model.AuthUser;

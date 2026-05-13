@@ -1,5 +1,6 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.GetUserAnomalyTrendsUseCase;
 import com.quertimizer.user.application.input.UserAnomalyTrendSearchInput;
 import com.quertimizer.user.application.output.UserAnomalyTrendItemOutput;
@@ -7,7 +8,6 @@ import com.quertimizer.user.application.output.UserAnomalyTrendPageOutput;
 import com.quertimizer.user.application.port.out.UserAnomalySubmitTrendPort;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.user.domain.model.UserAnomalyAction;
-import com.quertimizer.user.domain.model.UserAnomalyDateTimeConstant;
 import com.quertimizer.user.domain.model.UserAnomalyPageConstant;
 import com.quertimizer.user.domain.model.UserAnomalySubmitTrend;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 import static com.quertimizer.user.domain.model.UserAnomalyFailReason.CUSTOM_RANGE_FORMAT_INVALID;
@@ -31,6 +32,8 @@ import static com.quertimizer.user.domain.model.UserAnomalyRangeBoundary.START;
 @Component
 @RequiredArgsConstructor
 public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
+
+    private static final DateTimeFormatter CUSTOM_RANGE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final UserAnomalySubmitTrendPort userAnomalySubmitTrendPort;
 
@@ -47,6 +50,7 @@ public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("이상 계정 추세 조회")
     public UserAnomalyTrendPageOutput execute(UserAnomalyTrendSearchInput input) {
         int currentPage = Math.max(1, input.getPage());
         int pageSize = normalizePageSize(input.getPageSize());
@@ -108,7 +112,7 @@ public class GetUserAnomalyTrends implements GetUserAnomalyTrendsUseCase {
 
         // 사용자 지정 조회 시간 파싱
         try {
-            return LocalDateTime.parse(value.trim(), UserAnomalyDateTimeConstant.CUSTOM_RANGE_FORMATTER);
+            return LocalDateTime.parse(value.trim(), CUSTOM_RANGE_FORMATTER);
         } catch (DateTimeParseException ignored) {
             throw new BusinessException(CUSTOM_RANGE_FORMAT_INVALID.format(label), HttpStatus.BAD_REQUEST);
         }

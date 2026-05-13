@@ -1,10 +1,8 @@
 package com.quertimizer.user.domain.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserAnomalySubmitTrend {
 
     private final String handle;

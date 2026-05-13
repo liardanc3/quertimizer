@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.output.ProblemRankingRecordsOutput;
 import com.quertimizer.problem.application.output.ProblemRankingSolveRecordOutput;
 import com.quertimizer.problem.application.output.ProblemRankingSubmitRecordOutput;
@@ -29,6 +30,7 @@ public class GetProblemRankingRecords implements GetProblemRankingRecordsUseCase
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("문제 랭킹 기록 조회")
     public ProblemRankingRecordsOutput execute() {
         return new ProblemRankingRecordsOutput(
                 problemSolveHistoryRepository.findAll().stream().map(this::toSolveRecordOutput).toList(),

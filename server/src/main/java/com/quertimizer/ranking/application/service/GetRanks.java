@@ -1,5 +1,6 @@
 package com.quertimizer.ranking.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.ranking.application.port.in.GetRanksUseCase;
 import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.ranking.application.input.RankSearchInput;
@@ -36,13 +37,14 @@ public class GetRanks implements GetRanksUseCase {
      *
      * <ol>
      *   <li>페이지 크기와 DBMS, 정렬 기준 확정
-     *   <li>현재 및 월초 기준 랭킹 지표 계산
+     *   <li>현재 및 월초 기준 랭킹 지표와 전역 순위 계산
      *   <li>검색, 정렬, 페이징 반영 응답 생성
      * </ol>
      *
      * @param input 랭킹 검색 조건
      */
     @Override
+    @Log("랭킹 목록 조회")
     public RankPageOutput execute(RankSearchInput input) {
         int pageSize = resolvePageSize(input.getRequestedPageSize());
         DbmsType dbmsType = resolveDbmsType(input.getDbms());
@@ -62,18 +64,21 @@ public class GetRanks implements GetRanksUseCase {
                 currentMetricsByHandle,
                 baselineMetricsByHandle
         );
+        Map<String, Integer> rankByHandle =
+                createRankByHandle(currentMetricsByHandle.values().stream().toList(), rankSortKey);
 
         List<RankListItemOutput> filteredRanks = currentMetricsByHandle.values().stream()
                 .map(metrics -> {
+                    int rank = rankByHandle.get(metrics.handle());
                     SubmitMetrics submitMetrics = resolveSubmitMetrics(submitMetricsByHandle, metrics.handle());
                     return new RankListItemOutput(
-                            metrics.handle(), metrics.solvedCount(), metrics.avgExecutionPercentile(),
+                            rank, metrics.handle(), metrics.solvedCount(), metrics.avgExecutionPercentile(),
                             submitMetrics.totalSubmitCount(), submitMetrics.successSubmitCount(),
                             resolveMonthlyDelta(monthlyDeltaByHandle, metrics.handle())
                     );
                 })
                 .filter(rank -> matchesHandle(rank, input.getQuery()))
-                .sorted(createRankComparator(rankSortKey))
+                .sorted(Comparator.comparingInt(RankListItemOutput::rank))
                 .toList();
 
         int totalCount = filteredRanks.size();
@@ -310,20 +315,6 @@ public class GetRanks implements GetRanksUseCase {
 
         String normalizedQuery = query.trim().toLowerCase().replace("@", "");
         return rank.handle().toLowerCase().contains(normalizedQuery);
-    }
-
-    private Comparator<RankListItemOutput> createRankComparator(RankSortKey rankSortKey) {
-        // Rank 비교 기준 생성
-        if (rankSortKey == RankSortKey.AVG_EXECUTION_PERCENTILE) {
-            return Comparator.comparingDouble(RankListItemOutput::avgExecutionPercentile)
-                    .thenComparing(Comparator.comparingInt(RankListItemOutput::solvedCount).reversed())
-                    .thenComparing(RankListItemOutput::handle);
-        }
-
-        return Comparator.comparingInt(RankListItemOutput::solvedCount)
-                .reversed()
-                .thenComparingDouble(RankListItemOutput::avgExecutionPercentile)
-                .thenComparing(RankListItemOutput::handle);
     }
 
     private Comparator<RankMetrics> createRankMetricsComparator(RankSortKey rankSortKey) {

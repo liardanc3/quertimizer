@@ -1,9 +1,10 @@
 package com.quertimizer.problem.domain.policy;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
-import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
+import com.quertimizer.problem.domain.model.MySqlExecutionPlanElementIndex;
+import com.quertimizer.problem.domain.model.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.model.ProblemExecutionPlanAnalysis;
+import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,6 +14,7 @@ import static com.quertimizer.problem.domain.model.ProblemPlanSummaryText.*;
 import static com.quertimizer.problem.domain.model.ProblemSubmitProgressText.*;
 import static com.quertimizer.problem.domain.policy.ProblemExecutionPlanTokens.*;
 
+@Component
 public class ProblemExecutionPlanPolicy {
     public ProblemExecutionPlanAnalysis analyze(DbmsType dbmsType, List<String> planLines, String submittedSql) {
         // DBMS별 실행 계획 표현 차이를 각 DBMS 전용 분석 흐름으로 위임

@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type DragEvent, type ReactN
 import type { ProblemDataExampleTableData, ProblemDetailData, ProblemOutputExampleData } from '@/shared/api/problem-api';
 import type { DbmsType } from '@/shared/api/domain';
 import { getUiText, useUiText } from '@/shared/config/ui-text';
-import ReactFlowDiagram from './ReactFlowDiagram';
+import { ReactFlowDiagram } from '@/shared/ui/react-flow-diagram';
 
 interface ProblemDetailContentProps {
   detail: ProblemDetailData | null;

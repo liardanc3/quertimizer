@@ -1,12 +1,11 @@
 package com.quertimizer.judge.domain.entity;
 
-import com.quertimizer.judge.domain.entity.JudgeDatasetId;
-import com.quertimizer.judge.domain.entity.JudgeSetupSqlId;
 import com.quertimizer.judge.domain.model.IndexPolicy;
+import lombok.Data;
 
 import java.util.List;
-import java.util.Objects;
 
+@Data
 public class SetupSqlDefinition {
 
     private final JudgeSetupSqlId setupSqlId;
@@ -18,25 +17,9 @@ public class SetupSqlDefinition {
                               JudgeDatasetId datasetId,
                               List<String> setupSqls,
                               IndexPolicy indexPolicy) {
-        this.setupSqlId = Objects.requireNonNull(setupSqlId, "필수 값이 없습니다.");
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
-        this.setupSqls = List.copyOf(Objects.requireNonNull(setupSqls, "필수 값이 없습니다."));
-        this.indexPolicy = Objects.requireNonNull(indexPolicy, "필수 값이 없습니다.");
-    }
-
-    public JudgeSetupSqlId getSetupSqlId() {
-        return setupSqlId;
-    }
-
-    public JudgeDatasetId getDatasetId() {
-        return datasetId;
-    }
-
-    public List<String> getSetupSqls() {
-        return setupSqls;
-    }
-
-    public IndexPolicy getIndexPolicy() {
-        return indexPolicy;
+        this.setupSqlId = setupSqlId;
+        this.datasetId = datasetId;
+        this.setupSqls = List.copyOf(setupSqls);
+        this.indexPolicy = indexPolicy;
     }
 }

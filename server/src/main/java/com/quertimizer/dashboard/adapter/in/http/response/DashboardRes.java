@@ -1,0 +1,29 @@
+package com.quertimizer.dashboard.adapter.in.http.response;
+
+import com.quertimizer.dashboard.application.output.DashboardOutput;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class DashboardRes {
+
+    private final boolean authenticated;
+    private final String currentHandle;
+    private final List<DashboardCommunityPostRes> communityPosts;
+    private final List<DashboardProblemRecommendationRes> problems;
+
+    public static DashboardRes from(DashboardOutput result) {
+        return new DashboardRes(
+                result.authenticated(),
+                result.currentHandle(),
+                result.communityPosts().stream()
+                        .map(DashboardCommunityPostRes::from)
+                        .toList(),
+                result.problems().stream()
+                        .map(DashboardProblemRecommendationRes::from)
+                        .toList()
+        );
+    }
+
+}

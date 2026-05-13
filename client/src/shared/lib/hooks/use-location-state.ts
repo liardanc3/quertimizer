@@ -24,8 +24,3 @@ export function replaceQueryState(path: string, state: unknown = window.history.
     window.history.replaceState(state, '', path);
   }
 }
-
-export function useQueryState() {
-  const search = useLocationSearch();
-  return new URLSearchParams(search);
-}

@@ -622,8 +622,7 @@ function buildTimeSummary(samples: RuntimeSample[]) {
   const values = [...samples.map((sample) => sample.timeMs)].sort((left, right) => left - right);
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   const median = (values[Math.floor((values.length - 1) / 2)] + values[Math.floor(values.length / 2)]) / 2;
-  const p90 = values[Math.max(0, Math.floor(values.length * 0.9) - 1)];
-  return { min: values[0], average, median, spreadRate: ((p90 - values[0]) / Math.max(Math.abs(median), 1)) * 100 };
+  return { min: values[0], average, median };
 }
 
 function buildMarkers(samples: RuntimeSample[]) {

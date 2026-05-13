@@ -83,19 +83,11 @@ export default function RankingPage() {
   const [linkMenuState, setLinkMenuState] = useState<LinkMenuState>(null);
   const linkMenuRef = useRef<HTMLButtonElement | null>(null);
   const linkMenuLayerRefs = useMemo(() => [linkMenuRef], []);
+  const rankedEntries = rankPage.ranks;
 
   useEffect(() => {
     clearFavoriteRestoreSnapshot('ranking');
   }, []);
-
-  const rankedEntries = useMemo(
-    () =>
-      rankPage.ranks.map((entry, index) => ({
-        ...entry,
-        rank: (rankPage.currentPage - 1) * rankPage.pageSize + index + 1,
-      })),
-    [rankPage],
-  );
 
   useEffect(() => {
     const nextDbms = readRankingDbmsFromSearch(locationSearch);

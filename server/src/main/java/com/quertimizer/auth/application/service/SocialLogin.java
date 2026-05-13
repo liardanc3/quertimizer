@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.SocialLoginUseCase;
 import com.quertimizer.auth.application.input.SocialLoginInput;
 import com.quertimizer.auth.application.output.AuthenticatedUserOutput;
@@ -29,6 +30,7 @@ public class SocialLogin implements SocialLoginUseCase {
      * @param input 소셜 로그인 입력
      */
     @Override
+    @Log("소셜 로그인")
     public AuthenticatedUserOutput execute(SocialLoginInput input) {
         AuthUser user = authService.findOrCreateOAuth2User(input.getProvider(), input.getAttributes());
         loginPolicy.validateBlockedUser(user.hasHandle(), user.isBlocked());

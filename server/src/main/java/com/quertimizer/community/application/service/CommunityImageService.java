@@ -25,6 +25,12 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.quertimizer.community.domain.model.CommunityFailReason.IMAGE_PIXEL_SIZE_EXCEEDED;
+import static com.quertimizer.community.domain.model.CommunityFailReason.IMAGE_REQUIRED;
+import static com.quertimizer.community.domain.model.CommunityFailReason.IMAGE_SIZE_EXCEEDED;
+import static com.quertimizer.community.domain.model.CommunityFailReason.IMAGE_TYPE_UNSUPPORTED;
+import static com.quertimizer.community.domain.model.CommunityFailReason.IMAGE_UPLOAD_FAILED;
+
 @Service
 @RequiredArgsConstructor
 public class CommunityImageService {
@@ -35,18 +41,18 @@ public class CommunityImageService {
     public CommunityImageFileInfo validateImageFile(CommunityImageUploadInput input) {
         // 업로드 이미지 파일 존재 여부 검사
         if (input == null || input.isEmpty()) {
-            throw new BusinessException("이미지 파일을 첨부해 주세요.", HttpStatus.BAD_REQUEST);
+            throw new BusinessException(IMAGE_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
         // 업로드 이미지 파일 크기 제한 검사
         if (input.getSize() > CommunityImageConstant.MAX_SIZE) {
-            throw new BusinessException("이미지는 최대 10MB까지 업로드할 수 있습니다.", HttpStatus.BAD_REQUEST);
+            throw new BusinessException(IMAGE_SIZE_EXCEEDED.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
         // 업로드 이미지 파일 형식과 픽셀 수 검사
         CommunityImageFileInfo imageFileInfo = resolveImageFileInfo(input.getContent());
         if (!CommunityImageConstant.ALLOWED_TYPES.contains(imageFileInfo.getExtension())) {
-            throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);
+            throw new BusinessException(IMAGE_TYPE_UNSUPPORTED.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
         validateImageDimensions(input.getContent(), imageFileInfo);
@@ -69,7 +75,7 @@ public class CommunityImageService {
             Files.createDirectories(targetPath.getParent());
             Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException exception) {
-            throw new BusinessException("이미지 업로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(IMAGE_UPLOAD_FAILED.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -114,13 +120,13 @@ public class CommunityImageService {
                 return new CommunityImageFileInfo("webp", "image/webp");
             }
             if (looksLikeSvg(header)) {
-                throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);
+                throw new BusinessException(IMAGE_TYPE_UNSUPPORTED.getMessage(), HttpStatus.BAD_REQUEST);
             }
         } catch (IOException exception) {
-            throw new BusinessException("이미지 업로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(IMAGE_UPLOAD_FAILED.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
-        throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);
+        throw new BusinessException(IMAGE_TYPE_UNSUPPORTED.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     private void validateImageDimensions(byte[] content, CommunityImageFileInfo imageFileInfo) {
@@ -132,15 +138,15 @@ public class CommunityImageService {
         try (InputStream inputStream = new ByteArrayInputStream(content)) {
             BufferedImage image = ImageIO.read(inputStream);
             if (image == null) {
-                throw new BusinessException("지원하지 않는 이미지 형식입니다.", HttpStatus.BAD_REQUEST);
+                throw new BusinessException(IMAGE_TYPE_UNSUPPORTED.getMessage(), HttpStatus.BAD_REQUEST);
             }
 
             long pixels = (long) image.getWidth() * image.getHeight();
             if (pixels <= 0 || pixels > CommunityImageConstant.MAX_PIXELS) {
-                throw new BusinessException("이미지 크기가 너무 큽니다.", HttpStatus.BAD_REQUEST);
+                throw new BusinessException(IMAGE_PIXEL_SIZE_EXCEEDED.getMessage(), HttpStatus.BAD_REQUEST);
             }
         } catch (IOException exception) {
-            throw new BusinessException("이미지 업로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(IMAGE_UPLOAD_FAILED.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

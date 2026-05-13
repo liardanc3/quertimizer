@@ -19,7 +19,7 @@ import {
 } from '@/shared/api/problem-api';
 import { navigate } from '@/shared/config/navigation';
 import { getUiText, getUiTextValue, useUiText } from '@/shared/config/ui-text';
-import ReactFlowDiagram from '@/pages/problem-solve/ui/ReactFlowDiagram';
+import { ReactFlowDiagram } from '@/shared/ui/react-flow-diagram';
 import './ProblemCreatePage.css';
 
 type SectionKey = 'condition' | 'output' | 'ddl' | 'actualData' | 'hiddenData' | 'dataPreview' | 'outputPreview' | 'answerSql';

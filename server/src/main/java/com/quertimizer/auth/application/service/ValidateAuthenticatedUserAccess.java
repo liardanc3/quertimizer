@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.ValidateAuthenticatedUserAccessUseCase;
 import com.quertimizer.auth.domain.policy.LoginPolicy;
 import com.quertimizer.auth.application.port.out.AuthUserPort;
@@ -22,6 +23,7 @@ public class ValidateAuthenticatedUserAccess implements ValidateAuthenticatedUse
      * @param authenticatedEmail 현재 요청의 인증 이메일
      */
     @Override
+    @Log("인증 사용자 접근 검증")
     public void execute(String authenticatedEmail) {
         userRepository.findByEmailIgnoreCase(normalizeEmail(authenticatedEmail))
                 .ifPresent(user -> loginPolicy.validateBlockedUser(user.hasHandle(), user.isBlocked()));

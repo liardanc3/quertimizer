@@ -50,11 +50,9 @@ public class UserAlarmJpaEntity {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    public static UserAlarmJpaEntity create(String handle, String alarmType,
-                                            String title, String message,
-                                            String targetPath, String targetHash,
-                                            String bindingsJson, boolean read,
-                                            LocalDateTime createdAt) {
+    public static UserAlarmJpaEntity create(String handle, String alarmType, String title, String message,
+                                            String targetPath, String targetHash, String bindingsJson,
+                                            boolean read, LocalDateTime createdAt) {
         // 사용자 알람 JPA 엔티티 생성
         return new UserAlarmJpaEntity(
                 null, handle, alarmType, title, message,
@@ -67,11 +65,9 @@ public class UserAlarmJpaEntity {
         this.read = read;
     }
 
-    private UserAlarmJpaEntity(Long alarmId, String handle, String alarmType,
-                               String title, String message,
-                               String targetPath, String targetHash,
-                               String bindingsJson, boolean read,
-                               LocalDateTime createdAt) {
+    private UserAlarmJpaEntity(Long alarmId, String handle, String alarmType, String title, String message,
+                               String targetPath, String targetHash, String bindingsJson,
+                               boolean read, LocalDateTime createdAt) {
         this.alarmId = alarmId;
         this.handle = handle;
         this.alarmType = alarmType;

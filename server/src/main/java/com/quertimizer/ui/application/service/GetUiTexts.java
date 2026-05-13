@@ -1,9 +1,9 @@
 package com.quertimizer.ui.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.ui.application.port.in.GetUiTextsUseCase;
 import com.quertimizer.ui.application.output.UiTextOutput;
 import com.quertimizer.ui.application.port.out.UiTextRepositoryPort;
-import com.quertimizer.ui.application.service.UiTextService;
 import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.model.UiTextLanguage;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +28,7 @@ public class GetUiTexts implements GetUiTextsUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("UI 텍스트 목록 조회")
     public List<UiTextOutput> execute(String language) {
         String normalizedLanguage = uiTextService.normalizeLanguage(language);
         Map<String, UiText> resolvedUiTexts = new LinkedHashMap<>();

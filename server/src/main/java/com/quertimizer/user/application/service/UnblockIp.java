@@ -1,5 +1,6 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.UnblockIpUseCase;
 import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class UnblockIp implements UnblockIpUseCase {
      */
     @Transactional
     @Override
+    @Log("IP 차단 해제")
     public void execute(String ipAddress) {
         userAccountRestrictionPort.unblockIp(ipAddress);
     }

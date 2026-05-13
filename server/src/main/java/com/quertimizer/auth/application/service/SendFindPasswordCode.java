@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.SendFindPasswordCodeUseCase;
 import com.quertimizer.auth.application.input.SendCodeInput;
 import com.quertimizer.auth.application.port.out.AuthMailSenderPort;
@@ -42,6 +43,7 @@ public class SendFindPasswordCode implements SendFindPasswordCodeUseCase {
      */
     @Transactional
     @Override
+    @Log("비밀번호 찾기 코드 전송")
     public void execute(SendCodeInput input) {
         authRateLimitPolicy.validateTooManyRequest(input.getEmail(), input.getClientIp());
 

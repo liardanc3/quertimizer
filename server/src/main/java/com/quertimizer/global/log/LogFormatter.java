@@ -24,14 +24,8 @@ public class LogFormatter {
     private static final String RESPONSE_TRUNCATED_SUFFIX = "...truncated";
     private static final String ARRAY_OMITTED_MESSAGE = "... %d more truncated";
     private static final List<String> SENSITIVE_KEYS = List.of(
-            "password",
-            "code",
-            "email",
-            "token",
-            "authorization",
-            "cookie",
-            "secret",
-            "remember"
+            "password", "code", "email", "token",
+            "authorization", "cookie", "secret", "remember"
     );
 
     private final ObjectMapper objectMapper;

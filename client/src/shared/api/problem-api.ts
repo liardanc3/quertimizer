@@ -18,7 +18,6 @@ interface ProblemListItemResponse {
   description?: string;
   totalSubmitCount?: number;
   successSubmitCount?: number;
-  spreadRate?: number;
   submittedHistories?: ProblemSubmittedHistoryResponse[];
 }
 
@@ -27,8 +26,6 @@ interface ProblemPageResponse {
   pageSize?: number;
   totalCount?: number;
   totalPages?: number;
-  spreadRateMin?: number;
-  spreadRateMax?: number;
   problems?: ProblemListItemResponse[];
 }
 
@@ -171,9 +168,6 @@ export interface FetchProblemsParams {
   solvedCountSort: 'none' | 'asc' | 'desc';
   totalSubmitSort: 'none' | 'asc' | 'desc';
   successSubmitSort: 'none' | 'asc' | 'desc';
-  spreadRateSort: 'none' | 'asc' | 'desc';
-  spreadRateMin?: number | null;
-  spreadRateMax?: number | null;
 }
 
 export interface ProblemPage {
@@ -181,10 +175,6 @@ export interface ProblemPage {
   pageSize: number;
   totalCount: number;
   totalPages: number;
-  spreadRateRange: {
-    min: number;
-    max: number;
-  };
   problems: ProblemSummary[];
 }
 
@@ -253,7 +243,6 @@ function toProblemSummary(problem: ProblemListItemResponse) {
     solvedCount: countSolvedUsers(submittedHistories),
     totalSubmitCount: typeof problem.totalSubmitCount === 'number' ? problem.totalSubmitCount : submittedHistories.length,
     successSubmitCount: typeof problem.successSubmitCount === 'number' ? problem.successSubmitCount : submittedHistories.length,
-    spreadRate: typeof problem.spreadRate === 'number' ? problem.spreadRate : 0,
     submittedHistories,
   } satisfies ProblemSummary;
 }
@@ -345,24 +334,12 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
     searchParams.set('successSubmitSort', params.successSubmitSort);
   }
 
-  if (params.spreadRateSort !== 'none') {
-    searchParams.set('spreadRateSort', params.spreadRateSort);
-  }
-
   if (params.query.trim() !== '') {
     searchParams.set('query', params.query.trim());
   }
 
   if (params.solveState !== 'all') {
     searchParams.set('solveState', params.solveState);
-  }
-
-  if (typeof params.spreadRateMin === 'number') {
-    searchParams.set('spreadRateMin', String(params.spreadRateMin));
-  }
-
-  if (typeof params.spreadRateMax === 'number') {
-    searchParams.set('spreadRateMax', String(params.spreadRateMax));
   }
 
   const requestPath = `/problems?${searchParams.toString()}`;
@@ -400,10 +377,6 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
         pageSize: data.pageSize,
         totalCount: data.totalCount,
         totalPages: data.totalPages,
-        spreadRateRange: {
-          min: typeof data.spreadRateMin === 'number' ? data.spreadRateMin : 0,
-          max: typeof data.spreadRateMax === 'number' ? data.spreadRateMax : 0,
-        },
         problems: data.problems
           .filter(
             (problem): problem is Required<Pick<ProblemListItemResponse, 'problemId' | 'title' | 'description'>> & ProblemListItemResponse =>
@@ -606,39 +579,6 @@ function toDataPreviewData(data: ProblemDataPreviewResponse | undefined): Proble
     rowLimit: typeof data.rowLimit === 'number' ? data.rowLimit : 10,
     tables: normalizeDataPreviewTables(data.tables),
   };
-}
-
-export async function previewProblemOutput(payload: {
-  dbms: DbmsType;
-  ddl: string;
-  actualDataSql: string;
-  answerSql: string;
-}): Promise<ProblemOutputPreviewData> {
-  let response: Response;
-
-  try {
-    response = await fetch(`${getApiBaseUrl()}/admin/problems/output-preview`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw new Error(getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
-  }
-
-  if (!response.ok) {
-    throw await createApiErrorFromResponse(response, getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
-  }
-
-  try {
-    const data = (await response.json()) as ProblemOutputPreviewResponse;
-    return toOutputPreviewData(data);
-  } catch {
-    throw new Error(getUiTextValue('PROBLEM_CREATE_PREVIEW_FAIL_MESSAGE', '출력 예시를 생성하지 못했습니다.'));
-  }
 }
 
 export async function previewProblemExamples(payload: {

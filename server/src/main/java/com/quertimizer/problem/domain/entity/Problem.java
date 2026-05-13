@@ -5,6 +5,7 @@ import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.exception.DomainRuleViolationType;
 import lombok.Getter;
 
+import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_SET_ID_REQUIRED;
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_UPDATE_DATA_INVALID;
 
 @Getter
@@ -157,7 +158,7 @@ public class Problem {
     }
 
     public Problem validateSql() {
-        // 문제 SQL 자료 유효성 검증
+        // SQL 자료 유효성 검증
         validateText(ddl);
         validateText(answerSql);
 
@@ -237,7 +238,7 @@ public class Problem {
     private static String requireProblemSetId(String problemSetId) {
         // 문제 테이블셋 번호 null 또는 공백 여부 검사
         if (problemSetId == null || problemSetId.isBlank()) {
-            throw new IllegalArgumentException("problemSetId is required.");
+            throw new IllegalArgumentException(PROBLEM_SET_ID_REQUIRED.getMessage());
         }
 
         // 문제 테이블셋 번호 공백 제거 후 반환

@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.ToggleCommunityCommentLikeUseCase;
 import com.quertimizer.community.application.input.ToggleCommunityCommentLikeInput;
 import com.quertimizer.community.application.output.CommunityReactionOutput;
@@ -35,6 +36,7 @@ public class ToggleCommunityCommentLike implements ToggleCommunityCommentLikeUse
      */
     @Transactional
     @Override
+    @Log("커뮤니티 댓글 좋아요 처리")
     public Optional<CommunityReactionOutput> execute(ToggleCommunityCommentLikeInput input) {
         return communityCommentRepository.findById(input.getCommentId())
                 .map(comment -> {

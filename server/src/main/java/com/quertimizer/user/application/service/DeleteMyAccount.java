@@ -1,5 +1,6 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.user.application.port.in.DeleteMyAccountUseCase;
 import com.quertimizer.user.application.port.out.UserExternalLinkRepositoryPort;
@@ -34,6 +35,7 @@ public class DeleteMyAccount implements DeleteMyAccountUseCase {
      */
     @Transactional
     @Override
+    @Log("내 계정 삭제")
     public void execute(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));

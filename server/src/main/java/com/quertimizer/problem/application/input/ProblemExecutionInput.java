@@ -1,14 +1,13 @@
 package com.quertimizer.problem.application.input;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import com.quertimizer.problem.application.output.ProblemExecutionProgress;
+import lombok.Data;
 
 import java.util.List;
+import java.util.function.Consumer;
 
-@Getter
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+@Data
 public class ProblemExecutionInput {
 
     private final String handle;
@@ -19,16 +18,27 @@ public class ProblemExecutionInput {
     private final Integer page;
     private final Integer pageSize;
     private final List<String> indexSqls;
+    private final Consumer<ProblemExecutionProgress> progressListener;
 
     public static ProblemExecutionInput of(String handle, String executionSessionId,
                                            String problemId, String sql, String dbms,
                                            Integer page, Integer pageSize,
                                            List<String> indexSqls) {
+        return of(handle, executionSessionId, problemId, sql, dbms, page, pageSize, indexSqls, progress -> {
+        });
+    }
+
+    public static ProblemExecutionInput of(String handle, String executionSessionId,
+                                           String problemId, String sql, String dbms,
+                                           Integer page, Integer pageSize, List<String> indexSqls,
+                                           Consumer<ProblemExecutionProgress> progressListener) {
         // 정리된 요청 값과 실행 전 반영할 index DDL 목록을 애플리케이션 실행 입력으로 변환
         return new ProblemExecutionInput(
                 handle, executionSessionId,
                 problemId, sql, DbmsType.fromValueOrDefault(dbms, DbmsType.POSTGRESQL),
-                page, pageSize, normalizeIndexSqls(indexSqls)
+                page, pageSize, normalizeIndexSqls(indexSqls),
+                progressListener != null ? progressListener : progress -> {
+                }
         );
     }
 
@@ -44,5 +54,19 @@ public class ProblemExecutionInput {
                 .map(String::trim)
                 .distinct()
                 .toList();
+    }
+
+    private ProblemExecutionInput(String handle, String executionSessionId, String problemId, String sql,
+                                  DbmsType dbmsType, Integer page, Integer pageSize, List<String> indexSqls,
+                                  Consumer<ProblemExecutionProgress> progressListener) {
+        this.handle = handle;
+        this.executionSessionId = executionSessionId;
+        this.problemId = problemId;
+        this.sql = sql;
+        this.dbmsType = dbmsType;
+        this.page = page;
+        this.pageSize = pageSize;
+        this.indexSqls = indexSqls;
+        this.progressListener = progressListener;
     }
 }

@@ -1,6 +1,7 @@
 package com.quertimizer.dashboard.domain.policy;
 
 import com.quertimizer.dashboard.domain.model.DashboardCommunityPostCandidate;
+import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -13,6 +14,7 @@ import static com.quertimizer.dashboard.domain.model.DashboardHotPostConstant.RE
 import static com.quertimizer.dashboard.domain.model.DashboardHotPostConstant.RECENCY_WEIGHT;
 import static com.quertimizer.dashboard.domain.model.DashboardHotPostConstant.VIEW_WEIGHT;
 
+@Component
 public class DashboardHotPostPolicy {
     public int getDisplayLimit() {
         return DISPLAY_LIMIT;

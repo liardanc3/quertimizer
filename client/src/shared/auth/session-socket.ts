@@ -1,4 +1,4 @@
-import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
+import { Client, type IMessage } from '@stomp/stompjs';
 import { getApiBaseUrl } from '@/shared/api/auth-api';
 
 const SESSION_SOCKET_PATH = '/ws/session';
@@ -15,10 +15,14 @@ export const SESSION_SOCKET_DESTINATION = {
   judgeExecuteStop: '/app/judge.execute.stop',
   judgeSubmit: '/app/judge.submit',
   judgeLeave: '/app/judge.leave',
+  monitoringResources: '/app/monitoring.resources',
+  monitoringDatabaseStatus: '/app/monitoring.database-status',
+  monitoringLogsSubscribe: '/app/monitoring.logs.subscribe',
+  monitoringLogsUnsubscribe: '/app/monitoring.logs.unsubscribe',
 } as const;
 
 let sessionSocketClient: Client | null = null;
-let sessionSocketSubscription: StompSubscription | null = null;
+let sessionSocketSubscription: ReturnType<Client['subscribe']> | null = null;
 let connectPromise: Promise<void> | null = null;
 const messageListeners = new Set<(message: SessionSocketMessage) => void>();
 const connectionListeners = new Set<(connected: boolean) => void>();

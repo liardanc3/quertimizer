@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.GetCommunityTagSuggestionsUseCase;
 import com.quertimizer.community.application.output.CommunityTagSuggestionOutput;
 import com.quertimizer.community.application.port.out.CommunityPostTagRepositoryPort;
@@ -32,6 +33,7 @@ public class GetCommunityTagSuggestions implements GetCommunityTagSuggestionsUse
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("커뮤니티 태그 추천 조회")
     public List<CommunityTagSuggestionOutput> execute(String query) {
         if (!StringUtils.hasText(query)) {
             return List.of();

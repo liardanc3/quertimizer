@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.global.lock.Lock;
 import com.quertimizer.global.lock.LockKey;
@@ -15,6 +16,7 @@ import com.quertimizer.problem.application.port.out.ProblemSetRepositoryPort;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemAnswerCase;
 import com.quertimizer.problem.domain.entity.ProblemSet;
+import com.quertimizer.problem.domain.model.ProblemCreateProgressStep;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -30,32 +32,23 @@ import java.util.function.Supplier;
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.HIDDEN_DATA_REQUIRED;
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_CREATE_FAILED;
 import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.PROBLEM_SET_NOT_FOUND;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStatus.ERROR;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStatus.RUNNING;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStatus.SUCCESS;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.DATA_EXAMPLE;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.ERD_INFO;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.OPEN_DATA;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.OUTPUT_EXAMPLE;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.TABLE_INFO;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressText.hiddenDataKey;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressText.hiddenDataRunningMessage;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressText.hiddenDataSuccessMessage;
 import static org.springframework.util.StringUtils.hasText;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class CreateProblem implements CreateProblemUseCase {
-
-    private static final String PROGRESS_RUNNING = "running";
-    private static final String PROGRESS_SUCCESS = "success";
-    private static final String PROGRESS_ERROR = "error";
-    private static final String OPEN_DATA_KEY = "open-data";
-    private static final String TABLE_INFO_KEY = "table-info";
-    private static final String ERD_INFO_KEY = "erd-info";
-    private static final String DATA_EXAMPLE_KEY = "data-example";
-    private static final String OUTPUT_EXAMPLE_KEY = "output-example";
-    private static final String HIDDEN_DATA_KEY_PREFIX = "hidden-data-";
-    private static final String OPEN_DATA_RUNNING = "채점용 데이터 INSERT - Open 생성 중";
-    private static final String OPEN_DATA_SUCCESS = "채점용 데이터 INSERT - Open 생성 완료";
-    private static final String TABLE_INFO_RUNNING = "테이블 정보 생성 중";
-    private static final String TABLE_INFO_SUCCESS = "테이블 정보 생성 완료";
-    private static final String ERD_INFO_RUNNING = "ERD 정보 생성 중";
-    private static final String ERD_INFO_SUCCESS = "ERD 정보 생성 완료";
-    private static final String DATA_EXAMPLE_RUNNING = "데이터 예시 생성 중";
-    private static final String DATA_EXAMPLE_SUCCESS = "데이터 예시 생성 완료";
-    private static final String OUTPUT_EXAMPLE_RUNNING = "출력 예시 생성 중";
-    private static final String OUTPUT_EXAMPLE_SUCCESS = "출력 예시 생성 완료";
 
     private final ProblemRepositoryPort problemRepository;
     private final ProblemSetRepositoryPort problemSetRepository;
@@ -78,6 +71,7 @@ public class CreateProblem implements CreateProblemUseCase {
     @Transactional
     @Lock(prefix = LockKey.CREATE_PROBLEM, timeout = 5000)
     @Override
+    @Log("문제 생성")
     public ProblemCreateOutput execute(ProblemCreateInput input) {
         List<String> createdDatasetIds = new ArrayList<>();
         AtomicBoolean createdProblem = new AtomicBoolean(false);
@@ -125,20 +119,14 @@ public class CreateProblem implements CreateProblemUseCase {
         String answerHash = createAnswerHash(problemSet.getDatasetId(), input.getAnswerSql());
         String environmentId = problemJudgePort.createSubmissionEnvironment(problemSet.getDatasetId());
         try {
-            String schemaMetadata = executeProgressStep(
-                    input, TABLE_INFO_KEY, TABLE_INFO_RUNNING, TABLE_INFO_SUCCESS, 2,
-                    () -> problemExampleService.createSchemaMetadata(environmentId, input.getProblemDdl(), input.getDbmsType())
-            );
-            runProgressStep(input, ERD_INFO_KEY, ERD_INFO_RUNNING, ERD_INFO_SUCCESS, 3, () -> {
+            String schemaMetadata = executeProgressStep(input, TABLE_INFO,
+                    () -> problemExampleService.createSchemaMetadata(environmentId, input.getProblemDdl(), input.getDbmsType()));
+            runProgressStep(input, ERD_INFO, () -> {
             });
-            String dataExample = executeProgressStep(
-                    input, DATA_EXAMPLE_KEY, DATA_EXAMPLE_RUNNING, DATA_EXAMPLE_SUCCESS, 4,
-                    () -> problemExampleService.createDataExample(environmentId, input.getProblemDdl(), input.getDbmsType())
-            );
-            String outputExample = executeProgressStep(
-                    input, OUTPUT_EXAMPLE_KEY, OUTPUT_EXAMPLE_RUNNING, OUTPUT_EXAMPLE_SUCCESS, 5,
-                    () -> problemExampleService.createOutputExample(environmentId, input.getAnswerSql())
-            );
+            String dataExample = executeProgressStep(input, DATA_EXAMPLE,
+                    () -> problemExampleService.createDataExample(environmentId, input.getProblemDdl(), input.getDbmsType()));
+            String outputExample = executeProgressStep(input, OUTPUT_EXAMPLE,
+                    () -> problemExampleService.createOutputExample(environmentId, input.getAnswerSql()));
 
             // 신규 문제 기본 정보 생성
             return Problem.create(
@@ -196,7 +184,7 @@ public class CreateProblem implements CreateProblemUseCase {
 
     private String createProblemSetDataset(ProblemCreateInput input, List<String> createdDatasetIds) {
         // 문제셋 데이터셋 생성 후 롤백 대상 ID 보관
-        return executeProgressStep(input, OPEN_DATA_KEY, OPEN_DATA_RUNNING, OPEN_DATA_SUCCESS, 1, () -> {
+        return executeProgressStep(input, OPEN_DATA, () -> {
             String datasetId = createDataset(input.getDbmsType(), input.getDdl(), input.getActualDataSql());
             createdDatasetIds.add(datasetId);
             return datasetId;
@@ -215,18 +203,19 @@ public class CreateProblem implements CreateProblemUseCase {
         answerCases.add(ProblemAnswerCase.actual(problem.getProblemId(), problemSet.getDatasetId(), problem.getAnswerHash()));
         for (int index = 0; index < input.getHiddenDataSqls().size(); index++) {
             String hiddenDataSql = input.getHiddenDataSqls().get(index);
+            int sequence = index + 1;
             int stepOrder = index + 6;
-            String stepKey = HIDDEN_DATA_KEY_PREFIX + (index + 1);
-            String hiddenDataRunningMessage = "채점용 데이터 INSERT - Hidden " + (index + 1) + " 생성 중";
-            String hiddenDataSuccessMessage = "채점용 데이터 INSERT - Hidden " + (index + 1) + " 생성 완료";
-            String datasetId = executeProgressStep(input, stepKey, hiddenDataRunningMessage, hiddenDataSuccessMessage, stepOrder, () -> {
-                String createdDatasetId = createInlineDataset(input.getDbmsType(), input.getDdl(), hiddenDataSql);
-                createdDatasetIds.add(createdDatasetId);
-                return createdDatasetId;
-            });
+            String datasetId = executeProgressStep(
+                    input, hiddenDataKey(sequence), hiddenDataRunningMessage(sequence), hiddenDataSuccessMessage(sequence), stepOrder,
+                    () -> {
+                        String createdDatasetId = createInlineDataset(input.getDbmsType(), input.getDdl(), hiddenDataSql);
+                        createdDatasetIds.add(createdDatasetId);
+                        return createdDatasetId;
+                    }
+            );
             answerCases.add(ProblemAnswerCase.hidden(
                     problem.getProblemId(), datasetId,
-                    createAnswerHash(datasetId, input.getAnswerSql()), index + 1
+                    createAnswerHash(datasetId, input.getAnswerSql()), sequence
             ));
         }
         problemAnswerCaseRepository.deleteAllByProblemId(problem.getProblemId());
@@ -239,7 +228,7 @@ public class CreateProblem implements CreateProblemUseCase {
     }
 
     private String createDataset(DbmsType dbmsType, String ddl, String dataSql) {
-        // 문제 SQL 자료를 judge 데이터셋 생성 입력으로 변환 후 키 반환
+        // SQL 자료를 judge 데이터셋 생성 입력으로 변환 후 키 반환
         return problemJudgePort.createDataset(dbmsType, ddl, dataSql);
     }
 
@@ -270,17 +259,22 @@ public class CreateProblem implements CreateProblemUseCase {
 
     private ProblemCreateProgress running(String stepKey, String message, Integer stepOrder) {
         // 문제 생성 진행 상태 생성 중 메시지 생성
-        return new ProblemCreateProgress(stepKey, PROGRESS_RUNNING, message, stepOrder);
+        return new ProblemCreateProgress(stepKey, RUNNING.getValue(), message, stepOrder);
     }
 
     private ProblemCreateProgress success(String stepKey, String message, Integer stepOrder) {
         // 문제 생성 진행 상태 생성 완료 메시지 생성
-        return new ProblemCreateProgress(stepKey, PROGRESS_SUCCESS, message, stepOrder);
+        return new ProblemCreateProgress(stepKey, SUCCESS.getValue(), message, stepOrder);
     }
 
     private ProblemCreateProgress error(String stepKey, String runningMessage, Integer stepOrder) {
         // 문제 생성 진행 상태 생성 실패 메시지 생성
-        return new ProblemCreateProgress(stepKey, PROGRESS_ERROR, failMessage(runningMessage), stepOrder);
+        return new ProblemCreateProgress(stepKey, ERROR.getValue(), failMessage(runningMessage), stepOrder);
+    }
+
+    private <T> T executeProgressStep(ProblemCreateInput input, ProblemCreateProgressStep step, Supplier<T> supplier) {
+        // 고정 진행 단계를 메시지 전달 가능 단계로 변환
+        return executeProgressStep(input, step.getKey(), step.getRunningMessage(), step.getSuccessMessage(), step.getOrder(), supplier);
     }
 
     private <T> T executeProgressStep(ProblemCreateInput input, String stepKey,
@@ -298,11 +292,9 @@ public class CreateProblem implements CreateProblemUseCase {
         }
     }
 
-    private void runProgressStep(ProblemCreateInput input, String stepKey,
-                                 String runningMessage, String successMessage,
-                                 Integer stepOrder, Runnable runnable) {
-        // 반환값 없는 진행 단계를 값 반환 단계로 변환
-        executeProgressStep(input, stepKey, runningMessage, successMessage, stepOrder, () -> {
+    private void runProgressStep(ProblemCreateInput input, ProblemCreateProgressStep step, Runnable runnable) {
+        // 반환값 없는 고정 진행 단계를 값 반환 단계로 변환
+        executeProgressStep(input, step, () -> {
             runnable.run();
             return null;
         });

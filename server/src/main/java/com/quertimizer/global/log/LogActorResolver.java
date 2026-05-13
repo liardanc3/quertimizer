@@ -1,7 +1,7 @@
 package com.quertimizer.global.log;
 
 import com.quertimizer.auth.application.port.in.ResolveAuthenticatedHandleUseCase;
-import com.quertimizer.global.support.ClientIpResolver;
+import com.quertimizer.global.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;

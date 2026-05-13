@@ -1,12 +1,17 @@
 package com.quertimizer.community.domain.policy;
 
+import org.springframework.stereotype.Component;
+
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.quertimizer.community.domain.model.CommunityViewConstant.DUPLICATE_VIEW_WINDOW;
-
+@Component
 public class CommunityViewPolicy {
+
+    private static final Duration DUPLICATE_VIEW_WINDOW = Duration.ofMinutes(10);
+
     private final Map<String, Instant> viewedAtByKey = new ConcurrentHashMap<>();
 
     public boolean shouldIncreaseViewCount(Long postId, String viewerKey) {

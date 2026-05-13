@@ -1,8 +1,9 @@
 package com.quertimizer.problem.application.service;
 
-import com.quertimizer.global.constant.ExecutionPlanElementIndexes;
-import com.quertimizer.global.constant.MySqlExecutionPlanElementIndex;
-import com.quertimizer.global.constant.PostgreSqlExecutionPlanElementIndex;
+import com.quertimizer.global.log.Log;
+import com.quertimizer.problem.domain.model.ExecutionPlanElementIndexes;
+import com.quertimizer.problem.domain.model.MySqlExecutionPlanElementIndex;
+import com.quertimizer.problem.domain.model.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.problem.application.input.SubmitHistorySearchInput;
 import com.quertimizer.problem.application.output.SubmitHistoryListItemOutput;
@@ -45,6 +46,7 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
      * @param input 제출 이력 검색 조건
      */
     @Override
+    @Log("제출 목록 조회")
     public SubmitHistoryPageOutput execute(SubmitHistorySearchInput input) {
         DbmsType dbmsType = resolveDbmsType(input.getDbms());
         JudgeFilter judgeFilter = resolveJudgeFilter(input.getJudge());

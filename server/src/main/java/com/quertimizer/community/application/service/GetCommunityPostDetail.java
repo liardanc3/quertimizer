@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.GetCommunityPostDetailUseCase;
 import com.quertimizer.community.application.input.CommunityPostDetailInput;
 import com.quertimizer.community.application.output.CommunityCommentOutput;
@@ -40,6 +41,7 @@ public class GetCommunityPostDetail implements GetCommunityPostDetailUseCase {
      */
     @Transactional
     @Override
+    @Log("커뮤니티 게시글 상세 조회")
     public Optional<CommunityPostDetailOutput> execute(CommunityPostDetailInput input) {
         return communityPostRepository.findById(input.getPostId())
                 .map(post -> {

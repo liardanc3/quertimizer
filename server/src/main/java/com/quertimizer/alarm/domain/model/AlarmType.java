@@ -1,5 +1,8 @@
 package com.quertimizer.alarm.domain.model;
 
+import lombok.Getter;
+
+@Getter
 public enum AlarmType {
 
     FROM_ADMIN("FROM_ADMIN", "관리자 알람", "관리자 직접 알림", "관리자가 직접 전송한 알림", ""),
@@ -44,22 +47,6 @@ public enum AlarmType {
         this.defaultSentence = defaultSentence;
         this.defaultDescription = defaultDescription;
         this.defaultMessageTemplate = defaultMessageTemplate;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getDefaultSentence() {
-        return defaultSentence;
-    }
-
-    public String getDefaultDescription() {
-        return defaultDescription;
     }
 
     public String formatDefaultMessage(String actorHandle) {

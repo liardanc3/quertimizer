@@ -307,6 +307,11 @@ interface ProblemSubmitProgressMessage extends SessionSocketMessage {
   statementReference?: boolean | null;
 }
 
+interface ProblemExecutionProgressMessage extends SessionSocketMessage {
+  problemId?: string | null;
+  message?: string | null;
+}
+
 interface ProblemSubmitProgressStep {
   stepKey: string;
   status: ProblemSubmitStepStatus;
@@ -331,7 +336,7 @@ interface SqlAutocompleteTokenRange {
   qualifier: string | null;
 }
 
-type SolveIndexMethod = 'BTREE' | 'HASH' | 'GIN' | 'GIST' | 'BRIN';
+type SolveIndexMethod = 'BTREE' | 'HASH' | 'GIN' | 'GIST' | 'BRIN' | 'FULLTEXT' | 'SPATIAL';
 type SolveIndexSortDirection = 'ASC' | 'DESC';
 type SolveIndexNullsPosition = 'DEFAULT' | 'FIRST' | 'LAST';
 type SolveIndexSource = 'builder' | 'editor';
@@ -462,6 +467,7 @@ interface ExecutionStatementRun {
   end: number;
   status: ExecutionStatementStatus;
   result: ProblemExecutionResult | null;
+  progressMessage?: string | null;
 }
 
 const panelOrder: PanelKey[] = ['editor', 'submit'];
@@ -520,6 +526,8 @@ const SQL_AUTOCOMPLETE_KEYWORDS = [
   'EXPLAIN ANALYZE',
   'EXPLAIN ANALYSE',
   'CREATE INDEX',
+  'CREATE FULLTEXT INDEX',
+  'CREATE SPATIAL INDEX',
   'ALTER INDEX',
   'DROP INDEX',
 ];
@@ -533,13 +541,15 @@ const SQL_EDITOR_MIN_FONT_SIZE = 11;
 const SQL_EDITOR_MAX_FONT_SIZE = 24;
 const SQL_EDITOR_AUTOCOMPLETE_OVERFLOW_ITEM_COUNT = 4;
 const POSTGRESQL_INDEX_METHODS: SolveIndexMethod[] = ['BTREE', 'HASH', 'GIN', 'GIST', 'BRIN'];
-const MYSQL_INDEX_METHODS: SolveIndexMethod[] = ['BTREE', 'HASH'];
+const MYSQL_INDEX_METHODS: SolveIndexMethod[] = ['BTREE', 'HASH', 'FULLTEXT', 'SPATIAL'];
 const FLOATING_EDITOR_BACKGROUND_MIN_ALPHA = 0.12;
 const FLOATING_EDITOR_BACKGROUND_MAX_ALPHA = 1;
 const SQL_EDITOR_CONTENT_LINE_HEIGHT_RATIO = 1.7;
 const SUBMIT_HIDDEN_CASE_STEP_PATTERN = /^answer-hidden-(\d+)$/;
-const SUBMIT_INDEX_DDL_PATTERN = /^(CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX|ALTER\s+INDEX)\b/i;
+const SUBMIT_INDEX_DDL_PATTERN = /^(CREATE\s+(?:UNIQUE\s+)?(?:(?:FULLTEXT|SPATIAL)\s+)?INDEX|DROP\s+INDEX|ALTER\s+INDEX)\b/i;
 const SQL_IDENTIFIER_PATTERN = String.raw`(?:"[^"]+"|` + '`[^`]+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:"[^"]+"|` + '`[^`]+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$]*))?`;
+const SQL_CREATE_TABLE_OPTION_PATTERN =
+  String.raw`(?:(?:ENGINE|DEFAULT|CHARSET|COLLATE|COMMENT|ROW_FORMAT|AUTO_INCREMENT|TABLESPACE|PARTITION)\b[^;]*)?`;
 const PLAN_SELECTED_ATTEMPT_PREFIX = '__selected_plan_attempt__:';
 const PLAN_MEASUREMENT_PATTERN = /^실행계획 분석\s+(\d+)회\s*:\s*Cost\s+(.+)$/;
 const PLAN_DETAIL_SECTIONS = [
@@ -687,7 +697,6 @@ function createFallbackProblemDetail(problemId: string): ProblemDetail {
     solvedCount: 0,
     totalSubmitCount: 0,
     successSubmitCount: 0,
-    spreadRate: 0,
     submittedHistories: [],
     description: '',
     schemaInfo: '',
@@ -821,12 +830,15 @@ function resolveProblemDdl(detail: ProblemDetailData | null, dbms: DbmsType) {
 }
 
 function extractAutocompleteItemsFromDdl(ddl: string): SqlAutocompleteItem[] {
-  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\(([\s\S]*?)\);/gi;
+  const createTablePattern = new RegExp(
+    String.raw`CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})\s*\(([\s\S]*?)\)\s*${SQL_CREATE_TABLE_OPTION_PATTERN};`,
+    'gi',
+  );
   const items: SqlAutocompleteItem[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = createTablePattern.exec(ddl)) != null) {
-    const tableName = match[1];
+    const tableName = normalizeSqlIdentifier(match[1]);
     const tableBody = match[2];
 
     items.push({
@@ -839,17 +851,17 @@ function extractAutocompleteItemsFromDdl(ddl: string): SqlAutocompleteItem[] {
       .map((line) => line.trim().replace(/,$/, ''))
       .filter(Boolean)
       .forEach((line) => {
-        if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b/i.test(line)) {
+        if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK|KEY|INDEX|FULLTEXT|SPATIAL)\b/i.test(line)) {
           return;
         }
 
-        const columnMatch = line.match(/^("?[\w]+"?)\s+/);
+        const columnMatch = line.match(new RegExp(String.raw`^(${SQL_IDENTIFIER_PATTERN})\s+`, 'i'));
         if (!columnMatch) {
           return;
         }
 
         items.push({
-          value: columnMatch[1].replace(/"/g, ''),
+          value: normalizeSqlIdentifier(columnMatch[1]),
           kind: 'column',
           detail: tableName,
         });
@@ -868,18 +880,22 @@ function extractAutocompleteItemsFromDdl(ddl: string): SqlAutocompleteItem[] {
 }
 
 function extractIndexTableOptionsFromDdl(ddl: string): SolveIndexTableOption[] {
-  const createTablePattern = /CREATE TABLE\s+(?:[\w]+\.)?(\w+)\s*\(([\s\S]*?)\);/gi;
+  const createTablePattern = new RegExp(
+    String.raw`CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})\s*\(([\s\S]*?)\)\s*${SQL_CREATE_TABLE_OPTION_PATTERN};`,
+    'gi',
+  );
   const tableOptions: SolveIndexTableOption[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = createTablePattern.exec(ddl)) != null) {
-    const tableName = match[1];
+    const tableName = normalizeSqlIdentifier(match[1]);
     const columns = match[2]
       .split('\n')
       .map((line) => line.trim().replace(/,$/, ''))
       .filter(Boolean)
-      .filter((line) => !/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK|COMMENT)\b/i.test(line))
-      .map((line) => line.match(/^("?[\w]+"?)\s+/)?.[1]?.replace(/"/g, '') ?? '')
+      .filter((line) => !/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK|KEY|INDEX|FULLTEXT|SPATIAL|COMMENT)\b/i.test(line))
+      .map((line) => line.match(new RegExp(String.raw`^(${SQL_IDENTIFIER_PATTERN})\s+`, 'i'))?.[1] ?? '')
+      .map(normalizeSqlIdentifier)
       .filter(Boolean);
 
     tableOptions.push({
@@ -922,6 +938,10 @@ function supportsIndexColumnOrdering(method: SolveIndexMethod) {
   return method === 'BTREE';
 }
 
+function supportsUniqueIndex(dbms: DbmsType, method: SolveIndexMethod) {
+  return !(dbms === 'mysql' && (method === 'FULLTEXT' || method === 'SPATIAL'));
+}
+
 function createIndexDefaultName(indexCount: number) {
   return `index_${String(indexCount + 1).padStart(2, '0')}`;
 }
@@ -951,8 +971,14 @@ function createIndexColumn(name: string): SolveIndexColumn {
   };
 }
 
-function toIdentifierSql(identifier: string) {
-  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier) ? identifier : `"${identifier.replace(/"/g, '""')}"`;
+function toIdentifierSql(identifier: string, dbms: DbmsType) {
+  const quote = dbms === 'mysql' ? '`' : '"';
+  const quotePattern = dbms === 'mysql' ? /`/g : /"/g;
+
+  return identifier
+    .split('.')
+    .map((part) => (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(part) ? part : `${quote}${part.replace(quotePattern, quote + quote)}${quote}`))
+    .join('.');
 }
 
 function normalizeSqlIdentifier(identifier: string) {
@@ -1038,14 +1064,14 @@ function buildCreateIndexSql(indexDefinition: SolveIndexDraft | SolveIndexDefini
       const directionSql = columnOrderingEnabled ? ` ${column.direction}` : '';
       const nullsSql = columnOrderingEnabled && dbms === 'postgresql' && column.nulls !== 'DEFAULT' ? ` NULLS ${column.nulls}` : '';
 
-      return `${toIdentifierSql(column.name)}${directionSql}${nullsSql}`;
+      return `${toIdentifierSql(column.name, dbms)}${directionSql}${nullsSql}`;
     })
     .join(', ');
-  const uniqueSql = indexDefinition.unique ? 'UNIQUE ' : '';
+  const uniqueSql = indexDefinition.unique && supportsUniqueIndex(dbms, indexDefinition.method) ? 'UNIQUE ' : '';
   const usingSql = indexDefinition.method ? ` USING ${indexDefinition.method}` : '';
   const includeSql =
     dbms === 'postgresql' && indexDefinition.includeColumns.length > 0
-      ? ` INCLUDE (${indexDefinition.includeColumns.map(toIdentifierSql).join(', ')})`
+      ? ` INCLUDE (${indexDefinition.includeColumns.map((column) => toIdentifierSql(column, dbms)).join(', ')})`
       : '';
   const whereSql = dbms === 'postgresql' && indexDefinition.whereClause.trim() ? ` WHERE ${indexDefinition.whereClause.trim()}` : '';
 
@@ -1054,10 +1080,14 @@ function buildCreateIndexSql(indexDefinition: SolveIndexDraft | SolveIndexDefini
   }
 
   if (dbms === 'mysql') {
-    return `CREATE ${uniqueSql}INDEX ${toIdentifierSql(indexName)}${usingSql} ON ${toIdentifierSql(tableName)} (${columnSql})${whereSql};`;
+    if (indexDefinition.method === 'FULLTEXT' || indexDefinition.method === 'SPATIAL') {
+      return `CREATE ${indexDefinition.method} INDEX ${toIdentifierSql(indexName, dbms)} ON ${toIdentifierSql(tableName, dbms)} (${columnSql});`;
+    }
+
+    return `CREATE ${uniqueSql}INDEX ${toIdentifierSql(indexName, dbms)}${usingSql} ON ${toIdentifierSql(tableName, dbms)} (${columnSql});`;
   }
 
-  return `CREATE ${uniqueSql}INDEX ${toIdentifierSql(indexName)} ON ${toIdentifierSql(tableName)}${usingSql} (${columnSql})${includeSql}${whereSql};`;
+  return `CREATE ${uniqueSql}INDEX ${toIdentifierSql(indexName, dbms)} ON ${toIdentifierSql(tableName, dbms)}${usingSql} (${columnSql})${includeSql}${whereSql};`;
 }
 
 function resolveIndexDefinitionSql(indexDefinition: SolveIndexDefinition, dbms: DbmsType) {
@@ -1084,7 +1114,7 @@ function parseIndexColumnDefinition(rawColumn: string): SolveIndexColumn | null 
 
 function parseCreateIndexStatement(statement: SqlStatementSegment, tableOptions: SolveIndexTableOption[], dbms: DbmsType): SolveIndexDefinition | null {
   const createIndexPattern = new RegExp(
-    String.raw`^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})(?:\s+USING\s+(\w+))?\s+ON\s+(${SQL_IDENTIFIER_PATTERN})(?:\s+USING\s+(\w+))?\s*\(([\s\S]*?)\)\s*([\s\S]*)$`,
+    String.raw`^CREATE\s+(UNIQUE\s+)?(?:(FULLTEXT|SPATIAL)\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(${SQL_IDENTIFIER_PATTERN})(?:\s+USING\s+(\w+))?\s+ON\s+(${SQL_IDENTIFIER_PATTERN})(?:\s+USING\s+(\w+))?\s*\(([\s\S]*?)\)\s*([\s\S]*)$`,
     'i',
   );
   const createIndexMatch = statement.sql.match(createIndexPattern);
@@ -1092,20 +1122,22 @@ function parseCreateIndexStatement(statement: SqlStatementSegment, tableOptions:
     return null;
   }
 
-  const tableName = normalizeSqlIdentifier(createIndexMatch[4]);
-  const method = ((createIndexMatch[3] ?? createIndexMatch[5] ?? 'BTREE').toUpperCase() as SolveIndexMethod);
-  const parsedColumns = splitTopLevelComma(createIndexMatch[6])
+  const tableName = normalizeSqlIdentifier(createIndexMatch[5]);
+  const method = ((createIndexMatch[2] ?? createIndexMatch[4] ?? createIndexMatch[6] ?? 'BTREE').toUpperCase() as SolveIndexMethod);
+  const parsedColumns = splitTopLevelComma(createIndexMatch[7])
     .map(parseIndexColumnDefinition);
-  const tail = createIndexMatch[7].trim();
+  const tail = createIndexMatch[8].trim();
   const includeMatch = tail.match(/^INCLUDE\s*\(([\s\S]*?)\)\s*(.*)$/i);
   const whereSource = includeMatch?.[2]?.trim() ?? tail;
   const whereMatch = whereSource.match(/^WHERE\s+([\s\S]+)$/i);
+  const unsupportedMysqlTail = dbms === 'mysql' && tail.length > 0;
   const unknownTail = whereSource.length > 0 && whereMatch == null;
 
   if (
     !getIndexMethodOptions(dbms).includes(method) ||
     parsedColumns.length === 0 ||
     parsedColumns.some((column) => column == null) ||
+    unsupportedMysqlTail ||
     unknownTail
   ) {
     return null;
@@ -1118,10 +1150,10 @@ function parseCreateIndexStatement(statement: SqlStatementSegment, tableOptions:
 
   return {
     id: `editor-index-${statement.start}-${statement.end}`,
-    name: normalizeSqlIdentifier(createIndexMatch[2]),
+    name: normalizeSqlIdentifier(createIndexMatch[3]),
     tableName,
     method,
-    unique: createIndexMatch[1] != null,
+    unique: createIndexMatch[1] != null && supportsUniqueIndex(dbms, method),
     columns,
     includeColumns: includeMatch?.[1] ? splitTopLevelComma(includeMatch[1]).map(normalizeSqlIdentifier) : [],
     whereClause: whereMatch?.[1]?.trim() ?? '',
@@ -1134,7 +1166,7 @@ function parseCreateIndexStatement(statement: SqlStatementSegment, tableOptions:
 }
 
 function parseEditorIndexStatement(statement: SqlStatementSegment, tableOptions: SolveIndexTableOption[], dbms: DbmsType): SolveIndexDefinition | null {
-  if (/^CREATE\s+(?:UNIQUE\s+)?INDEX\b/i.test(statement.sql)) {
+  if (/^CREATE\s+(?:UNIQUE\s+)?(?:(?:FULLTEXT|SPATIAL)\s+)?INDEX\b/i.test(statement.sql)) {
     return parseCreateIndexStatement(statement, tableOptions, dbms);
   }
 
@@ -1199,13 +1231,6 @@ function parseEditorIndexStatements(sql: string, tableOptions: SolveIndexTableOp
     },
     { definitions: [], errorRanges: [] },
   );
-}
-
-function mergeIndexSqlsWithStatementSql(indexSqls: string[], statementSql: string) {
-  const statementComparableSqls = new Set(parseSqlStatements(statementSql).map((statement) => normalizeComparableSql(statement.sql)));
-  const mergedSqls = indexSqls.filter((indexSql) => !statementComparableSqls.has(normalizeComparableSql(indexSql)));
-
-  return [...mergedSqls, statementSql.trim()].filter(Boolean).join(';\n');
 }
 
 function uniqueSqls(sqls: string[]) {
@@ -1473,6 +1498,7 @@ function createExecutionStatementRuns(
     end: segment.end,
     status: initiallyRunningIndex === index ? 'running' : 'idle',
     result: null,
+    progressMessage: null,
   }));
 }
 
@@ -1488,6 +1514,7 @@ function createSingleExecutionStatementRun(sql: string, result: ProblemExecution
     end: Math.max(sql.length, 0),
     status: result.success ? 'success' : 'error',
     result,
+    progressMessage: null,
   };
 }
 
@@ -2066,12 +2093,21 @@ function createSubmitProgressStep(
   };
 }
 
+function isTerminalSubmitProgressStatus(status: ProblemSubmitStepStatus) {
+  return status === 'success' || status === 'incorrect' || status === 'error';
+}
+
 function upsertSubmitProgressStep(
   currentSteps: ProblemSubmitProgressStep[],
   nextStep: ProblemSubmitProgressStep,
 ): ProblemSubmitProgressStep[] {
   const existingIndex = currentSteps.findIndex((step) => step.stepKey === nextStep.stepKey);
   if (existingIndex >= 0) {
+    const existingStep = currentSteps[existingIndex];
+    if (isTerminalSubmitProgressStatus(existingStep.status) && nextStep.status === 'running') {
+      return currentSteps;
+    }
+
     const nextSteps = [...currentSteps];
     nextSteps[existingIndex] = nextStep;
     return nextSteps;
@@ -2583,7 +2619,9 @@ function ExecutionStatementResultItem({
       {!collapsed ? (
         <div className="solve-editor-inline-result-body solve-pane-result-stack">
           {item.status === 'running' ? (
-            <div className="solve-result-empty solve-result-empty-table">{getUiTextValue('PROBLEM_SOLVE_RUNNING_MESSAGE', 'SQL을 실행하는 중입니다.')}</div>
+            <div className="solve-result-empty solve-result-empty-table">
+              {item.progressMessage ?? getUiTextValue('PROBLEM_SOLVE_RUNNING_MESSAGE', 'SQL을 실행하는 중입니다.')}
+            </div>
           ) : executionResult ? (
             renderExecutionContent(
               executionResult,
@@ -4104,6 +4142,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
   const executionResultItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const submitPanelRef = useRef<HTMLElement | null>(null);
+  const submitInFlightRef = useRef(false);
   const executionResponseResolverRef = useRef<((result: ProblemExecutionResult) => void) | null>(null);
   const executionStopRequestedRef = useRef(false);
   const ignoredExecutionResponseCountRef = useRef(0);
@@ -4452,9 +4491,14 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     });
   };
 
+  const releaseSubmitLock = () => {
+    submitInFlightRef.current = false;
+    setIsSubmitting(false);
+  };
+
   const openAuthOverlay = (mode: SolveAuthOverlayMode = 'login') => {
     setIsExecuting(false);
-    setIsSubmitting(false);
+    releaseSubmitLock();
     setAuthOverlayMode(mode);
   };
 
@@ -4526,7 +4570,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setExecutionRuns([]);
     setExecutionStatementMarkerLayout(null);
     setIsExecuting(false);
-    setIsSubmitting(false);
+    releaseSubmitLock();
     setSubmitMessage(null);
     setSubmitProgressSteps([]);
     setExecutionPickerState(null);
@@ -4867,6 +4911,33 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         return;
       }
 
+      if (message.type === 'problem.execute.progress') {
+        const progressMessage = message as ProblemExecutionProgressMessage;
+        if (progressMessage.problemId !== problemId || !progressMessage.message) {
+          return;
+        }
+
+        setExecutionRuns((current) =>
+          current.map((run) =>
+            run.status === 'running'
+              ? {
+                  ...run,
+                  progressMessage: progressMessage.message,
+                }
+              : run,
+          ),
+        );
+        setCollapsedCards((current) => ({
+          ...current,
+          execute: false,
+        }));
+        setPanelVisibility((current) => ({
+          ...current,
+          editor: true,
+        }));
+        return;
+      }
+
       if (message.type === 'problem.submit.result') {
         const submitMessage = message as ProblemSocketMessage;
         const nextSubmitMessage = resolveSocketFailureMessage(
@@ -4874,7 +4945,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           text('PROBLEM_SOLVE_SUBMIT_RECORD_FAIL_MESSAGE', '제출을 기록하지 못했습니다.'),
         );
         if (isAuthenticationRequiredMessage(nextSubmitMessage)) {
-          setIsSubmitting(false);
+          releaseSubmitLock();
           setSubmitProgressSteps([]);
           setSubmitMessage(null);
           openAuthOverlay('login');
@@ -4885,7 +4956,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           submitMessage.success === false && nextSubmitMessage !== text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')
             ? nextSubmitMessage
             : null;
-        setIsSubmitting(false);
+        releaseSubmitLock();
         setSubmitMessage(null);
         if (failureMessage) {
           setSubmitProgressSteps((current) => {
@@ -4975,7 +5046,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }, [problemId, updateSqlEditorSelection]);
 
   useEffect(() => {
-    setIsSubmitting(false);
+    releaseSubmitLock();
     setSubmitMessage(null);
     setSubmitProgressSteps([]);
     setPanelVisibility((current) => ({
@@ -5233,6 +5304,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const handleSubmit = async () => {
+    if (submitInFlightRef.current || isSubmitting) {
+      return;
+    }
+
     if (executionPickerState != null) {
       if (executionPickerState.mode === 'submit') {
         confirmExecutionPickerSelection();
@@ -5321,15 +5396,15 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       const destination = page === 1
         ? SESSION_SOCKET_DESTINATION.problemExecute
         : SESSION_SOCKET_DESTINATION.problemExecutePage;
-      const executionSql = mergeIndexSqlsWithStatementSql(submitIndexSqls, statementSql);
 
       try {
         await sendSessionSocketMessage(destination, {
           problemId,
-          sql: executionSql,
+          sql: statementSql,
           dbms: selectedDbms,
           page,
           pageSize: EXECUTION_RESULT_PAGE_SIZE,
+          indexSqls: submitIndexSqls,
         });
       } catch (error) {
         executionResponseResolverRef.current = null;
@@ -5554,10 +5629,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   };
 
   const submitStatementSegments = async (statementSegments: SqlStatementSegment[]) => {
-    const selectedSubmitSql = statementSegments.map((statement) => statement.sql).join(';\n');
-    const submitSql = mergeIndexSqlsWithStatementSql(submitIndexSqls, selectedSubmitSql);
+    if (submitInFlightRef.current || isSubmitting) {
+      return;
+    }
 
-    if (submitSql.trim().length === 0) {
+    const selectedSubmitSql = statementSegments.map((statement) => statement.sql).join(';\n');
+
+    if (selectedSubmitSql.trim().length === 0) {
       setSubmitProgressSteps([]);
       setSubmitMessage(text('PROBLEM_SOLVE_SUBMIT_SQL_REQUIRED_MESSAGE', '제출할 SQL을 입력해 주세요.'));
       setCollapsedCards((current) => ({
@@ -5571,6 +5649,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       return;
     }
 
+    submitInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitMessage(null);
     setSubmitProgressSteps([
@@ -5589,11 +5668,12 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     try {
       await sendSessionSocketMessage(SESSION_SOCKET_DESTINATION.problemSubmit, {
         problemId,
-        sql: submitSql,
+        sql: selectedSubmitSql,
         dbms: selectedDbms,
+        indexSqls: submitIndexSqls,
       });
     } catch (error) {
-      setIsSubmitting(false);
+      releaseSubmitLock();
       setSubmitProgressSteps([]);
 
       const isSessionValid = await syncSession();
@@ -5864,6 +5944,25 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     }));
   };
 
+  const handleIndexDraftMethodChange = (method: SolveIndexMethod) => {
+    setIndexDraft((current) => ({
+      ...current,
+      method,
+      unique: supportsUniqueIndex(selectedDbms, method) ? current.unique : false,
+      columns: current.columns.map((column) =>
+        supportsIndexColumnOrdering(method)
+          ? column
+          : {
+              ...column,
+              direction: 'ASC',
+              nulls: 'DEFAULT',
+            },
+      ),
+      includeColumns: selectedDbms === 'postgresql' ? current.includeColumns : [],
+      whereClause: selectedDbms === 'postgresql' ? current.whereClause : '',
+    }));
+  };
+
   const toggleIndexDraftColumn = (columnName: string) => {
     setIndexDraft((current) => {
       const exists = current.columns.some((column) => column.name === columnName);
@@ -5929,6 +6028,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         ...indexDraft,
         id: editingIndexId ?? `index-${Date.now().toString(36)}-${current.length}`,
         name: indexDraft.name.trim() || createIndexDefaultName(current.length),
+        unique: supportsUniqueIndex(selectedDbms, indexDraft.method) ? indexDraft.unique : false,
         whereClause: selectedDbms === 'postgresql' ? indexDraft.whereClause : '',
         includeColumns: selectedDbms === 'postgresql' ? indexDraft.includeColumns : [],
         source: 'builder' as const,
@@ -6362,7 +6462,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                         <select
                           name="indexMethod"
                           value={indexDraft.method}
-                          onChange={(event) => setIndexDraft((current) => ({ ...current, method: event.target.value as SolveIndexMethod }))}
+                          onChange={(event) => handleIndexDraftMethodChange(event.target.value as SolveIndexMethod)}
                         >
                           {indexMethodOptions.map((method) => (
                             <option key={method} value={method}>{method}</option>
@@ -6373,6 +6473,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                         <input
                           type="checkbox"
                           checked={indexDraft.unique}
+                          disabled={!supportsUniqueIndex(selectedDbms, indexDraft.method)}
                           onChange={(event) => setIndexDraft((current) => ({ ...current, unique: event.target.checked }))}
                         />
                         <span>{text('PROBLEM_SOLVE_INDEX_UNIQUE_LABEL', 'UNIQUE')}</span>

@@ -1,11 +1,11 @@
 package com.quertimizer.judge.domain.entity;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import com.quertimizer.judge.domain.entity.JudgeDatasetId;
+import lombok.Data;
 
 import java.time.Instant;
-import java.util.Objects;
 
+@Data
 public class DatasetTemplateDefinition {
 
     private final JudgeDatasetId datasetId;
@@ -17,38 +17,10 @@ public class DatasetTemplateDefinition {
     public DatasetTemplateDefinition(JudgeDatasetId datasetId, DbmsType dbmsType,
                                      String templateVersion, String environmentName,
                                      Instant createdAt) {
-        this.datasetId = Objects.requireNonNull(datasetId, "필수 값이 없습니다.");
-        this.dbmsType = Objects.requireNonNull(dbmsType, "필수 값이 없습니다.");
-        this.templateVersion = requireText(templateVersion, "templateVersion");
-        this.environmentName = requireText(environmentName, "environmentName");
-        this.createdAt = Objects.requireNonNull(createdAt, "필수 값이 없습니다.");
-    }
-
-    public JudgeDatasetId getDatasetId() {
-        return datasetId;
-    }
-
-    public DbmsType getDbmsType() {
-        return dbmsType;
-    }
-
-    public String getTemplateVersion() {
-        return templateVersion;
-    }
-
-    public String getEnvironmentName() {
-        return environmentName;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    private String requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "이 비어 있습니다.");
-        }
-
-        return value.trim();
+        this.datasetId = datasetId;
+        this.dbmsType = dbmsType;
+        this.templateVersion = templateVersion.trim();
+        this.environmentName = environmentName.trim();
+        this.createdAt = createdAt;
     }
 }

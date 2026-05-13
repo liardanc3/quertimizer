@@ -31,8 +31,14 @@ public enum ProblemQueryFailReason {
     SUBMIT_SELECT_REQUIRED("제출에는 최소 한 개의 SELECT가 필요합니다."),
     SUBMIT_REFERENCE_SELECT_NOT_FOUND("제출 기준 SELECT를 찾을 수 없습니다."),
     SUBMIT_SELECT_AND_INDEX_DDL_ONLY("제출은 SELECT 1개와 INDEX DDL만 지원합니다."),
+    EXECUTE_SQL_WITH_INDEX_DDL_SINGLE_ONLY("실행 SQL은 INDEX DDL 뒤에 하나의 실행문만 허용됩니다."),
     PROBLEM_INFO_NOT_FOUND("문제 정보를 찾을 수 없습니다."),
     ANSWER_HASH_NOT_REGISTERED("정답 해시가 등록되지 않았습니다."),
+    ANSWER_CASE_NOT_FOUND("출력 데이터 검증 케이스가 없습니다."),
+    OFFICIAL_COST_SELECTION_FAILED("공식 비용 측정 결과를 선택하지 못했습니다."),
+    PROBLEM_EXAMPLE_SERIALIZATION_FAILED("문제 예시 직렬화 실패"),
+    SUBMIT_FAILED("SQL 제출에 실패했습니다."),
+    OUTPUT_PREVIEW_RATE_LIMITED("SQL 실행 요청이 많습니다. 잠시 후 다시 시도해 주세요."),
     RETRY_WAIT_INTERRUPTED("재시도 대기 중 인터럽트가 발생했습니다.");
 
     private final String message;

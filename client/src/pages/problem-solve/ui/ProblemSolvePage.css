@@ -778,13 +778,20 @@
   color: var(--ink-strong);
   font-size: 0.68rem;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.18;
+}
+
+.solve-index-column-name-cell input {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .solve-index-column-name-cell span {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transform: translateY(-0.02rem);
 }
 
 .solve-index-column-controls {
@@ -888,6 +895,11 @@
   max-height: min(76vh, 37rem);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.solve-index-modal .solve-index-column-picker {
+  max-height: min(34vh, 12rem);
+  overflow-y: auto;
 }
 
 .solve-index-modal .solve-index-draft-grid,

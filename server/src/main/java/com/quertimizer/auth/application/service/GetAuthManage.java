@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.GetAuthManageUseCase;
 import com.quertimizer.auth.application.output.AuthManageOutput;
 import com.quertimizer.auth.application.output.AuthManageUserRowOutput;
@@ -28,6 +29,7 @@ public class GetAuthManage implements GetAuthManageUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("인증 관리 조회")
     public AuthManageOutput execute() {
         List<AuthManageUserRowOutput> members = userRepository.findAllByOrderByHandleAsc().stream()
                 .filter(AuthUser::hasHandle)

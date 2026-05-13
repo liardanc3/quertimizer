@@ -1,13 +1,11 @@
 package com.quertimizer.ranking.domain.model;
 
 import com.quertimizer.judge.domain.model.DbmsType;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class RankingSolveRecord {
 
     private final String problemId;

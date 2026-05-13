@@ -1,6 +1,6 @@
 package com.quertimizer.global.lock;
 
-import com.quertimizer.global.constant.GlobalFailReason;
+import com.quertimizer.global.exception.GlobalFailReason;
 import com.quertimizer.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;

@@ -1,6 +1,6 @@
 package com.quertimizer.global.lock.impl;
 
-import com.quertimizer.global.constant.GlobalFailReason;
+import com.quertimizer.global.exception.GlobalFailReason;
 import com.quertimizer.global.lock.LockManager;
 import org.springframework.stereotype.Component;
 

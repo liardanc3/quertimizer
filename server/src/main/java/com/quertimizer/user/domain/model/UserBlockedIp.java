@@ -1,12 +1,10 @@
 package com.quertimizer.user.domain.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
+@Data
 public class UserBlockedIp {
 
     private final String ipAddress;

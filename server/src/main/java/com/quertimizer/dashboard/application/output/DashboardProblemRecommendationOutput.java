@@ -13,6 +13,5 @@ public class DashboardProblemRecommendationOutput {
     private final int solvedUserCount;
     private final int totalSubmitCount;
     private final int successSubmitCount;
-    private final double spreadRate;
     private final boolean solvedByCurrentUser;
 }

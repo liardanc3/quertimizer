@@ -1,5 +1,6 @@
 package com.quertimizer.favorite.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.favorite.application.port.in.GetFavoriteTabsUseCase;
 import com.quertimizer.favorite.application.output.FavoriteTabOutput;
 import com.quertimizer.favorite.application.output.FavoriteTabsOutput;
@@ -22,6 +23,7 @@ public class GetFavoriteTabs implements GetFavoriteTabsUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("즐겨찾기 탭 조회")
     public FavoriteTabsOutput execute(String userEmail) {
         return new FavoriteTabsOutput(
                 favoriteTabRepository.findAllByUserEmailOrderByDisplayOrderAsc(userEmail)

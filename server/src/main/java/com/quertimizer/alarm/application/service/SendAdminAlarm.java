@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.alarm.application.port.in.SendAdminAlarmUseCase;
 import com.quertimizer.alarm.application.input.SendAdminAlarmInput;
 import com.quertimizer.alarm.application.port.out.AlarmRecipientPort;
@@ -36,6 +37,7 @@ public class SendAdminAlarm implements SendAdminAlarmUseCase {
      */
     @Transactional
     @Override
+    @Log("관리자 알람 전송")
     public int execute(SendAdminAlarmInput input) {
         List<String> normalizedRecipientHandles = normalizeRecipientHandles(input.getRecipientHandles());
         String normalizedMessage = requireMessage(input.getMessage());

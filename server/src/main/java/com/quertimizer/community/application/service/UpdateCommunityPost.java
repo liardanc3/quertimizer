@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.UpdateCommunityPostUseCase;
 import com.quertimizer.community.application.input.UpdateCommunityPostInput;
 import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
@@ -38,6 +39,7 @@ public class UpdateCommunityPost implements UpdateCommunityPostUseCase {
      */
     @Transactional
     @Override
+    @Log("커뮤니티 게시글 수정")
     public Optional<Long> execute(UpdateCommunityPostInput input) {
         return communityPostRepository.findById(input.getPostId())
                 .filter(post -> post.getHandle().equals(input.getHandle()))

@@ -48,7 +48,7 @@ public class JudgeInlineDatasetDefinitionEntity {
     }
 
     public DatasetDefinition toDefinition(List<String> baseIndexDdls) {
-        // 임시 데이터셋 SQL 정의를 judge 도메인 정의로 복원
+        // 임시 데이터셋 SQL 정의를 도메인 정의로 복원
         return new DatasetDefinition(new JudgeDatasetId(datasetId), DbmsType.valueOf(dbmsType), ddl, dataSql, baseIndexDdls);
     }
 

@@ -1,11 +1,13 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.port.in.ExecuteProblemSqlUseCase;
 import com.quertimizer.global.exception.BusinessException;
 import com.quertimizer.problem.application.input.ProblemExecutionInput;
+import com.quertimizer.problem.application.output.ProblemExecutionProgress;
 import com.quertimizer.problem.application.output.ProblemExecutionOutput;
 import com.quertimizer.problem.application.output.ProblemJudgeExecutionResult;
-import com.quertimizer.problem.application.output.ProblemJudgeSqlStatement;
+import com.quertimizer.problem.application.output.ProblemSqlStatement;
 import com.quertimizer.problem.application.port.out.ProblemJudgePort;
 import com.quertimizer.problem.domain.model.ProblemJudgeExecutionMode;
 import com.quertimizer.problem.domain.model.ProblemQueryResultText;
@@ -19,6 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.quertimizer.problem.domain.model.ProblemQueryFailReason.EXECUTE_SQL_WITH_INDEX_DDL_SINGLE_ONLY;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -29,7 +33,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
     private final ProblemExecutionSessionStore executionSessionStore;
 
     /**
-     * 문제 SQL을 실행한다.
+     * SQL을 실행한다.
      *
      * <ol>
      *   <li>실행 SQL 분리와 데이터셋 조회
@@ -39,15 +43,13 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
      *   <li>실행 환경 정리
      * </ol>
      *
-     * @param input 문제 SQL 실행 입력
-     * @return 문제 SQL 실행 결과
+     * @param input SQL 실행 입력
+     * @return SQL 실행 결과
      */
     @Override
+    @Log("SQL 실행")
     public ProblemExecutionOutput execute(ProblemExecutionInput input) {
-        log.info(
-                "문제 SQL 실행 시작 problemId={}, handle={}, dbmsType={}, executionSessionId={}",
-                input.getProblemId(), input.getHandle(), input.getDbmsType(), input.getExecutionSessionId()
-        );
+        log.info("SQL 실행 시작 problemId={}", input.getProblemId());
 
         String executionId = "interactive-" + UUID.randomUUID();
         executionSessionStore.markExecution(input.getExecutionSessionId(), executionId);
@@ -56,14 +58,12 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
             ResolvedExecutionSql executionSql = resolveExecutionSql(input);
             ProblemDatasetResolver.ResolvedProblemDataset dataset =
                     datasetResolver.resolve(input.getProblemId(), input.getDbmsType());
-            log.info(
-                    "문제 SQL 실행 데이터셋 조회 완료 problemId={}, datasetId={}, dbmsType={}",
-                    input.getProblemId(), dataset.getDatasetId(), dataset.getDbmsType()
-            );
+            log.info("SQL 실행 데이터셋 조회 완료 datasetId={}, dbmsType={}", dataset.getDatasetId(), dataset.getDbmsType());
             session = createFreshEnvironment(input, dataset);
             applyIndexSqls(executionSql.indexSqls, session, executionId);
+            analyzeExecutionEnvironment(session, executionId);
             log.info(
-                    "문제 SQL 실행 요청 전달 executionId={}, environmentId={}, problemId={}",
+                    "SQL 실행 요청 전달 executionId={}, environmentId={}, problemId={}",
                     executionId, session.getEnvironmentId(), input.getProblemId()
             );
             ProblemJudgeExecutionResult result = problemJudgePort.executeInteractiveSql(
@@ -71,7 +71,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                     normalizePage(input.getPage()), normalizePageSize(input.getPageSize())
             );
             log.info(
-                    "문제 SQL 실행 완료 executionId={}, problemId={}, mode={}, rowCount={}, cost={}, executionTimeMs={}",
+                    "SQL 실행 완료 executionId={}, problemId={}, mode={}, rowCount={}, cost={}, executionTimeMs={}",
                     executionId, input.getProblemId(), result.getMode(), result.getRowCount(),
                     result.getCost(), result.getExecutionTimeMs()
             );
@@ -79,7 +79,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
             return toProblemExecutionOutput(input.getProblemId(), result);
         } catch (IllegalArgumentException exception) {
             log.warn(
-                    "문제 SQL 실행 검증 실패 executionId={}, problemId={}, reason={}",
+                    "SQL 실행 검증 실패 executionId={}, problemId={}, reason={}",
                     executionId, input.getProblemId(), resolveUserErrorMessage(exception)
             );
             throw new BusinessException(resolveUserErrorMessage(exception), HttpStatus.BAD_REQUEST);
@@ -93,28 +93,30 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
 
     private ResolvedExecutionSql resolveExecutionSql(ProblemExecutionInput input) {
         // 실행 SQL 문장 분리와 기존 index DDL 목록 준비
-        List<ProblemJudgeSqlStatement> statements = problemJudgePort.parseStatements(input.getSql());
+        List<ProblemSqlStatement> statements = problemJudgePort.parseStatements(input.getSql());
         if (statements.isEmpty()) {
             throw new IllegalArgumentException(ProblemQueryResultText.PROBLEM_EXECUTION_FAILED.getText());
         }
 
         // 단일 문장이면 별도 index DDL 목록만 유지
         if (statements.size() == 1) {
-            return new ResolvedExecutionSql(statements.get(0).getSql(), input.getIndexSqls());
+            ProblemSqlStatement statement = statements.get(0);
+            return new ResolvedExecutionSql(statement.getSql(), input.getIndexSqls());
         }
 
         // 마지막 실행문 이전의 INDEX DDL을 실행 환경 선반영 대상으로 분리
         List<String> indexSqls = new ArrayList<>(input.getIndexSqls());
         for (int statementIndex = 0; statementIndex < statements.size() - 1; statementIndex++) {
-            ProblemJudgeSqlStatement statement = statements.get(statementIndex);
+            ProblemSqlStatement statement = statements.get(statementIndex);
             if (statement.getMode() != ProblemJudgeExecutionMode.INDEX_COMMAND) {
-                throw new IllegalArgumentException("실행 SQL은 INDEX DDL 뒤에 하나의 실행문만 허용됩니다.");
+                throw new IllegalArgumentException(EXECUTE_SQL_WITH_INDEX_DDL_SINGLE_ONLY.getMessage());
             }
             indexSqls.add(statement.getSql());
         }
 
         // 마지막 문장을 실제 실행 대상으로 반환
-        return new ResolvedExecutionSql(statements.get(statements.size() - 1).getSql(), indexSqls);
+        ProblemSqlStatement statement = statements.get(statements.size() - 1);
+        return new ResolvedExecutionSql(statement.getSql(), indexSqls);
     }
 
     private void applyIndexSqls(List<String> indexSqls,
@@ -127,18 +129,32 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
 
         // 같은 실행 환경에 index DDL 순차 반영
         log.info(
-                "문제 SQL 실행 INDEX DDL 반영 시작 executionId={}, environmentId={}, indexDdlCount={}",
+                "SQL 실행 INDEX DDL 반영 시작 executionId={}, environmentId={}, indexDdlCount={}",
                 executionId, session.getEnvironmentId(), indexSqls.size()
         );
         for (String indexSql : indexSqls) {
             log.info(
-                    "문제 SQL 실행 INDEX DDL 실행 executionId={}, environmentId={}, sqlLength={}",
+                    "SQL 실행 INDEX DDL 실행 executionId={}, environmentId={}, sqlLength={}",
                     executionId, session.getEnvironmentId(), indexSql.length()
             );
             problemJudgePort.executeInteractiveSql(executionId, session.getEnvironmentId(), indexSql, 1, 1);
         }
         log.info(
-                "문제 SQL 실행 INDEX DDL 반영 완료 executionId={}, environmentId={}",
+                "SQL 실행 INDEX DDL 반영 완료 executionId={}, environmentId={}",
+                executionId, session.getEnvironmentId()
+        );
+    }
+
+    private void analyzeExecutionEnvironment(ProblemExecutionSessionStore.ProblemExecutionSession session,
+                                             String executionId) {
+        // 실행 직전 통계 1회 갱신
+        log.info(
+                "SQL 실행 통계 갱신 시작 executionId={}, environmentId={}",
+                executionId, session.getEnvironmentId()
+        );
+        problemJudgePort.analyzeOfficialEnvironment(executionId, session.getEnvironmentId());
+        log.info(
+                "SQL 실행 통계 갱신 완료 executionId={}, environmentId={}",
                 executionId, session.getEnvironmentId()
         );
     }
@@ -149,7 +165,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         executionSessionStore.remove(input.getExecutionSessionId())
                 .ifPresent(session -> {
                     log.info(
-                            "문제 SQL 실행 이전 환경 정리 executionSessionId={}, environmentId={}",
+                            "SQL 실행 이전 환경 정리 executionSessionId={}, environmentId={}",
                             input.getExecutionSessionId(), session.getEnvironmentId()
                     );
                     dropQuietly(input.getExecutionSessionId(), session.getEnvironmentId());
@@ -157,23 +173,31 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
 
         // 데이터셋 기준 새 judge 실행 환경 생성
         log.info(
-                "문제 SQL 실행 환경 생성 시작 executionSessionId={}, problemId={}, datasetId={}",
+                "SQL 실행 환경 생성 시작 executionSessionId={}, problemId={}, datasetId={}",
                 input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId()
         );
         String environmentId = problemJudgePort.createInteractiveEnvironment(
                 dataset.getDatasetId(),
-                remainingTasks -> log.info(
-                        "문제 SQL 실행 환경 생성 대기 executionSessionId={}, problemId={}, remainingTasks={}",
-                        input.getExecutionSessionId(), input.getProblemId(), remainingTasks
-                )
+                remainingTasks -> sendWaitingProgress(input, remainingTasks)
         );
         ProblemExecutionSessionStore.ProblemExecutionSession session =
                 executionSessionStore.save(input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId(), environmentId);
         log.info(
-                "문제 SQL 실행 환경 생성 완료 executionSessionId={}, environmentId={}, datasetId={}",
+                "SQL 실행 환경 생성 완료 executionSessionId={}, environmentId={}, datasetId={}",
                 input.getExecutionSessionId(), environmentId, dataset.getDatasetId()
         );
         return session;
+    }
+
+    private void sendWaitingProgress(ProblemExecutionInput input, int remainingTasks) {
+        // 대기열이 있을 때 실행 progress와 로그 전파
+        log.info(
+                "SQL 실행 환경 생성 대기 executionSessionId={}, problemId={}, remainingTasks={}",
+                input.getExecutionSessionId(), input.getProblemId(), remainingTasks
+        );
+        if (remainingTasks > 0) {
+            input.getProgressListener().accept(ProblemExecutionProgress.waiting(input.getProblemId(), remainingTasks));
+        }
     }
 
     private void cleanupEnvironment(String executionSessionId,
@@ -235,7 +259,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         try {
             problemJudgePort.dropEnvironment(environmentId);
             log.info(
-                    "문제 SQL 실행 환경 정리 완료 executionSessionId={}, environmentId={}",
+                    "SQL 실행 환경 정리 완료 executionSessionId={}, environmentId={}",
                     executionSessionId, environmentId
             );
         } catch (Exception exception) {

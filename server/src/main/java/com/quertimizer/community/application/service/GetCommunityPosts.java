@@ -1,5 +1,6 @@
 package com.quertimizer.community.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.community.application.port.in.GetCommunityPostsUseCase;
 import com.quertimizer.community.application.input.CommunityPostSearchInput;
 import com.quertimizer.community.application.output.CommunityPostPageOutput;
@@ -41,6 +42,7 @@ public class GetCommunityPosts implements GetCommunityPostsUseCase {
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("커뮤니티 게시글 목록 조회")
     public CommunityPostPageOutput execute(CommunityPostSearchInput input) {
         if (StringUtils.hasText(input.getTag())) {
             return createExactTaggedPostPage(input);

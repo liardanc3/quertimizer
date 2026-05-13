@@ -1,0 +1,22 @@
+package com.quertimizer.auth.adapter.in.http.response;
+
+import com.quertimizer.auth.application.output.AuthManageOutput;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class AuthManageRes {
+
+    private final List<AuthManageUserRowRes> users;
+
+    public AuthManageRes(List<AuthManageUserRowRes> users) {
+        this.users = users;
+    }
+
+    public static AuthManageRes from(AuthManageOutput result) {
+        return new AuthManageRes(result.getUsers().stream()
+                .map(AuthManageUserRowRes::from)
+                .toList());
+    }
+}

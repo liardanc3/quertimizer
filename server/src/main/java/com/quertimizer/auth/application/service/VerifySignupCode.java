@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.VerifySignupCodeUseCase;
 import com.quertimizer.auth.application.input.VerifyCodeInput;
 import com.quertimizer.auth.application.port.out.VerificationCodeRepositoryPort;
@@ -32,6 +33,7 @@ public class VerifySignupCode implements VerifySignupCodeUseCase {
      */
     @Transactional
     @Override
+    @Log("회원가입 코드 검증")
     public void execute(VerifyCodeInput input) {
         signupPolicy.validateAvailableEmail(input.getEmail(), userRepository.existsByEmailIgnoreCase(input.getEmail()));
         authService.validateVerificationCode(input.getEmail(), input.getCode(), input.getClientIp(), "signup");

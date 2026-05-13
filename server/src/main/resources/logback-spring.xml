@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+	<conversionRule conversionWord="rightThread" converterClass="com.quertimizer.global.log.RightAlignedThreadNameConverter"/>
 	<property name="QUERTIMIZER_LOG_DIR" value="/home/quertimizer/apps/server/logs"/>
-	<property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n%ex"/>
+	<property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%rightThread] %X{logActor}%logger{36} - %msg%n%ex"/>
 
 	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
 		<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">

@@ -14,27 +14,20 @@ import { fetchProblems, type ProblemPage } from '@/shared/api/problem-api';
 import { useSession } from '@/shared/auth/session';
 import { useUiText } from '@/shared/config/ui-text';
 import type { DbmsType } from '@/shared/api/domain';
-import ProblemSpreadRateFilter from './ProblemSpreadRateFilter';
 
 type SortDirection = 'desc' | 'asc';
-type SpreadRateSortOrder = 'none' | 'desc' | 'asc';
 type SolveState = 'all' | 'solved' | 'unsolved' | 'none';
 type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
-type RangeSelection = { min: number; max: number };
 interface HomePageFavoriteSnapshot {
   selectedDbms: DbmsType;
   showSolved: boolean;
   showUnsolved: boolean;
   countSortField: CountSortField;
   countSortDirection: SortDirection;
-  spreadRateSortOrder: SpreadRateSortOrder;
   draftSearchValue: string;
   searchQuery: string;
   requestedPage: number;
-  selectedSpreadRateRange: RangeSelection | null;
-  committedSpreadRateRange: RangeSelection | null;
 }
-const DEFAULT_SPREAD_RATE_RANGE: RangeSelection = { min: 0, max: 100 };
 const PROBLEM_PAGE_SIZE = 10;
 const dbmsOptions: DbmsType[] = ['postgresql', 'mysql'];
 
@@ -81,43 +74,8 @@ function createEmptyProblemPage(): ProblemPage {
     pageSize: PROBLEM_PAGE_SIZE,
     totalCount: 0,
     totalPages: 1,
-    spreadRateRange: { min: 0, max: 0 },
     problems: [],
   };
-}
-
-function normalizeRangeSelection(range: RangeSelection | null, bounds: RangeSelection): RangeSelection | null {
-  if (range == null) {
-    return null;
-  }
-
-  const min = Math.max(bounds.min, Math.min(range.min, bounds.max));
-  const max = Math.max(bounds.min, Math.min(range.max, bounds.max));
-
-  return { min, max };
-}
-
-function resolveRangeSelection(range: RangeSelection | null): RangeSelection | null {
-  if (range == null) {
-    return null;
-  }
-
-  return {
-    min: Math.min(range.min, range.max),
-    max: Math.max(range.min, range.max),
-  };
-}
-
-function areSameRange(left: RangeSelection | null, right: RangeSelection | null) {
-  if (left == null || right == null) {
-    return left === right;
-  }
-
-  return left.min === right.min && left.max === right.max;
-}
-
-function keepRangeIfSame(current: RangeSelection | null, next: RangeSelection | null) {
-  return areSameRange(current, next) ? current : next;
 }
 
 function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: boolean) {
@@ -138,7 +96,6 @@ export default function HomePage() {
   const [showUnsolved, setShowUnsolved] = useState(() => favoriteRestoreSnapshot?.showUnsolved ?? true);
   const [countSortField, setCountSortField] = useState<CountSortField>(() => favoriteRestoreSnapshot?.countSortField ?? 'solvedCount');
   const [countSortDirection, setCountSortDirection] = useState<SortDirection>(() => favoriteRestoreSnapshot?.countSortDirection ?? 'desc');
-  const [spreadRateSortOrder, setSpreadRateSortOrder] = useState<SpreadRateSortOrder>(() => favoriteRestoreSnapshot?.spreadRateSortOrder ?? 'none');
   const [draftSearchValue, setDraftSearchValue] = useState(() => favoriteRestoreSnapshot?.draftSearchValue ?? '');
   const [searchQuery, setSearchQuery] = useState(() => favoriteRestoreSnapshot?.searchQuery ?? '');
   const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
@@ -151,27 +108,15 @@ export default function HomePage() {
     beginRequest,
     failRequest,
   } = useRequestState<ProblemPage>(createEmptyProblemPage);
-  const [selectedSpreadRateRange, setSelectedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.selectedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
-  const [committedSpreadRateRange, setCommittedSpreadRateRange] = useState<RangeSelection | null>(() => favoriteRestoreSnapshot?.committedSpreadRateRange ?? DEFAULT_SPREAD_RATE_RANGE);
 
   const canShowSolveState = isReady && isAuthenticated;
   const showStats = true;
   const solveState = canShowSolveState ? resolveSolveState(showSolved, showUnsolved) : 'all';
-  const spreadRateSliderMax = Math.max(DEFAULT_SPREAD_RATE_RANGE.max, Math.ceil(problemPage.spreadRateRange.max));
-  const spreadRateSliderBounds = useMemo(() => ({ min: DEFAULT_SPREAD_RATE_RANGE.min, max: spreadRateSliderMax }), [spreadRateSliderMax]);
-  const visibleSpreadRateRange = selectedSpreadRateRange ?? spreadRateSliderBounds;
-  const resolvedVisibleSpreadRateRange = resolveRangeSelection(visibleSpreadRateRange) ?? spreadRateSliderBounds;
-  const resolvedSelectedSpreadRateRange = resolveRangeSelection(selectedSpreadRateRange);
-  const hasPendingSpreadRateRange = !areSameRange(resolvedSelectedSpreadRateRange, committedSpreadRateRange);
-  const hasActiveSpreadRateConstraints =
-    committedSpreadRateRange != null
-      && (committedSpreadRateRange.min > spreadRateSliderBounds.min || committedSpreadRateRange.max < spreadRateSliderBounds.max);
-  const isSpreadRateFilterActive = spreadRateSortOrder !== 'none' || hasActiveSpreadRateConstraints;
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const mobileFilterRef = useRef<HTMLDivElement | null>(null);
   const mobileFilterLayerRefs = useMemo(() => [mobileFilterRef], []);
   const isMobileFilterActive =
-    !showSolved || !showUnsolved || isSpreadRateFilterActive || countSortField !== 'solvedCount' || countSortDirection !== 'desc';
+    !showSolved || !showUnsolved || countSortField !== 'solvedCount' || countSortDirection !== 'desc';
 
   useDismissableLayer({
     enabled: isMobileFilterOpen,
@@ -183,13 +128,6 @@ export default function HomePage() {
   useEffect(() => {
     clearFavoriteRestoreSnapshot('home');
   }, []);
-
-  useEffect(() => {
-    setSelectedSpreadRateRange((current) => keepRangeIfSame(current, normalizeRangeSelection(current, spreadRateSliderBounds)));
-    setCommittedSpreadRateRange((current) =>
-      keepRangeIfSame(current, resolveRangeSelection(normalizeRangeSelection(current, spreadRateSliderBounds)))
-    );
-  }, [spreadRateSliderBounds]);
 
   useEffect(() => {
     const nextDbms = readProblemsDbmsFromSearch(locationSearch);
@@ -217,9 +155,6 @@ export default function HomePage() {
           solvedCountSort: countSortField === 'solvedCount' ? countSortDirection : 'none',
           totalSubmitSort: countSortField === 'totalSubmitCount' ? countSortDirection : 'none',
           successSubmitSort: countSortField === 'successSubmitCount' ? countSortDirection : 'none',
-          spreadRateSort: spreadRateSortOrder,
-          spreadRateMin: committedSpreadRateRange?.min ?? null,
-          spreadRateMax: committedSpreadRateRange?.max ?? null,
         });
 
         if (cancelled) {
@@ -248,7 +183,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [committedSpreadRateRange, countSortDirection, countSortField, requestedPage, searchQuery, selectedDbms, solveState, spreadRateSortOrder]);
+  }, [countSortDirection, countSortField, requestedPage, searchQuery, selectedDbms, solveState]);
 
   const resolvedProblems = useMemo(
     () =>
@@ -265,7 +200,6 @@ export default function HomePage() {
   function applySearch(value: string) {
     setDraftSearchValue(value);
     setSearchQuery(value);
-    setCommittedSpreadRateRange((current) => keepRangeIfSame(current, resolvedSelectedSpreadRateRange));
     setRequestedPage(1);
   }
 
@@ -298,38 +232,6 @@ export default function HomePage() {
     setShowUnsolved(nextSelection.currentChecked);
     setShowSolved(nextSelection.otherChecked);
     setRequestedPage(1);
-  }
-
-  function toggleSpreadRateSortOrder() {
-    setSpreadRateSortOrder((value) => (value === 'desc' ? 'asc' : 'desc'));
-    setRequestedPage(1);
-  }
-
-  function updateSpreadRateRange(nextRange: RangeSelection) {
-    setSelectedSpreadRateRange((current) =>
-      keepRangeIfSame(current, normalizeRangeSelection(nextRange, spreadRateSliderBounds))
-    );
-  }
-
-  function applySpreadRateRange(nextRange: RangeSelection | null = resolvedSelectedSpreadRateRange) {
-    setCommittedSpreadRateRange((current) => keepRangeIfSame(current, resolveRangeSelection(nextRange)));
-    setRequestedPage(1);
-  }
-
-  function updateSpreadRateMin(nextMin: number) {
-    const baseRange = visibleSpreadRateRange;
-    updateSpreadRateRange({
-      min: nextMin,
-      max: baseRange.max,
-    });
-  }
-
-  function updateSpreadRateMax(nextMax: number) {
-    const baseRange = visibleSpreadRateRange;
-    updateSpreadRateRange({
-      min: baseRange.min,
-      max: nextMax,
-    });
   }
 
   function requestProblemPage(nextPage: number) {
@@ -407,12 +309,9 @@ export default function HomePage() {
                     showUnsolved,
                     countSortField,
                     countSortDirection,
-                    spreadRateSortOrder,
                     draftSearchValue,
                     searchQuery,
                     requestedPage,
-                    selectedSpreadRateRange,
-                    committedSpreadRateRange,
                   },
                 }}
               />
@@ -481,23 +380,6 @@ export default function HomePage() {
                   {renderMobileSortRow(text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출'), 'totalSubmitCount')}
                   {renderMobileSortRow(text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출'), 'successSubmitCount')}
                 </div>
-
-                <ProblemSpreadRateFilter
-                  minBound={spreadRateSliderBounds.min}
-                  maxBound={spreadRateSliderBounds.max}
-                  selectedMin={visibleSpreadRateRange.min}
-                  selectedMax={visibleSpreadRateRange.max}
-                  displayMin={resolvedVisibleSpreadRateRange.min}
-                  displayMax={resolvedVisibleSpreadRateRange.max}
-                  sortOrder={spreadRateSortOrder}
-                  onToggleSort={toggleSpreadRateSortOrder}
-                  onChangeMin={updateSpreadRateMin}
-                  onChangeMax={updateSpreadRateMax}
-                  onChangeRange={updateSpreadRateRange}
-                  onApplyRange={applySpreadRateRange}
-                  hasPendingChanges={hasPendingSpreadRateRange}
-                  numberInputOnly
-                />
               </div>
             ) : null}
           </div>
@@ -520,24 +402,10 @@ export default function HomePage() {
             countSortField={countSortField}
             countSortDirection={countSortDirection}
             isLoading={isLoading}
-            isSpreadRateFilterActive={isSpreadRateFilterActive}
-            spreadRateMinBound={spreadRateSliderBounds.min}
-            spreadRateMaxBound={spreadRateSliderBounds.max}
-            selectedSpreadRateMin={visibleSpreadRateRange.min}
-            selectedSpreadRateMax={visibleSpreadRateRange.max}
-            displaySpreadRateMin={resolvedVisibleSpreadRateRange.min}
-            displaySpreadRateMax={resolvedVisibleSpreadRateRange.max}
-            spreadRateSortOrder={spreadRateSortOrder}
-            hasPendingSpreadRateRange={hasPendingSpreadRateRange}
             onSearchSelect={applySearch}
             onToggleSolved={toggleSolvedFilter}
             onToggleUnsolved={toggleUnsolvedFilter}
             onToggleCountSort={toggleCountSort}
-            onToggleSpreadRateSort={toggleSpreadRateSortOrder}
-            onChangeSpreadRateMin={updateSpreadRateMin}
-            onChangeSpreadRateMax={updateSpreadRateMax}
-            onChangeSpreadRateRange={updateSpreadRateRange}
-            onApplySpreadRateRange={applySpreadRateRange}
           />
         )}
 

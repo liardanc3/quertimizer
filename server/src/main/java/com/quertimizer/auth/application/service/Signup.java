@@ -1,5 +1,6 @@
 package com.quertimizer.auth.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.auth.application.port.in.SignupUseCase;
 import com.quertimizer.auth.application.input.SignupInput;
 import com.quertimizer.auth.domain.policy.SignupPolicy;
@@ -35,6 +36,7 @@ public class Signup implements SignupUseCase {
      */
     @Lock(prefix = LockKey.SIGNUP, key = "#p0.email", timeout = 500)
     @Override
+    @Log("회원가입 처리")
     public void execute(SignupInput input) {
         signupPolicy.validateAvailableEmail(input.getEmail(), userRepository.existsByEmailIgnoreCase(input.getEmail()));
 

@@ -1,10 +1,10 @@
 package com.quertimizer.user.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.user.application.port.in.GetUserProfileCommunityActivitiesUseCase;
 import com.quertimizer.user.application.input.UserProfileActivityPageInput;
 import com.quertimizer.user.application.output.UserProfileCommunityActivitiesOutput;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.application.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +30,7 @@ public class GetUserProfileCommunityActivities implements GetUserProfileCommunit
      */
     @Transactional(readOnly = true)
     @Override
+    @Log("프로필 커뮤니티 활동 조회")
     public Optional<UserProfileCommunityActivitiesOutput> execute(UserProfileActivityPageInput input) {
         return userRepository.findByHandle(input.getTargetHandle())
                 .map(user -> userProfileService.buildCommunityActivities(

@@ -1,5 +1,6 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.input.ProblemExamplePreviewInput;
 import com.quertimizer.problem.application.output.ProblemDataExampleOutput;
 import com.quertimizer.problem.application.output.ProblemExamplePreviewOutput;
@@ -33,6 +34,7 @@ public class PreviewProblemExamples implements PreviewProblemExamplesUseCase {
      * @param input 예시 생성 입력
      */
     @Override
+    @Log("데이터 예시 미리보기")
     public ProblemExamplePreviewOutput execute(ProblemExamplePreviewInput input) {
         problemOutputPreviewRateLimitPort.validate(input.getRequester(), input.getClientIp());
 

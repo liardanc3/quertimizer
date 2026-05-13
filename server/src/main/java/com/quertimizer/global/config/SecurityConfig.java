@@ -1,15 +1,15 @@
 package com.quertimizer.global.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quertimizer.global.constant.GlobalFailReason;
-import com.quertimizer.global.constant.UserRole;
-import com.quertimizer.global.filter.AccountRestrictionFilter;
-import com.quertimizer.global.filter.ApiLoggingFilter;
-import com.quertimizer.global.filter.CsrfCookieFilter;
-import com.quertimizer.global.filter.CsrfCookieNormalizationFilter;
-import com.quertimizer.global.handler.ApiExceptionHandler;
-import com.quertimizer.global.properties.AppSecurityProperties;
+import com.quertimizer.global.exception.ApiExceptionHandler;
+import com.quertimizer.global.exception.GlobalFailReason;
+import com.quertimizer.global.log.ApiLoggingFilter;
+import com.quertimizer.global.security.filter.AccountRestrictionFilter;
+import com.quertimizer.global.security.filter.CsrfCookieFilter;
+import com.quertimizer.global.security.filter.CsrfCookieNormalizationFilter;
+import com.quertimizer.global.security.properties.AppSecurityProperties;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
+import com.quertimizer.user.domain.model.UserRole;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;

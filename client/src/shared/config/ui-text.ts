@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { getApiBaseUrl } from '@/shared/api/api-base-url';
 import { resolveHttpErrorMessage, resolveHttpErrorReasons, toApiError } from '@/shared/api/api-error';
-import { defaultUiTexts, defaultUiTextMap } from '@/shared/config/default-ui-texts';
+import { defaultUiTextMap } from '@/shared/config/default-ui-texts';
 
 interface UiTextResponse {
   key?: string;
@@ -412,32 +412,6 @@ export async function fetchUiTexts(language: string): Promise<UiTextRuntimeData[
   }
 }
 
-export async function fetchUiText(key: string, language: string): Promise<UiTextData> {
-  let response: Response;
-  const fallbackMessage = 'Failed to fetch UI text.';
-
-  const searchParams = new URLSearchParams({ language });
-
-  try {
-    response = await fetch(`${getApiBaseUrl()}/ui-texts/${encodeURIComponent(key)}?${searchParams.toString()}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-  } catch {
-    throw new Error(fallbackMessage);
-  }
-
-  if (!response.ok) {
-    throw await createApiErrorFromResponse(response, fallbackMessage, { loadUiTexts: false });
-  }
-
-  try {
-    return toUiTextData((await response.json()) as UiTextResponse);
-  } catch {
-    throw new Error('Failed to parse UI text.');
-  }
-}
-
 export async function preloadUiTexts(language = resolveUiTextLanguage(), force = false) {
   const requestedLanguage = normalizeUiTextLanguage(language);
   const currentSnapshot = uiTextSnapshot.language === requestedLanguage
@@ -621,30 +595,6 @@ export function getUiTextValue(key: string, fallbackValue?: string) {
 export function getUiText(key: string, paramsOrFallback?: UiTextParams | string, fallbackValue?: string) {
   const { params, fallbackValue: resolvedFallbackValue } = resolveUiTextArguments(paramsOrFallback, fallbackValue);
   return formatUiTextTemplate(resolveUiTextBaseValue(key, resolvedFallbackValue), params);
-}
-
-export function getResolvedUiTextEntries() {
-  const mergedEntries = new Map<string, UiTextData>();
-
-  defaultUiTexts.forEach((uiText) => {
-    mergedEntries.set(uiText.key, {
-      key: uiText.key,
-      value: uiText.value,
-      language: DEFAULT_LANGUAGE,
-      description: uiText.description,
-    });
-  });
-
-  Object.values(uiTextSnapshot.items).forEach((uiText) => {
-    mergedEntries.set(uiText.key, {
-      key: uiText.key,
-      value: uiText.value ?? '',
-      language: uiText.language,
-      description: uiText.description,
-    });
-  });
-
-  return Array.from(mergedEntries.values());
 }
 
 export function useUiText() {

@@ -7,8 +7,7 @@ import java.util.function.Supplier;
 
 public final class LogMdcContext {
 
-    public static final String MDC_ACTOR_KEY = "logActor";
-
+    private static final String MDC_ACTOR_KEY = "logActor";
     private static final int ACTOR_WIDTH = 15;
 
     private LogMdcContext() {

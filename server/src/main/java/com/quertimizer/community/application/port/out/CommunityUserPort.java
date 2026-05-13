@@ -1,6 +1,6 @@
 package com.quertimizer.community.application.port.out;
 
-import com.quertimizer.global.constant.UserRole;
+import com.quertimizer.user.domain.model.UserRole;
 
 public interface CommunityUserPort {
 

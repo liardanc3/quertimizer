@@ -3,7 +3,7 @@ package com.quertimizer.alarm.application.service;
 import com.quertimizer.alarm.application.port.in.GetAdminAlarmTemplatesUseCase;
 import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
 import com.quertimizer.alarm.application.port.out.AlarmTemplateRepositoryPort;
-import com.quertimizer.alarm.application.service.AlarmTemplateService;
+import com.quertimizer.global.log.Log;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +27,7 @@ public class GetAdminAlarmTemplates implements GetAdminAlarmTemplatesUseCase {
      */
     @Transactional
     @Override
+    @Log("관리자 알람 템플릿 목록 조회")
     public List<AlarmTemplateOutput> execute() {
         alarmTemplateService.ensureDefaultTemplates();
         return alarmTemplateRepository.findAllByOrderByAlarmTypeAsc().stream()

@@ -1,9 +1,5 @@
 export type DomainType = 'rdbms' | 'nosql';
 
-export type HomeSectionType = 'ranking' | 'problems';
-
-export type ProblemViewMode = 'tagged' | 'spoilerFree';
-
 export type Difficulty = '입문' | '중급' | '고급';
 
 export type DbmsType = 'postgresql' | 'mysql';
@@ -85,17 +81,6 @@ export interface SubmitHistoryPageData {
   histories: SubmitHistoryEntry[];
 }
 
-export interface RuntimeBucket {
-  startMs: number;
-  count: number;
-}
-
-export interface RuntimeLeaderboardEntry {
-  nickname: string;
-  timeMs: number;
-  submittedAt: string;
-}
-
 export interface ProblemSubmittedHistory {
   dbms: DbmsType;
   handle: string;
@@ -103,51 +88,6 @@ export interface ProblemSubmittedHistory {
   executionTimeMs: number;
   cost?: number;
 }
-
-export interface RuntimeSample {
-  nickname: string;
-  timeMs: number;
-  rowsScanned: number;
-  submittedAt: string;
-  indexUsed: boolean;
-  fullScan: boolean;
-  hintUsed: boolean;
-  scanBucket: ScanBucket;
-  joinBucket: JoinBucket;
-  filterBucket: FilterBucket;
-  sortBucket: SortBucket;
-  aggregateBucket: AggregateBucket;
-  isMine?: boolean;
-}
-
-export interface RuntimeTuningStats {
-  p90TimeMs: number;
-  indexUsageRate: number;
-  fullScanRate: number;
-  averageRowsScanned: number;
-  bufferHitRate: number;
-  tempSpillRate: number;
-  hintUsageRate: number;
-}
-
-export interface RuntimeDistribution {
-  bucketSizeMs: number;
-  buckets: RuntimeBucket[];
-  fastestTimeMs: number;
-  fastestNickname: string;
-  fastestSolvedAt: string;
-  averageTimeMs: number;
-  medianTimeMs: number;
-  standardDeviationMs: number;
-  varianceMs: number;
-  myTimeMs?: number;
-  submissionCount: number;
-  topPerformers: RuntimeLeaderboardEntry[];
-  samples: RuntimeSample[];
-  tuningStats: RuntimeTuningStats;
-}
-
-export type RuntimeDistributionByDbms = Partial<Record<DbmsType, RuntimeDistribution>>;
 
 export interface ProblemSummary {
   id: string;
@@ -161,12 +101,9 @@ export interface ProblemSummary {
   solvedCount: number;
   totalSubmitCount?: number;
   successSubmitCount?: number;
-  spreadRate?: number;
   solvedAt?: string;
   isSolved?: boolean | null;
   submittedHistories?: ProblemSubmittedHistory[];
-  runtimeDistribution?: RuntimeDistribution;
-  runtimeDistributions?: RuntimeDistributionByDbms;
 }
 
 export interface ProblemDetail extends ProblemSummary {
@@ -179,50 +116,8 @@ export interface ProblemDetail extends ProblemSummary {
   disabledDbms: DbmsType[];
 }
 
-export interface DbmsOption {
-  id: DbmsType;
-  label: string;
-  disabled?: boolean;
-}
-
-export interface ProfileSolvedRecord {
-  id: string;
-  problemId: string;
-  problemNumber: number;
-  problemTitle: string;
-  executionTimeMs: number;
-  scanRows: number;
-  solvedAt: string;
-}
-
-export interface ProfileLinks {
-  blog?: string;
-  github?: string;
-  email?: string;
-}
-
-export type SqlEditorPreset = 'focused' | 'balanced' | 'analysis';
-export type SqlVisibility = 'public' | 'followers' | 'private';
-
-export interface ProfileSettings {
-  defaultDbms: DbmsType;
-  sqlEditorPreset: SqlEditorPreset;
-  sqlVisibility: SqlVisibility;
-}
-
-export interface Profile {
-  handle: string;
-  name: string;
-  tier: string;
-  avatarUrl?: string;
-  bio: string;
-  links: ProfileLinks;
-  solvedProblems: ProfileSolvedRecord[];
-  settings: ProfileSettings;
-  solvedCount: number;
-}
-
 export interface RankingEntry {
+  rank: number;
   handle: string;
   solvedCount: number;
   avgExecutionPercentile: number;
@@ -231,20 +126,9 @@ export interface RankingEntry {
   monthlyRankDelta: Record<RankingMetricKey, number>;
 }
 
-export type RankingLeaderboardByDbms = Record<DbmsType, RankingEntry[]>;
 export type RankingMetricKey = 'solvedCount' | 'avgExecutionPercentile';
 
 export type CommunityPostCategory = 'tip' | 'question' | 'discussion' | 'notice';
-export type CommunityTagKind = 'problem' | 'tech' | 'topic';
-
-export interface CommunityTagDefinition {
-  id: string;
-  label: string;
-  kind: CommunityTagKind;
-  aliases: string[];
-  usageCount: number;
-  description: string;
-}
 
 export interface CommunityPostSummary {
   id: string;

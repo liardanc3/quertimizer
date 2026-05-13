@@ -105,13 +105,13 @@
   gap: 0.72rem;
 }
 
-.monitoring-runtime-table {
+.monitoring-database-table {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.42rem;
 }
 
-.monitoring-runtime-card {
+.monitoring-database-card {
   position: relative;
   display: grid;
   grid-template-columns: minmax(4.2rem, 0.56fr) minmax(0, 1.35fr) minmax(4.2rem, 0.5fr) 1.9rem;
@@ -124,12 +124,12 @@
   background: #ffffff;
 }
 
-.monitoring-runtime-card.is-saving > :not(.monitoring-runtime-card-wave) {
+.monitoring-database-card.is-saving > :not(.monitoring-database-card-wave) {
   filter: blur(1.2px);
   opacity: 0.62;
 }
 
-.monitoring-runtime-card-wave {
+.monitoring-database-card-wave {
   position: absolute;
   inset: 0;
   z-index: 8;
@@ -140,12 +140,12 @@
   pointer-events: none;
 }
 
-.monitoring-runtime-card-wave .wave-loading-placeholder {
+.monitoring-database-card-wave .wave-loading-placeholder {
   width: min(12rem, 58%);
   height: 0.58rem;
 }
 
-.monitoring-runtime-card-controls {
+.monitoring-database-card-controls {
   grid-area: action;
   display: flex;
   align-items: center;
@@ -167,7 +167,7 @@
   color: #946200;
 }
 
-.monitoring-runtime-container-name {
+.monitoring-database-container-name {
   grid-area: container;
   min-width: 0;
   overflow: hidden;
@@ -179,7 +179,7 @@
   white-space: nowrap;
 }
 
-.monitoring-runtime-usage {
+.monitoring-database-usage {
   grid-area: usage;
   color: #0f172a;
   font-size: 1.04rem;
@@ -189,7 +189,7 @@
   white-space: nowrap;
 }
 
-.monitoring-runtime-edit-button {
+.monitoring-database-edit-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -201,15 +201,15 @@
   color: #64748b;
 }
 
-.monitoring-runtime-edit-button:hover,
-.monitoring-runtime-edit-button:focus-visible {
+.monitoring-database-edit-button:hover,
+.monitoring-database-edit-button:focus-visible {
   color: #0f5db3;
   outline: 0;
   background: rgba(37, 99, 235, 0.08);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
 }
 
-.monitoring-runtime-edit-button svg {
+.monitoring-database-edit-button svg {
   width: 1rem;
   height: 1rem;
   fill: none;
@@ -320,14 +320,14 @@
 
 @media (prefers-color-scheme: dark) {
   .monitoring-metric-card,
-  .monitoring-runtime-card {
+  .monitoring-database-card {
     border-color: var(--border-subtle);
     background: var(--surface-panel);
   }
 
   .monitoring-metric-value,
-  .monitoring-runtime-container-name,
-  .monitoring-runtime-usage {
+  .monitoring-database-container-name,
+  .monitoring-database-usage {
     color: var(--ink-strong);
   }
 
@@ -360,7 +360,7 @@
     color: #bfdbfe;
   }
 
-  .monitoring-runtime-card-wave {
+  .monitoring-database-card-wave {
     background: rgba(15, 23, 42, 0.56);
   }
 }
@@ -370,7 +370,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .monitoring-runtime-card-controls {
+  .monitoring-database-card-controls {
     justify-content: flex-end;
   }
 }
@@ -380,7 +380,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .monitoring-runtime-table {
+  .monitoring-database-table {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -404,7 +404,7 @@
     font-size: 0.66rem;
   }
 
-  .monitoring-runtime-card {
+  .monitoring-database-card {
     grid-template-columns: minmax(5.2rem, 0.8fr) minmax(0, 1fr) minmax(4.5rem, 0.55fr) 2rem;
     grid-template-areas: "dbms container usage action";
     gap: 0.38rem;

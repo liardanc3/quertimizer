@@ -1,5 +1,6 @@
 package com.quertimizer.alarm.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.alarm.application.port.in.UpdateAlarmTemplateUseCase;
 import com.quertimizer.alarm.application.input.AlarmTemplateInput;
 import com.quertimizer.alarm.application.output.AlarmTemplateOutput;
@@ -32,6 +33,7 @@ public class UpdateAlarmTemplate implements UpdateAlarmTemplateUseCase {
      */
     @Transactional
     @Override
+    @Log("알람 템플릿 수정")
     public AlarmTemplateOutput execute(AlarmTemplateInput input) {
         AlarmTemplate alarmTemplate = alarmTemplateService.getAlarmTemplate(input.getAlarmType());
         alarmTemplate.changeContent(

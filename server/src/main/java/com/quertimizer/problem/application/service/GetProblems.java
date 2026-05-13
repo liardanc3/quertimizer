@@ -1,12 +1,11 @@
 package com.quertimizer.problem.application.service;
 
+import com.quertimizer.global.log.Log;
 import com.quertimizer.problem.application.port.in.GetProblemsUseCase;
 import com.quertimizer.problem.application.input.ProblemSearchInput;
 import com.quertimizer.problem.application.output.ProblemListItemOutput;
 import com.quertimizer.problem.application.output.ProblemPage;
 import com.quertimizer.problem.application.output.ProblemPageOutput;
-import com.quertimizer.problem.application.service.ProblemSearchService;
-import com.quertimizer.problem.application.service.ProblemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -31,12 +30,12 @@ public class GetProblems implements GetProblemsUseCase {
      * @param input 문제 목록 검색, 필터, 정렬 입력
      */
     @Override
+    @Log("문제 목록 조회")
     public ProblemPageOutput execute(ProblemSearchInput input) {
         ProblemPage problemPage = problemSearchService.findProblemPage(
                 input.getPage(), input.getQuery(), problemService.resolveDbmsType(input.getDbms()),
                 input.getSolveState(), input.getCurrentHandle(),
-                input.getSolvedCountSort(), input.getTotalSubmitSort(), input.getSuccessSubmitSort(),
-                input.getSpreadRateSort(), input.getSpreadRateMin(), input.getSpreadRateMax()
+                input.getSolvedCountSort(), input.getTotalSubmitSort(), input.getSuccessSubmitSort()
         );
 
         List<ProblemListItemOutput> problems = problemPage.getProblems().stream()
@@ -45,8 +44,7 @@ public class GetProblems implements GetProblemsUseCase {
 
         return new ProblemPageOutput(
                 problemPage.getCurrentPage(), problemPage.getPageSize(),
-                problemPage.getTotalCount(), problemPage.getTotalPages(),
-                problemPage.getSpreadRateMin(), problemPage.getSpreadRateMax(), problems
+                problemPage.getTotalCount(), problemPage.getTotalPages(), problems
         );
     }
 }

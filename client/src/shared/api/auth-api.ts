@@ -74,11 +74,6 @@ export class RecoveryApiError extends Error {
   }
 }
 
-export interface DuplicateCheckResult {
-  available: boolean;
-  reason: string | null;
-}
-
 export interface SessionMeResult {
   authenticated: boolean;
   handle: string | null;
@@ -145,23 +140,18 @@ function parseSessionMeResult(data: SessionMeResponse) {
   } satisfies SessionMeResult;
 }
 
-async function requestDuplicateCheck(
-  path: '/duplicate-check/handle' | '/duplicate-check/email',
-  queryKey: 'handle' | 'email',
-  value: string,
-  fallbackMessage: string
-) {
+async function requestDuplicateCheck(email: string, fallbackMessage: string) {
   let response: Response;
 
   try {
-    response = await fetch(`${getApiBaseUrl()}${path}`, {
+    response = await fetch(`${getApiBaseUrl()}/duplicate-check/email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       credentials: 'include',
       body: JSON.stringify({
-        [queryKey]: value,
+        email,
       }),
     });
   } catch {
@@ -298,30 +288,6 @@ export async function login(payload: LoginPayload) {
   }
 }
 
-export function startGithubLogin() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.location.assign(`${getApiBaseUrl()}/oauth2/authorization/github`);
-}
-
-export function startGoogleLogin() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.location.assign(`${getApiBaseUrl()}/oauth2/authorization/google`);
-}
-
-export function startKakaoLogin() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.location.assign(`${getApiBaseUrl()}/oauth2/authorization/kakao`);
-}
-
 export async function logout() {
   let response: Response;
 
@@ -372,12 +338,8 @@ export async function fetchSessionMe() {
   }
 }
 
-export async function checkDuplicateHandle(handle: string) {
-  return requestDuplicateCheck('/duplicate-check/handle', 'handle', handle, getUiTextValue('HANDLE_DUPLICATE_CHECK_FAIL_MESSAGE', 'Handle 중복 확인 중 오류가 발생했습니다.'));
-}
-
 export async function checkDuplicateEmail(email: string) {
-  return requestDuplicateCheck('/duplicate-check/email', 'email', email, getUiTextValue('AUTH_EMAIL_DUPLICATE_CHECK_FAIL_MESSAGE', '이메일 중복 확인 중 오류가 발생했습니다.'));
+  return requestDuplicateCheck(email, getUiTextValue('AUTH_EMAIL_DUPLICATE_CHECK_FAIL_MESSAGE', '이메일 중복 확인 중 오류가 발생했습니다.'));
 }
 
 export async function sendPasswordResetCode(payload: AccountRecoveryEmailPayload) {
