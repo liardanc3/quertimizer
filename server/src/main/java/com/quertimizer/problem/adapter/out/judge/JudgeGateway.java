@@ -33,37 +33,37 @@ public class JudgeGateway implements ProblemJudgePort {
     private final JudgeApplicationPort judgeApplicationPort;
 
     @Override
-    public String createDataset(DbmsType dbmsType, String ddl, String dataSql) {
+    public Long createDataset(DbmsType dbmsType, String ddl, String dataSql) {
         // problem SQL 자료를 채점 데이터셋으로 등록
         return judgeApplicationPort.createDataset(new CreateDatasetInput(dbmsType, ddl, dataSql, List.of())).getValue();
     }
 
     @Override
-    public String createInlineDataset(DbmsType dbmsType, String ddl, String dataSql) {
+    public Long createInlineDataset(DbmsType dbmsType, String ddl, String dataSql) {
         // 별도 problem_set 행이 없는 SQL 자료를 채점 데이터셋 내부 정의와 함께 등록
         return judgeApplicationPort.createDataset(new CreateDatasetInput(dbmsType, ddl, dataSql, List.of(), true)).getValue();
     }
 
     @Override
-    public String createTemporaryDataset(DbmsType dbmsType, String ddl, String dataSql) {
+    public Long createTemporaryDataset(DbmsType dbmsType, String ddl, String dataSql) {
         // 임시 SQL 자료를 채점 데이터셋 내부 정의와 함께 등록
         return judgeApplicationPort.createDataset(new CreateDatasetInput(dbmsType, ddl, dataSql, List.of(), true)).getValue();
     }
 
     @Override
-    public boolean hasDataset(String datasetId) {
+    public boolean hasDataset(Long datasetId) {
         // 채점 데이터셋 존재 여부 확인
         return judgeApplicationPort.hasDataset(datasetId);
     }
 
     @Override
-    public void deleteDataset(String datasetId) {
+    public void deleteDataset(Long datasetId) {
         // 채점 데이터셋 제거
         judgeApplicationPort.deleteDataset(new JudgeDatasetId(datasetId));
     }
 
     @Override
-    public String createAnswerHash(String datasetId, String answerSql) {
+    public String createAnswerHash(Long datasetId, String answerSql) {
         // 채점 데이터셋 기준 정답 SQL 실행 해시 생성
         return judgeApplicationPort.createSqlExecutionHash(new CreateSqlExecutionHashInput(
                 new JudgeDatasetId(datasetId), answerSql, ExecutionOptions.officialCost()
@@ -71,13 +71,13 @@ public class JudgeGateway implements ProblemJudgePort {
     }
 
     @Override
-    public String createInteractiveEnvironment(String datasetId) {
+    public String createInteractiveEnvironment(Long datasetId) {
         return createInteractiveEnvironment(datasetId, remainingTasks -> {
         });
     }
 
     @Override
-    public String createInteractiveEnvironment(String datasetId, Consumer<Integer> remainingTaskListener) {
+    public String createInteractiveEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener) {
         // 인터랙티브 문제 실행 환경 생성
         return judgeApplicationPort.createEnvironment(new CreateEnvironmentInput(
                 new JudgeDatasetId(datasetId), EnvironmentPolicy.interactive(),
@@ -86,19 +86,19 @@ public class JudgeGateway implements ProblemJudgePort {
     }
 
     @Override
-    public String createSubmissionEnvironment(String datasetId) {
+    public String createSubmissionEnvironment(Long datasetId) {
         return createSubmissionEnvironment(datasetId, remainingTasks -> {
         });
     }
 
     @Override
-    public String createSubmissionEnvironment(String datasetId, Consumer<Integer> remainingTaskListener) {
+    public String createSubmissionEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener) {
         return createSubmissionEnvironment(datasetId, remainingTaskListener, detail -> {
         });
     }
 
     @Override
-    public String createSubmissionEnvironment(String datasetId, Consumer<Integer> remainingTaskListener,
+    public String createSubmissionEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener,
                                               Consumer<String> detailListener) {
         // 공식 제출용 문제 실행 환경 생성
         return judgeApplicationPort.createEnvironment(new CreateEnvironmentInput(

@@ -36,7 +36,7 @@ public class PreviewProblem implements PreviewProblemUseCase {
     public ProblemOutputPreviewOutput execute(ProblemOutputPreviewInput input) {
         problemOutputPreviewRateLimitPort.validate(input.getRequester(), input.getClientIp());
 
-        String datasetId = createDataset(input);
+        Long datasetId = createDataset(input);
         String environmentId = problemJudgePort.createSubmissionEnvironment(datasetId);
         try {
             return problemExampleService.createOutputPreview(environmentId, input.getAnswerSql());
@@ -46,7 +46,7 @@ public class PreviewProblem implements PreviewProblemUseCase {
         }
     }
 
-    private String createDataset(ProblemOutputPreviewInput input) {
+    private Long createDataset(ProblemOutputPreviewInput input) {
         // 출력 예시 SQL 자료를 judge 데이터셋으로 등록
         return problemJudgePort.createTemporaryDataset(input.getDbmsType(), input.getDdl(), input.getActualDataSql());
     }
@@ -56,16 +56,16 @@ public class PreviewProblem implements PreviewProblemUseCase {
         try {
             problemJudgePort.dropEnvironment(environmentId);
         } catch (Exception exception) {
-            log.warn("출력 예시 임시 judge 실행 환경 정리 실패 environmentId={}", environmentId, exception);
+            log.warn("출력 예시 임시 judge 실행 환경 정리 실패 environment={}", environmentId, exception);
         }
     }
 
-    private void deleteDatasetQuietly(String datasetId) {
+    private void deleteDatasetQuietly(Long datasetId) {
         // 출력 예시 임시 데이터셋 제거 실패 로그 기록
         try {
             problemJudgePort.deleteDataset(datasetId);
         } catch (Exception exception) {
-            log.warn("출력 예시 임시 judge 데이터셋 정리 실패 datasetId={}", datasetId, exception);
+            log.warn("출력 예시 임시 judge 데이터셋 정리 실패 dataset={}", datasetId, exception);
         }
     }
 

@@ -23,8 +23,8 @@ import java.time.Instant;
 public class JudgeDatasetTemplateEntity {
 
     @Id
-    @Column(name = "dataset_id", nullable = false, length = 80)
-    private String datasetId;
+    @Column(name = "dataset_id", nullable = false)
+    private Long datasetId;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "dataset_id", insertable = false, updatable = false)
@@ -56,7 +56,7 @@ public class JudgeDatasetTemplateEntity {
         );
     }
 
-    private JudgeDatasetTemplateEntity(String datasetId, String dbmsType,
+    private JudgeDatasetTemplateEntity(Long datasetId, String dbmsType,
                                        String templateVersion, String environmentName, Instant createdAt) {
         this.datasetId = datasetId;
         this.dbmsType = dbmsType;

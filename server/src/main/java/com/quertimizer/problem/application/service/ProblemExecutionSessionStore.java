@@ -14,7 +14,7 @@ public class ProblemExecutionSessionStore {
         return Optional.ofNullable(sessionById.get(executionSessionId));
     }
 
-    public ProblemExecutionSession save(String executionSessionId, String problemId, String datasetId, String environmentId) {
+    public ProblemExecutionSession save(String executionSessionId, String problemId, Long datasetId, String environmentId) {
         // 실행 세션 상태 저장
         ProblemExecutionSession session = new ProblemExecutionSession(problemId, datasetId, environmentId);
         sessionById.put(executionSessionId, session);
@@ -43,11 +43,11 @@ public class ProblemExecutionSessionStore {
 
     public static final class ProblemExecutionSession {
         private final String problemId;
-        private final String datasetId;
+        private final Long datasetId;
         private final String environmentId;
         private String lastExecutionId;
 
-        private ProblemExecutionSession(String problemId, String datasetId, String environmentId) {
+        private ProblemExecutionSession(String problemId, Long datasetId, String environmentId) {
             this.problemId = problemId;
             this.datasetId = datasetId;
             this.environmentId = environmentId;

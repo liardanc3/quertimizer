@@ -23,8 +23,8 @@ public class JudgeSetupSqlDefinitionEntity {
     @Column(name = "setup_sql_id", nullable = false, length = 80)
     private String setupSqlId;
 
-    @Column(name = "dataset_id", nullable = false, length = 80)
-    private String datasetId;
+    @Column(name = "dataset_id", nullable = false)
+    private Long datasetId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "dataset_id", insertable = false, updatable = false)
@@ -51,7 +51,7 @@ public class JudgeSetupSqlDefinitionEntity {
         return new JudgeSetupSqlId(setupSqlId);
     }
 
-    private JudgeSetupSqlDefinitionEntity(String setupSqlId, String datasetId, String setupSqlsJson,
+    private JudgeSetupSqlDefinitionEntity(String setupSqlId, Long datasetId, String setupSqlsJson,
                                           boolean keepBaseIndexes, boolean applySetupIndexesOnly) {
         this.setupSqlId = setupSqlId;
         this.datasetId = datasetId;

@@ -32,32 +32,27 @@ public class ProblemDatasetResolver {
                 .orElseThrow(() -> new BusinessException(PROBLEM_SET_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
         DbmsType dbmsType = problem.getDbmsType() != null ? problem.getDbmsType() : requestedDbmsType;
 
-        // 저장된 데이터셋 키가 judge에 남아 있으면 기존 데이터셋 재사용
-        String storedDatasetId = normalize(problemSet.getDatasetId());
-        if (!storedDatasetId.isBlank() && problemJudgePort.hasDataset(storedDatasetId)) {
+        // 저장된 데이터셋 ID가 judge에 남아 있으면 기존 데이터셋 재사용
+        Long storedDatasetId = problemSet.getDatasetId();
+        if (storedDatasetId != null && problemJudgePort.hasDataset(storedDatasetId)) {
             return new ResolvedProblemDataset(problem, problemSet, storedDatasetId, dbmsType);
         }
 
-        // 키 누락 또는 judge 데이터셋 누락 시 문제셋 원본 SQL 기반 새 데이터셋 생성
-        String datasetId = problemJudgePort.createDataset(dbmsType, problemSet.getDdl(), problemSet.getActualDataSql());
+        // ID 누락 또는 judge 데이터셋 누락 시 문제셋 원본 SQL 기반 새 데이터셋 생성
+        Long datasetId = problemJudgePort.createDataset(dbmsType, problemSet.getDdl(), problemSet.getActualDataSql());
         problemSet.changeContent(problemSet.getDdl(), problemSet.getActualDataSql(), dbmsType, datasetId);
         problemSetRepository.save(problemSet);
 
         return new ResolvedProblemDataset(problem, problemSet, datasetId, dbmsType);
     }
 
-    private String normalize(String value) {
-        // null 문자열 빈 문자열 정리
-        return value != null ? value.trim() : "";
-    }
-
     public static class ResolvedProblemDataset {
         private final Problem problem;
         private final ProblemSet problemSet;
-        private final String datasetId;
+        private final Long datasetId;
         private final DbmsType dbmsType;
 
-        private ResolvedProblemDataset(Problem problem, ProblemSet problemSet, String datasetId, DbmsType dbmsType) {
+        private ResolvedProblemDataset(Problem problem, ProblemSet problemSet, Long datasetId, DbmsType dbmsType) {
             this.problem = problem;
             this.problemSet = problemSet;
             this.datasetId = datasetId;
@@ -74,7 +69,7 @@ public class ProblemDatasetResolver {
             return problemSet;
         }
 
-    public String getDatasetId() {
+    public Long getDatasetId() {
             // judge 데이터셋 ID 반환
             return datasetId;
         }

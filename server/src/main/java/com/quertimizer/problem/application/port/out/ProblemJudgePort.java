@@ -9,27 +9,27 @@ import java.util.function.Consumer;
 
 public interface ProblemJudgePort {
 
-    String createDataset(DbmsType dbmsType, String ddl, String dataSql);
+    Long createDataset(DbmsType dbmsType, String ddl, String dataSql);
 
-    String createInlineDataset(DbmsType dbmsType, String ddl, String dataSql);
+    Long createInlineDataset(DbmsType dbmsType, String ddl, String dataSql);
 
-    String createTemporaryDataset(DbmsType dbmsType, String ddl, String dataSql);
+    Long createTemporaryDataset(DbmsType dbmsType, String ddl, String dataSql);
 
-    boolean hasDataset(String datasetId);
+    boolean hasDataset(Long datasetId);
 
-    void deleteDataset(String datasetId);
+    void deleteDataset(Long datasetId);
 
-    String createAnswerHash(String datasetId, String answerSql);
+    String createAnswerHash(Long datasetId, String answerSql);
 
-    String createInteractiveEnvironment(String datasetId);
+    String createInteractiveEnvironment(Long datasetId);
 
-    String createInteractiveEnvironment(String datasetId, Consumer<Integer> remainingTaskListener);
+    String createInteractiveEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener);
 
-    String createSubmissionEnvironment(String datasetId);
+    String createSubmissionEnvironment(Long datasetId);
 
-    String createSubmissionEnvironment(String datasetId, Consumer<Integer> remainingTaskListener);
+    String createSubmissionEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener);
 
-    String createSubmissionEnvironment(String datasetId, Consumer<Integer> remainingTaskListener,
+    String createSubmissionEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener,
                                        Consumer<String> detailListener);
 
     ProblemJudgeExecutionResult executeInteractiveSql(String executionId, String environmentId,

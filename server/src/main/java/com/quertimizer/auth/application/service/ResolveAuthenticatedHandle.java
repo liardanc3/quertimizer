@@ -22,7 +22,6 @@ public class ResolveAuthenticatedHandle implements ResolveAuthenticatedHandleUse
      * @param authenticatedEmail 현재 요청의 인증 이메일
      */
     @Override
-    @Log("인증 Handle 확인")
     public String execute(String authenticatedEmail) {
         return userRepository.findByEmailIgnoreCase(normalizeEmail(authenticatedEmail))
                 .map(AuthUser::getHandle)

@@ -33,21 +33,21 @@ public class ProblemSetJpaEntity {
     @Column(name = "data", nullable = false, columnDefinition = "TEXT")
     private String actualDataSql;
 
-    @Column(name = "dataset_id", length = 80)
-    private String datasetId;
+    @Column(name = "dataset_id")
+    private Long datasetId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "dbms_type", nullable = false, length = 20)
     private DbmsType dbmsType;
 
     public static ProblemSetJpaEntity create(String problemSetId, String ddl,
-                                             String actualDataSql, String datasetId,
+                                             String actualDataSql, Long datasetId,
                                              DbmsType dbmsType) {
         // 문제 테이블셋 JPA 엔티티 생성
         return new ProblemSetJpaEntity(problemSetId, ddl, actualDataSql, datasetId, dbmsType);
     }
 
-    public void update(String ddl, String actualDataSql, String datasetId, DbmsType dbmsType) {
+    public void update(String ddl, String actualDataSql, Long datasetId, DbmsType dbmsType) {
         // 문제 테이블셋 JPA 엔티티 내용 변경
         this.ddl = ddl;
         this.actualDataSql = actualDataSql;
@@ -56,7 +56,7 @@ public class ProblemSetJpaEntity {
     }
 
     private ProblemSetJpaEntity(String problemSetId, String ddl,
-                                String actualDataSql, String datasetId,
+                                String actualDataSql, Long datasetId,
                                 DbmsType dbmsType) {
         this.problemSetId = problemSetId;
         this.ddl = ddl;

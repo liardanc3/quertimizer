@@ -24,7 +24,6 @@ public class ValidateClientIpAccess implements ValidateClientIpAccessUseCase {
      */
     @Override
     @Transactional(readOnly = true)
-    @Log("클라이언트 IP 접근 검증")
     public void execute(String clientIp) {
         // 빈 IP는 차단 대상 조회 없이 허용
         if (clientIp == null || clientIp.isBlank()) {

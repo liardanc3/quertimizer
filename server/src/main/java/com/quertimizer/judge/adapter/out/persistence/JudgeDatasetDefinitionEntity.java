@@ -6,6 +6,8 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
@@ -24,8 +26,9 @@ import java.util.List;
 public class JudgeDatasetDefinitionEntity {
 
     @Id
-    @Column(name = "dataset_id", nullable = false, length = 80)
-    private String datasetId;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "dataset_id", nullable = false, updatable = false)
+    private Long datasetId;
 
     @Column(name = "base_index_ddls_json", nullable = false, columnDefinition = "TEXT")
     private String baseIndexDdlsJson;
@@ -42,10 +45,10 @@ public class JudgeDatasetDefinitionEntity {
     public static JudgeDatasetDefinitionEntity from(DatasetDefinition definition, String baseIndexDdlsJson,
                                                     boolean storeSqlDefinition) {
         JudgeDatasetDefinitionEntity entity = new JudgeDatasetDefinitionEntity(
-                definition.getDatasetId().getValue(), baseIndexDdlsJson
+                definition.getDatasetId() != null ? definition.getDatasetId().getValue() : null, baseIndexDdlsJson
         );
         if (storeSqlDefinition) {
-            entity.inlineDefinition = JudgeInlineDatasetDefinitionEntity.from(definition);
+            entity.inlineDefinition = JudgeInlineDatasetDefinitionEntity.from(entity, definition);
         }
 
         return entity;
@@ -59,7 +62,7 @@ public class JudgeDatasetDefinitionEntity {
         return baseIndexDdlsJson;
     }
 
-    private JudgeDatasetDefinitionEntity(String datasetId, String baseIndexDdlsJson) {
+    private JudgeDatasetDefinitionEntity(Long datasetId, String baseIndexDdlsJson) {
         this.datasetId = datasetId;
         this.baseIndexDdlsJson = baseIndexDdlsJson;
     }

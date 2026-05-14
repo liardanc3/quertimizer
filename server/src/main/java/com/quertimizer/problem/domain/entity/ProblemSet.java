@@ -14,21 +14,21 @@ public class ProblemSet {
     private String problemSetId;
     private String ddl;
     private String actualDataSql;
-    private String datasetId;
+    private Long datasetId;
     private DbmsType dbmsType;
 
     public static ProblemSet create(String problemSetId,
                                     String ddl,
                                     String actualDataSql,
                                     DbmsType dbmsType) {
-        return create(problemSetId, ddl, actualDataSql, dbmsType, "");
+        return create(problemSetId, ddl, actualDataSql, dbmsType, null);
     }
 
     public static ProblemSet create(String problemSetId,
                                     String ddl,
                                     String actualDataSql,
                                     DbmsType dbmsType,
-                                    String judgeDatasetId) {
+                                    Long judgeDatasetId) {
         return new ProblemSet(problemSetId, ddl, actualDataSql, dbmsType, judgeDatasetId);
     }
 
@@ -40,16 +40,16 @@ public class ProblemSet {
     public static ProblemSet create(DbmsType dbmsType) {
         // DBMS 유형만 확정한 빈 문제 테이블셋 엔티티 생성
         DbmsType resolvedDbmsType = dbmsType != null ? dbmsType : DbmsType.POSTGRESQL;
-        return new ProblemSet("", "", "", resolvedDbmsType, "");
+        return new ProblemSet("", "", "", resolvedDbmsType, null);
     }
 
     public static ProblemSet create(String ddl, String actualDataSql, DbmsType dbmsType) {
         // SQL 자료와 DBMS 유형을 가진 신규 문제 테이블셋 엔티티 생성
         DbmsType resolvedDbmsType = dbmsType != null ? dbmsType : DbmsType.POSTGRESQL;
-        return new ProblemSet("", ddl, actualDataSql, resolvedDbmsType, "");
+        return new ProblemSet("", ddl, actualDataSql, resolvedDbmsType, null);
     }
 
-    public static ProblemSet create(String ddl, String actualDataSql, DbmsType dbmsType, String judgeDatasetId) {
+    public static ProblemSet create(String ddl, String actualDataSql, DbmsType dbmsType, Long judgeDatasetId) {
         // SQL 자료와 judge 데이터셋 정보를 가진 신규 문제 테이블셋 엔티티 생성
         DbmsType resolvedDbmsType = dbmsType != null ? dbmsType : DbmsType.POSTGRESQL;
         return new ProblemSet("", ddl, actualDataSql, resolvedDbmsType, judgeDatasetId);
@@ -57,7 +57,7 @@ public class ProblemSet {
 
     public static ProblemSet restore(Long id, String problemSetId,
                                      String ddl, String actualDataSql,
-                                     String datasetId, DbmsType dbmsType) {
+                                     Long datasetId, DbmsType dbmsType) {
         // 저장된 문제 테이블셋 상태 복원
         ProblemSet problemSet = new ProblemSet(problemSetId, ddl, actualDataSql, dbmsType, datasetId);
         problemSet.id = id;
@@ -72,7 +72,7 @@ public class ProblemSet {
         return this;
     }
 
-    public ProblemSet updateInfo(String ddl, String actualDataSql, DbmsType dbmsType, String judgeDatasetId) {
+    public ProblemSet updateInfo(String ddl, String actualDataSql, DbmsType dbmsType, Long judgeDatasetId) {
         // 문제 테이블셋 SQL 자료와 judge 데이터셋 정보 전체 교체
         this.ddl = ddl;
         this.actualDataSql = actualDataSql;
@@ -81,7 +81,7 @@ public class ProblemSet {
         return this;
     }
 
-    public ProblemSet updateDatasetId(String datasetId) {
+    public ProblemSet updateDatasetId(Long datasetId) {
         // 문제 테이블셋 데이터셋 ID 교체
         this.datasetId = datasetId;
         return this;
@@ -97,7 +97,7 @@ public class ProblemSet {
     public void changeContent(String ddl,
                               String actualDataSql,
                               DbmsType dbmsType,
-                              String judgeDatasetId) {
+                              Long judgeDatasetId) {
         this.ddl = ddl;
         this.actualDataSql = actualDataSql;
         this.dbmsType = dbmsType;
@@ -140,7 +140,7 @@ public class ProblemSet {
                        String ddl,
                        String actualDataSql,
                        DbmsType dbmsType,
-                       String datasetId) {
+                       Long datasetId) {
         this.problemSetId = problemSetId;
         this.ddl = ddl;
         this.actualDataSql = actualDataSql;

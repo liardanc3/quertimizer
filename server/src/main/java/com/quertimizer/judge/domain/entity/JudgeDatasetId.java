@@ -7,9 +7,9 @@ import java.util.Objects;
 @Data
 public class JudgeDatasetId {
 
-    private final String value;
+    private final Long value;
 
-    public JudgeDatasetId(String value) {
+    public JudgeDatasetId(Long value) {
         this.value = value;
     }
 
@@ -33,6 +33,6 @@ public class JudgeDatasetId {
 
     @Override
     public String toString() {
-        return value;
+        return String.valueOf(value);
     }
 }

@@ -59,12 +59,6 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
     public ProvisionedEnvironment create(JudgeEnvironmentId environmentId, DatasetDefinition dataset,
                                                 EnvironmentPolicy policy, QueuePriority queuePriority,
                                                 QueueStatusListener queueStatusListener) {
-        // 실행 환경 시작 로그 기록
-        log.info(
-                "lvm-snapshot 실행 환경 분리 시작 environmentId={}, datasetId={}, dbmsType={}",
-                environmentId, dataset.getDatasetId(), dataset.getDbmsType()
-        );
-
         // 실행 DB 노드와 데이터셋 템플릿 context 생성
         DatabaseSlot databaseSlot = lvmSnapshotPort.acquire(dataset.getDbmsType(), queuePriority, queueStatusListener);
         queueStatusListener.onWaiting(0);
@@ -77,7 +71,7 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
         try {
             // 읽기 전용 템플릿 기반 평가 snapshot 생성
             log.info(
-                    "lvm-snapshot 평가 snapshot 생성 시작 environmentId={}, databaseId={}, templateVersion={}, port={}",
+                    "LVM snapshot 평가 LV 생성 시작 environment={}, database={}, template={}, port={}",
                     environmentId, context.database.getId(), context.templateVersion, context.port
             );
             queueStatusListener.onSnapshotCreating();
@@ -85,30 +79,35 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
             snapshotCreated = true;
             queueStatusListener.onSnapshotCreated();
             log.info(
-                    "lvm-snapshot 평가 snapshot 생성 완료 environmentId={}, databaseId={}, environmentScriptName={}",
+                    "LVM snapshot 평가 LV 생성 완료 environment={}, database={}, script={}",
                     environmentId, context.database.getId(), context.environmentScriptName
             );
 
             // 평가 snapshot을 바라보는 DB 프로세스 시작
             log.info(
-                    "lvm-snapshot 평가 DB 프로세스 시작 environmentId={}, containerName={}, port={}",
-                    environmentId, context.databaseNode.getContainerName(), context.port
+                    "LVM snapshot 기반 {} 프로세스 실행 시작 environment={}, container={}, port={}",
+                    dataset.getDbmsType(), environmentId, context.databaseNode.getContainerName(), context.port
             );
             queueStatusListener.onProcessStarting(dataset.getDbmsType());
             startDatabaseProcess(dataset.getDbmsType(), context.databaseNode, context.environmentScriptName, context.port);
             processStarted = true;
+            log.info(
+                    "LVM snapshot 기반 {} 프로세스 실행 완료 environment={}, container={}, port={}",
+                    dataset.getDbmsType(), environmentId, context.databaseNode.getContainerName(), context.port
+            );
 
             // JDBC 접속 가능한 평가 DB 정보 생성과 준비 대기
             ExecutionEnvironment environment = createExecutionEnvironment(environmentId, dataset, context);
             log.info(
-                    "lvm-snapshot 평가 DB 준비 대기 시작 environmentId={}, jdbcUrl={}",
+                    "LVM snapshot 기반 {} 접속 준비 대기 environment={}, jdbcUrl={}",
+                    dataset.getDbmsType(),
                     environmentId, environment.getDatabase().getJdbcUrl()
             );
             environmentConnectionPort.waitUntilReady(environment, options.getStartupTimeoutSeconds());
             queueStatusListener.onProcessStarted(dataset.getDbmsType());
             log.info(
-                    "lvm-snapshot 실행 환경 분리 완료 environmentId={}, datasetId={}, databaseId={}, port={}",
-                    environmentId, dataset.getDatasetId(), context.database.getId(), context.port
+                    "LVM snapshot 기반 {} 접속 준비 완료 environment={}, database={}, port={}",
+                    dataset.getDbmsType(), environmentId, context.database.getId(), context.port
             );
 
             // 생성된 실행 환경 인스턴스 등록 후 반환
@@ -121,8 +120,8 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
         } catch (Exception exception) {
             // 실행 환경 생성 실패 시 생성된 프로세스와 snapshot 정리
             log.warn(
-                    "lvm-snapshot 실행 환경 분리 실패 environmentId={}, datasetId={}, databaseId={}",
-                    environmentId, dataset.getDatasetId(), context.database.getId(), exception
+                    "LVM snapshot 실행 환경 생성 실패 environment={}, database={}",
+                    environmentId, context.database.getId(), exception
             );
             try {
                 cleanupFailedCreation(context, processStarted, snapshotCreated);
@@ -157,13 +156,13 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
         JudgeEnvironmentId environmentId = environment.getExecutionEnvironment().getEnvironmentId();
         LvmSnapshotInstance instance = instances.remove(environmentId);
         if (instance == null) {
-            log.info("lvm-snapshot 실행 환경 정리 대상 없음 environmentId={}", environmentId);
+            log.info("LVM snapshot 실행 환경 정리 대상 없음 environment={}", environmentId);
             return;
         }
 
         // DB 프로세스와 평가 snapshot 정리
         log.info(
-                "lvm-snapshot 실행 환경 정리 시작 environmentId={}, environmentScriptName={}, port={}",
+                "LVM snapshot 실행 환경 정리 시작 environment={}, environmentScriptName={}, port={}",
                 environmentId, instance.environmentScriptName, instance.port
         );
         RuntimeException failure = null;
@@ -171,10 +170,10 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
         failure = captureFailure(failure, () -> dropEvalSnapshot(instance.scriptDbmsName, instance.environmentScriptName));
         releaseInstance(instance);
         if (failure != null) {
-            log.warn("lvm-snapshot 실행 환경 정리 실패 environmentId={}", environmentId, failure);
+            log.warn("LVM snapshot 실행 환경 정리 실패 environment={}", environmentId, failure);
             throw failure;
         }
-        log.info("lvm-snapshot 실행 환경 정리 완료 environmentId={}", environmentId);
+        log.info("LVM snapshot 실행 환경 정리 완료 environment={}", environmentId);
     }
 
     @Override
@@ -216,15 +215,15 @@ public class ProvisionService implements EnvironmentProvisioner, OrphanLvmSnapsh
     private void dropOrphanEvalSnapshot(String evalLvName) {
         // 고아 평가 LV 정리 실패가 batch 전체를 중단시키지 않도록 개별 처리
         try {
-            log.info("lvm-snapshot 고아 평가 snapshot 정리 시작 lvName={}", evalLvName);
+            log.info("LVM snapshot 고아 평가 snapshot 정리 시작 lvName={}", evalLvName);
             containerPort.stopOrphanEvalProcesses(
                     lvmSnapshotPort.resolveEvalDbmsType(evalLvName), options.getNodes(),
                     lvmSnapshotPort.resolveEvalEnvironmentName(evalLvName)
             );
             lvmSnapshotPort.dropOrphanEvalSnapshot(evalLvName);
-            log.info("lvm-snapshot 고아 평가 snapshot 정리 완료 lvName={}", evalLvName);
+            log.info("LVM snapshot 고아 평가 snapshot 정리 완료 lvName={}", evalLvName);
         } catch (Exception exception) {
-            log.warn("lvm-snapshot 고아 평가 snapshot 정리 실패 lvName={}", evalLvName, exception);
+            log.warn("LVM snapshot 고아 평가 snapshot 정리 실패 lvName={}", evalLvName, exception);
         }
     }
 

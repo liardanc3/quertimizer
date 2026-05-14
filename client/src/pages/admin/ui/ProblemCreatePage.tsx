@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { StatusPopup } from '@/shared/ui';
 import useDismissableLayer from '@/shared/lib/hooks/use-dismissable-layer';
-import { subscribeSessionSocketMessages, type SessionSocketMessage } from '@/shared/auth/session-socket';
+import {
+  connectSessionSocket,
+  subscribeSessionSocketConnection,
+  subscribeSessionSocketMessages,
+  type SessionSocketMessage,
+} from '@/shared/auth/session-socket';
 import {
   createProblem,
   fetchAdminProblemOptions,
@@ -136,6 +141,7 @@ const NEW_PROBLEM_OPTION_VALUE = '__new_problem__';
 const SCHEMA_TABLE_COLUMN_TEMPLATE = 'minmax(9.2rem, 2fr) minmax(13rem, 3.4fr) minmax(8rem, 1.6fr) minmax(4.5rem, 1fr) minmax(9.2rem, 2fr)';
 const ROW_COUNT_FORMATTER = new Intl.NumberFormat('ko-KR');
 const MAX_HIDDEN_DATA_SQL_COUNT = 10;
+const PROBLEM_CREATE_PROGRESS_TIMEOUT_MS = 10 * 60 * 1000;
 
 function useEditableDraft<T>(initialValue: T): EditableDraftState<T> {
   const [appliedValue, setAppliedValue] = useState(initialValue);
@@ -1301,6 +1307,8 @@ export function ProblemCreateContent() {
     outputPreview: false,
     answerSql: false,
   });
+  const isSavingRef = useRef(false);
+  const createProgressTimeoutRef = useRef<number | null>(null);
 
   const currentDbms = useMemo<DbmsType>(() => {
     if (!existingProblemSet) {
@@ -1328,11 +1336,15 @@ export function ProblemCreateContent() {
   }, [currentFullProblemSetDdl]);
 
   useEffect(() => {
-    if (!isSaving) {
-      return;
-    }
+    isSavingRef.current = isSaving;
+  }, [isSaving]);
 
+  useEffect(() => {
     return subscribeSessionSocketMessages((message) => {
+      if (!isSavingRef.current) {
+        return;
+      }
+
       if (!isProblemCreateProgressMessage(message)
           || typeof message.stepKey !== 'string'
           || typeof message.status !== 'string'
@@ -1352,16 +1364,33 @@ export function ProblemCreateContent() {
       }));
 
       if (status === 'error') {
-        setPopupState({ open: true, level: 2, message: progressMessage });
-        setIsSaving(false);
+        finishCreateProgressFailure(progressMessage);
         return;
       }
 
       if (status === 'success' && typeof message.problemId === 'string') {
+        clearCreateProgressTimeout();
+        isSavingRef.current = false;
+        setIsSaving(false);
         navigate(`/problems/${encodeURIComponent(message.problemId)}`);
       }
     });
-  }, [isSaving]);
+  }, []);
+
+  useEffect(() => {
+    return subscribeSessionSocketConnection((connected) => {
+      if (!connected && isSavingRef.current) {
+        finishCreateProgressFailure(getUiTextValue(
+          'PROBLEM_CREATE_PROGRESS_CONNECTION_LOST_MESSAGE',
+          '문제 생성 진행 상태 연결이 끊겼습니다. 다시 시도해 주세요.',
+        ));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => clearCreateProgressTimeout();
+  }, []);
 
   useEffect(() => {
     if (availableTableNames.length === 0) {
@@ -1581,6 +1610,32 @@ export function ProblemCreateContent() {
   const completedFieldCount = requiredFieldCount - missingFields.length;
   const isHeroMissing = missingFields.some((field) => field.key === 'title' || field.key === 'description');
 
+  function clearCreateProgressTimeout() {
+    if (createProgressTimeoutRef.current == null) {
+      return;
+    }
+
+    window.clearTimeout(createProgressTimeoutRef.current);
+    createProgressTimeoutRef.current = null;
+  }
+
+  function startCreateProgressTimeout() {
+    clearCreateProgressTimeout();
+    createProgressTimeoutRef.current = window.setTimeout(() => {
+      finishCreateProgressFailure(getUiTextValue(
+        'PROBLEM_CREATE_PROGRESS_TIMEOUT_MESSAGE',
+        '문제 생성 진행 상태를 확인하지 못했습니다. 다시 시도해 주세요.',
+      ));
+    }, PROBLEM_CREATE_PROGRESS_TIMEOUT_MS);
+  }
+
+  function finishCreateProgressFailure(message: string) {
+    clearCreateProgressTimeout();
+    isSavingRef.current = false;
+    setIsSaving(false);
+    setPopupState({ open: true, level: 2, message });
+  }
+
   function resetProblemDrafts() {
     heroState.replaceValue({ title: '', description: '' });
     conditionState.replaceValue('');
@@ -1732,8 +1787,20 @@ export function ProblemCreateContent() {
     }
 
     const hiddenDataSqls = hiddenDataState.appliedValue.map((hiddenDataSql) => hiddenDataSql.trim()).filter(Boolean);
+    try {
+      await connectSessionSocket();
+    } catch {
+      finishCreateProgressFailure(text(
+        'PROBLEM_CREATE_PROGRESS_CONNECT_FAIL_MESSAGE',
+        '문제 생성 진행 상태 연결에 실패했습니다. 다시 시도해 주세요.',
+      ));
+      return;
+    }
+
+    isSavingRef.current = true;
     setIsSaving(true);
     setCreateProgressSteps(createInitialCreateProgressSteps(hiddenDataSqls.length, existingProblem));
+    startCreateProgressTimeout();
 
     try {
       await createProblem({
@@ -1751,12 +1818,9 @@ export function ProblemCreateContent() {
         dbms: currentDbms,
       });
     } catch (error) {
-      setPopupState({
-        open: true,
-        level: 2,
-        message: error instanceof Error ? error.message : text('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'),
-      });
-      setIsSaving(false);
+      finishCreateProgressFailure(
+        error instanceof Error ? error.message : text('PROBLEM_CREATE_SAVE_FAIL_MESSAGE', '문제를 저장하지 못했습니다.'),
+      );
     }
   }
 

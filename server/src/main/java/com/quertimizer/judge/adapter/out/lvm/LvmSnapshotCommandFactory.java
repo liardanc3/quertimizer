@@ -169,7 +169,7 @@ public class LvmSnapshotCommandFactory {
 
     private List<String> allowPostgresDockerBridgeCommand(String dataDir) {
         String hbaPath = Path.of(dataDir, "pg_hba.conf").normalize().toString();
-        String marker = "# quertimizer lvm snapshot docker bridge access";
+        String marker = "# quertimizer LVM snapshot docker bridge access";
         String rule = "host all judge 172.16.0.0/12 md5";
         return shellCommand("if sudo -n test -f " + shellQuote(hbaPath)
                 + " && ! sudo -n grep -q " + shellQuote(marker) + " " + shellQuote(hbaPath)

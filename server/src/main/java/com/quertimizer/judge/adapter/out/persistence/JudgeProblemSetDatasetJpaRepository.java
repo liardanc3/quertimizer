@@ -6,5 +6,5 @@ import java.util.Optional;
 
 public interface JudgeProblemSetDatasetJpaRepository extends JpaRepository<JudgeProblemSetDatasetEntity, Long> {
 
-    Optional<JudgeProblemSetDatasetEntity> findByDatasetId(String datasetId);
+    Optional<JudgeProblemSetDatasetEntity> findByDatasetId(Long datasetId);
 }

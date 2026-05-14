@@ -19,7 +19,7 @@ public interface JudgeApplicationPort {
 
     JudgeDatasetId createDataset(CreateDatasetInput input);
 
-    boolean hasDataset(String datasetId);
+    boolean hasDataset(Long datasetId);
 
     void deleteDataset(JudgeDatasetId datasetId);
 

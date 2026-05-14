@@ -25,8 +25,8 @@ public class JudgeProblemSetDatasetEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private Long id;
 
-    @Column(name = "dataset_id", length = 80)
-    private String datasetId;
+    @Column(name = "dataset_id")
+    private Long datasetId;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String ddl;

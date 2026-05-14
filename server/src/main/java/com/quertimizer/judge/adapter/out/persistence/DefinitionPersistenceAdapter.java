@@ -34,13 +34,17 @@ public class DefinitionPersistenceAdapter implements DefinitionRepositoryPort {
 
     @Override
     @Transactional
-    public void saveDataset(DatasetDefinition datasetDefinition, boolean storeSqlDefinition) {
+    public DatasetDefinition saveDataset(DatasetDefinition datasetDefinition, boolean storeSqlDefinition) {
         // 데이터셋 handle과 필요 시 임시 SQL 정의 저장
-        datasetRepository.save(JudgeDatasetDefinitionEntity.from(
+        JudgeDatasetDefinitionEntity entity = datasetRepository.saveAndFlush(JudgeDatasetDefinitionEntity.from(
                 datasetDefinition,
                 serializeStringList(datasetDefinition.getBaseIndexDdls()),
                 storeSqlDefinition
         ));
+        return new DatasetDefinition(
+                entity.toDatasetId(), datasetDefinition.getDbmsType(), datasetDefinition.getDdl(),
+                datasetDefinition.getDataSql(), datasetDefinition.getBaseIndexDdls()
+        );
     }
 
     @Override

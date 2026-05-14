@@ -73,7 +73,7 @@ public class CreateProblem implements CreateProblemUseCase {
     @Override
     @Log("문제 생성")
     public ProblemCreateOutput execute(ProblemCreateInput input) {
-        List<String> createdDatasetIds = new ArrayList<>();
+        List<Long> createdDatasetIds = new ArrayList<>();
         AtomicBoolean createdProblem = new AtomicBoolean(false);
 
         try {
@@ -182,17 +182,17 @@ public class CreateProblem implements CreateProblemUseCase {
         return "%05d".formatted(sequence);
     }
 
-    private String createProblemSetDataset(ProblemCreateInput input, List<String> createdDatasetIds) {
+    private Long createProblemSetDataset(ProblemCreateInput input, List<Long> createdDatasetIds) {
         // 문제셋 데이터셋 생성 후 롤백 대상 ID 보관
         return executeProgressStep(input, OPEN_DATA, () -> {
-            String datasetId = createDataset(input.getDbmsType(), input.getDdl(), input.getActualDataSql());
+            Long datasetId = createDataset(input.getDbmsType(), input.getDdl(), input.getActualDataSql());
             createdDatasetIds.add(datasetId);
             return datasetId;
         });
     }
 
     private void saveProblemAnswerCases(Problem problem, ProblemSet problemSet,
-                                        ProblemCreateInput input, List<String> createdDatasetIds) {
+                                        ProblemCreateInput input, List<Long> createdDatasetIds) {
         // 숨김 채점 데이터 존재 여부 검사
         if (input.getHiddenDataSqls().isEmpty()) {
             throw new BusinessException(HIDDEN_DATA_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
@@ -205,10 +205,10 @@ public class CreateProblem implements CreateProblemUseCase {
             String hiddenDataSql = input.getHiddenDataSqls().get(index);
             int sequence = index + 1;
             int stepOrder = index + 6;
-            String datasetId = executeProgressStep(
+            Long datasetId = executeProgressStep(
                     input, hiddenDataKey(sequence), hiddenDataRunningMessage(sequence), hiddenDataSuccessMessage(sequence), stepOrder,
                     () -> {
-                        String createdDatasetId = createInlineDataset(input.getDbmsType(), input.getDdl(), hiddenDataSql);
+                        Long createdDatasetId = createInlineDataset(input.getDbmsType(), input.getDdl(), hiddenDataSql);
                         createdDatasetIds.add(createdDatasetId);
                         return createdDatasetId;
                     }
@@ -222,17 +222,17 @@ public class CreateProblem implements CreateProblemUseCase {
         problemAnswerCaseRepository.saveAll(answerCases);
     }
 
-    private String createAnswerHash(String datasetId, String answerSql) {
+    private String createAnswerHash(Long datasetId, String answerSql) {
         // 문제 테이블셋 데이터셋 기준 정답 SQL 해시 생성
         return problemJudgePort.createAnswerHash(datasetId, answerSql);
     }
 
-    private String createDataset(DbmsType dbmsType, String ddl, String dataSql) {
+    private Long createDataset(DbmsType dbmsType, String ddl, String dataSql) {
         // SQL 자료를 judge 데이터셋 생성 입력으로 변환 후 키 반환
         return problemJudgePort.createDataset(dbmsType, ddl, dataSql);
     }
 
-    private String createInlineDataset(DbmsType dbmsType, String ddl, String dataSql) {
+    private Long createInlineDataset(DbmsType dbmsType, String ddl, String dataSql) {
         // 문제셋 원본 행 없이 보관할 SQL 자료를 judge 데이터셋으로 변환 후 키 반환
         return problemJudgePort.createInlineDataset(dbmsType, ddl, dataSql);
     }
@@ -242,17 +242,17 @@ public class CreateProblem implements CreateProblemUseCase {
         try {
             problemJudgePort.dropEnvironment(environmentId);
         } catch (Exception exception) {
-            log.warn("문제 예시 실행 환경 정리 실패 environmentId={}", environmentId, exception);
+            log.warn("문제 예시 실행 환경 정리 실패 environment={}", environmentId, exception);
         }
     }
 
-    private void deleteDatasetsQuietly(List<String> datasetIds) {
+    private void deleteDatasetsQuietly(List<Long> datasetIds) {
         // 데이터셋 목록 제거 실패 로그 기록
-        for (String datasetId : datasetIds) {
+        for (Long datasetId : datasetIds) {
             try {
                 problemJudgePort.deleteDataset(datasetId);
             } catch (Exception exception) {
-                log.error("데이터셋 정리 실패 datasetId={}", datasetId, exception);
+                log.error("데이터셋 정리 실패 dataset={}", datasetId, exception);
             }
         }
     }

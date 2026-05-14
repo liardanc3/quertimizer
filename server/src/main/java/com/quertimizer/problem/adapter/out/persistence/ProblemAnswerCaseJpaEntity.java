@@ -27,8 +27,8 @@ public class ProblemAnswerCaseJpaEntity {
     @Column(name = "problem_id", nullable = false, length = 12)
     private String problemId;
 
-    @Column(name = "dataset_id", nullable = false, length = 80)
-    private String datasetId;
+    @Column(name = "dataset_id", nullable = false)
+    private Long datasetId;
 
     @Column(name = "answer_hash", nullable = false, columnDefinition = "TEXT")
     private String answerHash;
@@ -40,14 +40,14 @@ public class ProblemAnswerCaseJpaEntity {
     @Column(name = "case_order", nullable = false)
     private int caseOrder;
 
-    public static ProblemAnswerCaseJpaEntity create(String problemId, String datasetId,
+    public static ProblemAnswerCaseJpaEntity create(String problemId, Long datasetId,
                                                     String answerHash, ProblemAnswerCaseType caseType,
                                                     int caseOrder) {
         // 문제 정답 케이스 JPA 엔티티 생성
         return new ProblemAnswerCaseJpaEntity(problemId, datasetId, answerHash, caseType, caseOrder);
     }
 
-    private ProblemAnswerCaseJpaEntity(String problemId, String datasetId,
+    private ProblemAnswerCaseJpaEntity(String problemId, Long datasetId,
                                        String answerHash, ProblemAnswerCaseType caseType,
                                        int caseOrder) {
         this.problemId = problemId;

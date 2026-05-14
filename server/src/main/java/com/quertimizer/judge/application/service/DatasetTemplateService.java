@@ -45,12 +45,12 @@ public class DatasetTemplateService {
         // 봉인된 LVM 템플릿 snapshot 제거
         String scriptDbmsName = Names.scriptDbmsName(templateDefinition.getDbmsType());
         log.info(
-                "lvm-snapshot 데이터셋 템플릿 제거 시작 datasetId={}, templateVersion={}",
+                "LVM snapshot 데이터셋 템플릿 제거 시작 dataset={}, template={}",
                 templateDefinition.getDatasetId().getValue(), templateDefinition.getTemplateVersion()
         );
         lvmSnapshotPort.dropTemplate(scriptDbmsName, templateDefinition.getTemplateVersion());
         log.info(
-                "lvm-snapshot 데이터셋 템플릿 제거 완료 datasetId={}, templateVersion={}",
+                "LVM snapshot 데이터셋 템플릿 제거 완료 dataset={}, template={}",
                 templateDefinition.getDatasetId().getValue(), templateDefinition.getTemplateVersion()
         );
     }
@@ -58,14 +58,15 @@ public class DatasetTemplateService {
     private DatasetTemplateDefinition prepareTemplate(DatasetDefinition dataset, DatabaseSlot databaseSlot) {
         // 템플릿 생성용 DB 노드와 snapshot 이름 정보 확보
         log.info(
-                "lvm-snapshot 데이터셋 템플릿 준비 시작 datasetId={}, dbmsType={}",
+                "LVM snapshot 데이터셋 템플릿 준비 시작 dataset={}, dbms={}",
                 dataset.getDatasetId().getValue(), dataset.getDbmsType()
         );
         Database database = databaseSlot.getDatabase();
         DatabaseNode databaseNode = databaseNodeService.requireNode(database.getId());
         String scriptDbmsName = Names.scriptDbmsName(dataset.getDbmsType());
-        String templateVersion = Names.scriptName(dataset.getDatasetId().getValue());
-        String environmentName = Names.datasetEnvironmentName(dataset.getDatasetId().getValue());
+        String datasetIdValue = String.valueOf(dataset.getDatasetId().getValue());
+        String templateVersion = Names.scriptName(datasetIdValue);
+        String environmentName = Names.datasetEnvironmentName(datasetIdValue);
         int port = databaseSlot.getPort();
 
         boolean templateCreationRequested = false;
@@ -91,7 +92,7 @@ public class DatasetTemplateService {
             processStarted = false;
             lvmSnapshotPort.sealTemplate(scriptDbmsName, templateVersion);
             log.info(
-                    "lvm-snapshot 데이터셋 템플릿 준비 완료 datasetId={}, templateVersion={}",
+                    "LVM snapshot 데이터셋 템플릿 준비 완료 dataset={}, template={}",
                     dataset.getDatasetId().getValue(), templateVersion
             );
             return new DatasetTemplateDefinition(

@@ -61,16 +61,17 @@ public class JudgeApplicationService implements JudgeApplicationPort {
         // DDL과 데이터 SQL 검증 후 데이터셋 정의 생성
         definitionPolicy.validateDdl(input.getDdl());
         definitionPolicy.validateDataSql(input.getDataSql());
-        JudgeDatasetId datasetId = new JudgeDatasetId("dataset-" + UUID.randomUUID());
         DatasetDefinition datasetDefinition = new DatasetDefinition(
-                datasetId, input.getDbmsType(), input.getDdl(),
+                null, input.getDbmsType(), input.getDdl(),
                 input.getDataSql(), input.getBaseIndexDdls()
         );
 
         // 데이터셋 정의와 물리 템플릿 저장, 실패 시 생성 리소스 정리
+        JudgeDatasetId datasetId = null;
         DatasetTemplateDefinition templateDefinition = null;
         try {
-            definitionRepository.saveDataset(datasetDefinition, input.isStoreSqlDefinition());
+            datasetDefinition = definitionRepository.saveDataset(datasetDefinition, input.isStoreSqlDefinition());
+            datasetId = datasetDefinition.getDatasetId();
             SqlExecutorTicket ticket = sqlExecutorPool.requestExecutor(
                     input.getDbmsType(), input.getQueuePriority(), QueueStatusListener.noop()
             );
@@ -89,7 +90,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
 
     @Override
     @Log("채점 데이터셋 존재 확인")
-    public boolean hasDataset(String datasetId) {
+    public boolean hasDataset(Long datasetId) {
         // 데이터셋 정의 존재 여부 반환
         return definitionRepository.findDataset(new JudgeDatasetId(datasetId)).isPresent();
     }
@@ -249,6 +250,10 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     private void cleanupFailedDataset(JudgeDatasetId datasetId, DatasetTemplateDefinition templateDefinition) {
+        if (datasetId == null) {
+            return;
+        }
+
         // 데이터셋 생성 실패 시 물리 템플릿과 저장된 정의 제거
         if (templateDefinition != null) {
             sqlExecutorPool.dropDataset(templateDefinition);
