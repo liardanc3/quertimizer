@@ -83,6 +83,17 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                     executionId, input.getProblemId(), resolveUserErrorMessage(exception)
             );
             throw new BusinessException(resolveUserErrorMessage(exception), HttpStatus.BAD_REQUEST);
+        } catch (RuntimeException exception) {
+            String message = ProblemSqlErrorMessageResolver.resolveUserSqlMessage(exception);
+            if (message == null) {
+                throw exception;
+            }
+
+            log.warn(
+                    "SQL 실행 DB 오류 executionId={}, problem={}, reason={}",
+                    executionId, input.getProblemId(), message, exception
+            );
+            throw new BusinessException(message, HttpStatus.BAD_REQUEST);
         } finally {
             executionSessionStore.clearExecution(input.getExecutionSessionId(), executionId);
             if (session != null) {

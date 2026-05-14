@@ -743,26 +743,45 @@ function isProblemCreateProgressMessage(message: SessionSocketMessage): message 
 }
 
 function upsertCreateProgressStep(currentSteps: ProblemCreateProgressStep[], nextStep: ProblemCreateProgressStep) {
-  const nextSteps = currentSteps.filter((step) => step.stepKey !== nextStep.stepKey);
+  const completedSteps = nextStep.status === 'waiting'
+    ? currentSteps
+    : currentSteps.map((step) => {
+      if (step.stepOrder >= nextStep.stepOrder || step.status === 'success' || step.status === 'error') {
+        return step;
+      }
+      return { ...step, status: 'success' as const, message: createCreateProgressSuccessMessage(step.message) };
+    });
+  const nextSteps = completedSteps.filter((step) => step.stepKey !== nextStep.stepKey);
   return [...nextSteps, nextStep].sort((left, right) => left.stepOrder - right.stepOrder);
 }
 
-function createInitialCreateProgressSteps(hiddenDataCount: number, existingProblem: boolean): ProblemCreateProgressStep[] {
+function createCreateProgressSuccessMessage(message: string) {
+  if (message.endsWith(' 대기 중')) {
+    return `${message.slice(0, -' 대기 중'.length)} 완료`;
+  }
+  if (message.endsWith(' 중')) {
+    return `${message.slice(0, -' 중'.length)} 완료`;
+  }
+  return message;
+}
+
+function createInitialCreateProgressSteps(hiddenDataCount: number, existingProblemSet: boolean, existingProblem: boolean): ProblemCreateProgressStep[] {
   if (existingProblem) {
     return [{ stepKey: 'problem-text', status: 'running', message: '문제 정보 저장 중', stepOrder: 1 }];
   }
 
   return [
-    { stepKey: 'open-data', status: 'running', message: '채점용 데이터 INSERT - Open 생성 중', stepOrder: 1 },
-    { stepKey: 'table-info', status: 'waiting', message: '테이블 정보 생성 대기 중', stepOrder: 2 },
-    { stepKey: 'erd-info', status: 'waiting', message: 'ERD 정보 생성 대기 중', stepOrder: 3 },
-    { stepKey: 'data-example', status: 'waiting', message: '데이터 예시 생성 대기 중', stepOrder: 4 },
-    { stepKey: 'output-example', status: 'waiting', message: '출력 예시 생성 대기 중', stepOrder: 5 },
+    ...(!existingProblemSet ? [{ stepKey: 'open-data', status: 'running' as const, message: '채점용 데이터 INSERT - Open 생성 중', stepOrder: 1 }] : []),
+    { stepKey: 'answer-hash', status: existingProblemSet ? 'running' : 'waiting', message: `정답 해시 생성 ${existingProblemSet ? '중' : '대기 중'}`, stepOrder: 2 },
+    { stepKey: 'table-info', status: 'waiting', message: '테이블 정보 생성 대기 중', stepOrder: 3 },
+    { stepKey: 'erd-info', status: 'waiting', message: 'ERD 정보 생성 대기 중', stepOrder: 4 },
+    { stepKey: 'data-example', status: 'waiting', message: '데이터 예시 생성 대기 중', stepOrder: 5 },
+    { stepKey: 'output-example', status: 'waiting', message: '출력 예시 생성 대기 중', stepOrder: 6 },
     ...Array.from({ length: hiddenDataCount }, (_, index) => ({
       stepKey: `hidden-data-${index + 1}`,
       status: 'waiting' as const,
       message: `채점용 데이터 INSERT - Hidden ${index + 1} 생성 대기 중`,
-      stepOrder: index + 6,
+      stepOrder: index + 7,
     })),
   ];
 }
@@ -1800,7 +1819,7 @@ export function ProblemCreateContent() {
 
     isSavingRef.current = true;
     setIsSaving(true);
-    setCreateProgressSteps(createInitialCreateProgressSteps(hiddenDataSqls.length, existingProblem));
+    setCreateProgressSteps(createInitialCreateProgressSteps(hiddenDataSqls.length, existingProblemSet, existingProblem));
     startCreateProgressTimeout();
 
     try {

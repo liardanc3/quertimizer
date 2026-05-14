@@ -71,15 +71,15 @@ export function isCommonHttpErrorStatus(status: number | null | undefined) {
 }
 
 export async function resolveHttpErrorReasons(response: Response, fallbackMessage: string, options: ResolveHttpErrorOptions = {}) {
+  const reasons = await readErrorReasons(response);
+  if (reasons.length > 0) {
+    return reasons;
+  }
+
   if (isCommonHttpErrorStatus(response.status)) {
     const key = resolveCommonHttpErrorMessageKey(response.status);
     const commonFallbackMessage = resolveCommonHttpErrorFallback(response.status);
     return [await (options.resolveCommonMessage?.(key, commonFallbackMessage) ?? commonFallbackMessage)];
-  }
-
-  const reasons = await readErrorReasons(response);
-  if (reasons.length > 0) {
-    return reasons;
   }
 
   return [fallbackMessage];

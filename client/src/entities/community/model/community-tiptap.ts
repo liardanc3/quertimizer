@@ -183,7 +183,7 @@ export function parseCommunityContentJson(contentJson?: string | null): JSONCont
 
   try {
     const parsedContent = JSON.parse(contentJson) as JSONContent;
-    return parsedContent.type === 'doc' ? stripItalicMarks(parsedContent) : COMMUNITY_EMPTY_DOC;
+    return parsedContent.type === 'doc' ? normalizeCommunityContent(parsedContent) : COMMUNITY_EMPTY_DOC;
   } catch {
     return COMMUNITY_EMPTY_DOC;
   }
@@ -230,24 +230,53 @@ export function createCommunityEditorSnapshotFromJson(contentJson?: string | nul
 }
 
 function createCommunityEditorSnapshotFromContent(content: JSONContent): CommunityEditorSnapshot {
-  const contentJson = stringifyCommunityContentJson(content);
-  const plainTextSummary = createPlainTextSummary(content);
+  const normalizedContent = normalizeCommunityContent(content);
+  const contentJson = stringifyCommunityContentJson(normalizedContent);
+  const plainTextSummary = createPlainTextSummary(normalizedContent);
 
   return {
     contentJson,
     plainTextSummary,
-    imageIds: extractCommunityImageIds(content),
+    imageIds: extractCommunityImageIds(normalizedContent),
     contentByteLength: utf8Encoder.encode(contentJson).length,
-    empty: !hasMeaningfulCommunityContent(content),
+    empty: !hasMeaningfulCommunityContent(normalizedContent),
   };
 }
 
-function stripItalicMarks(content: JSONContent): JSONContent {
+function normalizeCommunityContent(content: JSONContent): JSONContent {
+  const normalizedContent = normalizeCommunityNode(content) ?? COMMUNITY_EMPTY_DOC;
+  if (normalizedContent.type === 'doc' && normalizedContent.content?.length === 0) {
+    return COMMUNITY_EMPTY_DOC;
+  }
+
+  return normalizedContent;
+}
+
+function normalizeCommunityNode(content: JSONContent): JSONContent | null {
+  if (content.type === 'horizontalRule') {
+    return null;
+  }
+
+  const children = content.content
+    ?.map(normalizeCommunityNode)
+    .filter((child): child is JSONContent => child != null);
   return {
     ...content,
     marks: content.marks?.filter((mark) => mark.type !== 'italic'),
-    content: content.content?.map(stripItalicMarks),
+    content: normalizeCommunityChildren(content.type, children),
   };
+}
+
+function normalizeCommunityChildren(type: string | undefined, children: JSONContent[] | undefined) {
+  if (type === 'doc' && children?.length === 0) {
+    return COMMUNITY_EMPTY_DOC.content;
+  }
+
+  if (type === 'detailsContent' && children?.length === 0) {
+    return [{ type: 'paragraph' }];
+  }
+
+  return children;
 }
 
 function createPlainTextSummary(content: JSONContent) {

@@ -2,6 +2,8 @@ package com.quertimizer.auth.application.input;
 
 import lombok.Data;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -16,7 +18,7 @@ public class SocialLoginInput {
         // 정규화된 소셜 로그인 입력 생성
         return new SocialLoginInput(
                 normalizeProvider(provider),
-                Optional.ofNullable(attributes).map(Map::copyOf).orElseGet(Map::of),
+                normalizeAttributes(attributes),
                 normalizeAccessIp(accessIp)
         );
     }
@@ -33,5 +35,14 @@ public class SocialLoginInput {
         return Optional.ofNullable(accessIp)
                 .map(String::trim)
                 .orElse("");
+    }
+
+    private static Map<String, Object> normalizeAttributes(Map<String, Object> attributes) {
+        // GitHub OAuth attributes는 null value를 포함할 수 있으므로 null 보존 복사
+        if (attributes == null || attributes.isEmpty()) {
+            return Map.of();
+        }
+
+        return Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
     }
 }

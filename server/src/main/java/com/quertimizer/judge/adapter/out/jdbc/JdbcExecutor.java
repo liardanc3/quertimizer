@@ -1,13 +1,14 @@
 package com.quertimizer.judge.adapter.out.jdbc;
 
 import com.quertimizer.judge.application.input.ExecuteSqlInput;
+import com.quertimizer.judge.application.exception.UserSqlExecutionException;
 import com.quertimizer.judge.application.model.EnvironmentConnection;
 import com.quertimizer.judge.application.output.SqlExecutionResult;
 import com.quertimizer.judge.application.port.out.SqlExecutionPort;
+import com.quertimizer.judge.application.port.out.SqlDialect;
 import com.quertimizer.judge.domain.entity.JudgeExecutionId;
 import com.quertimizer.judge.domain.entity.SetupSqlDefinition;
 import com.quertimizer.judge.domain.model.ExecutionMode;
-import com.quertimizer.judge.application.port.out.SqlDialect;
 import com.quertimizer.judge.adapter.out.jdbc.dialect.SqlPlanCostParser;
 import com.quertimizer.judge.domain.service.SqlStatementParser;
 import lombok.Data;
@@ -19,6 +20,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -175,6 +177,8 @@ public class JdbcExecutor implements SqlExecutionPort {
         for (String statementSql : statementParser.splitStatements(sql)) {
             try (Statement statement = connection.createStatement()) {
                 statement.execute(statementSql);
+            } catch (SQLException exception) {
+                throw userSqlException(exception);
             }
         }
     }
@@ -234,6 +238,8 @@ public class JdbcExecutor implements SqlExecutionPort {
                     Duration.ofNanos(System.nanoTime() - startTime).toMillis(), null,
                     List.of(), "SQL 명령 실행 완료"
             );
+        } catch (SQLException exception) {
+            throw userSqlException(exception);
         } finally {
             clearTrackedStatement(executionId, statement);
         }
@@ -253,6 +259,8 @@ public class JdbcExecutor implements SqlExecutionPort {
 
                 return resultSet.getLong(1);
             }
+        } catch (SQLException exception) {
+            throw userSqlException(exception);
         } finally {
             clearTrackedStatement(executionId, statement);
         }
@@ -262,8 +270,9 @@ public class JdbcExecutor implements SqlExecutionPort {
                                            SqlDialect dialect, String sql,
                                            int page, int pageSize) throws Exception {
         // SELECT 페이지 결과 조회
-        PreparedStatement statement = createTrackedPreparedStatement(executionId, connection, dialect.selectPageSql(sql));
-        try (statement) {
+        PreparedStatement statement = null;
+        try {
+            statement = createTrackedPreparedStatement(executionId, connection, dialect.selectPageSql(sql));
             statement.setInt(1, pageSize);
             statement.setLong(2, (long) (page - 1) * pageSize);
             statement.execute();
@@ -275,8 +284,10 @@ public class JdbcExecutor implements SqlExecutionPort {
 
                 return readTableResult(resultSet);
             }
+        } catch (SQLException exception) {
+            throw userSqlException(exception);
         } finally {
-            clearTrackedStatement(executionId, statement);
+            closeTrackedStatement(executionId, statement);
         }
     }
 
@@ -293,6 +304,8 @@ public class JdbcExecutor implements SqlExecutionPort {
 
                 return readTableResult(resultSet);
             }
+        } catch (SQLException exception) {
+            throw userSqlException(exception);
         } finally {
             clearTrackedStatement(executionId, statement);
         }
@@ -311,6 +324,8 @@ public class JdbcExecutor implements SqlExecutionPort {
 
                 return readPlanLines(resultSet);
             }
+        } catch (SQLException exception) {
+            throw userSqlException(exception);
         } finally {
             clearTrackedStatement(executionId, statement);
         }
@@ -380,9 +395,27 @@ public class JdbcExecutor implements SqlExecutionPort {
 
     private void clearTrackedStatement(JudgeExecutionId executionId, Statement statement) {
         // 실행 취소 추적 Statement 제거
-        if (executionId != null) {
+        if (executionId != null && statement != null) {
             activeStatements.remove(executionId, statement);
         }
+    }
+
+    private void closeTrackedStatement(JudgeExecutionId executionId, Statement statement) {
+        // 실행 취소 추적 제거 후 Statement 종료
+        clearTrackedStatement(executionId, statement);
+        if (statement != null) {
+            try {
+                statement.close();
+            } catch (SQLException ignored) {
+            }
+        }
+    }
+
+    private UserSqlExecutionException userSqlException(SQLException exception) {
+        // JDBC가 반환한 사용자 SQL 오류 메시지 보존
+        String message = exception.getMessage();
+        String reason = message != null && !message.isBlank() ? message : "SQL 실행 실패";
+        return new UserSqlExecutionException(reason, exception);
     }
 
     @Data

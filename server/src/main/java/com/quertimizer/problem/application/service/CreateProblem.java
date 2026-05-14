@@ -35,6 +35,7 @@ import static com.quertimizer.problem.domain.model.ProblemManagementFailReason.P
 import static com.quertimizer.problem.domain.model.ProblemCreateProgressStatus.ERROR;
 import static com.quertimizer.problem.domain.model.ProblemCreateProgressStatus.RUNNING;
 import static com.quertimizer.problem.domain.model.ProblemCreateProgressStatus.SUCCESS;
+import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.ANSWER_HASH;
 import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.DATA_EXAMPLE;
 import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.ERD_INFO;
 import static com.quertimizer.problem.domain.model.ProblemCreateProgressStep.OPEN_DATA;
@@ -116,7 +117,8 @@ public class CreateProblem implements CreateProblemUseCase {
 
     private Problem createProblem(ProblemCreateInput input, ProblemSet problemSet) {
         // 실제 데이터셋 기준 정답 해시와 표시용 예시 생성
-        String answerHash = createAnswerHash(problemSet.getDatasetId(), input.getAnswerSql());
+        String answerHash = executeProgressStep(input, ANSWER_HASH,
+                () -> createAnswerHash(problemSet.getDatasetId(), input.getAnswerSql()));
         String environmentId = problemJudgePort.createSubmissionEnvironment(problemSet.getDatasetId());
         try {
             String schemaMetadata = executeProgressStep(input, TABLE_INFO,
@@ -204,7 +206,7 @@ public class CreateProblem implements CreateProblemUseCase {
         for (int index = 0; index < input.getHiddenDataSqls().size(); index++) {
             String hiddenDataSql = input.getHiddenDataSqls().get(index);
             int sequence = index + 1;
-            int stepOrder = index + 6;
+            int stepOrder = index + 7;
             Long datasetId = executeProgressStep(
                     input, hiddenDataKey(sequence), hiddenDataRunningMessage(sequence), hiddenDataSuccessMessage(sequence), stepOrder,
                     () -> {

@@ -2448,7 +2448,6 @@ function renderResultTable(
           {isPageLoading ? (
             <div className="solve-result-table-grid-overlay" aria-live="polite" aria-label={getUiTextValue('PROBLEM_SOLVE_RESULT_PAGE_LOADING_LABEL', '실행 결과 페이지 로딩 중')}>
               <span className="solve-result-table-grid-spinner" aria-hidden="true" />
-              <span className="solve-result-table-grid-overlay-label">{getUiTextValue('COMMON_LOADING_STATUS', '로딩 중')}</span>
             </div>
           ) : null}
         </div>
@@ -4141,6 +4140,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const favoriteSelectionRestoreRef = useRef<SqlEditorSelection | null>(favoriteRestoreSnapshot?.editorSelection ?? null);
   const executionPanelRef = useRef<HTMLDivElement | null>(null);
   const executionResultItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const autocompleteListRef = useRef<HTMLDivElement | null>(null);
   const submitPanelRef = useRef<HTMLElement | null>(null);
   const submitInFlightRef = useRef(false);
   const executionResponseResolverRef = useRef<((result: ProblemExecutionResult) => void) | null>(null);
@@ -4869,6 +4869,17 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       window.removeEventListener('scroll', handleViewportChange, true);
     };
   }, [autocompleteState, sqlEditorFontSize]);
+
+  useEffect(() => {
+    if (autocompleteState == null) {
+      return;
+    }
+
+    const selectedItem = autocompleteListRef.current?.querySelector<HTMLElement>(
+      `[data-autocomplete-index="${autocompleteState.selectedIndex}"]`,
+    );
+    selectedItem?.scrollIntoView({ block: 'nearest' });
+  }, [autocompleteState?.selectedIndex, autocompleteState?.items.length]);
 
   useEffect(() => {
     const unsubscribe = subscribeSessionSocketMessages((message) => {
@@ -6714,16 +6725,20 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       onClick={refreshAutocompleteFromEditor}
                       onScroll={refreshAutocompleteFromEditor}
                       onWheel={handleEditorWheel}
-                      onKeyUp={(event) => {
-                        if (executionPickerState != null) {
-                          return;
-                        }
+	                      onKeyUp={(event) => {
+	                        if (executionPickerState != null) {
+	                          return;
+	                        }
 
-                        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
-                          return;
-                        }
+	                        if (autocompleteState != null && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+	                          return;
+	                        }
 
-                        refreshAutocompleteFromEditor();
+	                        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+	                          return;
+	                        }
+
+	                        refreshAutocompleteFromEditor();
                       }}
                       onKeyDown={handleEditorKeyDown}
                       onBlur={(event) => {
@@ -6741,8 +6756,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
                   {autocompleteState
                     ? createPortal(
-                        <div
-                          className="solve-editor-autocomplete"
+	                        <div
+	                          ref={autocompleteListRef}
+	                          className="solve-editor-autocomplete"
                           style={{
                             left: `${autocompleteState.left}px`,
                             top: `${autocompleteState.top}px`,
@@ -6754,9 +6770,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                         >
                           {autocompleteState.items.map((item, index) => (
                             <button
-                              key={`${item.kind}-${item.value}-${item.detail ?? ''}`}
-                              type="button"
-                              className={`solve-editor-autocomplete-item ${index === autocompleteState.selectedIndex ? 'is-selected' : ''}`}
+	                              key={`${item.kind}-${item.value}-${item.detail ?? ''}`}
+	                              type="button"
+	                              data-autocomplete-index={index}
+	                              className={`solve-editor-autocomplete-item ${index === autocompleteState.selectedIndex ? 'is-selected' : ''}`}
                               role="option"
                               aria-selected={index === autocompleteState.selectedIndex}
                               onMouseEnter={() =>

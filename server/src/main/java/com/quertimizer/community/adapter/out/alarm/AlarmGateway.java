@@ -36,9 +36,12 @@ public class AlarmGateway implements CommunityAlarmPort {
 
     @Override
     public void publishCommentReply(String recipientHandle, String actorHandle, String postId,
-                                    String replyContent, Long replyCommentId) {
+                                    String parentCommentContent, Long parentCommentId, Long replyCommentId) {
         // 대댓글 알람 명세 생성 후 alarm use case 호출
-        publishAlarm.execute(new CommunityCommentReplyAlarm(recipientHandle, actorHandle, postId, replyContent, replyCommentId));
+        publishAlarm.execute(new CommunityCommentReplyAlarm(
+                recipientHandle, actorHandle, postId,
+                parentCommentContent, parentCommentId, replyCommentId
+        ));
     }
 
 }

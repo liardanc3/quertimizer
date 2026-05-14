@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class LvmSnapshotCleanupScheduler {
 
-    private static final long ORPHAN_CLEANUP_INTERVAL_MILLIS = 60 * 60 * 1000L;
+    private static final long ORPHAN_CLEANUP_INTERVAL_MILLIS = 10 * 60 * 1000L;
 
     private final CleanupOrphanLvmSnapshotsUseCase cleanupOrphanLvmSnapshots;
 

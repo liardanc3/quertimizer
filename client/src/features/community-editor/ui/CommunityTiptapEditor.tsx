@@ -45,6 +45,11 @@ interface CommunityImageSize {
   height: number;
 }
 
+interface CommunityEditorSelection {
+  from: number;
+  to: number;
+}
+
 function clampImageWidth(width: number) {
   return Math.min(COMMUNITY_IMAGE_MAX_WIDTH, Math.max(COMMUNITY_IMAGE_MIN_WIDTH, Math.round(width)));
 }
@@ -174,6 +179,7 @@ export default function CommunityTiptapEditor({
   const { text } = useUiText();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const lastInitialContentJsonRef = useRef(initialContentJson);
+  const imageInsertSelectionRef = useRef<CommunityEditorSelection | null>(null);
   const [, refreshToolbarState] = useState(0);
   const editorExtensions = useMemo(
     () => createCommunityTiptapExtensions(ReactNodeViewRenderer(ResizableCommunityImage)),
@@ -216,6 +222,30 @@ export default function CommunityTiptapEditor({
     refreshToolbarState((currentValue) => currentValue + 1);
   }
 
+  function rememberImageInsertSelection() {
+    if (!editor) {
+      return;
+    }
+
+    const { from, to } = editor.state.selection;
+    imageInsertSelectionRef.current = { from, to };
+  }
+
+  function insertImageAtRememberedSelection(content: Record<string, unknown>) {
+    if (!editor) {
+      return;
+    }
+
+    const command = editor.chain().focus();
+    const selection = imageInsertSelectionRef.current;
+    if (selection != null) {
+      command.setTextSelection(selection);
+      imageInsertSelectionRef.current = null;
+    }
+
+    command.insertContent(content).run();
+  }
+
   useEffect(() => {
     if (!editor || lastInitialContentJsonRef.current === initialContentJson) {
       return;
@@ -238,7 +268,7 @@ export default function CommunityTiptapEditor({
     try {
       const imageSize = await resolveCommunityImageSize(file);
       const uploadedImage = await onUploadImage(file);
-      editor.chain().focus().insertContent({
+      insertImageAtRememberedSelection({
         type: 'image',
         attrs: {
           src: uploadedImage.imageUrl,
@@ -246,7 +276,7 @@ export default function CommunityTiptapEditor({
           imageId: uploadedImage.imageId,
           ...imageSize,
         },
-      }).run();
+      });
       onFeedback?.(null);
     } catch (error) {
       onFeedback?.(error instanceof Error ? error.message : text('COMMUNITY_EDITOR_IMAGE_UPLOAD_FAIL_MESSAGE', '이미지 업로드에 실패했습니다.'));
@@ -284,6 +314,7 @@ export default function CommunityTiptapEditor({
       return;
     }
 
+    rememberImageInsertSelection();
     event.preventDefault();
     void insertImageFiles(files);
   }
@@ -295,8 +326,14 @@ export default function CommunityTiptapEditor({
       return;
     }
 
+    rememberImageInsertSelection();
     event.preventDefault();
     void insertImageFiles(files);
+  }
+
+  function openImagePicker() {
+    rememberImageInsertSelection();
+    imageInputRef.current?.click();
   }
 
   return (
@@ -378,14 +415,9 @@ export default function CommunityTiptapEditor({
             onClick={() => runToolbarCommand((chain) => chain.setHardBreak())}
           />
           <ToolbarButton
-            label={text('COMMUNITY_EDITOR_DIVIDER_LABEL', '구분선')}
-            title={text('COMMUNITY_EDITOR_DIVIDER_LABEL', '구분선')}
-            onClick={() => runToolbarCommand((chain) => chain.setHorizontalRule())}
-          />
-          <ToolbarButton
             icon="image"
             title={text('COMMON_IMAGE_LABEL', '이미지')}
-            onClick={() => imageInputRef.current?.click()}
+            onClick={openImagePicker}
           />
         </div>
 

@@ -102,8 +102,7 @@ public class LvmSnapshotCommandFactory {
         String normalizedEnvironmentId = scriptName(environmentId);
         String mountPath = evalMountPath(normalizedDbmsName, normalizedEnvironmentId);
         return List.of(
-                shellCommand("if mountpoint -q " + shellQuote(mountPath) + "; then sudo -n umount "
-                        + shellQuote(mountPath) + "; fi"),
+                unmountCommand(mountPath),
                 sudoCommand("lvremove", "-y", lvPath(evalLvName(normalizedDbmsName, normalizedEnvironmentId)))
         );
     }
@@ -122,8 +121,7 @@ public class LvmSnapshotCommandFactory {
         String dataMountPath = evalMountPath(dbmsName, environmentId);
         String logMountPath = evalLogPath(dbmsName, environmentId);
         return shellCommand(
-                "while mountpoint -q " + shellQuote(dataMountPath)
-                        + "; do sudo -n umount " + shellQuote(dataMountPath) + " || exit 1; done; "
+                unmountScript(dataMountPath) + "; "
                         + "if sudo -n lvs --noheadings " + shellQuote(lvPath(normalizedEvalLvName))
                         + " >/dev/null 2>&1; then sudo -n lvremove -y " + shellQuote(lvPath(normalizedEvalLvName)) + "; fi; "
                         + "sudo -n rm -rf " + shellQuote(dataMountPath) + " " + shellQuote(logMountPath)
@@ -163,8 +161,12 @@ public class LvmSnapshotCommandFactory {
     }
 
     private List<String> unmountCommand(String mountPath) {
-        return shellCommand("while mountpoint -q " + shellQuote(mountPath)
-                + "; do sudo -n umount " + shellQuote(mountPath) + " || exit 1; done");
+        return shellCommand(unmountScript(mountPath));
+    }
+
+    private String unmountScript(String mountPath) {
+        return "while mountpoint -q " + shellQuote(mountPath)
+                + "; do sudo -n umount " + shellQuote(mountPath) + " || exit 1; done";
     }
 
     private List<String> allowPostgresDockerBridgeCommand(String dataDir) {

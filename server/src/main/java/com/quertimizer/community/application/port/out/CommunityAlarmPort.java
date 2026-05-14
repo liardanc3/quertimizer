@@ -8,6 +8,7 @@ public interface CommunityAlarmPort {
 
     void publishCommentLike(String recipientHandle, String actorHandle, String postId, String commentContent, Long commentId);
 
-    void publishCommentReply(String recipientHandle, String actorHandle, String postId, String replyContent, Long replyCommentId);
+    void publishCommentReply(String recipientHandle, String actorHandle, String postId,
+                             String parentCommentContent, Long parentCommentId, Long replyCommentId);
 
 }

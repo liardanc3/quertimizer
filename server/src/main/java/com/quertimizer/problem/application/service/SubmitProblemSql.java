@@ -805,16 +805,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
     private String resolveErrorMessage(Exception exception) {
         // 예외 체인 내 사용자 전달 메시지 조회
-        Throwable cause = exception;
-        while (cause != null) {
-            if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
-                return cause.getMessage();
-            }
-
-            cause = cause.getCause();
-        }
-
-        return SUBMIT_FAILED.getMessage();
+        return ProblemSqlErrorMessageResolver.resolve(exception, SUBMIT_FAILED.getMessage());
     }
 
     private BusinessException badRequest(String message) {

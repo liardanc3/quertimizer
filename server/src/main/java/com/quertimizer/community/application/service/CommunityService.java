@@ -285,7 +285,8 @@ public class CommunityService {
         // 대댓글 알람 발행
         communityAlarmPort.publishCommentReply(
                 parentComment.get().getHandle(), actorHandle,
-                CommunityPostIdPolicy.format(post.getPostId()), comment.getContent(), comment.getCommentId()
+                CommunityPostIdPolicy.format(post.getPostId()),
+                parentComment.get().getContent(), parentComment.get().getCommentId(), comment.getCommentId()
         );
         return true;
     }

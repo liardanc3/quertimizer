@@ -5,7 +5,7 @@ import lombok.Getter;
 @Getter
 public enum LoginFailReason {
 
-    INVALID_EMAIL_OR_PASSWORD("이메일 또는 비밀번호가 올바르지 않습니다."),
+    INVALID_EMAIL_OR_PASSWORD("이메일과 비밀번호를 확인해주세요."),
     BLOCKED_USER("차단된 계정입니다.");
 
     private final String message;
