@@ -30,11 +30,6 @@ public class LogFormatter {
 
     private final ObjectMapper objectMapper;
 
-    public String formatHttpLine(String actor, String label, String message) {
-        // HTTP 로그 라인 포맷
-        return formatLine(actor, label, message);
-    }
-
     public String formatWebSocketLine(String actor, String label, String message) {
         // WebSocket 로그 라인 포맷
         return formatLine(actor, label, message);

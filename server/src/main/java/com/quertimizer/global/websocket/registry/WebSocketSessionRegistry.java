@@ -73,4 +73,19 @@ public class WebSocketSessionRegistry {
 
         return targetsByHandle;
     }
+
+    public Set<String> findSessionIdsByHandle(String handle) {
+        // handle 기준 현재 등록된 WebSocket 세션 ID 목록 조회
+        if (handle == null || handle.isBlank()) {
+            return Set.of();
+        }
+
+        Set<String> webSocketSessionIds = ConcurrentHashMap.newKeySet();
+        handleByWebSocketSessionId.forEach((webSocketSessionId, registeredHandle) -> {
+            if (handle.equals(registeredHandle)) {
+                webSocketSessionIds.add(webSocketSessionId);
+            }
+        });
+        return webSocketSessionIds;
+    }
 }

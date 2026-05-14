@@ -1,6 +1,7 @@
 package com.quertimizer.problem.adapter.in.http;
 
 import com.quertimizer.global.exception.BusinessException;
+import com.quertimizer.global.log.LogMdcContext;
 import com.quertimizer.global.util.ClientIpResolver;
 import com.quertimizer.global.websocket.sender.WebSocketSender;
 import com.quertimizer.problem.application.output.ProblemCreateOutput;
@@ -160,7 +161,7 @@ public class ProblemController {
     public ResponseEntity<Void> createProblem(@Valid @RequestBody ProblemCreateReq request, Authentication authentication) {
         String currentHandle = problemSupport.resolveCurrentHandle(authentication);
 
-        taskExecutor.execute(() -> {
+        taskExecutor.execute(LogMdcContext.wrap(() -> {
             try {
                 ProblemCreateOutput output = createProblem.execute(request.toInput(progress -> sendProblemCreateProgress(currentHandle, ProblemCreateProgressRes.from(progress))));
                 sendProblemCreateProgress(currentHandle, ProblemCreateProgressRes.completed(output.problemId()));
@@ -168,7 +169,7 @@ public class ProblemController {
                 log.error("문제 생성 비동기 작업 실패", exception);
                 sendProblemCreateProgress(currentHandle, ProblemCreateProgressRes.failed(resolveProblemCreateFailureMessage(exception)));
             }
-        });
+        }));
 
         return ResponseEntity.accepted().build();
     }

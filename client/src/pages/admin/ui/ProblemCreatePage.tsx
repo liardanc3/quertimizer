@@ -1633,6 +1633,7 @@ export function ProblemCreateContent() {
     clearCreateProgressTimeout();
     isSavingRef.current = false;
     setIsSaving(false);
+    setCreateProgressSteps([]);
     setPopupState({ open: true, level: 2, message });
   }
 

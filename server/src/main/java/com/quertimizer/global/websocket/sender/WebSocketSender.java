@@ -31,9 +31,17 @@ public class WebSocketSender {
             return;
         }
 
-        // 사용자 전체 WebSocket 세션에 payload 전송
-        logWebSocketPayload(handle, payload);
-        messagingTemplate.convertAndSendToUser(handle, WebSocketDestination.SESSION_QUEUE, payload);
+        // registry에 등록된 사용자 세션이 있으면 세션 단위로 payload 전송
+        Set<String> sessionIds = webSocketSessionRegistry.findSessionIdsByHandle(handle);
+        if (!sessionIds.isEmpty()) {
+            for (String sessionId : sessionIds) {
+                sendToSession(handle, sessionId, payload);
+            }
+            return;
+        }
+
+        // registry 조회 실패 시 Spring user destination 기준 payload 전송
+        sendToUserDestination(handle, payload);
     }
 
     public void sendToSession(String handle, String sessionId, Object payload) throws Exception {
@@ -43,12 +51,7 @@ public class WebSocketSender {
         }
 
         // 특정 WebSocket 세션으로 사용자 queue 메시지 전송
-        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
-        headers.setSessionId(sessionId);
-        headers.setLeaveMutable(true);
-
-        logWebSocketPayload(handle, payload);
-        messagingTemplate.convertAndSendToUser(handle, WebSocketDestination.SESSION_QUEUE, payload, headers.getMessageHeaders());
+        sendToSessionDestination(handle, sessionId, payload);
     }
 
     public void sendToSessionUnchecked(String handle, String sessionId, Object payload) {
@@ -81,6 +84,22 @@ public class WebSocketSender {
                 }
             }
         }
+    }
+
+    private void sendToUserDestination(String handle, Object payload) throws Exception {
+        // 사용자 queue로 payload 전송
+        logWebSocketPayload(handle, payload);
+        messagingTemplate.convertAndSendToUser(handle, WebSocketDestination.SESSION_QUEUE, payload);
+    }
+
+    private void sendToSessionDestination(String handle, String sessionId, Object payload) throws Exception {
+        // 사용자 queue와 WebSocket 세션을 지정해 payload 전송
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
+        headers.setSessionId(sessionId);
+        headers.setLeaveMutable(true);
+
+        logWebSocketPayload(handle, payload);
+        messagingTemplate.convertAndSendToUser(handle, WebSocketDestination.SESSION_QUEUE, payload, headers.getMessageHeaders());
     }
 
     private void logWebSocketPayload(String actor, Object payload) throws Exception {

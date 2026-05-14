@@ -11,9 +11,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Instant;
 
+import static com.quertimizer.judge.domain.model.JudgeFailReason.DATASET_TEMPLATE_TABLE_NOT_CREATED;
 import static com.quertimizer.judge.domain.model.JudgeFailReason.LVM_TEMPLATE_DB_PROCESS_READY_FAILED;
 import static com.quertimizer.judge.domain.model.JudgeFailReason.LVM_TEMPLATE_DB_PROCESS_WAIT_INTERRUPTED;
 
@@ -59,11 +61,28 @@ public class JdbcDatasetTemplateLoader implements DatasetLoaderPort {
                 for (String baseIndexDdl : dataset.getBaseIndexDdls()) {
                     executeStatements(connection, baseIndexDdl);
                 }
+                verifyEnvironmentTablesCreated(connection, dialect, environmentName);
                 environment.initializeStatistics(connection, dialect, environmentName);
                 connection.commit();
             } catch (Exception exception) {
                 rollback(connection);
                 throw exception;
+            }
+        }
+    }
+
+    private void verifyEnvironmentTablesCreated(Connection connection, SqlDialect dialect,
+                                                String environmentName) throws Exception {
+        // 템플릿 schema에 실제 테이블 생성 여부 확인
+        String tableNamesSql = dialect.tableNamesSql(environmentName);
+        if (tableNamesSql.isBlank()) {
+            return;
+        }
+
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(tableNamesSql)) {
+            if (!resultSet.next()) {
+                throw new IllegalStateException(DATASET_TEMPLATE_TABLE_NOT_CREATED.getMessage());
             }
         }
     }

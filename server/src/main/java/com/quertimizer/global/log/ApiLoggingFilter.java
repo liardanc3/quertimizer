@@ -37,34 +37,29 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-
         // 요청/응답 본문을 후처리에서도 읽을 수 있도록 caching wrapper 적용
         ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request, 1024 * 64);
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
         String actor = resolveActor(request);
-        String prefix = logFormatter.prefix(actor);
-
-        // 요청 라인과 쿼리스트링 로그 기록
-        log.debug("{}", logFormatter.formatHttpLine(
-                actor,
-                "API Request",
-                requestWrapper.getMethod() + " " + requestPath(requestWrapper)
-        ));
-        logLines(logFormatter.formatQueryStringLines(prefix, requestWrapper.getQueryString()));
 
         try (LogMdcContext.LogActorScope ignored = LogMdcContext.openActorScope(actor)) {
-            filterChain.doFilter(requestWrapper, responseWrapper);
-        } finally {
+            // 요청 라인과 쿼리스트링 로그 기록
+            log.debug("API Request : {} {}", requestWrapper.getMethod(), requestPath(requestWrapper));
+            logLines(logFormatter.formatQueryStringLines("", requestWrapper.getQueryString()));
 
-            // 요청 본문과 응답 결과 로그 기록
-            if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), requestWrapper.getContentType(), requestWrapper.getContentLengthLong())) {
-                logLines(logFormatter.formatRequestBodyLines(prefix, extractRequestBody(requestWrapper)));
+            try {
+                filterChain.doFilter(requestWrapper, responseWrapper);
+            } finally {
+                // 요청 본문과 응답 결과 로그 기록
+                if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), requestWrapper.getContentType(), requestWrapper.getContentLengthLong())) {
+                    logLines(logFormatter.formatRequestBodyLines("", extractRequestBody(requestWrapper)));
+                }
+                log.debug("API Response : {}", responseStatus(responseWrapper));
+                if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), responseWrapper.getContentType(), responseWrapper.getContentAsByteArray().length)) {
+                    logLines(logFormatter.formatResponseBodyLines("", extractResponseBody(responseWrapper)));
+                }
+                responseWrapper.copyBodyToResponse();
             }
-            log.debug("{}", logFormatter.formatHttpLine(actor, "API Response", responseStatus(responseWrapper)));
-            if (includeBodies && shouldLogBody(requestWrapper.getRequestURI(), responseWrapper.getContentType(), responseWrapper.getContentAsByteArray().length)) {
-                logLines(logFormatter.formatResponseBodyLines(prefix, extractResponseBody(responseWrapper)));
-            }
-            responseWrapper.copyBodyToResponse();
         }
     }
 
@@ -229,7 +224,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     private void logLines(List<String> logLines) {
         // 로그 라인 생성
         for (String logLine : logLines) {
-            log.info("{}", logLine);
+            log.debug("{}", logLine);
         }
     }
 

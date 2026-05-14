@@ -82,11 +82,12 @@ public class DockerCommandFactory {
     private List<String> startPostgresProcessCommand(String containerName, String dataDir,
                                                      String logPath, int port) {
         return List.of(
-                "docker", "exec", "--user", Constants.POSTGRES_USER, "-d",
+                "docker", "exec", "--user", Constants.POSTGRES_USER,
                 containerName.trim(),
                 "sh", "-lc",
                 Constants.POSTGRES_CTL_RESOLVER
-                        + "\"$pg_ctl_bin\" -D " + shellQuote(dataDir)
+                        + "\"$pg_ctl_bin\" -w -t " + Constants.POSTGRES_CTL_TIMEOUT_SECONDS
+                        + " -D " + shellQuote(dataDir)
                         + " -o " + shellQuote("-p " + port + " -c listen_addresses=0.0.0.0")
                         + " -l " + shellQuote(logPath) + " start"
         );
@@ -98,7 +99,8 @@ public class DockerCommandFactory {
                 containerName.trim(),
                 "sh", "-lc",
                 Constants.POSTGRES_CTL_RESOLVER
-                        + "\"$pg_ctl_bin\" -D " + shellQuote(dataDir) + " -m fast stop"
+                        + "\"$pg_ctl_bin\" -w -t " + Constants.POSTGRES_CTL_TIMEOUT_SECONDS
+                        + " -D " + shellQuote(dataDir) + " -m fast stop"
         );
     }
 

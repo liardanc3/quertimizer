@@ -16,8 +16,8 @@ import com.quertimizer.problem.domain.model.ProblemPlanMeasurement;
 import com.quertimizer.problem.domain.entity.ProblemAnswerCase;
 import com.quertimizer.problem.domain.policy.ProblemExecutionPlanPolicy;
 import com.quertimizer.problem.domain.policy.ProblemOfficialCostPolicy;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -35,7 +36,6 @@ import static com.quertimizer.problem.domain.model.ProblemSubmitProgressStep.*;
 import static com.quertimizer.problem.domain.model.ProblemSubmitProgressText.*;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
@@ -47,6 +47,21 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
     private final ProblemOfficialCostPolicy officialCostPolicy;
     private final ProblemAnswerValidationService problemAnswerValidationService;
     private final ProblemSubmissionRecordService problemSubmissionRecordService;
+    private final Executor problemSubmitTaskExecutor;
+
+    public SubmitProblemSql(ProblemJudgePort problemJudgePort, ProblemDatasetResolver datasetResolver,
+                            ProblemExecutionPlanPolicy executionPlanPolicy, ProblemOfficialCostPolicy officialCostPolicy,
+                            ProblemAnswerValidationService problemAnswerValidationService,
+                            ProblemSubmissionRecordService problemSubmissionRecordService,
+                            @Qualifier("problemSubmitTaskExecutor") Executor problemSubmitTaskExecutor) {
+        this.problemJudgePort = problemJudgePort;
+        this.datasetResolver = datasetResolver;
+        this.executionPlanPolicy = executionPlanPolicy;
+        this.officialCostPolicy = officialCostPolicy;
+        this.problemAnswerValidationService = problemAnswerValidationService;
+        this.problemSubmissionRecordService = problemSubmissionRecordService;
+        this.problemSubmitTaskExecutor = problemSubmitTaskExecutor;
+    }
 
     /**
      * SQL을 제출하고 채점한다.
@@ -267,7 +282,10 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         List<AnswerCaseEnvironmentTask> environmentTasks = answerCases.stream()
                 .map(answerCase -> new AnswerCaseEnvironmentTask(
                         answerCase,
-                        CompletableFuture.supplyAsync(() -> createAnswerCaseEnvironment(answerCaseProgress, answerCase))
+                        CompletableFuture.supplyAsync(
+                                () -> createAnswerCaseEnvironment(answerCaseProgress, answerCase),
+                                problemSubmitTaskExecutor
+                        )
                 ))
                 .toList();
 

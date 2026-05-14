@@ -22,6 +22,7 @@ public enum JudgeFailReason {
     UNKNOWN_SETUP_SQL_ID("알 수 없는 설정 SQL 묶음 ID: %s"),
     SETUP_SQL_DATASET_MISMATCH("설정 SQL 묶음의 대상 데이터셋이 다릅니다: %s"),
     DATASET_TEMPLATE_PREPARATION_FAILED("LVM 스냅샷 데이터셋 템플릿 준비 실패"),
+    DATASET_TEMPLATE_TABLE_NOT_CREATED("데이터셋 템플릿에 생성된 테이블이 없습니다."),
     LVM_SNAPSHOT_NODE_CONFIG_NOT_FOUND("LVM 스냅샷 실행 노드 설정이 없습니다: %s"),
     REQUIRED_TEXT_BLANK("필수 문자열이 비어 있습니다."),
     REQUIRED_FIELD_BLANK("%s이 비어 있습니다."),
