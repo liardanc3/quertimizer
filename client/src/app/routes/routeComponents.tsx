@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { PageLoading } from '@/shared/ui';
 import type { AppRoute } from '@/app/routes/routeConfig';
+import RouteErrorBoundary from '@/app/routes/RouteErrorBoundary';
 
 const AdminPage = lazy(() => import('@/pages/admin/ui/AdminPage'));
 const CommunityDetailPage = lazy(() => import('@/pages/community/ui/CommunityDetailPage'));
@@ -16,20 +17,22 @@ const RankingPage = lazy(() => import('@/pages/ranking/ui/RankingPage'));
 const SocialLoginCallbackPage = lazy(() => import('@/pages/social-login-callback/ui/SocialLoginCallbackPage'));
 const SubmitHistoryPage = lazy(() => import('@/pages/submit-history/ui/SubmitHistoryPage'));
 
-function renderWithRouteSuspense(component: ReactNode) {
+function renderWithRouteSuspense(routeKey: string, component: ReactNode) {
   return (
-    <Suspense fallback={<PageLoading />}>
-      {component}
-    </Suspense>
+    <RouteErrorBoundary routeKey={routeKey}>
+      <Suspense fallback={<PageLoading />}>
+        {component}
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }
 
 export function renderSocialLoginCallbackComponent() {
-  return renderWithRouteSuspense(<SocialLoginCallbackPage />);
+  return renderWithRouteSuspense('social-login-callback', <SocialLoginCallbackPage />);
 }
 
 export function renderRouteComponent(route: AppRoute) {
-  return renderWithRouteSuspense((() => {
+  return renderWithRouteSuspense(resolveRouteKey(route), (() => {
     switch (route.type) {
       case 'problem':
         return <ProblemSolvePage key={route.problemId} problemId={route.problemId} />;
@@ -62,4 +65,21 @@ export function renderRouteComponent(route: AppRoute) {
         return <DashboardPage />;
     }
   })());
+}
+
+function resolveRouteKey(route: AppRoute) {
+  switch (route.type) {
+    case 'problem':
+      return `problem:${route.problemId}`;
+    case 'communityDetail':
+      return `community-detail:${route.postId}`;
+    case 'communityEdit':
+      return `community-edit:${route.postId}`;
+    case 'profile':
+      return `profile:${route.handle ?? 'me'}`;
+    case 'profileActivity':
+      return `profile-activity:${route.handle ?? 'me'}`;
+    default:
+      return route.type;
+  }
 }

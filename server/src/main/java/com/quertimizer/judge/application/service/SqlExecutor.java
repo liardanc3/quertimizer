@@ -77,6 +77,18 @@ public class SqlExecutor implements AutoCloseable {
         );
     }
 
+    public SqlExecutionResult executeSelectAll(ExecuteSqlInput command, String sql) {
+        // 영속 실행 환경 점유 후 SELECT 전체 결과 실행
+        requireOpen();
+        return withPersistentConnection(
+                command.getEnvironmentId(), command.getOptions().getTimeoutSeconds(),
+                connection -> executeSelectAll(
+                        command.getExecutionId(), connection, sql,
+                        command.getOptions().isIncludeCost(), command.getOptions().isIncludePlan()
+                )
+        );
+    }
+
     public SqlExecutionResult analyze(AnalyzeEnvironmentInput input) {
         // 영속 실행 환경 점유 후 DBMS 통계 갱신
         requireOpen();

@@ -150,6 +150,22 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
+    @Log("SQL 전체 실행")
+    public SqlExecutionResult executeSelectAllSql(ExecuteSqlInput input) {
+        // 읽기 전용 단일 SQL 검증과 실행 SQL 결정
+        definitionPolicy.validateReadOnlySql(input.getSql());
+        String sql = resolveSingleStatement(input.getSql());
+
+        // 영속 SQL 실행기 ticket 발급 후 SELECT 전체 결과 조회
+        SqlExecutorTicket ticket = sqlExecutorPool.requestExecutor(
+                input.getEnvironmentId(), QueuePriority.NORMAL, QueueStatusListener.noop()
+        );
+        try (SqlExecutor executor = sqlExecutorPool.acquireExecutor(ticket)) {
+            return executor.executeSelectAll(input, sql);
+        }
+    }
+
+    @Override
     @Log("채점 환경 분석")
     public SqlExecutionResult analyzeEnvironment(AnalyzeEnvironmentInput input) {
         // 실행 환경 존재 여부 확인

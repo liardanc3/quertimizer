@@ -138,8 +138,8 @@ public class JudgeGateway implements ProblemJudgePort {
 
     @Override
     public ProblemJudgeExecutionResult executeSubmissionAnswerSql(String executionId, String environmentId, String sql) {
-        // 제출 정답 비교 옵션으로 SQL 실행
-        return toProblemResult(judgeApplicationPort.executeSql(new ExecuteSqlInput(
+        // 제출 정답 비교 옵션으로 SELECT 전체 결과 조회
+        return toProblemResult(judgeApplicationPort.executeSelectAllSql(new ExecuteSqlInput(
                 new JudgeExecutionId(executionId), new JudgeEnvironmentId(environmentId),
                 sql, ExecutionOptions.submissionAnswer()
         )));

@@ -3272,9 +3272,9 @@ function SolvePageAuthOverlay({
         {mode === 'login' ? (
           <div className="solve-auth-landing-body">
             <div className="minimal-auth-form solve-auth-modal-login-form">
-              <div className="landing-auth-layout">
-                <form className="landing-login-panel" aria-label={text('AUTH_LOGIN_FORM_LABEL', '로그인 입력')} onSubmit={(event) => void handleLoginSubmit(event)}>
-                  <div className="field-stack">
+              <div className="landing-auth-layout solve-auth-landing-layout">
+                <form className="landing-login-panel solve-auth-landing-login-panel" aria-label={text('AUTH_LOGIN_FORM_LABEL', '로그인 입력')} onSubmit={(event) => void handleLoginSubmit(event)}>
+                  <div className="field-stack solve-auth-field-stack">
                     <label className="field-label" htmlFor="solve-auth-email">
                       {text('AUTH_EMAIL_LABEL', '이메일')}
                     </label>
@@ -3292,7 +3292,7 @@ function SolvePageAuthOverlay({
                     />
                   </div>
 
-                  <div className="field-stack">
+                  <div className="field-stack solve-auth-field-stack">
                     <label className="field-label" htmlFor="solve-auth-password">
                       {text('AUTH_PASSWORD_LABEL', '비밀번호')}
                     </label>
@@ -3320,54 +3320,54 @@ function SolvePageAuthOverlay({
                     </div>
                   ) : null}
 
-                  <div className="auth-actions minimal">
+                  <div className="auth-actions minimal solve-auth-login-actions">
                     <button
                       type="submit"
-                      className="btn primary landing-login-submit"
+                      className="btn primary landing-login-submit solve-auth-login-submit"
                       disabled={!isLoginReady || isLoginSubmitting}
                     >
                       {isLoginSubmitting ? text('AUTH_LOGIN_IN_PROGRESS_ELLIPSIS', '로그인 중…') : text('AUTH_LOGIN_TITLE', '로그인')}
                     </button>
                   </div>
 
-                  <button type="button" className="btn text landing-password-reset-link" onClick={onOpenResetPassword}>
+                  <button type="button" className="btn text landing-password-reset-link solve-auth-reset-link" onClick={onOpenResetPassword}>
                     {text('AUTH_FORGOT_PASSWORD_LINK', '비밀번호를 잊으셨나요?')}
                   </button>
                 </form>
 
-                <div className="landing-auth-divider" aria-hidden="true">
-                  <span className="landing-auth-divider-line" />
-                  <img className="landing-auth-divider-mark" src={logoImage} alt="" />
-                  <span className="landing-auth-divider-line" />
+                <div className="landing-auth-divider solve-auth-landing-divider" aria-hidden="true">
+                  <span className="landing-auth-divider-line solve-auth-landing-divider-line" />
+                  <img className="landing-auth-divider-mark solve-auth-landing-divider-mark" src={logoImage} alt="" />
+                  <span className="landing-auth-divider-line solve-auth-landing-divider-line" />
                 </div>
 
-                <aside className="landing-access-panel" aria-label={text('AUTH_ACCOUNT_SUPPORT_LABEL', '계정 지원')}>
-                  <div className="landing-access-group landing-access-group-social">
-                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
-                      <span className="landing-access-card-icon" aria-hidden="true">
+                <aside className="landing-access-panel solve-auth-landing-access-panel" aria-label={text('AUTH_ACCOUNT_SUPPORT_LABEL', '계정 지원')}>
+                  <div className="landing-access-group landing-access-group-social solve-auth-landing-access-group">
+                    <button type="button" className="landing-access-card is-social solve-auth-social-button" onClick={() => startSocialLogin('google')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon solve-auth-social-icon" aria-hidden="true">
                         <GoogleMarkIcon />
                       </span>
                       <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GOOGLE', 'Google로 계속하기')}</span>
                     </button>
 
-                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
-                      <span className="landing-access-card-icon" aria-hidden="true">
+                    <button type="button" className="landing-access-card is-social solve-auth-social-button" onClick={() => startSocialLogin('github')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon solve-auth-social-icon" aria-hidden="true">
                         <GithubMarkIcon />
                       </span>
                       <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_GITHUB', 'Github로 계속하기')}</span>
                     </button>
 
-                    <button type="button" className="landing-access-card is-social" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
-                      <span className="landing-access-card-icon" aria-hidden="true">
+                    <button type="button" className="landing-access-card is-social solve-auth-social-button" onClick={() => startSocialLogin('kakao')} disabled={isSocialLoginSubmitting}>
+                      <span className="landing-access-card-icon solve-auth-social-icon" aria-hidden="true">
                         <KakaoMarkIcon />
                       </span>
                       <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_KAKAO', 'Kakao로 계속하기')}</span>
                     </button>
                   </div>
 
-                  <div className="landing-access-group landing-access-group-support">
-                    <button type="button" className="landing-access-card is-social is-email" onClick={onOpenSignup}>
-                      <span className="landing-access-card-icon" aria-hidden="true">
+                  <div className="landing-access-group landing-access-group-support solve-auth-landing-access-group solve-auth-landing-access-group-support">
+                    <button type="button" className="landing-access-card is-social is-email solve-auth-social-button" onClick={onOpenSignup}>
+                      <span className="landing-access-card-icon solve-auth-social-icon" aria-hidden="true">
                         <EmailMarkIcon />
                       </span>
                       <span className="landing-access-card-title">{text('AUTH_CONTINUE_WITH_EMAIL', '이메일로 계속하기')}</span>

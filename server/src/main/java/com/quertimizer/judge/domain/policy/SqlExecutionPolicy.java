@@ -75,7 +75,7 @@ public class SqlExecutionPolicy {
         // 위험 키워드 검증 후 정규화 SQL 반환
         String normalizedSql = normalize(statements.get(0));
         validateDangerousKeyword(normalizedSql);
-        return normalizedSql;
+        return removeLeadingComments(normalizedSql);
     }
 
     private void validateDangerousKeyword(String normalizedSql) {
@@ -88,5 +88,23 @@ public class SqlExecutionPolicy {
     private String normalize(String sql) {
         // SQL 비교용 대문자 정규화
         return sql.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+    }
+
+    private String removeLeadingComments(String normalizedSql) {
+        // 선행 힌트 주석 제거 후 실행 SQL 유형 판별 기준 반환
+        String resolvedSql = normalizedSql;
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            if (resolvedSql.startsWith("/*")) {
+                int endIndex = resolvedSql.indexOf("*/");
+                if (endIndex >= 0) {
+                    resolvedSql = resolvedSql.substring(endIndex + 2).trim();
+                    changed = true;
+                }
+            }
+        }
+
+        return resolvedSql;
     }
 }

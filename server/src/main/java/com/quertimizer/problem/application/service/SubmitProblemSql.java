@@ -260,10 +260,12 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
     }
 
     private ProblemJudgeExecutionResult executeAnswer(String environmentId, String sql) {
-        // 출력 데이터 비교용 최대 제출 검증 행 수 SELECT 결과 조회
+        // 출력 데이터 비교용 SELECT 전체 결과 조회
         ProblemJudgeExecutionResult result = problemJudgePort.executeSubmissionAnswerSql(
                 "submit-answer-" + UUID.randomUUID(), environmentId, sql
         );
+
+        // 조회 결과 누락 방지
         if (result.getRowCount() > result.getRows().size()) {
             throw badRequest("SQL 실행 결과 행 수가 너무 많습니다.");
         }

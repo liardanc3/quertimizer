@@ -136,6 +136,7 @@ def deployTarget = findProperty('deployTarget') ?: 'quertimizer@quertimizer.com'
 ext {
 	remoteServerBase = '/home/quertimizer/apps/server'
 	remoteClientBase = '/home/quertimizer/apps/client'
+	remoteClientAssetsBase = '/home/quertimizer/apps/client/shared-assets'
 	remoteServiceName = 'quertimizer-server'
 	localClientDir = file('../client')
 }
@@ -206,7 +207,7 @@ tasks.register('deployClient') {
 		runCmd([
 				'ssh',
 				deployTarget,
-				"mkdir -p ${remoteClientBase}/releases/${release}"
+				"mkdir -p ${remoteClientBase}/releases/${release} ${remoteClientAssetsBase}"
 		])
 
 		runCmd([
@@ -219,7 +220,8 @@ tasks.register('deployClient') {
 		runCmd([
 				'ssh',
 				deployTarget,
-				"ln -sfn ${remoteClientBase}/releases/${release} ${remoteClientBase}/current" +
+				"if [ -d ${remoteClientBase}/releases/${release}/assets ]; then cp -a ${remoteClientBase}/releases/${release}/assets/. ${remoteClientAssetsBase}/; fi" +
+						" && ln -sfn ${remoteClientBase}/releases/${release} ${remoteClientBase}/current" +
 						" && sudo -n nginx -t" +
 						" && sudo -n systemctl reload nginx"
 		])

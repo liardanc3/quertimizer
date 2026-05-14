@@ -29,6 +29,8 @@ public interface JudgeApplicationPort {
 
     SqlExecutionResult executeSql(ExecuteSqlInput input);
 
+    SqlExecutionResult executeSelectAllSql(ExecuteSqlInput input);
+
     SqlExecutionResult analyzeEnvironment(AnalyzeEnvironmentInput input);
 
     SqlExecutionHashResult createSqlExecutionHash(CreateSqlExecutionHashInput input);

@@ -88,7 +88,10 @@ public class DockerCommandFactory {
                 Constants.POSTGRES_CTL_RESOLVER
                         + "\"$pg_ctl_bin\" -w -t " + Constants.POSTGRES_CTL_TIMEOUT_SECONDS
                         + " -D " + shellQuote(dataDir)
-                        + " -o " + shellQuote("-p " + port + " -c listen_addresses=0.0.0.0")
+                        + " -o " + shellQuote(
+                                "-p " + port + " -c listen_addresses=0.0.0.0 "
+                                        + "-c shared_preload_libraries=pg_hint_plan"
+                        )
                         + " -l " + shellQuote(logPath) + " start"
         );
     }
