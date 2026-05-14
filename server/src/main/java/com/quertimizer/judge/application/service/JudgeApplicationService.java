@@ -202,7 +202,6 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 런타임 snapshot 조회")
     public DatabaseSnapshot createDatabaseSnapshot() {
         // DB 실행 환경 현재 snapshot 조회
         return databaseSnapshotPort.createSnapshot();
