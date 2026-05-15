@@ -2,11 +2,13 @@ package com.quertimizer.community.adapter.out.elasticsearch;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quertimizer.community.application.port.out.CommunityCommentRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostRepositoryPort;
 import com.quertimizer.community.application.port.out.CommunityPostSearchPort;
 import com.quertimizer.community.application.port.out.CommunityPostTagRepositoryPort;
 import com.quertimizer.community.application.output.CommunityPostPageOutput;
 import com.quertimizer.community.application.output.CommunityPostSummaryOutput;
+import com.quertimizer.community.domain.entity.CommunityComment;
 import com.quertimizer.community.domain.entity.CommunityPost;
 import com.quertimizer.community.domain.entity.CommunityPostTag;
 import com.quertimizer.community.domain.policy.CommunityPostIdPolicy;
@@ -29,10 +31,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +44,7 @@ public class CommunitySearchService implements CommunityPostSearchPort {
 
     private final ObjectProvider<ElasticsearchOperations> elasticsearchOperationsProvider;
     private final ObjectMapper objectMapper;
+    private final CommunityCommentRepositoryPort communityCommentRepository;
     private final CommunityPostRepositoryPort communityPostRepository;
     private final CommunityPostTagRepositoryPort communityPostTagRepository;
     private final CommunitySearchIndexManager communitySearchIndexManager;
@@ -54,10 +59,20 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         }
 
         List<CommunityPost> posts = communityPostRepository.findAll();
-        Map<Long, List<String>> tagsByPostId = createTagsByPostId(posts.stream().map(CommunityPost::getPostId).toList());
+        List<Long> postIds = posts.stream().map(CommunityPost::getPostId).toList();
+        Map<Long, List<String>> tagsByPostId = createTagsByPostId(postIds);
+        Map<Long, String> commentTextByPostId = createCommentTextByPostId(postIds);
 
         for (CommunityPost post : posts) {
-            syncPost(post, tagsByPostId.getOrDefault(post.getPostId(), List.of()));
+            try {
+                syncPost(
+                        elasticsearchOperations, post,
+                        tagsByPostId.getOrDefault(post.getPostId(), List.of()),
+                        commentTextByPostId.getOrDefault(post.getPostId(), "")
+                );
+            } catch (RuntimeException ignored) {
+                // 검색 인덱스 동기화 실패는 목록 조회 fallback으로 보완
+            }
         }
     }
 
@@ -97,18 +112,7 @@ public class CommunitySearchService implements CommunityPostSearchPort {
 
         // 게시글 검색 문서 최신화
         try {
-            elasticsearchOperations.save(CommunityPostDocument.create(
-                    CommunityPostIdPolicy.format(post.getPostId()),
-                    post.getTitle(),
-                    post.getHandle(),
-                    post.getPlainTextSummary(),
-                    tags,
-                    resolveCategory(post),
-                    post.getLikeCount(),
-                    post.getCommentCount(),
-                    post.getViewCount(),
-                    post.getCreatedAt()
-            ));
+            syncPost(elasticsearchOperations, post, tags, createCommentText(post.getPostId()));
         } catch (RuntimeException ignored) {
             // 검색 인덱스 동기화 실패는 목록 조회 fallback으로 보완
         }
@@ -146,6 +150,33 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         }
 
         return tagsByPostId;
+    }
+
+    private Map<Long, String> createCommentTextByPostId(List<Long> postIds) {
+        // 게시글 번호별 댓글 검색 텍스트 생성
+        Map<Long, StringBuilder> commentTextBuilderByPostId = new HashMap<>();
+
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> postIdSet = new HashSet<>(postIds);
+        for (CommunityComment comment : communityCommentRepository.findAll()) {
+            if (!postIdSet.contains(comment.getPostId()) || !StringUtils.hasText(comment.getContent())) {
+                continue;
+            }
+
+            commentTextBuilderByPostId.computeIfAbsent(comment.getPostId(), key -> new StringBuilder())
+                    .append(' ')
+                    .append(comment.getContent().trim());
+        }
+
+        Map<Long, String> commentTextByPostId = new HashMap<>();
+        for (Map.Entry<Long, StringBuilder> entry : commentTextBuilderByPostId.entrySet()) {
+            commentTextByPostId.put(entry.getKey(), entry.getValue().toString().trim());
+        }
+
+        return commentTextByPostId;
     }
 
     private CommunityPostPageOutput searchPostsInElasticsearch(ElasticsearchOperations elasticsearchOperations,
@@ -198,13 +229,13 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         List<Object> filter = new ArrayList<>();
         List<Object> functions = new ArrayList<>();
 
-        // 제목, 태그, 작성자, 본문 가중치 검색
+        // 제목, 본문, 댓글 가중치 검색
         if (StringUtils.hasText(searchKeyword)) {
             must.add(Map.of(
                     "simple_query_string",
                     Map.of(
                             "query", searchKeyword.trim(),
-                            "fields", List.of("title^8", "tags^6", "authorId^4", "contentText^2"),
+                            "fields", List.of("title^100", "contentText^5", "commentText^1", "tags^3", "authorId^2"),
                             "default_operator", "and"
                     )
             ));
@@ -310,13 +341,21 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         String normalizedSearchKeyword = normalizeKeyword(searchKeyword);
         String normalizedTag = normalizeKeyword(tag);
         String normalizedCategory = normalizeCategory(category);
+        Map<Long, String> commentTextByPostId = normalizedSearchKeyword.isBlank()
+                ? Map.of()
+                : createCommentTextByPostId(posts.stream().map(CommunityPost::getPostId).toList());
         List<RankedPost> rankedPosts = posts.stream()
                 .filter(post -> matchesCategory(post, normalizedCategory))
                 .filter(post -> matchesTag(tagsByPostId.getOrDefault(post.getPostId(), List.of()), normalizedTag))
                 .map(post -> new RankedPost(
                         post,
                         tagsByPostId.getOrDefault(post.getPostId(), List.of()),
-                        calculateScore(post, tagsByPostId.getOrDefault(post.getPostId(), List.of()), normalizedSearchKeyword)
+                        calculateScore(
+                                post,
+                                tagsByPostId.getOrDefault(post.getPostId(), List.of()),
+                                commentTextByPostId.getOrDefault(post.getPostId(), ""),
+                                normalizedSearchKeyword
+                        )
                 ))
                 .filter(rankedPost -> normalizedSearchKeyword.isBlank() || rankedPost.score() > 0)
                 .sorted(createComparator(sortKey, !normalizedSearchKeyword.isBlank()))
@@ -398,7 +437,35 @@ public class CommunitySearchService implements CommunityPostSearchPort {
         return tags.stream().map(this::normalizeKeyword).anyMatch(normalizedTag::equals);
     }
 
-    private double calculateScore(CommunityPost post, List<String> tags, String normalizedSearchKeyword) {
+    private void syncPost(ElasticsearchOperations elasticsearchOperations,
+                          CommunityPost post, List<String> tags,
+                          String commentText) {
+        // 게시글 검색 문서 저장
+        elasticsearchOperations.save(CommunityPostDocument.create(
+                CommunityPostIdPolicy.format(post.getPostId()),
+                post.getTitle(),
+                post.getHandle(),
+                post.getPlainTextSummary(),
+                commentText,
+                tags,
+                resolveCategory(post),
+                post.getLikeCount(),
+                post.getCommentCount(),
+                post.getViewCount(),
+                post.getCreatedAt()
+        ));
+    }
+
+    private String createCommentText(Long postId) {
+        // 게시글 댓글 검색 텍스트 생성
+        return communityCommentRepository.findAllByPostIdOrderByCreatedAtAsc(postId).stream()
+                .map(CommunityComment::getContent)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .reduce("", (left, right) -> left.isBlank() ? right : left + " " + right);
+    }
+
+    private double calculateScore(CommunityPost post, List<String> tags, String commentText, String normalizedSearchKeyword) {
         // 점수 계산
         if (normalizedSearchKeyword.isBlank()) {
             return post.getLikeCount() * 0.4
@@ -407,16 +474,18 @@ public class CommunitySearchService implements CommunityPostSearchPort {
                     + Math.max(0, 1000 - Math.abs(Duration.between(post.getCreatedAt(), LocalDateTime.now()).toHours()));
         }
 
-        double titleScore = calculateTextScore(post.getTitle(), normalizedSearchKeyword, 8d);
-        double authorScore = calculateTextScore(post.getHandle(), normalizedSearchKeyword, 4d);
-        double contentScore = calculateTextScore(post.getPlainTextSummary(), normalizedSearchKeyword, 2d);
+        double titleScore = calculateTextScore(post.getTitle(), normalizedSearchKeyword, 100d);
+        double authorScore = calculateTextScore(post.getHandle(), normalizedSearchKeyword, 2d);
+        double contentScore = calculateTextScore(post.getPlainTextSummary(), normalizedSearchKeyword, 5d);
+        double commentScore = calculateTextScore(commentText, normalizedSearchKeyword, 1d);
         double tagScore = tags.stream()
-                .mapToDouble(tag -> calculateTextScore(tag, normalizedSearchKeyword, 6d))
+                .mapToDouble(tag -> calculateTextScore(tag, normalizedSearchKeyword, 3d))
                 .sum();
 
         return titleScore
                 + authorScore
                 + contentScore
+                + commentScore
                 + tagScore
                 + post.getLikeCount() * 0.4
                 + post.getCommentCount() * 0.6

@@ -19,6 +19,7 @@ public class CommunityPostDocument {
     private String title;
     private String authorId;
     private String contentText;
+    private String commentText;
     private List<String> tags;
     private String category;
     private int likeCount;
@@ -30,6 +31,7 @@ public class CommunityPostDocument {
                                                String title,
                                                String authorId,
                                                String contentText,
+                                               String commentText,
                                                List<String> tags,
                                                String category,
                                                int likeCount,
@@ -41,6 +43,7 @@ public class CommunityPostDocument {
                 title,
                 authorId,
                 contentText,
+                commentText,
                 tags,
                 category,
                 likeCount,
@@ -54,6 +57,7 @@ public class CommunityPostDocument {
                                   String title,
                                   String authorId,
                                   String contentText,
+                                  String commentText,
                                   List<String> tags,
                                   String category,
                                   int likeCount,
@@ -64,6 +68,7 @@ public class CommunityPostDocument {
         this.title = title;
         this.authorId = authorId;
         this.contentText = contentText;
+        this.commentText = commentText;
         this.tags = tags;
         this.category = category;
         this.likeCount = likeCount;

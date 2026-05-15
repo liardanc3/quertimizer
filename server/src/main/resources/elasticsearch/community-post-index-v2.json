@@ -57,6 +57,11 @@
         "analyzer": "community_index_analyzer",
         "search_analyzer": "community_search_analyzer"
       },
+      "commentText": {
+        "type": "text",
+        "analyzer": "community_index_analyzer",
+        "search_analyzer": "community_search_analyzer"
+      },
       "tags": {
         "type": "text",
         "analyzer": "community_index_analyzer",
