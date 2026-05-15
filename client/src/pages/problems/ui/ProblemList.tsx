@@ -8,7 +8,7 @@ import { useUiText } from '@/shared/config/ui-text';
 import type { DbmsType, ProblemSummary } from '@/shared/api/domain';
 import ProblemCard from './ProblemCard';
 
-type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
+type ProblemSortField = 'problemId' | 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
 
 type ProblemListProps = {
   problems: ProblemSummary[];
@@ -17,13 +17,13 @@ type ProblemListProps = {
   showSolveState: boolean;
   showSolved: boolean;
   showUnsolved: boolean;
-  countSortField: CountSortField;
+  countSortField: ProblemSortField;
   countSortDirection: 'desc' | 'asc';
   isLoading: boolean;
   onSearchSelect: (value: string) => void;
   onToggleSolved: () => void;
   onToggleUnsolved: () => void;
-  onToggleCountSort: (field: CountSortField) => void;
+  onToggleCountSort: (field: ProblemSortField) => void;
 };
 
 const problemLoadingRows = Array.from({ length: 8 }, (_, index) => index);
@@ -56,7 +56,7 @@ export default function ProblemList({
     dismissOnResize: true,
   });
 
-  function renderSortIcon(field: CountSortField) {
+  function renderSortIcon(field: ProblemSortField) {
     if (countSortField !== field) {
       return <SortIcon direction="none" />;
     }
@@ -120,8 +120,20 @@ export default function ProblemList({
                 </>
               ) : null}
             </div>
-            <div role="columnheader" className="problem-table-head-cell">
-              {text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제번호')}
+            <div role="columnheader" className="problem-table-head-cell problem-table-head-cell-filter">
+              <span>{text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제번호')}</span>
+              <button
+                type="button"
+                className={`problem-table-head-filter-trigger problem-table-head-sort-trigger ${countSortField === 'problemId' ? 'is-active' : ''}`}
+                aria-label={
+                  countSortField === 'problemId' && countSortDirection === 'desc'
+                    ? text('PROBLEM_TABLE_NUMBER_SORT_DESC_LABEL', '문제 번호 내림차순')
+                    : text('PROBLEM_TABLE_NUMBER_SORT_ASC_LABEL', '문제 번호 오름차순')
+                }
+                onClick={() => onToggleCountSort('problemId')}
+              >
+                {renderSortIcon('problemId')}
+              </button>
             </div>
             <div role="columnheader" className="problem-table-head-cell">
               {text('PROBLEM_TABLE_TITLE_COLUMN_LABEL', '문제 제목')}

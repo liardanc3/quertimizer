@@ -28,7 +28,6 @@ public class GetProblemOptions implements GetProblemOptionsUseCase {
      * @param problemSetId 옵션을 조회할 문제 테이블셋 번호
      */
     @Override
-    @Log("문제 선택지 조회")
     public List<AdminProblemOptionOutput> execute(String problemSetId) {
         String scopedProblemSetId = problemService.normalizeScopedProblemSetId(problemSetId, null);
         List<Problem> problems = problemRepository.findAllByProblemSetIdOrderByProblemIdAsc(scopedProblemSetId);

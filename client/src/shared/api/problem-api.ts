@@ -165,6 +165,7 @@ export interface FetchProblemsParams {
   dbms: DbmsType;
   query: string;
   solveState: 'all' | 'solved' | 'unsolved' | 'none';
+  problemIdSort: 'none' | 'asc' | 'desc';
   solvedCountSort: 'none' | 'asc' | 'desc';
   totalSubmitSort: 'none' | 'asc' | 'desc';
   successSubmitSort: 'none' | 'asc' | 'desc';
@@ -324,6 +325,10 @@ export async function fetchProblems(params: FetchProblemsParams): Promise<Proble
 
   if (params.solvedCountSort !== 'none') {
     searchParams.set('solvedCountSort', params.solvedCountSort);
+  }
+
+  if (params.problemIdSort !== 'none') {
+    searchParams.set('problemIdSort', params.problemIdSort);
   }
 
   if (params.totalSubmitSort !== 'none') {

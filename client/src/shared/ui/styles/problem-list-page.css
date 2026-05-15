@@ -6,6 +6,16 @@
   box-shadow: none;
 }
 
+:is(.home-page, .data-page) .panel-card.problem-toolbar-card {
+  position: relative;
+  z-index: 20;
+}
+
+:is(.home-page, .data-page) .panel-card.problem-board {
+  position: relative;
+  z-index: 1;
+}
+
 :is(.home-page, .data-page).page-stack {
   gap: 0.5rem;
 }
@@ -411,6 +421,8 @@
 }
 
 :is(.home-page, .data-page) .problem-table-head {
+  position: relative;
+  z-index: 30;
   padding-top: 0.12rem;
   padding-bottom: 0.58rem;
   border-bottom: 1px solid rgba(219, 230, 242, 0.82);
@@ -430,6 +442,7 @@
 
 :is(.home-page, .data-page) .problem-table-head-cell-filter {
   position: relative;
+  z-index: 31;
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
@@ -473,7 +486,7 @@
   position: absolute;
   top: calc(100% + 0.34rem);
   left: 0;
-  z-index: 18;
+  z-index: 80;
   display: grid;
   gap: 0.28rem;
   min-width: max-content;

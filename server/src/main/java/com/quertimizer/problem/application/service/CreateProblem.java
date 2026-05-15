@@ -12,10 +12,12 @@ import com.quertimizer.problem.application.port.in.CreateProblemUseCase;
 import com.quertimizer.problem.application.port.out.ProblemAnswerCaseRepositoryPort;
 import com.quertimizer.problem.application.port.out.ProblemJudgePort;
 import com.quertimizer.problem.application.port.out.ProblemRepositoryPort;
+import com.quertimizer.problem.application.port.out.ProblemSetHiddenCaseRepositoryPort;
 import com.quertimizer.problem.application.port.out.ProblemSetRepositoryPort;
 import com.quertimizer.problem.domain.entity.Problem;
 import com.quertimizer.problem.domain.entity.ProblemAnswerCase;
 import com.quertimizer.problem.domain.entity.ProblemSet;
+import com.quertimizer.problem.domain.entity.ProblemSetHiddenCase;
 import com.quertimizer.problem.domain.model.ProblemCreateProgressStep;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +56,7 @@ public class CreateProblem implements CreateProblemUseCase {
     private final ProblemRepositoryPort problemRepository;
     private final ProblemSetRepositoryPort problemSetRepository;
     private final ProblemAnswerCaseRepositoryPort problemAnswerCaseRepository;
+    private final ProblemSetHiddenCaseRepositoryPort problemSetHiddenCaseRepository;
     private final ProblemJudgePort problemJudgePort;
     private final ProblemExampleService problemExampleService;
 
@@ -76,9 +79,10 @@ public class CreateProblem implements CreateProblemUseCase {
     public ProblemCreateOutput execute(ProblemCreateInput input) {
         List<Long> createdDatasetIds = new ArrayList<>();
         AtomicBoolean createdProblem = new AtomicBoolean(false);
+        boolean createdProblemSet = !hasText(input.getProblemSetId());
 
         try {
-            ProblemSet problemSet = hasText(input.getProblemSetId())
+            ProblemSet problemSet = !createdProblemSet
                     ? problemSetRepository.findByProblemSetId(input.getProblemSetId())
                             .orElseThrow(() -> new BusinessException(PROBLEM_SET_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND))
                     : problemSetRepository.save(createProblemSet(input)
@@ -96,7 +100,10 @@ public class CreateProblem implements CreateProblemUseCase {
             problemSet = problemSetRepository.save(resolvedProblemSet);
             problem = problemRepository.save(problem);
             if (createdProblem.get()) {
-                saveProblemAnswerCases(problem, problemSet, input, createdDatasetIds);
+                List<ProblemSetHiddenCase> hiddenCases = createdProblemSet
+                        ? saveProblemSetHiddenCases(problemSet, input, createdDatasetIds)
+                        : findProblemSetHiddenCases(problemSet.getProblemSetId());
+                saveProblemAnswerCases(problem, problemSet, input, hiddenCases);
             }
 
             return new ProblemCreateOutput(problem.getProblemId());
@@ -193,16 +200,15 @@ public class CreateProblem implements CreateProblemUseCase {
         });
     }
 
-    private void saveProblemAnswerCases(Problem problem, ProblemSet problemSet,
-                                        ProblemCreateInput input, List<Long> createdDatasetIds) {
+    private List<ProblemSetHiddenCase> saveProblemSetHiddenCases(ProblemSet problemSet, ProblemCreateInput input,
+                                                                 List<Long> createdDatasetIds) {
         // 숨김 채점 데이터 존재 여부 검사
         if (input.getHiddenDataSqls().isEmpty()) {
             throw new BusinessException(HIDDEN_DATA_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
-        // 실제 채점 케이스와 숨김 채점 케이스 생성 후 저장
-        List<ProblemAnswerCase> answerCases = new ArrayList<>();
-        answerCases.add(ProblemAnswerCase.actual(problem.getProblemId(), problemSet.getDatasetId(), problem.getAnswerHash()));
+        // 문제 테이블셋 기준 숨김 채점 데이터셋 생성
+        List<ProblemSetHiddenCase> hiddenCases = new ArrayList<>();
         for (int index = 0; index < input.getHiddenDataSqls().size(); index++) {
             String hiddenDataSql = input.getHiddenDataSqls().get(index);
             int sequence = index + 1;
@@ -215,11 +221,34 @@ public class CreateProblem implements CreateProblemUseCase {
                         return createdDatasetId;
                     }
             );
+            hiddenCases.add(ProblemSetHiddenCase.create(problemSet.getProblemSetId(), datasetId, sequence));
+        }
+        return problemSetHiddenCaseRepository.saveAll(hiddenCases);
+    }
+
+    private List<ProblemSetHiddenCase> findProblemSetHiddenCases(String problemSetId) {
+        // 문제 테이블셋 기준 숨김 채점 케이스 존재 여부 검사
+        List<ProblemSetHiddenCase> hiddenCases = problemSetHiddenCaseRepository.findAllByProblemSetIdOrderByCaseOrderAsc(problemSetId);
+        if (hiddenCases.isEmpty()) {
+            throw new BusinessException(HIDDEN_DATA_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+        return hiddenCases;
+    }
+
+    private void saveProblemAnswerCases(Problem problem, ProblemSet problemSet,
+                                        ProblemCreateInput input, List<ProblemSetHiddenCase> hiddenCases) {
+        // 실제 채점 케이스와 공유 숨김 채점 케이스 기준 정답 해시 생성
+        List<ProblemAnswerCase> answerCases = new ArrayList<>();
+        answerCases.add(ProblemAnswerCase.actual(problem.getProblemId(), problemSet.getDatasetId(), problem.getAnswerHash()));
+        for (ProblemSetHiddenCase hiddenCase : hiddenCases) {
             answerCases.add(ProblemAnswerCase.hidden(
-                    problem.getProblemId(), datasetId,
-                    createAnswerHash(datasetId, input.getAnswerSql()), sequence
+                    problem.getProblemId(), hiddenCase.getDatasetId(),
+                    createAnswerHash(hiddenCase.getDatasetId(), input.getAnswerSql()),
+                    hiddenCase.getCaseOrder()
             ));
         }
+
+        // 문제 번호 기준 정답 케이스 교체 저장
         problemAnswerCaseRepository.deleteAllByProblemId(problem.getProblemId());
         problemAnswerCaseRepository.saveAll(answerCases);
     }

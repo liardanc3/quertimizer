@@ -35,7 +35,8 @@ public class GetProblems implements GetProblemsUseCase {
         ProblemPage problemPage = problemSearchService.findProblemPage(
                 input.getPage(), input.getQuery(), problemService.resolveDbmsType(input.getDbms()),
                 input.getSolveState(), input.getCurrentHandle(),
-                input.getSolvedCountSort(), input.getTotalSubmitSort(), input.getSuccessSubmitSort()
+                input.getProblemIdSort(), input.getSolvedCountSort(),
+                input.getTotalSubmitSort(), input.getSuccessSubmitSort()
         );
 
         List<ProblemListItemOutput> problems = problemPage.getProblems().stream()

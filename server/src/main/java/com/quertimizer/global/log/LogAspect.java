@@ -25,7 +25,7 @@ public class LogAspect {
 
         try {
             // 실행 시작 로그 출력 후 대상 메서드 실행
-            log.info("{} 실행", message);
+            log.info("{} 시작", message);
             Object result = joinPoint.proceed();
 
             // 실행 완료 로그 출력 후 결과 반환

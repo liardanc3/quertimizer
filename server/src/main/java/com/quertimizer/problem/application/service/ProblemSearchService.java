@@ -37,8 +37,8 @@ public class ProblemSearchService {
 
     public ProblemPage findProblemPage(int requestedPage, String searchKeyword, DbmsType dbmsType,
                                        String solveState, String currentHandle,
-                                       String solvedCountSort, String totalSubmitSort,
-                                       String successSubmitSort) {
+                                       String problemIdSort, String solvedCountSort,
+                                       String totalSubmitSort, String successSubmitSort) {
         // DB에서 문제와 제출 통계 원천 데이터 직접 조회
         Map<String, List<ProblemSolveHistory>> bestHistoriesByProblemId =
                 createBestSubmittedHistoriesByProblemId(problemSolveHistoryRepository.findAll());
@@ -53,7 +53,7 @@ public class ProblemSearchService {
                 .map(problem -> createProblemListEntry(problem, currentHandle, bestHistoriesByProblemId, submissionStatsByProblemId))
                 .filter(problemEntry -> matchesSearch(problemEntry, searchKeyword))
                 .filter(problemEntry -> matchesSolveState(problemEntry, solveState, currentHandle))
-                .sorted(createProblemComparator(solvedCountSort, totalSubmitSort, successSubmitSort))
+                .sorted(createProblemComparator(problemIdSort, solvedCountSort, totalSubmitSort, successSubmitSort))
                 .toList();
 
         // 페이지 경계 계산
@@ -142,7 +142,8 @@ public class ProblemSearchService {
         return true;
     }
 
-    private Comparator<ProblemListEntry> createProblemComparator(String solvedCountSort,
+    private Comparator<ProblemListEntry> createProblemComparator(String problemIdSort,
+                                                                String solvedCountSort,
                                                                 String totalSubmitSort,
                                                                 String successSubmitSort) {
         // 문제 번호 보조 정렬 기준 준비
@@ -150,6 +151,14 @@ public class ProblemSearchService {
                 Comparator.comparing(problemEntry -> problemEntry.getProblem().getProblemId());
 
         // 요청 정렬 조건별 comparator 반환
+        if ("asc".equalsIgnoreCase(problemIdSort)) {
+            return problemIdComparator;
+        }
+
+        if ("desc".equalsIgnoreCase(problemIdSort)) {
+            return problemIdComparator.reversed();
+        }
+
         if ("asc".equalsIgnoreCase(totalSubmitSort)) {
             return Comparator.comparingInt(ProblemListEntry::getTotalSubmitCount).thenComparing(problemIdComparator);
         }

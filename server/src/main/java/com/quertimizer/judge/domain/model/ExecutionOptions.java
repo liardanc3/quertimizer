@@ -7,6 +7,8 @@ import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.POSITIVE_VA
 @Data
 public class ExecutionOptions {
 
+    public static final int DEFAULT_TIMEOUT_SECONDS = 180;
+
     private final int timeoutSeconds;
     private final int page;
     private final int pageSize;
@@ -42,18 +44,18 @@ public class ExecutionOptions {
     }
 
     public static ExecutionOptions interactive() {
-        return new ExecutionOptions(60, 1, 10, true, false);
+        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, 10, true, false);
     }
 
     public static ExecutionOptions officialCost() {
-        return new ExecutionOptions(60, 1, 100, true, true);
+        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, 100, true, true);
     }
 
     public static ExecutionOptions submissionAnswer() {
-        return new ExecutionOptions(60, 1, 10_000, true, false);
+        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, 10_000, true, false);
     }
 
     public static ExecutionOptions internalMetadata(int pageSize) {
-        return new ExecutionOptions(60, 1, pageSize, false, false, false);
+        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, pageSize, false, false, false);
     }
 }

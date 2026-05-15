@@ -37,9 +37,9 @@ public class FindProblemRecommendationCandidates implements FindProblemRecommend
         Map<String, ProblemListEntry> candidatesByProblemId = new LinkedHashMap<>();
         String solveState = input.getCurrentHandle() == null ? "all" : "unsolved";
 
-        addProblemCandidates(candidatesByProblemId, findCandidates(input, solveState, "desc", "none", "none"));
-        addProblemCandidates(candidatesByProblemId, findCandidates(input, solveState, "none", "desc", "none"));
-        addProblemCandidates(candidatesByProblemId, findCandidates(input, solveState, "none", "none", "desc"));
+        addProblemCandidates(candidatesByProblemId, findCandidates(input, solveState, "none", "desc", "none", "none"));
+        addProblemCandidates(candidatesByProblemId, findCandidates(input, solveState, "none", "none", "desc", "none"));
+        addProblemCandidates(candidatesByProblemId, findCandidates(input, solveState, "none", "none", "none", "desc"));
 
         return candidatesByProblemId.values().stream()
                 .map(this::toOutput)
@@ -47,12 +47,12 @@ public class FindProblemRecommendationCandidates implements FindProblemRecommend
     }
 
     private List<ProblemListEntry> findCandidates(ProblemRecommendationCandidatesInput input, String solveState,
-                                                  String solvedCountSort, String totalSubmitSort,
-                                                  String successSubmitSort) {
+                                                  String problemIdSort, String solvedCountSort,
+                                                  String totalSubmitSort, String successSubmitSort) {
         // 문제 검색 서비스 기준 추천 후보 조회
         return problemSearchService.findProblemPage(
                         1, null, input.getDbmsType(), solveState, input.getCurrentHandle(),
-                        solvedCountSort, totalSubmitSort, successSubmitSort
+                        problemIdSort, solvedCountSort, totalSubmitSort, successSubmitSort
                 )
                 .getProblems()
                 .stream()

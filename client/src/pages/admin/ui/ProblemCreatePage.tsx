@@ -1620,12 +1620,12 @@ export function ProblemCreateContent() {
     ddl: scopedProblemDdl,
     actualData: currentActualData,
     hiddenDataSqls: hiddenDataState.appliedValue,
-    requireHiddenData: !existingProblem,
+    requireHiddenData: !existingProblem && !existingProblemSet,
     answerSql: answerSqlState.appliedValue,
   });
 
   const missingFieldLabels = missingFields.map((field) => field.label);
-  const requiredFieldCount = existingProblem ? 7 : 8;
+  const requiredFieldCount = existingProblem || existingProblemSet ? 7 : 8;
   const completedFieldCount = requiredFieldCount - missingFields.length;
   const isHeroMissing = missingFields.some((field) => field.key === 'title' || field.key === 'description');
 
@@ -1806,7 +1806,9 @@ export function ProblemCreateContent() {
       return;
     }
 
-    const hiddenDataSqls = hiddenDataState.appliedValue.map((hiddenDataSql) => hiddenDataSql.trim()).filter(Boolean);
+    const hiddenDataSqls = existingProblemSet
+      ? []
+      : hiddenDataState.appliedValue.map((hiddenDataSql) => hiddenDataSql.trim()).filter(Boolean);
     try {
       await connectSessionSocket();
     } catch {
@@ -2079,7 +2081,7 @@ export function ProblemCreateContent() {
           )}
         </ProblemCreateSection>
 
-        {!existingProblem ? (
+        {!existingProblem && !existingProblemSet ? (
           <ProblemCreateSection
             sectionKey="hiddenData"
             title={text('PROBLEM_CREATE_HIDDEN_DATA_COMPACT_TITLE', '채점용 데이터 INSERT - Hidden')}

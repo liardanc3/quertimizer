@@ -27,6 +27,9 @@ public class ProblemSearchReq {
     private String solvedCountSort = "desc";
 
     @Pattern(regexp = "none|asc|desc")
+    private String problemIdSort = "none";
+
+    @Pattern(regexp = "none|asc|desc")
     private String totalSubmitSort = "none";
 
     @Pattern(regexp = "none|asc|desc")
@@ -35,7 +38,7 @@ public class ProblemSearchReq {
     public ProblemSearchInput toInput(String currentHandle) {
         return new ProblemSearchInput(
                 page, query, dbms, solveState, currentHandle,
-                solvedCountSort, totalSubmitSort, successSubmitSort
+                problemIdSort, solvedCountSort, totalSubmitSort, successSubmitSort
         );
     }
 }

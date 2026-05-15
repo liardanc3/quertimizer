@@ -17,12 +17,12 @@ import type { DbmsType } from '@/shared/api/domain';
 
 type SortDirection = 'desc' | 'asc';
 type SolveState = 'all' | 'solved' | 'unsolved' | 'none';
-type CountSortField = 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
+type ProblemSortField = 'problemId' | 'solvedCount' | 'totalSubmitCount' | 'successSubmitCount';
 interface HomePageFavoriteSnapshot {
   selectedDbms: DbmsType;
   showSolved: boolean;
   showUnsolved: boolean;
-  countSortField: CountSortField;
+  countSortField: ProblemSortField;
   countSortDirection: SortDirection;
   draftSearchValue: string;
   searchQuery: string;
@@ -94,7 +94,7 @@ export default function HomePage() {
   const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search));
   const [showSolved, setShowSolved] = useState(() => favoriteRestoreSnapshot?.showSolved ?? true);
   const [showUnsolved, setShowUnsolved] = useState(() => favoriteRestoreSnapshot?.showUnsolved ?? true);
-  const [countSortField, setCountSortField] = useState<CountSortField>(() => favoriteRestoreSnapshot?.countSortField ?? 'solvedCount');
+  const [countSortField, setCountSortField] = useState<ProblemSortField>(() => favoriteRestoreSnapshot?.countSortField ?? 'solvedCount');
   const [countSortDirection, setCountSortDirection] = useState<SortDirection>(() => favoriteRestoreSnapshot?.countSortDirection ?? 'desc');
   const [draftSearchValue, setDraftSearchValue] = useState(() => favoriteRestoreSnapshot?.draftSearchValue ?? '');
   const [searchQuery, setSearchQuery] = useState(() => favoriteRestoreSnapshot?.searchQuery ?? '');
@@ -152,6 +152,7 @@ export default function HomePage() {
           dbms: selectedDbms,
           query: searchQuery,
           solveState,
+          problemIdSort: countSortField === 'problemId' ? countSortDirection : 'none',
           solvedCountSort: countSortField === 'solvedCount' ? countSortDirection : 'none',
           totalSubmitSort: countSortField === 'totalSubmitCount' ? countSortDirection : 'none',
           successSubmitSort: countSortField === 'successSubmitCount' ? countSortDirection : 'none',
@@ -203,18 +204,18 @@ export default function HomePage() {
     setRequestedPage(1);
   }
 
-  function toggleCountSort(field: CountSortField) {
+  function toggleCountSort(field: ProblemSortField) {
     if (countSortField === field) {
       setCountSortDirection((value) => (value === 'desc' ? 'asc' : 'desc'));
     } else {
       setCountSortField(field);
-      setCountSortDirection('desc');
+      setCountSortDirection(field === 'problemId' ? 'asc' : 'desc');
     }
 
     setRequestedPage(1);
   }
 
-  function selectCountSort(field: CountSortField, direction: SortDirection) {
+  function selectCountSort(field: ProblemSortField, direction: SortDirection) {
     setCountSortField(field);
     setCountSortDirection(direction);
     setRequestedPage(1);
@@ -245,7 +246,7 @@ export default function HomePage() {
     setRequestedPage(normalizedPage);
   }
 
-  function renderMobileSortRow(label: string, field: CountSortField) {
+  function renderMobileSortRow(label: string, field: ProblemSortField) {
     return (
       <div className="problem-mobile-sort-row">
         <span className="problem-mobile-sort-label">{label}</span>
@@ -376,6 +377,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="problem-mobile-sort-list" aria-label={text('PROBLEM_TABLE_MOBILE_SORT_LABEL', '문제 목록 정렬')}>
+                  {renderMobileSortRow(text('PROBLEM_TABLE_NUMBER_COLUMN_LABEL', '문제번호'), 'problemId')}
                   {renderMobileSortRow(text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수'), 'solvedCount')}
                   {renderMobileSortRow(text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출'), 'totalSubmitCount')}
                   {renderMobileSortRow(text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출'), 'successSubmitCount')}

@@ -113,7 +113,7 @@ public class JudgeGateway implements ProblemJudgePort {
         // 인터랙티브 실행 옵션으로 SQL 실행
         return toProblemResult(judgeApplicationPort.executeSql(new ExecuteSqlInput(
                 new JudgeExecutionId(executionId), new JudgeEnvironmentId(environmentId),
-                sql, new ExecutionOptions(60, page, pageSize, true, false)
+                sql, new ExecutionOptions(ExecutionOptions.DEFAULT_TIMEOUT_SECONDS, page, pageSize, true, false)
         )));
     }
 

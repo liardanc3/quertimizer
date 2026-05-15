@@ -10,6 +10,7 @@ public class ProblemSearchInput {
     private final String dbms;
     private final String solveState;
     private final String currentHandle;
+    private final String problemIdSort;
     private final String solvedCountSort;
     private final String totalSubmitSort;
     private final String successSubmitSort;
