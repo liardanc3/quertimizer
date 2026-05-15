@@ -9,7 +9,7 @@ import org.springframework.data.elasticsearch.annotations.Document;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Document(indexName = "community-post")
+@Document(indexName = "community-post-v2", createIndex = false)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CommunityPostDocument {

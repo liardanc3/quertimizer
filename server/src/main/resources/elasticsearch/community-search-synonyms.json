@@ -1,0 +1,564 @@
+{
+  "synonyms_set": [
+    {
+      "id": "quertimizer",
+      "synonyms": "quertimizer, 쿼티마이저, 쿼리마이저"
+    },
+    {
+      "id": "community",
+      "synonyms": "community, communities, 커뮤니티"
+    },
+    {
+      "id": "post",
+      "synonyms": "post, posts, article, articles, 게시글, 게시물, 글"
+    },
+    {
+      "id": "comment",
+      "synonyms": "comment, comments, reply, replies, 댓글, 답글"
+    },
+    {
+      "id": "tag",
+      "synonyms": "tag, tags, tagging, 태그"
+    },
+    {
+      "id": "profile",
+      "synonyms": "profile, profiles, 프로필"
+    },
+    {
+      "id": "handle",
+      "synonyms": "handle, handles, 핸들, 닉네임, 사용자명"
+    },
+    {
+      "id": "alarm",
+      "synonyms": "alarm, alarms, notification, notifications, 알람, 알림"
+    },
+    {
+      "id": "favorite",
+      "synonyms": "favorite, favorites, bookmark, bookmarks, 즐겨찾기, 북마크"
+    },
+    {
+      "id": "question-post",
+      "synonyms": "question, questions, ask, asking, inquiry, qna, q&a, 질문, 문의, 질의"
+    },
+    {
+      "id": "discussion",
+      "synonyms": "discussion, discussions, topic, topics, thread, threads, 토론, 논의, 주제, 스레드"
+    },
+    {
+      "id": "notice",
+      "synonyms": "notice, notices, announcement, announcements, 공지, 공지사항, 안내"
+    },
+    {
+      "id": "tip",
+      "synonyms": "tip, tips, trick, tricks, knowhow, know-how, 팁, 노하우"
+    },
+    {
+      "id": "guide",
+      "synonyms": "guide, guides, tutorial, tutorials, walkthrough, walkthroughs, 가이드, 튜토리얼, 사용법"
+    },
+    {
+      "id": "help",
+      "synonyms": "help, support, troubleshooting, troubleshoot, 도움, 도움말, 해결방법, 해결 방법"
+    },
+    {
+      "id": "feedback",
+      "synonyms": "feedback, suggestion, suggestions, opinion, opinions, 피드백, 제안, 의견"
+    },
+    {
+      "id": "feature-request",
+      "synonyms": "feature request, request, requests, improvement, improvements, 기능요청, 기능 요청, 개선요청, 개선 요청"
+    },
+    {
+      "id": "write",
+      "synonyms": "write, writing, create, creating, 작성, 글쓰기, 생성"
+    },
+    {
+      "id": "edit",
+      "synonyms": "edit, editing, update, updating, modify, modifying, 수정, 편집, 변경"
+    },
+    {
+      "id": "delete",
+      "synonyms": "delete, deleting, remove, removing, 삭제, 제거"
+    },
+    {
+      "id": "editor",
+      "synonyms": "editor, wysiwyg, rich text, text editor, 에디터, 글쓰기창, 입력창"
+    },
+    {
+      "id": "markdown",
+      "synonyms": "markdown, md, 마크다운"
+    },
+    {
+      "id": "formatting",
+      "synonyms": "formatting, format, bold, italic, underline, strike, 서식, 굵게, 기울임, 밑줄, 취소선"
+    },
+    {
+      "id": "divider",
+      "synonyms": "divider, horizontal rule, hr, separator, 구분선, 분리선"
+    },
+    {
+      "id": "image-upload",
+      "synonyms": "image upload, upload image, paste image, image paste, 이미지업로드, 이미지 업로드, 사진업로드, 사진 업로드, 이미지 붙여넣기"
+    },
+    {
+      "id": "image-resize",
+      "synonyms": "image resize, resize image, resize, resizing, 이미지 크기, 사진 크기, 리사이즈, 크기조절, 크기 조절"
+    },
+    {
+      "id": "logo",
+      "synonyms": "logo, logos, brand, branding, 로고, 브랜드, 브랜딩"
+    },
+    {
+      "id": "popup",
+      "synonyms": "popup, pop-up, modal, dialog, overlay, 팝업, 모달, 다이얼로그, 오버레이"
+    },
+    {
+      "id": "button",
+      "synonyms": "button, buttons, icon button, 버튼, 아이콘버튼"
+    },
+    {
+      "id": "tab",
+      "synonyms": "tab, tabs, navigation, nav, 탭, 네비게이션, 내비게이션"
+    },
+    {
+      "id": "dropdown",
+      "synonyms": "dropdown, select box, combo box, menu, 드롭다운, 셀렉트박스, 메뉴"
+    },
+    {
+      "id": "search",
+      "synonyms": "search, searching, keyword, keywords, 검색, 검색어, 키워드"
+    },
+    {
+      "id": "filter-ui",
+      "synonyms": "filter option, filters, filtered, 필터옵션, 필터 옵션, 필터링옵션"
+    },
+    {
+      "id": "sort-ui",
+      "synonyms": "sort option, sort key, ascending, descending, 정렬옵션, 정렬 옵션, 오름, 내림"
+    },
+    {
+      "id": "pagination-ui",
+      "synonyms": "page, pages, page number, 페이지, 페이지번호, 페이지 번호"
+    },
+    {
+      "id": "scroll",
+      "synonyms": "scroll, scrolling, scroll bar, scrollbar, 스크롤, 스크롤바"
+    },
+    {
+      "id": "mobile",
+      "synonyms": "mobile, responsive, smartphone, phone, 모바일, 반응형, 스마트폰, 휴대폰"
+    },
+    {
+      "id": "desktop",
+      "synonyms": "desktop, pc, wide screen, 데스크톱, 데스크탑, 피씨, PC"
+    },
+    {
+      "id": "dark-mode",
+      "synonyms": "dark mode, dark theme, 다크모드, 다크 모드, 다크테마"
+    },
+    {
+      "id": "light-mode",
+      "synonyms": "light mode, light theme, 라이트모드, 라이트 모드, 라이트테마"
+    },
+    {
+      "id": "login",
+      "synonyms": "login, log in, signin, sign in, 로그인"
+    },
+    {
+      "id": "logout",
+      "synonyms": "logout, log out, signout, sign out, 로그아웃"
+    },
+    {
+      "id": "social-login",
+      "synonyms": "social login, oauth, github login, google login, kakao login, 소셜로그인, 소셜 로그인, 깃허브로그인, 구글로그인, 카카오로그인"
+    },
+    {
+      "id": "account",
+      "synonyms": "account, accounts, user, users, member, members, 계정, 사용자, 회원"
+    },
+    {
+      "id": "admin",
+      "synonyms": "admin, administrator, management, 관리자, 관리"
+    },
+    {
+      "id": "view-count",
+      "synonyms": "view count, views, hit count, 조회수, 조회 수"
+    },
+    {
+      "id": "like",
+      "synonyms": "like, likes, reaction, reactions, 좋아요, 반응"
+    },
+    {
+      "id": "problem",
+      "synonyms": "problem, problems, 문제, 문제풀이"
+    },
+    {
+      "id": "solve",
+      "synonyms": "solve, solves, solved, solving, 풀이, 해결, 해결됨, 푼 문제"
+    },
+    {
+      "id": "answer",
+      "synonyms": "answer, answers, solution, solutions, 정답, 답안, 해답"
+    },
+    {
+      "id": "submit",
+      "synonyms": "submit, submits, submitted, submission, submissions, 제출, 제출목록, 제출 목록"
+    },
+    {
+      "id": "judge",
+      "synonyms": "judge, judging, evaluation, evaluations, 채점, 평가"
+    },
+    {
+      "id": "ranking",
+      "synonyms": "rank, ranking, ranks, leaderboard, leader board, 랭킹, 순위, 리더보드"
+    },
+    {
+      "id": "monitoring",
+      "synonyms": "monitoring, monitor, metrics, metric, 모니터링, 지표"
+    },
+    {
+      "id": "test",
+      "synonyms": "test, tests, testing, testcase, test case, 테스트, 테스트케이스, 테스트 케이스"
+    },
+    {
+      "id": "sql",
+      "synonyms": "sql, 에스큐엘, 쿼리, query, queries"
+    },
+    {
+      "id": "select",
+      "synonyms": "select, projection, 조회, 조회문"
+    },
+    {
+      "id": "where",
+      "synonyms": "where, predicate, predicates, condition, conditions, 조건, 필터, 필터링"
+    },
+    {
+      "id": "join",
+      "synonyms": "join, joins, joining, 조인"
+    },
+    {
+      "id": "inner-join",
+      "synonyms": "inner join, inner, 이너조인, 내부조인, 내부 조인"
+    },
+    {
+      "id": "left-join",
+      "synonyms": "left join, left outer join, left, 레프트조인, 외부조인, 외부 조인"
+    },
+    {
+      "id": "self-join",
+      "synonyms": "self join, self, 셀프조인, 자체조인, 자체 조인"
+    },
+    {
+      "id": "group-by",
+      "synonyms": "group by, grouping, 그룹화, 그룹"
+    },
+    {
+      "id": "order-by",
+      "synonyms": "order by, ordering, sort, sorting, 정렬, 오름차순, 내림차순"
+    },
+    {
+      "id": "having",
+      "synonyms": "having, group filter, 그룹 조건, 집계 조건"
+    },
+    {
+      "id": "limit",
+      "synonyms": "limit, offset, pagination, paging, 제한, 페이징, 페이지네이션"
+    },
+    {
+      "id": "union",
+      "synonyms": "union, union all, 합집합, 유니온"
+    },
+    {
+      "id": "distinct",
+      "synonyms": "distinct, deduplicate, deduplication, 중복제거, 중복 제거"
+    },
+    {
+      "id": "case",
+      "synonyms": "case, case when, conditional expression, 조건식, 케이스문"
+    },
+    {
+      "id": "cte",
+      "synonyms": "cte, with, with clause, common table expression, 공통 테이블 식, 공통테이블식"
+    },
+    {
+      "id": "subquery",
+      "synonyms": "subquery, sub query, nested query, 서브쿼리, 하위쿼리, 하위 쿼리"
+    },
+    {
+      "id": "window-function",
+      "synonyms": "window function, window, over, analytic function, 윈도우함수, 윈도우 함수, 분석함수"
+    },
+    {
+      "id": "row-number",
+      "synonyms": "row_number, row number, rownumber, 행번호, 행 번호"
+    },
+    {
+      "id": "dense-rank",
+      "synonyms": "dense_rank, dense rank, rank, ranking function, 순위함수, 순위 함수"
+    },
+    {
+      "id": "lead-lag",
+      "synonyms": "lead, lag, previous row, next row, 이전행, 다음행, 이전 행, 다음 행"
+    },
+    {
+      "id": "aggregate",
+      "synonyms": "aggregate, aggregation, aggregate function, 집계, 집계함수, 집계 함수"
+    },
+    {
+      "id": "count",
+      "synonyms": "count, count distinct, 카운트, 개수, 건수"
+    },
+    {
+      "id": "sum",
+      "synonyms": "sum, total, total amount, 합계, 총합, 총액"
+    },
+    {
+      "id": "average",
+      "synonyms": "avg, average, mean, 평균"
+    },
+    {
+      "id": "table",
+      "synonyms": "table, tables, relation, relations, 테이블, 릴레이션"
+    },
+    {
+      "id": "column",
+      "synonyms": "column, columns, field, fields, 컬럼, 칼럼, 필드"
+    },
+    {
+      "id": "row",
+      "synonyms": "row, rows, record, records, tuple, tuples, 행, 레코드, 튜플"
+    },
+    {
+      "id": "schema",
+      "synonyms": "schema, schemas, 스키마"
+    },
+    {
+      "id": "database",
+      "synonyms": "database, databases, db, dbms, 데이터베이스, 디비"
+    },
+    {
+      "id": "postgresql",
+      "synonyms": "postgresql, postgres, pg, postgre, 포스트그레스, 포스트그레SQL"
+    },
+    {
+      "id": "mysql",
+      "synonyms": "mysql, my sql, 마이에스큐엘, 마이SQL"
+    },
+    {
+      "id": "ddl",
+      "synonyms": "ddl, create table, alter table, drop table, 데이터 정의어, 테이블 생성"
+    },
+    {
+      "id": "dml",
+      "synonyms": "dml, insert, update, delete, 데이터 조작어, 삽입, 수정, 삭제"
+    },
+    {
+      "id": "primary-key",
+      "synonyms": "primary key, pk, primary, 기본키, 기본 키"
+    },
+    {
+      "id": "foreign-key",
+      "synonyms": "foreign key, fk, reference, references, 외래키, 외래 키, 참조키"
+    },
+    {
+      "id": "constraint",
+      "synonyms": "constraint, constraints, unique constraint, check constraint, 제약조건, 제약 조건"
+    },
+    {
+      "id": "transaction",
+      "synonyms": "transaction, transactions, tx, commit, rollback, 트랜잭션, 커밋, 롤백"
+    },
+    {
+      "id": "isolation",
+      "synonyms": "isolation, isolation level, 격리수준, 격리 수준"
+    },
+    {
+      "id": "lock",
+      "synonyms": "lock, locks, locking, deadlock, 락, 잠금, 데드락, 교착상태"
+    },
+    {
+      "id": "index",
+      "synonyms": "index, indexes, indexing, 인덱스"
+    },
+    {
+      "id": "composite-index",
+      "synonyms": "composite index, multi column index, multicolumn index, compound index, 복합인덱스, 복합 인덱스"
+    },
+    {
+      "id": "covering-index",
+      "synonyms": "covering index, index only, index only scan, 커버링인덱스, 커버링 인덱스"
+    },
+    {
+      "id": "partial-index",
+      "synonyms": "partial index, filtered index, 부분인덱스, 부분 인덱스"
+    },
+    {
+      "id": "unique-index",
+      "synonyms": "unique index, unique, 유니크인덱스, 유니크 인덱스"
+    },
+    {
+      "id": "btree",
+      "synonyms": "btree, b-tree, b tree, 비트리"
+    },
+    {
+      "id": "gin-gist",
+      "synonyms": "gin, gist, generalized inverted index, generalised search tree, 진인덱스, 지스트"
+    },
+    {
+      "id": "full-text-search",
+      "synonyms": "full text search, fulltext, fts, 전문검색, 전문 검색"
+    },
+    {
+      "id": "execution-plan",
+      "synonyms": "plan, plans, explain, explain analyze, execution plan, query plan, 실행계획, 실행 계획, 플랜"
+    },
+    {
+      "id": "cost",
+      "synonyms": "cost, costs, query cost, planner cost, 코스트, 비용"
+    },
+    {
+      "id": "cardinality",
+      "synonyms": "cardinality, rows, row estimate, estimated rows, 카디널리티, 행수, 예상행수, 예상 행수"
+    },
+    {
+      "id": "selectivity",
+      "synonyms": "selectivity, filter ratio, 선택도, 필터율"
+    },
+    {
+      "id": "statistics",
+      "synonyms": "statistics, stats, analyze, 통계, 분석"
+    },
+    {
+      "id": "vacuum",
+      "synonyms": "vacuum, autovacuum, vacuum analyze, 베큠, 오토베큠"
+    },
+    {
+      "id": "optimizer",
+      "synonyms": "optimizer, planner, query optimizer, 옵티마이저, 플래너"
+    },
+    {
+      "id": "tuning",
+      "synonyms": "tuning, optimization, optimize, performance tuning, 튜닝, 최적화, 성능튜닝"
+    },
+    {
+      "id": "performance",
+      "synonyms": "performance, perf, latency, throughput, 성능, 지연시간, 처리량"
+    },
+    {
+      "id": "slow-query",
+      "synonyms": "slow query, slow sql, slowlog, slow log, 슬로우쿼리, 느린쿼리, 느린 쿼리"
+    },
+    {
+      "id": "seq-scan",
+      "synonyms": "seq scan, sequential scan, full scan, full table scan, 테이블스캔, 테이블 스캔, 풀스캔, 전체스캔"
+    },
+    {
+      "id": "index-scan",
+      "synonyms": "index scan, range scan, ref scan, 인덱스스캔, 인덱스 스캔, 범위스캔"
+    },
+    {
+      "id": "bitmap-scan",
+      "synonyms": "bitmap scan, bitmap index scan, bitmap heap scan, 비트맵스캔, 비트맵 스캔"
+    },
+    {
+      "id": "hash-join",
+      "synonyms": "hash join, hashjoin, 해시조인, 해시 조인"
+    },
+    {
+      "id": "merge-join",
+      "synonyms": "merge join, mergejoin, 병합조인, 머지조인"
+    },
+    {
+      "id": "nested-loop",
+      "synonyms": "nested loop, nested loop join, nestedloop, 중첩루프, 중첩 루프, 네스티드루프"
+    },
+    {
+      "id": "filesort",
+      "synonyms": "filesort, file sort, using filesort, 파일정렬, 파일 정렬"
+    },
+    {
+      "id": "temporary-table",
+      "synonyms": "temporary table, temp table, using temporary, 임시테이블, 임시 테이블"
+    },
+    {
+      "id": "partition",
+      "synonyms": "partition, partitions, partitioning, 파티션, 파티셔닝"
+    },
+    {
+      "id": "replication",
+      "synonyms": "replication, replica, primary replica, 복제, 레플리카"
+    },
+    {
+      "id": "backup",
+      "synonyms": "backup, restore, dump, 백업, 복구, 덤프"
+    },
+    {
+      "id": "migration",
+      "synonyms": "migration, migrate, schema migration, 마이그레이션, 이관"
+    },
+    {
+      "id": "cache",
+      "synonyms": "cache, caching, buffer, buffer pool, 캐시, 버퍼, 버퍼풀"
+    },
+    {
+      "id": "resource",
+      "synonyms": "resource, resources, cpu, memory, disk, 리소스, 자원, 씨피유, 메모리, 디스크"
+    },
+    {
+      "id": "docker",
+      "synonyms": "docker, container, containers, 도커, 컨테이너"
+    },
+    {
+      "id": "lvm",
+      "synonyms": "lvm, logical volume, volume group, snapshot, thin pool, 논리볼륨, 볼륨그룹, 스냅샷"
+    },
+    {
+      "id": "queue",
+      "synonyms": "queue, queues, queued, waiting queue, 대기열, 큐, 작업큐"
+    },
+    {
+      "id": "concurrency",
+      "synonyms": "concurrency, concurrent, max concurrency, parallelism, 동시성, 동시실행, 병렬성"
+    },
+    {
+      "id": "api",
+      "synonyms": "api, endpoint, endpoints, rest api, 에이피아이, 엔드포인트"
+    },
+    {
+      "id": "frontend",
+      "synonyms": "frontend, front-end, client, ui, ux, 프론트엔드, 클라이언트, 화면"
+    },
+    {
+      "id": "backend",
+      "synonyms": "backend, back-end, server, api server, 백엔드, 서버"
+    },
+    {
+      "id": "deploy",
+      "synonyms": "deploy, deployment, release, 배포, 릴리즈"
+    },
+    {
+      "id": "build",
+      "synonyms": "build, compile, compilation, 빌드, 컴파일"
+    },
+    {
+      "id": "refactor",
+      "synonyms": "refactor, refactoring, cleanup, clean up, 리팩토링, 정리"
+    },
+    {
+      "id": "bug",
+      "synonyms": "bug, bugs, defect, defects, issue, issues, 버그, 이슈, 결함"
+    },
+    {
+      "id": "error",
+      "synonyms": "error, errors, exception, exceptions, failure, failures, 오류, 에러, 예외, 실패"
+    },
+    {
+      "id": "log",
+      "synonyms": "log, logs, logging, stacktrace, stack trace, 로그, 로깅, 스택트레이스"
+    },
+    {
+      "id": "websocket",
+      "synonyms": "websocket, web socket, socket, sockets, 웹소켓, 소켓"
+    }
+  ]
+}

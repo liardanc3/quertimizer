@@ -42,9 +42,11 @@ public class CommunitySearchService implements CommunityPostSearchPort {
     private final ObjectMapper objectMapper;
     private final CommunityPostRepositoryPort communityPostRepository;
     private final CommunityPostTagRepositoryPort communityPostTagRepository;
+    private final CommunitySearchIndexManager communitySearchIndexManager;
 
     @EventListener(ApplicationReadyEvent.class)
     public void syncAllPosts() {
+        communitySearchIndexManager.ensureReady();
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -64,6 +66,7 @@ public class CommunitySearchService implements CommunityPostSearchPort {
                                                String category, String sortKey, List<CommunityPost> posts,
                                                Map<Long, List<String>> tagsByPostId) {
         // Elasticsearch 사용 가능 여부 확인
+        communitySearchIndexManager.ensureReady();
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         // Elasticsearch 미사용 시 메모리 검색으로 대체
@@ -85,6 +88,7 @@ public class CommunitySearchService implements CommunityPostSearchPort {
     @Override
     public void syncPost(CommunityPost post, List<String> tags) {
         // 단일 게시글 검색 인덱스를 동기화
+        communitySearchIndexManager.ensureReady();
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {
@@ -113,6 +117,7 @@ public class CommunitySearchService implements CommunityPostSearchPort {
     @Override
     public void deletePost(Long postId) {
         // 삭제된 게시글 검색 인덱스를 정리
+        communitySearchIndexManager.ensureReady();
         ElasticsearchOperations elasticsearchOperations = elasticsearchOperationsProvider.getIfAvailable();
 
         if (elasticsearchOperations == null) {

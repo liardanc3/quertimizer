@@ -1,0 +1,92 @@
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "community_synonym_graph": {
+          "type": "synonym_graph",
+          "synonyms_set": "community-search-synonyms",
+          "updateable": true
+        }
+      },
+      "analyzer": {
+        "community_index_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase"
+          ]
+        },
+        "community_search_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase",
+            "community_synonym_graph"
+          ]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "postId": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "text",
+        "analyzer": "community_index_analyzer",
+        "search_analyzer": "community_search_analyzer",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "authorId": {
+        "type": "text",
+        "analyzer": "community_index_analyzer",
+        "search_analyzer": "community_search_analyzer",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "contentText": {
+        "type": "text",
+        "analyzer": "community_index_analyzer",
+        "search_analyzer": "community_search_analyzer"
+      },
+      "tags": {
+        "type": "text",
+        "analyzer": "community_index_analyzer",
+        "search_analyzer": "community_search_analyzer",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "category": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "likeCount": {
+        "type": "integer"
+      },
+      "commentCount": {
+        "type": "integer"
+      },
+      "viewCount": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "date"
+      }
+    }
+  }
+}
