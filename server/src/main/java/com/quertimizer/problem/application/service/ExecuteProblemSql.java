@@ -191,7 +191,8 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         );
         String environmentId = problemJudgePort.createInteractiveEnvironment(
                 dataset.getDatasetId(),
-                remainingTasks -> sendWaitingProgress(input, remainingTasks)
+                remainingTasks -> sendWaitingProgress(input, remainingTasks),
+                detail -> sendRunningProgress(input)
         );
         ProblemExecutionSessionStore.ProblemExecutionSession session =
                 executionSessionStore.save(input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId(), environmentId);
@@ -203,14 +204,17 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
     }
 
     private void sendWaitingProgress(ProblemExecutionInput input, int remainingTasks) {
-        // 대기열이 있을 때 실행 progress와 로그 전파
+        // 실행 환경 대기열 순번 progress와 로그 전파
         log.info(
                 "SQL 실행 환경 생성 대기 session={}, problem={}, remainingTasks={}",
                 input.getExecutionSessionId(), input.getProblemId(), remainingTasks
         );
-        if (remainingTasks > 0) {
-            input.getProgressListener().accept(ProblemExecutionProgress.waiting(input.getProblemId(), remainingTasks));
-        }
+        input.getProgressListener().accept(ProblemExecutionProgress.waiting(input.getProblemId(), remainingTasks));
+    }
+
+    private void sendRunningProgress(ProblemExecutionInput input) {
+        // 실행 환경 생성 시작 이후 SQL 실행 중 progress 전파
+        input.getProgressListener().accept(ProblemExecutionProgress.running(input.getProblemId()));
     }
 
     private void cleanupEnvironment(String executionSessionId,

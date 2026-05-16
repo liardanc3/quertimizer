@@ -25,6 +25,9 @@ public interface ProblemJudgePort {
 
     String createInteractiveEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener);
 
+    String createInteractiveEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener,
+                                        Consumer<String> detailListener);
+
     String createSubmissionEnvironment(Long datasetId);
 
     String createSubmissionEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener);

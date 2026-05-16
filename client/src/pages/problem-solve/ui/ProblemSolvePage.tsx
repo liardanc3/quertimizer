@@ -311,6 +311,7 @@ interface ProblemSubmitProgressMessage extends SessionSocketMessage {
 
 interface ProblemExecutionProgressMessage extends SessionSocketMessage {
   problemId?: string | null;
+  status?: 'waiting' | 'running' | null;
   message?: string | null;
 }
 
@@ -459,7 +460,7 @@ interface ExecutionStatementMarkerLayout {
   topOffsets: Record<number, number>;
 }
 
-type ExecutionStatementStatus = 'idle' | 'running' | 'success' | 'error';
+type ExecutionStatementStatus = 'idle' | 'waiting' | 'running' | 'success' | 'error';
 
 interface ExecutionStatementRun {
   key: string;
@@ -1522,7 +1523,7 @@ function createExecutionStatementRuns(
     preview: segment.preview,
     start: segment.start,
     end: segment.end,
-    status: initiallyRunningIndex === index ? 'running' : 'idle',
+    status: initiallyRunningIndex === index ? 'waiting' : 'idle',
     result: null,
     progressMessage: null,
   }));
@@ -2601,8 +2602,12 @@ function ExecutionStatementResultItem({
       ? getExecutionResultPageCount(executionResult.rowCount)
       : 1;
   const previewLabel = item.sql.replace(/\s+/g, ' ').trim() || 'SQL';
+  const isWaiting = item.status === 'waiting';
+  const runningMessage = item.progressMessage ?? getUiTextValue('PROBLEM_SOLVE_RUNNING_MESSAGE', 'SQL을 실행하는 중입니다.');
+  const waitingMessage = item.progressMessage ?? getUiTextValue('PROBLEM_SOLVE_EXECUTION_WAITING_MESSAGE', 'SQL 실행 대기 중');
+  const statementTitle = isWaiting ? waitingMessage : previewLabel;
   const titleToneClass =
-    item.status === 'running'
+    item.status === 'running' || isWaiting
       ? 'is-pending'
       : showErrorSummary
         ? 'is-error'
@@ -2610,7 +2615,7 @@ function ExecutionStatementResultItem({
           ? 'is-success'
           : 'is-pending';
   const resultToneClass =
-    item.status === 'running'
+    item.status === 'running' || isWaiting
       ? 'is-pending'
       : showErrorSummary
         ? 'is-error'
@@ -2673,15 +2678,17 @@ function ExecutionStatementResultItem({
               '•'
             )}
           </button>
-          <span className={`solve-pane-summary-statement-title ${titleToneClass}`.trim()}>{previewLabel}</span>
+          <span className={`solve-pane-summary-statement-title ${titleToneClass}`.trim()}>{statementTitle}</span>
         </div>
       </div>
 
       {!collapsed ? (
         <div className="solve-editor-inline-result-body solve-pane-result-stack">
-          {item.status === 'running' ? (
+          {isWaiting ? (
+            <div className="solve-result-empty solve-result-empty-table">{waitingMessage}</div>
+          ) : item.status === 'running' ? (
             <div className="solve-result-empty solve-result-empty-table">
-              {item.progressMessage ?? getUiTextValue('PROBLEM_SOLVE_RUNNING_MESSAGE', 'SQL을 실행하는 중입니다.')}
+              {runningMessage}
             </div>
           ) : executionResult ? (
             renderExecutionContent(
@@ -4454,7 +4461,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   }, [syncSqlEditorSelectionFromElement]);
   const executionStatementMarkerRuns = useMemo(() => {
     const currentStatementSegments = parseSqlStatements(deferredSql);
-    const remainingRuns = executionRuns.filter((run) => run.status !== 'idle');
+    const remainingRuns = executionRuns.filter((run) => run.status !== 'idle' && run.status !== 'waiting');
 
     return currentStatementSegments.flatMap((segment) => {
       const matchedRunIndex = remainingRuns.findIndex((run) => run.sql === segment.sql);
@@ -4991,9 +4998,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
         setExecutionRuns((current) =>
           current.map((run) =>
-            run.status === 'running'
+            run.status === 'waiting' || run.status === 'running'
               ? {
                   ...run,
+                  status: progressMessage.status === 'waiting' ? 'waiting' : 'running',
                   progressMessage: progressMessage.message,
                 }
               : run,
@@ -5551,7 +5559,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
         if (isAuthenticationRequiredMessage(nextResult.message)) {
           setExecutionRuns((current) =>
             current.map((run) =>
-              run.status === 'running'
+              run.status === 'waiting' || run.status === 'running'
                 ? {
                     ...run,
                     status: 'idle',
@@ -5578,7 +5586,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             if (runIndex === statementIndex + 1 && shouldContinue) {
               return {
                 ...run,
-                status: 'running',
+                status: 'waiting',
               };
             }
 
@@ -5594,7 +5602,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
       if (!isSessionValid) {
         setExecutionRuns((current) =>
           current.map((run) =>
-            run.status === 'running'
+            run.status === 'waiting' || run.status === 'running'
               ? {
                   ...run,
                   status: 'idle',
@@ -5613,7 +5621,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           return [createSingleExecutionStatementRun(sql, nextErrorResult)];
         }
 
-        const runningIndex = current.findIndex((run) => run.status === 'running');
+        const runningIndex = current.findIndex((run) => run.status === 'waiting' || run.status === 'running');
         if (runningIndex === -1) {
           return current;
         }
@@ -5844,7 +5852,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
     setIsExecuting(false);
     setExecutionRuns((current) =>
       current.map((run) =>
-        run.status === 'running'
+        run.status === 'waiting' || run.status === 'running'
           ? {
               ...run,
               status: 'idle',

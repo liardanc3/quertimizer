@@ -78,10 +78,17 @@ public class JudgeGateway implements ProblemJudgePort {
 
     @Override
     public String createInteractiveEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener) {
+        return createInteractiveEnvironment(datasetId, remainingTaskListener, detail -> {
+        });
+    }
+
+    @Override
+    public String createInteractiveEnvironment(Long datasetId, Consumer<Integer> remainingTaskListener,
+                                               Consumer<String> detailListener) {
         // 인터랙티브 문제 실행 환경 생성
         return judgeApplicationPort.createEnvironment(new CreateEnvironmentInput(
                 new JudgeDatasetId(datasetId), EnvironmentPolicy.interactive(),
-                QueuePriority.NORMAL, remainingTaskListener::accept
+                QueuePriority.NORMAL, createQueueStatusListener(remainingTaskListener, detailListener)
         )).getValue();
     }
 

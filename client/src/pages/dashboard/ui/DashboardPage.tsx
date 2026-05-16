@@ -212,15 +212,15 @@ function ProblemMeta({ problem }: { problem: DashboardProblemRecommendation }) {
   return (
     <div className="dashboard-problem-meta" aria-label={text('DASHBOARD_PROBLEM_METRICS_LABEL', { problemId: problem.problemId }, `${problem.problemId} 추천 지표`)}>
       <span className="dashboard-problem-metric">
-        <span>{text('DASHBOARD_METRIC_SOLVED_LABEL', '해결')}</span>
+        <span>{text('DASHBOARD_METRIC_SOLVED_LABEL', '푼 사람 수')}</span>
         <strong>{`${formatCount(problem.solvedUserCount)}명`}</strong>
       </span>
       <span className="dashboard-problem-metric">
-        <span>{text('DASHBOARD_METRIC_SUBMIT_LABEL', '제출')}</span>
+        <span>{text('DASHBOARD_METRIC_SUBMIT_LABEL', '전체 제출')}</span>
         <strong>{`${formatCount(problem.totalSubmitCount)}회`}</strong>
       </span>
       <span className="dashboard-problem-metric">
-        <span>{text('DASHBOARD_METRIC_CORRECT_LABEL', '정답')}</span>
+        <span>{text('DASHBOARD_METRIC_CORRECT_LABEL', '정답 제출')}</span>
         <strong>{`${formatCount(problem.successSubmitCount)}회`}</strong>
       </span>
     </div>
