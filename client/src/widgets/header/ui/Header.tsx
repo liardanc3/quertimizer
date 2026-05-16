@@ -241,6 +241,14 @@ export default function Header() {
   }, [activeNav, headerNavItems, isAdmin, isAuthenticated, text]);
   const ownProfilePath = currentHandle != null ? getProfilePath(currentHandle) : null;
   const ownProfileAlarmPath = ownProfilePath != null ? `${ownProfilePath}?tab=alarms` : null;
+  const isAdminRoutePath = pathname.startsWith(ADMIN_PATH) || pathname === `${PROBLEMS_PATH}/create`;
+
+  const closeHeaderAuthOverlay = () => {
+    setIsHeaderAuthOverlayOpen(false);
+    if (isAdminRoutePath) {
+      navigate(DASHBOARD_PATH, { replace: true });
+    }
+  };
 
   useEffect(() => {
     setIsAlarmOpen(false);
@@ -884,9 +892,8 @@ export default function Header() {
       {(!isAuthenticated && isHeaderAuthOverlayOpen) ? (
         <HeaderAuthOverlay
           description={headerAuthOverlayDescription}
-          onClose={() => setIsHeaderAuthOverlayOpen(false)}
+          onClose={closeHeaderAuthOverlay}
           onAuthenticated={() => setIsHeaderAuthOverlayOpen(false)}
-          hideCloseButton={reauthenticationRequired}
         />
       ) : null}
     </header>

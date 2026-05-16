@@ -42,7 +42,6 @@ interface HeaderAuthOverlayProps {
   onAuthenticated: () => void;
   disableBackdropBlur?: boolean;
   hideModalBorder?: boolean;
-  hideCloseButton?: boolean;
 }
 
 function CloseIcon() {
@@ -127,7 +126,6 @@ export default function HeaderAuthOverlay({
   onAuthenticated,
   disableBackdropBlur = false,
   hideModalBorder = false,
-  hideCloseButton = false,
 }: HeaderAuthOverlayProps) {
   const { text } = useUiText();
   const [mode, setMode] = useState<HeaderAuthOverlayMode>('login');
@@ -736,16 +734,14 @@ export default function HeaderAuthOverlay({
     <div className="header-auth-overlay" role="presentation">
       <div className={`header-auth-overlay-backdrop ${disableBackdropBlur ? 'is-without-blur' : ''}`.trim()} />
       <section className={`header-auth-modal ${hideModalBorder ? 'is-borderless' : ''}`.trim()} role="dialog" aria-modal="true" aria-label={overlayTitle}>
-        {!hideCloseButton ? (
-          <button
-            type="button"
-            className="header-auth-modal-close"
-            aria-label={text('AUTH_LOGIN_MODAL_CLOSE_LABEL', '로그인 팝업 닫기')}
-            onClick={onClose}
-          >
-            <CloseIcon />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="header-auth-modal-close"
+          aria-label={text('AUTH_LOGIN_MODAL_CLOSE_LABEL', '로그인 팝업 닫기')}
+          onClick={onClose}
+        >
+          <CloseIcon />
+        </button>
 
         <div className="header-auth-modal-header">
           <div className="header-auth-modal-copy">
