@@ -13,7 +13,8 @@
   --header-mobile-popup-width: 14.75rem;
   --header-mobile-popup-top: calc(var(--header-marquee-height) + 2.62rem);
   position: relative;
-  z-index: 20;
+  z-index: calc(var(--z-header) + 40);
+  isolation: isolate;
 }
 
 .header-inner {
@@ -113,8 +114,8 @@
 
 .brand-logo {
   display: block;
-  width: 2.08rem;
-  height: 2rem;
+  width: 2.34rem;
+  height: 2.25rem;
   object-fit: contain;
 }
 
@@ -303,7 +304,7 @@
 .header-mobile-nav-layer {
   position: fixed;
   inset: calc(var(--header-marquee-height) + 2.58rem) 0 0;
-  z-index: 35;
+  z-index: calc(var(--z-header) + 2);
   display: none;
 }
 
@@ -539,7 +540,7 @@
   position: absolute;
   top: calc(100% + 0.9rem);
   right: calc(-1 * var(--header-notification-toast-offset));
-  z-index: 39;
+  z-index: calc(var(--z-header) + 19);
   width: min(28rem, calc(100vw - 1.5rem));
 }
 
@@ -586,7 +587,7 @@
   position: absolute;
   top: calc(100% + var(--header-popup-offset));
   right: 0;
-  z-index: 40;
+  z-index: calc(var(--z-header) + 20);
   width: min(31rem, calc(100vw - 1.5rem));
   display: grid;
   gap: 0.8rem;
@@ -985,8 +986,8 @@
   }
 
   .brand-logo {
-    width: 1.74rem;
-    height: 1.68rem;
+    width: 2rem;
+    height: 1.92rem;
   }
 
   .header-link-button {

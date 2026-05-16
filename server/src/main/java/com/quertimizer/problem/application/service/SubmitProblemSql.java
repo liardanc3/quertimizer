@@ -24,7 +24,9 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -141,7 +143,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         // 숨김 케이스와 공개 케이스를 순차 실행해 출력 데이터 검증
         AnswerValidationResult answerValidationResult;
         try {
-            answerValidationResult = validateAnswerCases(input, problemId, dataset, referenceStatement.sql);
+            answerValidationResult = validateAnswerCases(input, problemId, dataset, referenceStatement.sql, ddlStatements);
         } catch (Exception exception) {
             String message = resolveErrorMessage(exception);
             log.warn(
@@ -180,7 +182,6 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
                     problemId, environmentId
             );
             acceptProgress(input, running(problemId, PLAN.getKey(), PLAN_RUNNING.getText()));
-            executeDdlStatements(problemId, environmentId, ddlStatements);
             OfficialPlanMeasurement officialPlanMeasurement = measureOfficialPlan(input, problemId, environmentId, referenceStatement.sql);
             planResult = officialPlanMeasurement.getPlanResult();
             planAnalysis = executionPlanPolicy.analyze(dataset.getDbmsType(), planResult.getPlanLines(), referenceStatement.sql);
@@ -274,7 +275,8 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
     }
 
     private AnswerValidationResult validateAnswerCases(ProblemSubmissionInput input, String problemId,
-                                                       ProblemDatasetResolver.ResolvedProblemDataset dataset, String sql) {
+                                                       ProblemDatasetResolver.ResolvedProblemDataset dataset,
+                                                       String sql, List<SubmittedStatement> ddlStatements) {
         // 출력 데이터 검증 대상 케이스와 진행 상태 저장소 준비
         List<ProblemAnswerCase> hiddenAnswerCases = problemAnswerValidationService.findHiddenAnswerCases(problemId);
         List<AnswerCaseDefinition> answerCases = createAnswerCaseDefinitions(hiddenAnswerCases, dataset);
@@ -296,7 +298,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         try {
             for (AnswerCaseEnvironmentTask environmentTask : environmentTasks) {
                 AnswerCaseEnvironment environment = awaitAnswerCaseEnvironment(environmentTask);
-                ProblemJudgeExecutionResult result = executeAnswerCase(answerCaseProgress, environment, sql);
+                ProblemJudgeExecutionResult result = executeAnswerCase(problemId, answerCaseProgress, environment, sql, ddlStatements);
                 boolean correct;
                 try {
                     correct = matchesAnswerCase(problemId, environment.getDefinition(), result);
@@ -390,11 +392,15 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         }
     }
 
-    private ProblemJudgeExecutionResult executeAnswerCase(AnswerCaseProgress progress,
-                                                          AnswerCaseEnvironment environment, String sql) {
-        // 케이스 환경에서 제출 SELECT 실행
+    private ProblemJudgeExecutionResult executeAnswerCase(String problemId, AnswerCaseProgress progress,
+                                                          AnswerCaseEnvironment environment,
+                                                          String sql, List<SubmittedStatement> ddlStatements) {
+        // 케이스 환경에 INDEX DDL 반영 후 제출 SELECT 실행
         progress.markRunning(environment.getDefinition());
         try {
+            if (!ddlStatements.isEmpty()) {
+                executeDdlStatements(problemId, environment.getEnvironmentId(), ddlStatements);
+            }
             return executeAnswer(environment.getEnvironmentId(), sql);
         } catch (RuntimeException exception) {
             progress.markError(environment.getDefinition(), resolveErrorMessage(exception));
@@ -695,6 +701,14 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         );
     }
 
+    private ProblemSubmissionProgress skipped(String problemId, String stepKey, String message) {
+        // 생략 진행 상태 생성
+        return new ProblemSubmissionProgress(
+                problemId, stepKey, "skipped", message,
+                List.of(), null, null, null, null, null
+        );
+    }
+
     private void acceptProgress(ProblemSubmissionInput input, ProblemSubmissionProgress progress) {
         // 진행 상태 리스너 존재 시 진행 상태 전달
         Consumer<ProblemSubmissionProgress> listener = input.getProgressListener();
@@ -816,10 +830,13 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
     private final class AnswerCaseProgress {
         private final ProblemSubmissionInput input;
         private final String problemId;
+        private final List<AnswerCaseDefinition> answerCases;
+        private final Set<String> terminalStepKeys = new HashSet<>();
 
         private AnswerCaseProgress(ProblemSubmissionInput input, String problemId, List<AnswerCaseDefinition> answerCases) {
             this.input = input;
             this.problemId = problemId;
+            this.answerCases = List.copyOf(answerCases);
             for (AnswerCaseDefinition answerCase : answerCases) {
                 acceptProgress(input, running(problemId, answerCase.getStepKey(), answerCase.waitingMessage()));
             }
@@ -827,7 +844,10 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
         private void markWaiting(AnswerCaseDefinition answerCase, int remainingTasks) {
             // 케이스 대기열 순번을 제목에 반영
-            synchronized (answerCase) {
+            synchronized (this) {
+                if (terminalStepKeys.contains(answerCase.getStepKey())) {
+                    return;
+                }
                 acceptProgress(input, running(
                         problemId, answerCase.getStepKey(),
                         answerCase.waitingMessage(remainingTasks)
@@ -837,29 +857,56 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
         private void markRunning(AnswerCaseDefinition answerCase) {
             // 케이스 채점 중 제목으로 진행 상태 전환
-            synchronized (answerCase) {
+            synchronized (this) {
+                if (terminalStepKeys.contains(answerCase.getStepKey())) {
+                    return;
+                }
                 acceptProgress(input, running(problemId, answerCase.getStepKey(), answerCase.runningMessage()));
             }
         }
 
         private void markCorrect(AnswerCaseDefinition answerCase) {
             // 케이스 정답 완료 progress 전달
-            synchronized (answerCase) {
+            synchronized (this) {
+                if (!terminalStepKeys.add(answerCase.getStepKey())) {
+                    return;
+                }
                 acceptProgress(input, success(problemId, answerCase.getStepKey(), answerCase.correctMessage()));
             }
         }
 
         private void markIncorrect(AnswerCaseDefinition answerCase) {
-            // 케이스 오답 완료 progress 전달
-            synchronized (answerCase) {
+            // 케이스 오답 완료와 후속 케이스 생략 progress 전달
+            synchronized (this) {
+                if (!terminalStepKeys.add(answerCase.getStepKey())) {
+                    return;
+                }
                 acceptProgress(input, incorrect(problemId, answerCase.getStepKey(), answerCase.incorrectMessage()));
+                markRemainingSkipped(answerCase);
             }
         }
 
         private void markError(AnswerCaseDefinition answerCase, String message) {
-            // 케이스 실패 progress 전달
-            synchronized (answerCase) {
+            // 케이스 실패와 후속 케이스 생략 progress 전달
+            synchronized (this) {
+                if (!terminalStepKeys.add(answerCase.getStepKey())) {
+                    return;
+                }
                 acceptProgress(input, error(problemId, answerCase.getStepKey(), answerCase.failedMessage(), List.of(message)));
+                markRemainingSkipped(answerCase);
+            }
+        }
+
+        private void markRemainingSkipped(AnswerCaseDefinition failedAnswerCase) {
+            // 실패 케이스 이후 미완료 케이스 생략 처리
+            boolean skipTarget = false;
+            for (AnswerCaseDefinition answerCase : answerCases) {
+                if (skipTarget && terminalStepKeys.add(answerCase.getStepKey())) {
+                    acceptProgress(input, skipped(problemId, answerCase.getStepKey(), answerCase.skippedMessage()));
+                }
+                if (answerCase == failedAnswerCase) {
+                    skipTarget = true;
+                }
             }
         }
     }
@@ -918,6 +965,11 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         private String failedMessage() {
             // 케이스 실패 제목 생성
             return caseLabel + " 채점 실패";
+        }
+
+        private String skippedMessage() {
+            // 케이스 생략 제목 생성
+            return caseLabel + " 채점 생략";
         }
 
         private String getStepKey() {

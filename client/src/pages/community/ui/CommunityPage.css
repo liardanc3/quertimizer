@@ -29,6 +29,11 @@
   gap: 0.78rem;
 }
 
+.community-write-root .community-write-layout,
+.community-write-root .community-write-main {
+  min-width: 0;
+}
+
 .community-page .community-list-meta,
 .community-detail-page .community-detail-meta,
 .community-detail-page .community-detail-actions,
@@ -168,9 +173,11 @@
 }
 
 .community-detail-page .community-content-body,
+.community-write-root .community-content-body,
 .community-detail-page .community-comment-list,
 .community-write-root .community-editor-shell,
 .community-write-root .community-write-actions {
+  min-width: 0;
   gap: 0.82rem;
 }
 
@@ -218,13 +225,18 @@
 }
 
 .community-write-root .community-editor-body {
+  min-width: 0;
   min-height: 18rem;
   padding: 0.88rem 0.96rem;
+  overflow-x: clip;
 }
 
 .community-write-root .community-editor-body .ProseMirror,
 .community-detail-page .community-detail-editor-body .ProseMirror {
+  min-width: 0;
+  max-width: 100%;
   min-height: inherit;
+  overflow-x: clip;
   outline: none;
 }
 
@@ -1252,6 +1264,7 @@
   height: auto;
   margin: 0.9rem auto;
   border-radius: 0.92rem;
+  box-shadow: none;
 }
 
 .community-write-root .community-editor-body .community-resizable-image,
@@ -1259,7 +1272,7 @@
   position: relative;
   display: block;
   width: fit-content;
-  max-width: min(100%, 75rem);
+  max-width: 100%;
   margin: 0.9rem 0;
   line-height: 0;
 }
@@ -2130,6 +2143,7 @@
 
 .community-detail-page .community-detail-editor-shell {
   display: grid;
+  min-width: 0;
   gap: 0;
   padding: 0;
   border: 1px solid rgba(219, 230, 242, 0.88);
@@ -2205,6 +2219,7 @@
 }
 
 .community-detail-page .community-detail-editor-body {
+  min-width: 0;
   min-height: 14rem;
   padding: 0.88rem 0.96rem;
   border: 0;
@@ -2213,6 +2228,7 @@
   color: #22324b;
   font-size: 0.82rem;
   line-height: 1.72;
+  overflow-x: clip;
 }
 
 .community-detail-page .community-detail-editor-body:focus,

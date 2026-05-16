@@ -11,6 +11,7 @@ public class DashboardCommunityPostCandidate {
     private final String postId;
     private final String title;
     private final String authorHandle;
+    private final String contentJson;
     private final String plainTextSummary;
     private final List<String> tags;
     private final String category;

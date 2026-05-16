@@ -55,7 +55,7 @@ public class CommunityGateway implements DashboardCommunityPort {
         // 커뮤니티 게시글을 대시보드 후보 모델로 변환
         return new DashboardCommunityPostCandidate(
                 CommunityPostIdPolicy.format(post.getPostId()), post.getTitle(), post.getHandle(),
-                post.getPlainTextSummary(), tags, resolveCategory(post), post.getCreatedAt(),
+                post.getContentJson(), post.getPlainTextSummary(), tags, resolveCategory(post), post.getCreatedAt(),
                 post.getViewCount(), post.getLikeCount(), post.getCommentCount()
         );
     }

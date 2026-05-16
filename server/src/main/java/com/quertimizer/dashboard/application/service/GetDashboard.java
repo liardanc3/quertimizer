@@ -1,5 +1,8 @@
 package com.quertimizer.dashboard.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.dashboard.application.port.in.GetDashboardUseCase;
 import com.quertimizer.dashboard.application.output.DashboardCommunityPostOutput;
 import com.quertimizer.dashboard.application.output.DashboardOutput;
@@ -21,6 +24,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.StreamSupport;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class GetDashboard implements GetDashboardUseCase {
 
     private static final int COMMUNITY_POST_EXCERPT_LENGTH = 720;
 
+    private final ObjectMapper objectMapper;
     private final DashboardCommunityPort dashboardCommunityPort;
     private final DashboardProblemPort dashboardProblemPort;
     private final DashboardHotPostPolicy hotPostPolicy;
@@ -98,7 +103,7 @@ public class GetDashboard implements GetDashboardUseCase {
         // 커뮤니티 게시글 응답 변환
         return new DashboardCommunityPostOutput(
                 post.getPostId(),
-                post.getTitle(), post.getAuthorHandle(), createExcerpt(post.getPlainTextSummary()),
+                post.getTitle(), post.getAuthorHandle(), createExcerpt(post.getContentJson(), post.getPlainTextSummary()),
                 post.getTags(), post.getCategory(), post.getCreatedAt(),
                 post.getViewCount(), post.getLikeCount(), post.getCommentCount(),
                 Math.round(hotPostPolicy.calculateHotScore(post) * 10d) / 10d
@@ -115,9 +120,12 @@ public class GetDashboard implements GetDashboardUseCase {
         );
     }
 
-    private String createExcerpt(String contentText) {
-        // 본문 텍스트 공백 정규화
-        String normalizedContentText = normalizeContentText(contentText);
+    private String createExcerpt(String contentJson, String fallbackText) {
+        // 본문 JSON 기준 대시보드 미리보기 생성
+        String normalizedContentText = createContentText(contentJson);
+        if (!StringUtils.hasText(normalizedContentText)) {
+            normalizedContentText = normalizeContentText(fallbackText);
+        }
 
         // 표시할 본문 없으면 빈 문자열 반환
         if (!StringUtils.hasText(normalizedContentText)) {
@@ -128,6 +136,51 @@ public class GetDashboard implements GetDashboardUseCase {
         return normalizedContentText.length() > COMMUNITY_POST_EXCERPT_LENGTH
                 ? normalizedContentText.substring(0, COMMUNITY_POST_EXCERPT_LENGTH).trim() + "..."
                 : normalizedContentText;
+    }
+
+    private String createContentText(String contentJson) {
+        // 본문 JSON 없으면 빈 문자열 반환
+        if (!StringUtils.hasText(contentJson)) {
+            return "";
+        }
+
+        // 본문 JSON을 대시보드 미리보기 텍스트로 변환
+        try {
+            return normalizeContentText(extractContentText(objectMapper.readTree(contentJson)));
+        } catch (JsonProcessingException exception) {
+            return "";
+        }
+    }
+
+    private String extractContentText(JsonNode node) {
+        // 노드 유형별 텍스트 추출
+        String type = node.path("type").asText("");
+        if ("image".equals(type)) {
+            return "[이미지]";
+        }
+        if ("hardBreak".equals(type)) {
+            return "\n";
+        }
+        if ("text".equals(type)) {
+            return node.path("text").asText("");
+        }
+        if ("detailsSummary".equals(type) || !node.path("content").isArray()) {
+            return "";
+        }
+
+        // 자식 노드 텍스트 결합
+        List<String> childTexts = StreamSupport.stream(node.path("content").spliterator(), false)
+                .map(this::extractContentText)
+                .toList();
+        return separatesChildNodesByLine(type) ? String.join("\n", childTexts) : String.join("", childTexts);
+    }
+
+    private boolean separatesChildNodesByLine(String type) {
+        // 자식 노드 줄 단위 분리 여부 확인
+        return switch (type) {
+            case "doc", "blockquote", "bulletList", "orderedList", "details", "detailsContent" -> true;
+            default -> false;
+        };
     }
 
     private String normalizeContentText(String contentText) {

@@ -331,7 +331,7 @@
   top: calc(100% + 0.42rem);
   left: 0;
   right: 0;
-  z-index: 2147483647;
+  z-index: var(--z-dropdown);
   display: grid;
   gap: 0.12rem;
   padding: 0.26rem;
@@ -597,7 +597,7 @@
 
 .submit-history-link-menu {
   position: fixed;
-  z-index: 90;
+  z-index: var(--z-dropdown);
   display: inline-flex;
   align-items: center;
   min-width: 14rem;
@@ -788,7 +788,7 @@
 
 .submit-history-header-filter-menu {
   position: fixed;
-  z-index: 92;
+  z-index: var(--z-dropdown);
   display: grid;
   gap: 0.72rem;
   padding: 0.82rem 0.88rem;

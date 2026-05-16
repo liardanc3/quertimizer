@@ -1009,6 +1009,15 @@
   color: #0f172a;
 }
 
+.solve-page .solve-pane-summary-status-button.is-skipped,
+.solve-floating-pane-shell .solve-pane-summary-status-button.is-skipped,
+.solve-external-window-root-inner .solve-pane-summary-status-button.is-skipped,
+.solve-page .solve-pane-summary-statement-title.is-skipped,
+.solve-floating-pane-shell .solve-pane-summary-statement-title.is-skipped,
+.solve-external-window-root-inner .solve-pane-summary-statement-title.is-skipped {
+  color: #64748b;
+}
+
 .solve-page .solve-pane-summary-item,
 .solve-floating-pane-shell .solve-pane-summary-item,
 .solve-external-window-root-inner .solve-pane-summary-item {
@@ -2439,6 +2448,15 @@ body.handle-setup-locked {
   .solve-floating-pane-shell .solve-pane-summary-statement-title.is-pending,
   .solve-external-window-root-inner .solve-pane-summary-statement-title.is-pending {
     color: #e2e8f0;
+  }
+
+  .solve-page .solve-pane-summary-status-button.is-skipped,
+  .solve-floating-pane-shell .solve-pane-summary-status-button.is-skipped,
+  .solve-external-window-root-inner .solve-pane-summary-status-button.is-skipped,
+  .solve-page .solve-pane-summary-statement-title.is-skipped,
+  .solve-floating-pane-shell .solve-pane-summary-statement-title.is-skipped,
+  .solve-external-window-root-inner .solve-pane-summary-statement-title.is-skipped {
+    color: rgba(203, 213, 225, 0.72);
   }
 
   .solve-page .solve-pane-summary-statement-title.is-success,

@@ -7,8 +7,8 @@ interface ResizeState {
   height: number;
 }
 
-function clampImageWidth(width: number) {
-  return Math.min(COMMUNITY_IMAGE_MAX_WIDTH, Math.max(COMMUNITY_IMAGE_MIN_WIDTH, Math.round(width)));
+function clampImageWidth(width: number, maxWidth = COMMUNITY_IMAGE_MAX_WIDTH) {
+  return Math.min(maxWidth, Math.max(COMMUNITY_IMAGE_MIN_WIDTH, Math.round(width)));
 }
 
 function parseImageDimension(value: unknown) {
@@ -36,12 +36,21 @@ function resolveAspectRatio(image: HTMLImageElement, width: number, height: numb
   return 1;
 }
 
-function createImageSize(width: number, aspectRatio: number): ResizeState {
-  const normalizedWidth = clampImageWidth(width);
+function createImageSize(width: number, aspectRatio: number, maxWidth = COMMUNITY_IMAGE_MAX_WIDTH): ResizeState {
+  const normalizedWidth = clampImageWidth(width, maxWidth);
   return {
     width: normalizedWidth,
     height: Math.max(1, Math.round(normalizedWidth / Math.max(aspectRatio, 0.01))),
   };
+}
+
+function resolveEditorContentWidth(image: HTMLImageElement) {
+  const editorBody = image.closest('.community-editor-body, .community-detail-editor-body');
+  if (editorBody instanceof HTMLElement && editorBody.clientWidth > 0) {
+    return Math.max(COMMUNITY_IMAGE_MIN_WIDTH, Math.min(COMMUNITY_IMAGE_MAX_WIDTH, editorBody.clientWidth));
+  }
+
+  return COMMUNITY_IMAGE_MAX_WIDTH;
 }
 
 export function ResizableCommunityImage({ node, selected, updateAttributes }: ReactNodeViewProps) {
@@ -53,7 +62,7 @@ export function ResizableCommunityImage({ node, selected, updateAttributes }: Re
   const displayHeight = previewSize?.height ?? height ?? undefined;
   const imageStyle = useMemo(
     () => ({
-      width: displayWidth != null ? `${displayWidth}px` : undefined,
+      width: displayWidth != null ? '100%' : undefined,
       height: 'auto',
       maxWidth: '100%',
     }),
@@ -66,7 +75,11 @@ export function ResizableCommunityImage({ node, selected, updateAttributes }: Re
       return;
     }
 
-    const imageSize = createImageSize(image.naturalWidth, image.naturalWidth / image.naturalHeight);
+    const imageSize = createImageSize(
+      image.naturalWidth,
+      image.naturalWidth / image.naturalHeight,
+      resolveEditorContentWidth(image),
+    );
     updateAttributes(imageSize);
   }
 
@@ -82,11 +95,12 @@ export function ResizableCommunityImage({ node, selected, updateAttributes }: Re
     const startX = event.clientX;
     const startWidth = image.getBoundingClientRect().width;
     const aspectRatio = resolveAspectRatio(image, startWidth, height);
-    let nextSize = createImageSize(startWidth, aspectRatio);
+    const maxWidth = resolveEditorContentWidth(image);
+    let nextSize = createImageSize(startWidth, aspectRatio, maxWidth);
     setPreviewSize(nextSize);
 
     function handlePointerMove(pointerEvent: globalThis.PointerEvent) {
-      nextSize = createImageSize(startWidth + pointerEvent.clientX - startX, aspectRatio);
+      nextSize = createImageSize(startWidth + pointerEvent.clientX - startX, aspectRatio, maxWidth);
       setPreviewSize(nextSize);
     }
 
@@ -105,7 +119,7 @@ export function ResizableCommunityImage({ node, selected, updateAttributes }: Re
     <NodeViewWrapper
       as="figure"
       className={`community-resizable-image ${selected ? 'is-selected' : ''} ${previewSize != null ? 'is-resizing' : ''}`.trim()}
-      style={{ width: displayWidth != null ? `${displayWidth}px` : undefined }}
+      style={{ width: displayWidth != null ? `min(${displayWidth}px, 100%)` : undefined }}
     >
       <img
         ref={imageRef}

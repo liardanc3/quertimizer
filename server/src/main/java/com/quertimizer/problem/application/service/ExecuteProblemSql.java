@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.quertimizer.problem.domain.model.ProblemExecutionPageConstant.DEFAULT_PAGE_SIZE;
+import static com.quertimizer.problem.domain.model.ProblemExecutionPageConstant.MAX_PAGE_SIZE;
 import static com.quertimizer.problem.domain.model.ProblemQueryFailReason.EXECUTE_SQL_WITH_INDEX_DDL_SINGLE_ONLY;
 
 @Component
@@ -256,13 +258,13 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
     }
 
     private int normalizePageSize(Integer pageSize) {
-        // 기존 인터랙티브 실행 기준 페이지 크기 최대 10개 제한
+        // 인터랙티브 실행 결과 청크 크기 기본값 적용
         if (pageSize == null || pageSize < 1) {
-            return 10;
+            return DEFAULT_PAGE_SIZE;
         }
 
-        // 페이지 크기 상한 적용
-        return Math.min(pageSize, 10);
+        // 실행 결과 청크 크기 상한 적용
+        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private void dropQuietly(String executionSessionId, String environmentId) {

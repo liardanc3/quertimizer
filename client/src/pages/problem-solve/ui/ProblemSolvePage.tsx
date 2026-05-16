@@ -260,6 +260,8 @@ interface CollapsedCardState {
 
 type ProblemExecutionMode = 'select' | 'explain' | 'explain_analyze' | 'command';
 const EXECUTION_RESULT_PAGE_SIZE = 10;
+const EXECUTION_RESULT_FETCH_PAGE_SIZE = 500;
+const EXECUTION_RESULT_FETCH_PAGE_COUNT = Math.floor(EXECUTION_RESULT_FETCH_PAGE_SIZE / EXECUTION_RESULT_PAGE_SIZE);
 const SUBMIT_REFERENCE_WRITE_CTE_PATTERN = /\bWITH\b[\s\S]*\b(INSERT|UPDATE|DELETE|MERGE)\b/i;
 
 interface ProblemExecutionResult {
@@ -291,7 +293,7 @@ interface ProblemSocketMessage extends SessionSocketMessage {
   executionTimeMs?: number | null;
 }
 
-type ProblemSubmitStepStatus = 'running' | 'success' | 'incorrect' | 'error';
+type ProblemSubmitStepStatus = 'running' | 'success' | 'incorrect' | 'error' | 'skipped';
 type StatementPickerMode = 'execute' | 'submit';
 
 interface ProblemSubmitProgressMessage extends SessionSocketMessage {
@@ -614,6 +616,30 @@ function RelatedCommentIcon() {
 
 function getExecutionResultPageCount(rowCount: number) {
   return Math.max(1, Math.ceil(rowCount / EXECUTION_RESULT_PAGE_SIZE));
+}
+
+function getExecutionResultFetchPage(page: number) {
+  return Math.max(1, Math.floor((page - 1) / EXECUTION_RESULT_FETCH_PAGE_COUNT) + 1);
+}
+
+function isExecutionResultPageCached(executionResult: ProblemExecutionResult, page: number) {
+  const fetchPage = executionResult.currentPage ?? 1;
+  const fetchPageSize = executionResult.pageSize ?? EXECUTION_RESULT_FETCH_PAGE_SIZE;
+  const cachedStartIndex = (fetchPage - 1) * fetchPageSize;
+  const pageStartIndex = (page - 1) * EXECUTION_RESULT_PAGE_SIZE;
+
+  return pageStartIndex >= cachedStartIndex
+    && pageStartIndex + EXECUTION_RESULT_PAGE_SIZE <= cachedStartIndex + fetchPageSize;
+}
+
+function createExecutionResultPageRows(executionResult: ProblemExecutionResult, page: number) {
+  const fetchPage = executionResult.currentPage ?? 1;
+  const fetchPageSize = executionResult.pageSize ?? EXECUTION_RESULT_FETCH_PAGE_SIZE;
+  const cachedStartIndex = (fetchPage - 1) * fetchPageSize;
+  const pageStartIndex = (page - 1) * EXECUTION_RESULT_PAGE_SIZE;
+  const startIndex = Math.max(0, pageStartIndex - cachedStartIndex);
+
+  return executionResult.rows.slice(startIndex, startIndex + EXECUTION_RESULT_PAGE_SIZE);
 }
 
 function resolveSubmitStatementMode(sql: string): ProblemExecutionMode {
@@ -2094,7 +2120,7 @@ function createSubmitProgressStep(
 }
 
 function isTerminalSubmitProgressStatus(status: ProblemSubmitStepStatus) {
-  return status === 'success' || status === 'incorrect' || status === 'error';
+  return status === 'success' || status === 'incorrect' || status === 'error' || status === 'skipped';
 }
 
 function upsertSubmitProgressStep(
@@ -2133,6 +2159,27 @@ function getSubmitProgressStepOrder(stepKey: string) {
 
 function isAnswerCaseProgressStep(stepKey: string) {
   return stepKey === 'answer-open' || SUBMIT_HIDDEN_CASE_STEP_PATTERN.test(stepKey);
+}
+
+function createSkippedAnswerCaseMessage(stepKey: string) {
+  const hiddenCaseMatch = stepKey.match(SUBMIT_HIDDEN_CASE_STEP_PATTERN);
+  if (hiddenCaseMatch != null) {
+    return `Case Hidden ${hiddenCaseMatch[1]} 채점 생략`;
+  }
+
+  if (stepKey === 'answer-open') {
+    return 'Case Open 채점 생략';
+  }
+
+  return getUiTextValue('PROBLEM_SOLVE_SUBMIT_PROGRESS_SKIPPED_MESSAGE', '채점 생략');
+}
+
+function skipRunningAnswerCaseProgressSteps(currentSteps: ProblemSubmitProgressStep[]) {
+  return currentSteps.map((step) =>
+    step.status === 'running' && isAnswerCaseProgressStep(step.stepKey)
+      ? createSubmitProgressStep(step.stepKey, 'skipped', createSkippedAnswerCaseMessage(step.stepKey))
+      : step,
+  );
 }
 
 function createPlanProgressView(detailLines: string[]) {
@@ -2222,14 +2269,26 @@ function SubmitProgressItem({ step }: { step: ProblemSubmitProgressStep }) {
       ? 'is-pending'
       : step.status === 'success'
         ? 'is-success'
-        : 'is-error';
-  const indicator = step.status === 'running' ? <span className="solve-editor-statement-spinner" /> : step.status === 'success' ? '✓' : '✕';
+        : step.status === 'skipped'
+          ? 'is-skipped'
+          : 'is-error';
+  const indicator = step.status === 'running'
+    ? <span className="solve-editor-statement-spinner" />
+    : step.status === 'success'
+      ? '✓'
+      : step.status === 'skipped'
+        ? '–'
+        : '✕';
   const planProgressView = step.stepKey === 'plan' ? createPlanProgressView(step.detailLines) : null;
   const displayMessage = step.stepKey === 'plan' && step.status === 'success'
     ? getUiTextValue('PROBLEM_SOLVE_PLAN_PROGRESS_SUCCESS_TITLE', '실행계획 분석 완료')
     : step.message;
   const shouldRenderPlanProgress = planProgressView != null && planProgressView.measurements.length > 0;
-  const shouldRenderDetailLines = step.detailLines.length > 0 && !shouldRenderPlanProgress && !isAnswerCaseProgressStep(step.stepKey);
+  const shouldRenderAnswerCaseErrorDetails =
+    isAnswerCaseProgressStep(step.stepKey) && step.status === 'error' && step.detailLines.length > 0;
+  const shouldRenderDetailLines =
+    step.detailLines.length > 0 && !shouldRenderPlanProgress
+    && (!isAnswerCaseProgressStep(step.stepKey) || shouldRenderAnswerCaseErrorDetails);
   const canOpenPlanDetails = step.stepKey === 'plan' && step.status === 'success' && planProgressView != null && planProgressView.selectedAttempt != null;
 
   return (
@@ -2460,7 +2519,6 @@ function renderResultTable(
 function renderExecutionContent(
   executionResult: ProblemExecutionResult,
   currentPage: number,
-  pageSize: number,
   onPageChange: (page: number) => void,
   isPageLoading: boolean,
   resetKey: number,
@@ -2473,11 +2531,11 @@ function renderExecutionContent(
   if (executionResult.mode === 'select') {
     return renderResultTable(
       executionResult.columns,
-      executionResult.rows,
+      createExecutionResultPageRows(executionResult, currentPage),
       getUiTextValue('PROBLEM_SOLVE_RESULT_EMPTY_STATE', '표시할 실행 결과가 없습니다.'),
       executionResult.rowCount,
       currentPage,
-      pageSize,
+      EXECUTION_RESULT_PAGE_SIZE,
       onPageChange,
       isPageLoading,
       resetKey,
@@ -2526,7 +2584,7 @@ function ExecutionStatementResultItem({
     setCurrentPage(item.result?.currentPage ?? 1);
     setGridResetKey(0);
     setIsPageLoading(false);
-  }, [item.key, item.status, item.result?.mode, item.result?.rowCount, item.result?.message, item.result?.currentPage]);
+  }, [item.key, item.status, item.result?.mode, item.result?.rowCount, item.result?.message]);
 
   useEffect(() => {
     registerResultItemRef(item.key, executionItemRef.current);
@@ -2542,7 +2600,6 @@ function ExecutionStatementResultItem({
     executionResult != null && executionResult.success && executionResult.mode === 'select'
       ? getExecutionResultPageCount(executionResult.rowCount)
       : 1;
-  const resolvedPageSize = executionResult?.pageSize ?? EXECUTION_RESULT_PAGE_SIZE;
   const previewLabel = item.sql.replace(/\s+/g, ' ').trim() || 'SQL';
   const titleToneClass =
     item.status === 'running'
@@ -2567,6 +2624,11 @@ function ExecutionStatementResultItem({
 
     const normalizedPage = clamp(nextPage, 1, executionResultTotalPages);
     if (normalizedPage === currentPage) {
+      return;
+    }
+
+    if (isExecutionResultPageCached(executionResult, normalizedPage)) {
+      setCurrentPage(normalizedPage);
       return;
     }
 
@@ -2625,7 +2687,6 @@ function ExecutionStatementResultItem({
             renderExecutionContent(
               executionResult,
               currentPage,
-              resolvedPageSize,
               requestPage,
               isPageLoading,
               gridResetKey,
@@ -4986,6 +5047,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
               ),
             );
           });
+        } else if (submitMessage.success === false) {
+          setSubmitProgressSteps(skipRunningAnswerCaseProgressSteps);
         }
         setCollapsedCards((current) => ({
           ...current,
@@ -5404,6 +5467,7 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
   const requestExecutionResult = async (statementSql: string, page = 1) =>
     new Promise<ProblemExecutionResult>(async (resolve, reject) => {
       executionResponseResolverRef.current = resolve;
+      const fetchPage = getExecutionResultFetchPage(page);
       const destination = page === 1
         ? SESSION_SOCKET_DESTINATION.problemExecute
         : SESSION_SOCKET_DESTINATION.problemExecutePage;
@@ -5413,8 +5477,8 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           problemId,
           sql: statementSql,
           dbms: selectedDbms,
-          page,
-          pageSize: EXECUTION_RESULT_PAGE_SIZE,
+          page: fetchPage,
+          pageSize: EXECUTION_RESULT_FETCH_PAGE_SIZE,
           indexSqls: submitIndexSqls,
         });
       } catch (error) {

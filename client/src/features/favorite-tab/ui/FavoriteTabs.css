@@ -82,7 +82,7 @@
   position: absolute;
   top: calc(100% + var(--header-popup-offset, 0.9rem));
   right: 0;
-  z-index: 40;
+  z-index: calc(var(--z-header, 90) + 20);
   display: grid;
   gap: 0.72rem;
   width: min(16.5rem, calc(100vw - 1.5rem));

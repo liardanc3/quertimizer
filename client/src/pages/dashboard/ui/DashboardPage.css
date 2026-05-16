@@ -126,6 +126,7 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   position: relative;
   min-width: 0;
   padding-inline: 1.72rem;
+  touch-action: pan-y;
 }
 
 .dashboard-community-window {
@@ -678,30 +679,30 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
     padding-inline: 1.35rem;
   }
 
+  .dashboard-community-window {
+    min-height: 17rem;
+  }
+
+  .dashboard-problem-window {
+    min-height: 14rem;
+  }
+
   .dashboard-community-grid.is-featured-layout,
-  .dashboard-community-grid.is-grid-layout,
+  .dashboard-community-grid.is-grid-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(17rem, 1fr);
+    min-height: 17rem;
+  }
+
   .dashboard-problem-list {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
+    grid-template-rows: repeat(3, minmax(4.32rem, 1fr));
+    min-height: 14rem;
   }
 
   .dashboard-post-card.is-featured {
     grid-row: auto;
     min-height: 17rem;
-  }
-
-  .dashboard-community-grid,
-  .dashboard-community-window,
-  .dashboard-problem-list,
-  .dashboard-problem-window {
-    min-height: 18rem;
-  }
-
-  .dashboard-community-grid:has(.dashboard-post-card),
-  .dashboard-community-window:has(.dashboard-post-card),
-  .dashboard-problem-list:has(.dashboard-problem-card),
-  .dashboard-problem-window:has(.dashboard-problem-card) {
-    min-height: auto;
   }
 
   .dashboard-community-grid:has(.dashboard-empty-text),
@@ -714,6 +715,15 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   .dashboard-problem-card {
     height: auto;
     min-height: auto;
+  }
+
+  .dashboard-post-card {
+    min-height: 17rem;
+  }
+
+  .dashboard-problem-card {
+    height: 4.32rem;
+    min-height: 4.32rem;
   }
 
   .dashboard-problem-meta {

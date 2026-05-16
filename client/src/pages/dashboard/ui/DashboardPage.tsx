@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent, MutableRefObject, PointerEvent } from 'react';
 import { ContentLoading } from '@/shared/ui';
 import { HttpErrorState } from '@/shared/ui';
 import { PageLoadFailureState } from '@/shared/ui';
@@ -23,8 +24,12 @@ import './DashboardPage.css';
 
 const COMMUNITY_FEATURED_PAGE_SIZE = 4;
 const COMMUNITY_GRID_PAGE_SIZE = 9;
+const COMMUNITY_MOBILE_MAX_COUNT = 3;
 const PROBLEM_PAGE_SIZE = 6;
+const PROBLEM_MOBILE_PAGE_SIZE = 3;
 const MAX_PROBLEM_RECOMMENDATION_COUNT = 9;
+const DASHBOARD_MOBILE_MEDIA_QUERY = '(max-width: 780px)';
+const DASHBOARD_SWIPE_THRESHOLD_PX = 44;
 
 function createEmptyDashboard(): DashboardData {
   return {
@@ -148,7 +153,11 @@ function CarouselDots({
   );
 }
 
-function createCommunityPages(posts: DashboardCommunityPost[]) {
+function createCommunityPages(posts: DashboardCommunityPost[], mobile: boolean) {
+  if (mobile) {
+    return posts.slice(0, COMMUNITY_MOBILE_MAX_COUNT).map((post) => [post]);
+  }
+
   const pages: DashboardCommunityPost[][] = [];
   const featuredPosts = posts.slice(0, COMMUNITY_FEATURED_PAGE_SIZE);
 
@@ -163,13 +172,14 @@ function createCommunityPages(posts: DashboardCommunityPost[]) {
   return pages;
 }
 
-function createProblemPages(problems: DashboardProblemRecommendation[]) {
+function createProblemPages(problems: DashboardProblemRecommendation[], mobile: boolean) {
   const recommendationProblems = problems.slice(0, MAX_PROBLEM_RECOMMENDATION_COUNT);
-  const pageCount = Math.ceil(recommendationProblems.length / PROBLEM_PAGE_SIZE);
+  const pageSize = mobile ? PROBLEM_MOBILE_PAGE_SIZE : PROBLEM_PAGE_SIZE;
+  const pageCount = Math.ceil(recommendationProblems.length / pageSize);
 
   return Array.from({ length: pageCount }, (_, pageIndex) => {
-    const startIndex = pageIndex * PROBLEM_PAGE_SIZE;
-    return recommendationProblems.slice(startIndex, startIndex + PROBLEM_PAGE_SIZE);
+    const startIndex = pageIndex * pageSize;
+    return recommendationProblems.slice(startIndex, startIndex + pageSize);
   });
 }
 
@@ -219,9 +229,11 @@ function ProblemMeta({ problem }: { problem: DashboardProblemRecommendation }) {
 
 function CommunityPostCard({
   featured,
+  onOpen,
   post,
 }: {
   featured: boolean;
+  onOpen: () => void;
   post: DashboardCommunityPost;
 }) {
   const { text } = useUiText();
@@ -231,7 +243,7 @@ function CommunityPostCard({
       <button
         type="button"
         className="dashboard-card-hitbox"
-        onClick={() => navigate(getCommunityPostPath(post.postId))}
+        onClick={onOpen}
         aria-label={text('DASHBOARD_POST_OPEN_LABEL', { title: post.title }, `${post.title} 게시글로 이동`)}
       />
 
@@ -278,6 +290,10 @@ function CommunityPostCard({
 
 export default function DashboardPage() {
   const { text } = useUiText();
+  const communitySwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const problemSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressCommunityOpenRef = useRef(false);
+  const suppressProblemOpenRef = useRef(false);
   const [dashboard, setDashboard] = useState<DashboardData>(createEmptyDashboard);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -285,13 +301,20 @@ export default function DashboardPage() {
   const [loadFailedStatus, setLoadFailedStatus] = useState<number | null>(null);
   const [communityPageIndex, setCommunityPageIndex] = useState(0);
   const [problemPageIndex, setProblemPageIndex] = useState(0);
-  const communityPages = useMemo(() => createCommunityPages(dashboard.communityPosts), [dashboard.communityPosts]);
-  const problemPages = useMemo(() => createProblemPages(dashboard.problems), [dashboard.problems]);
+  const [isMobileDashboard, setIsMobileDashboard] = useState(false);
+  const communityPages = useMemo(
+    () => createCommunityPages(dashboard.communityPosts, isMobileDashboard),
+    [dashboard.communityPosts, isMobileDashboard],
+  );
+  const problemPages = useMemo(
+    () => createProblemPages(dashboard.problems, isMobileDashboard),
+    [dashboard.problems, isMobileDashboard],
+  );
   const communityPageCount = Math.max(1, communityPages.length);
   const problemPageCount = Math.max(1, problemPages.length);
   const visibleCommunityPosts = communityPages[communityPageIndex] ?? [];
   const visibleProblems = problemPages[problemPageIndex] ?? [];
-  const isFeaturedCommunityLayout = communityPageIndex === 0;
+  const isFeaturedCommunityLayout = isMobileDashboard || communityPageIndex === 0;
 
   useEffect(() => {
     document.documentElement.classList.add('is-dashboard-route');
@@ -351,7 +374,19 @@ export default function DashboardPage() {
   useEffect(() => {
     setCommunityPageIndex(0);
     setProblemPageIndex(0);
-  }, [dashboard.communityPosts, dashboard.problems]);
+  }, [dashboard.communityPosts, dashboard.problems, isMobileDashboard]);
+
+  useEffect(() => {
+    const mediaQueryList = window.matchMedia(DASHBOARD_MOBILE_MEDIA_QUERY);
+    const updateMobileState = () => setIsMobileDashboard(mediaQueryList.matches);
+
+    updateMobileState();
+    mediaQueryList.addEventListener('change', updateMobileState);
+
+    return () => {
+      mediaQueryList.removeEventListener('change', updateMobileState);
+    };
+  }, []);
 
   function moveCommunityPage(direction: 'previous' | 'next') {
     setCommunityPageIndex((currentPageIndex) => {
@@ -365,6 +400,90 @@ export default function DashboardPage() {
       const nextPageIndex = direction === 'previous' ? currentPageIndex - 1 : currentPageIndex + 1;
       return Math.min(problemPageCount - 1, Math.max(0, nextPageIndex));
     });
+  }
+
+  function markSwipeOpenSuppressed(target: 'community' | 'problem') {
+    // 스와이프 후 발생하는 카드 click 이동 방지
+    const suppressRef = target === 'community' ? suppressCommunityOpenRef : suppressProblemOpenRef;
+    suppressRef.current = true;
+    window.setTimeout(() => {
+      suppressRef.current = false;
+    }, 180);
+  }
+
+  function handleCarouselPointerDown(
+    event: PointerEvent<HTMLDivElement>,
+    swipeStartRef: MutableRefObject<{ x: number; y: number } | null>,
+  ) {
+    // 모바일 터치 시작점 저장
+    if (!isMobileDashboard || loadFailed || event.pointerType === 'mouse') {
+      return;
+    }
+
+    swipeStartRef.current = { x: event.clientX, y: event.clientY };
+  }
+
+  function handleCarouselPointerUp(
+    event: PointerEvent<HTMLDivElement>,
+    swipeStartRef: MutableRefObject<{ x: number; y: number } | null>,
+    movePage: (direction: 'previous' | 'next') => void,
+    target: 'community' | 'problem',
+  ) {
+    // 수평 스와이프를 페이지 이동으로 변환
+    if (!isMobileDashboard || event.pointerType === 'mouse') {
+      swipeStartRef.current = null;
+      return;
+    }
+
+    const swipeStart = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (swipeStart == null) {
+      return;
+    }
+
+    const deltaX = event.clientX - swipeStart.x;
+    const deltaY = event.clientY - swipeStart.y;
+    if (Math.abs(deltaX) < DASHBOARD_SWIPE_THRESHOLD_PX || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+      return;
+    }
+
+    markSwipeOpenSuppressed(target);
+    movePage(deltaX < 0 ? 'next' : 'previous');
+  }
+
+  function handleCarouselPointerCancel(swipeStartRef: MutableRefObject<{ x: number; y: number } | null>) {
+    // 취소된 터치 시작점 제거
+    swipeStartRef.current = null;
+  }
+
+  function handleCarouselClickCapture(event: MouseEvent<HTMLDivElement>, target: 'community' | 'problem') {
+    // 스와이프 직후 발생한 내부 button click 차단
+    const suppressRef = target === 'community' ? suppressCommunityOpenRef : suppressProblemOpenRef;
+    if (!suppressRef.current) {
+      return;
+    }
+
+    suppressRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function openCommunityPost(postId: string) {
+    // 스와이프 직후 발생한 click이면 이동 생략
+    if (suppressCommunityOpenRef.current) {
+      return;
+    }
+
+    navigate(getCommunityPostPath(postId));
+  }
+
+  function openProblem(problemId: string) {
+    // 스와이프 직후 발생한 click이면 이동 생략
+    if (suppressProblemOpenRef.current) {
+      return;
+    }
+
+    navigate(buildProblemPath(problemId));
   }
 
   if (isLoading) {
@@ -390,7 +509,13 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        <div className="dashboard-carousel-window dashboard-community-window">
+        <div
+          className="dashboard-carousel-window dashboard-community-window"
+          onPointerDown={(event) => handleCarouselPointerDown(event, communitySwipeStartRef)}
+          onPointerUp={(event) => handleCarouselPointerUp(event, communitySwipeStartRef, moveCommunityPage, 'community')}
+          onPointerCancel={() => handleCarouselPointerCancel(communitySwipeStartRef)}
+          onClickCapture={(event) => handleCarouselClickCapture(event, 'community')}
+        >
           <button
             type="button"
             className="dashboard-carousel-arrow is-left"
@@ -408,7 +533,12 @@ export default function DashboardPage() {
                 : <PageLoadFailureState className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
             ) : visibleCommunityPosts.length > 0 ? (
               visibleCommunityPosts.map((post, index) => (
-                <CommunityPostCard key={post.postId} post={post} featured={communityPageIndex === 0 && index === 0} />
+                <CommunityPostCard
+                  key={post.postId}
+                  post={post}
+                  featured={isMobileDashboard || (communityPageIndex === 0 && index === 0)}
+                  onOpen={() => openCommunityPost(post.postId)}
+                />
               ))
             ) : (
               <p className="dashboard-empty-text">{text('DASHBOARD_EMPTY_POSTS_STATE', '표시할 게시글이 없습니다.')}</p>
@@ -444,7 +574,13 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        <div className="dashboard-carousel-window dashboard-problem-window">
+        <div
+          className="dashboard-carousel-window dashboard-problem-window"
+          onPointerDown={(event) => handleCarouselPointerDown(event, problemSwipeStartRef)}
+          onPointerUp={(event) => handleCarouselPointerUp(event, problemSwipeStartRef, moveProblemPage, 'problem')}
+          onPointerCancel={() => handleCarouselPointerCancel(problemSwipeStartRef)}
+          onClickCapture={(event) => handleCarouselClickCapture(event, 'problem')}
+        >
           <button
             type="button"
             className="dashboard-carousel-arrow is-left"
@@ -466,7 +602,7 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     className="dashboard-card-hitbox"
-                    onClick={() => navigate(buildProblemPath(problem.problemId))}
+                    onClick={() => openProblem(problem.problemId)}
                     aria-label={text('DASHBOARD_PROBLEM_OPEN_LABEL', { problemId: problem.problemId }, `${problem.problemId} 문제로 이동`)}
                   />
 
