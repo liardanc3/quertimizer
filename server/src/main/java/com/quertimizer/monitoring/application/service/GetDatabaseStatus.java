@@ -2,6 +2,7 @@ package com.quertimizer.monitoring.application.service;
 
 import com.quertimizer.global.log.Log;
 import com.quertimizer.monitoring.application.output.DatabaseStatusOutput;
+import com.quertimizer.monitoring.application.output.MonitoringDatabaseSnapshotOutput;
 import com.quertimizer.monitoring.application.port.in.GetDatabaseStatusUseCase;
 import com.quertimizer.monitoring.application.port.out.DockerContainerPort;
 import com.quertimizer.monitoring.application.port.out.MonitoringDatabasePort;
@@ -37,21 +38,20 @@ public class GetDatabaseStatus implements GetDatabaseStatusUseCase {
     @Override
     @Transactional(readOnly = true)
     public DatabaseStatusOutput execute() {
+        MonitoringDatabaseSnapshotOutput snapshot = monitoringDatabasePort.getSnapshot();
         Map<String, DatabaseNodeConfig> savedConfigsByDatabaseId = databaseNodeConfigRepositoryPort.findAll().stream()
                 .collect(Collectors.toMap(DatabaseNodeConfig::getDatabaseId, Function.identity()));
 
-        List<DatabaseNodeConfigOutput> configs = monitoringDatabasePort.getNodes().stream()
+        List<DatabaseNodeConfigOutput> configs = snapshot.getNodes().stream()
                 .map(node -> savedConfigsByDatabaseId.get(node.getDatabaseId()))
                 .filter(config -> config != null)
                 .map(DatabaseNodeConfigOutput::from)
                 .toList();
 
         return new DatabaseStatusOutput(
-                monitoringDatabasePort.getTotalWaitingCount(),
-                monitoringDatabasePort.getTotalRunningCount(),
-                monitoringDatabasePort.getQueues(),
-                monitoringDatabasePort.getNodes(),
-                dockerContainerPort.findJudgeContainers(),
+                snapshot.getTotalWaitingCount(), snapshot.getTotalRunningCount(),
+                snapshot.getQueues(), snapshot.getNodes(),
+                dockerContainerPort.findJudgeContainers(snapshot.getNodes()),
                 configs
         );
     }

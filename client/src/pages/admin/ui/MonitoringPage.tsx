@@ -188,6 +188,10 @@ export function MonitoringContent() {
   }, [text]);
 
   useEffect(() => {
+    if (activeSection !== 'resources') {
+      return;
+    }
+
     let cancelled = false;
 
     async function requestResources() {
@@ -205,14 +209,18 @@ export function MonitoringContent() {
     void requestResources();
     const timer = window.setInterval(() => {
       void requestResources();
-    }, 5000);
+    }, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [text]);
+  }, [activeSection, text]);
 
   useEffect(() => {
+    if (activeSection !== 'resources') {
+      return;
+    }
+
     let cancelled = false;
 
     async function requestDatabaseStatus() {
@@ -230,12 +238,12 @@ export function MonitoringContent() {
     void requestDatabaseStatus();
     const timer = window.setInterval(() => {
       void requestDatabaseStatus();
-    }, 5000);
+    }, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [text]);
+  }, [activeSection, text]);
 
   useEffect(() => {
     if (activeSection !== 'logs') {
