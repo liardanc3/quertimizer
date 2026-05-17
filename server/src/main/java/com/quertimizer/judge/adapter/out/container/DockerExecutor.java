@@ -65,7 +65,7 @@ public class DockerExecutor implements ContainerPort {
                 );
             } catch (Exception exception) {
                 log.info(
-                        "고아 평가 DB 프로세스 정리 생략 containerName={}, environmentId={}",
+                        "[고아 리소스 정리] DB 프로세스 정리 생략 container={} environment={}",
                         databaseNode.getContainerName(), normalizedEnvironmentId
                 );
             }

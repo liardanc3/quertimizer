@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static com.quertimizer.problem.domain.model.ProblemExecutionPageConstant.DEFAULT_PAGE_SIZE;
 import static com.quertimizer.problem.domain.model.ProblemExecutionPageConstant.MAX_PAGE_SIZE;
@@ -51,38 +52,49 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
     @Override
     @Log("SQL 실행")
     public ProblemExecutionOutput execute(ProblemExecutionInput input) {
-        log.info("SQL 실행 시작 problem={}", input.getProblemId());
-
+        long startedAt = System.nanoTime();
         String executionId = "interactive-" + UUID.randomUUID();
+        log.info(
+                "[SQL 실행] 시작 problem={} session={} execution={} page={} pageSize={} sqlLength={} indexDdlCount={}",
+                input.getProblemId(), input.getExecutionSessionId(), executionId,
+                normalizePage(input.getPage()), normalizePageSize(input.getPageSize()),
+                resolveLength(input.getSql()), resolveSize(input.getIndexSqls())
+        );
         executionSessionStore.markExecution(input.getExecutionSessionId(), executionId);
         ProblemExecutionSessionStore.ProblemExecutionSession session = null;
         try {
             ResolvedExecutionSql executionSql = resolveExecutionSql(input);
             ProblemDatasetResolver.ResolvedProblemDataset dataset =
                     datasetResolver.resolve(input.getProblemId(), input.getDbmsType());
-            log.info("SQL 실행 데이터셋 조회 완료 dataset={}, dbmsType={}", dataset.getDatasetId(), dataset.getDbmsType());
+            log.info(
+                    "[SQL 실행] 데이터셋 조회 완료 problem={} dataset={} dbms={}",
+                    input.getProblemId(), dataset.getDatasetId(), dataset.getDbmsType()
+            );
             session = createFreshEnvironment(input, dataset);
             applyIndexSqls(executionSql.indexSqls, session, executionId);
             analyzeExecutionEnvironment(session, executionId);
+            long selectStartedAt = System.nanoTime();
             log.info(
-                    "SQL 실행 요청 전달 executionId={}, environment={}, problem={}",
-                    executionId, session.getEnvironmentId(), input.getProblemId()
+                    "[SQL 실행] SELECT 실행 시작 problem={} execution={} environment={} page={} pageSize={}",
+                    input.getProblemId(), executionId, session.getEnvironmentId(),
+                    normalizePage(input.getPage()), normalizePageSize(input.getPageSize())
             );
             ProblemJudgeExecutionResult result = problemJudgePort.executeInteractiveSql(
                     executionId, session.getEnvironmentId(), executionSql.sql,
                     normalizePage(input.getPage()), normalizePageSize(input.getPageSize())
             );
             log.info(
-                    "SQL 실행 완료 executionId={}, problem={}, mode={}, rowCount={}, cost={}, executionTimeMs={}",
-                    executionId, input.getProblemId(), result.getMode(), result.getRowCount(),
-                    result.getCost(), result.getExecutionTimeMs()
+                    "[SQL 실행] SELECT 실행 완료 problem={} execution={} environment={} mode={} rowCount={} cost={} executionTimeMs={} elapsedMs={} totalElapsedMs={}",
+                    input.getProblemId(), executionId, session.getEnvironmentId(), result.getMode(),
+                    result.getRowCount(), result.getCost(), result.getExecutionTimeMs(),
+                    elapsedMillis(selectStartedAt), elapsedMillis(startedAt)
             );
 
             return toProblemExecutionOutput(input.getProblemId(), result);
         } catch (IllegalArgumentException exception) {
             log.warn(
-                    "SQL 실행 검증 실패 executionId={}, problem={}, reason={}",
-                    executionId, input.getProblemId(), resolveUserErrorMessage(exception)
+                    "[SQL 실행] 검증 실패 problem={} execution={} reason={} elapsedMs={}",
+                    input.getProblemId(), executionId, resolveUserErrorMessage(exception), elapsedMillis(startedAt)
             );
             throw new BusinessException(resolveUserErrorMessage(exception), HttpStatus.BAD_REQUEST);
         } catch (RuntimeException exception) {
@@ -92,8 +104,8 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
             }
 
             log.warn(
-                    "SQL 실행 DB 오류 executionId={}, problem={}, reason={}",
-                    executionId, input.getProblemId(), message, exception
+                    "[SQL 실행] DB 오류 problem={} execution={} reason={} elapsedMs={}",
+                    input.getProblemId(), executionId, message, elapsedMillis(startedAt), exception
             );
             throw new BusinessException(message, HttpStatus.BAD_REQUEST);
         } finally {
@@ -137,38 +149,44 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                                 String executionId) {
         // 실행 전 반영할 index DDL 없으면 생략
         if (indexSqls.isEmpty()) {
+            log.info(
+                    "[SQL 실행] 인덱스 DDL 반영 생략 execution={} environment={}",
+                    executionId, session.getEnvironmentId()
+            );
             return;
         }
 
         // 같은 실행 환경에 index DDL 순차 반영
+        long startedAt = System.nanoTime();
         log.info(
-                "SQL 실행 INDEX DDL 반영 시작 executionId={}, environment={}, indexDdlCount={}",
+                "[SQL 실행] 인덱스 DDL 반영 시작 execution={} environment={} indexDdlCount={}",
                 executionId, session.getEnvironmentId(), indexSqls.size()
         );
         for (String indexSql : indexSqls) {
             log.info(
-                    "SQL 실행 INDEX DDL 실행 executionId={}, environment={}, sqlLength={}",
+                    "[SQL 실행] 인덱스 DDL 실행 시작 execution={} environment={} sqlLength={}",
                     executionId, session.getEnvironmentId(), indexSql.length()
             );
             problemJudgePort.executeInteractiveSql(executionId, session.getEnvironmentId(), indexSql, 1, 1);
         }
         log.info(
-                "SQL 실행 INDEX DDL 반영 완료 executionId={}, environment={}",
-                executionId, session.getEnvironmentId()
+                "[SQL 실행] 인덱스 DDL 반영 완료 execution={} environment={} elapsedMs={}",
+                executionId, session.getEnvironmentId(), elapsedMillis(startedAt)
         );
     }
 
     private void analyzeExecutionEnvironment(ProblemExecutionSessionStore.ProblemExecutionSession session,
                                              String executionId) {
         // 실행 직전 통계 1회 갱신
+        long startedAt = System.nanoTime();
         log.info(
-                "SQL 실행 통계 갱신 시작 executionId={}, environment={}",
+                "[SQL 실행] 통계 갱신 시작 execution={} environment={}",
                 executionId, session.getEnvironmentId()
         );
         problemJudgePort.analyzeOfficialEnvironment(executionId, session.getEnvironmentId());
         log.info(
-                "SQL 실행 통계 갱신 완료 executionId={}, environment={}",
-                executionId, session.getEnvironmentId()
+                "[SQL 실행] 통계 갱신 완료 execution={} environment={} elapsedMs={}",
+                executionId, session.getEnvironmentId(), elapsedMillis(startedAt)
         );
     }
 
@@ -178,15 +196,16 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         executionSessionStore.remove(input.getExecutionSessionId())
                 .ifPresent(session -> {
                     log.info(
-                            "SQL 실행 이전 환경 정리 session={}, environment={}",
+                            "[SQL 실행] 이전 환경 정리 시작 session={} environment={}",
                             input.getExecutionSessionId(), session.getEnvironmentId()
                     );
                     dropQuietly(input.getExecutionSessionId(), session.getEnvironmentId());
                 });
 
         // 데이터셋 기준 새 judge 실행 환경 생성
+        long startedAt = System.nanoTime();
         log.info(
-                "SQL 실행 환경 생성 시작 session={}, problem={}, dataset={}",
+                "[SQL 실행] 실행 환경 생성 시작 session={} problem={} dataset={}",
                 input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId()
         );
         String environmentId = problemJudgePort.createInteractiveEnvironment(
@@ -197,8 +216,8 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         ProblemExecutionSessionStore.ProblemExecutionSession session =
                 executionSessionStore.save(input.getExecutionSessionId(), input.getProblemId(), dataset.getDatasetId(), environmentId);
         log.info(
-                "SQL 실행 환경 생성 완료 session={}, environment={}, dataset={}",
-                input.getExecutionSessionId(), environmentId, dataset.getDatasetId()
+                "[SQL 실행] 실행 환경 생성 완료 session={} environment={} dataset={} elapsedMs={}",
+                input.getExecutionSessionId(), environmentId, dataset.getDatasetId(), elapsedMillis(startedAt)
         );
         return session;
     }
@@ -206,7 +225,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
     private void sendWaitingProgress(ProblemExecutionInput input, int remainingTasks) {
         // 실행 환경 대기열 순번 progress와 로그 전파
         log.info(
-                "SQL 실행 환경 생성 대기 session={}, problem={}, remainingTasks={}",
+                "[SQL 실행] 실행 환경 생성 대기 session={} problem={} remainingTasks={}",
                 input.getExecutionSessionId(), input.getProblemId(), remainingTasks
         );
         input.getProgressListener().accept(ProblemExecutionProgress.waiting(input.getProblemId(), remainingTasks));
@@ -276,12 +295,27 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
         try {
             problemJudgePort.dropEnvironment(environmentId);
             log.info(
-                    "SQL 실행 환경 정리 완료 session={}, environment={}",
+                    "[SQL 실행] 실행 환경 정리 완료 session={} environment={}",
                     executionSessionId, environmentId
             );
         } catch (Exception exception) {
-            log.warn("judge 실행 환경 정리 실패 session={}, environment={}", executionSessionId, environmentId, exception);
+            log.warn("[SQL 실행] 실행 환경 정리 실패 session={} environment={}", executionSessionId, environmentId, exception);
         }
+    }
+
+    private int resolveLength(String value) {
+        // 로그 표시용 문자열 길이 계산
+        return value == null ? 0 : value.length();
+    }
+
+    private int resolveSize(List<?> values) {
+        // 로그 표시용 목록 크기 계산
+        return values == null ? 0 : values.size();
+    }
+
+    private long elapsedMillis(long startedAt) {
+        // 로그 표시용 경과 시간 계산
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
     private Double toDouble(BigDecimal value) {

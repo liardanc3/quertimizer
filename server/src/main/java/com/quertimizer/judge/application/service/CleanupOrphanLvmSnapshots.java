@@ -16,7 +16,7 @@ public class CleanupOrphanLvmSnapshots implements CleanupOrphanLvmSnapshotsUseCa
      * 고아 LVM 평가 스냅샷을 정리한다.
      */
     @Override
-    @Log("고아 LVM 평가 스냅샷 정리")
+    @Log("고아 리소스 정리")
     public void execute() {
         orphanLvmSnapshotCleanupPort.cleanupOrphans();
     }

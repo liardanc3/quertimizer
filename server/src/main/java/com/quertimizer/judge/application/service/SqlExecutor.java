@@ -227,7 +227,7 @@ public class SqlExecutor implements AutoCloseable {
             environmentProvisioner.drop(environment);
         } catch (RuntimeException exception) {
             log.warn(
-                    "격리 SQL 실행 환경 정리 실패 environmentId={}",
+                    "[채점 환경] 격리 실행 환경 정리 실패 environment={}",
                     environment.getExecutionEnvironment().getEnvironmentId(), exception
             );
         }

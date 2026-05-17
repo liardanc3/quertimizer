@@ -56,7 +56,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     private final DatabaseSnapshotPort databaseSnapshotPort;
 
     @Override
-    @Log("채점 데이터셋 생성")
+    @Log("데이터셋 생성")
     public JudgeDatasetId createDataset(CreateDatasetInput input) {
         // DDL과 데이터 SQL 검증 후 데이터셋 정의 생성
         definitionPolicy.validateDdl(input.getDdl());
@@ -89,14 +89,14 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 데이터셋 존재 확인")
+    @Log("데이터셋 존재 확인")
     public boolean hasDataset(Long datasetId) {
         // 데이터셋 정의 존재 여부 반환
         return definitionRepository.findDataset(new JudgeDatasetId(datasetId)).isPresent();
     }
 
     @Override
-    @Log("채점 데이터셋 삭제")
+    @Log("데이터셋 삭제")
     public void deleteDataset(JudgeDatasetId datasetId) {
         // 물리 템플릿 제거 후 데이터셋 정의 제거
         templateRepository.findDatasetTemplate(datasetId).ifPresent(sqlExecutorPool::dropDataset);
@@ -104,7 +104,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 환경 생성")
+    @Log("실행 환경 생성")
     public JudgeEnvironmentId createEnvironment(CreateEnvironmentInput input) {
         // 데이터셋 정의 조회와 실행 환경 ID 생성
         DatasetDefinition dataset = requireDataset(input.getDatasetId());
@@ -120,7 +120,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 환경 삭제")
+    @Log("실행 환경 삭제")
     public void dropEnvironment(JudgeEnvironmentId environmentId) {
         // 등록되지 않은 실행 환경 제거 요청 무시
         if (!sqlExecutorPool.hasEnvironment(environmentId)) {
@@ -166,7 +166,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 환경 분석")
+    @Log("실행 환경 통계 갱신")
     public SqlExecutionResult analyzeEnvironment(AnalyzeEnvironmentInput input) {
         // 실행 환경 존재 여부 확인
         if (!sqlExecutorPool.hasEnvironment(input.getEnvironmentId())) {
@@ -183,7 +183,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("SQL 실행 해시 생성")
+    @Log("정답 기준 생성")
     public SqlExecutionHashResult createSqlExecutionHash(CreateSqlExecutionHashInput input) {
         // 읽기 전용 SQL 검증 후 격리 SQL 실행
         definitionPolicy.validateReadOnlySql(input.getSql());
@@ -198,7 +198,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 실행 취소")
+    @Log("SQL 실행 취소")
     public void cancelExecution(JudgeExecutionId executionId) {
         // 활성 실행이 아니면 취소 요청 무시
         if (!sqlExecutorPool.hasActiveExecution(executionId)) {
@@ -210,7 +210,7 @@ public class JudgeApplicationService implements JudgeApplicationPort {
     }
 
     @Override
-    @Log("채점 SQL 구문 파싱")
+    @Log("SQL 구문 파싱")
     public List<SqlStatement> parseSqlStatements(String sql) {
         // SQL 문장 분리와 실행 모드 분류
         return statementParser.splitStatements(sql).stream()

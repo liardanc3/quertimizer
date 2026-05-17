@@ -8,7 +8,7 @@
 
 :is(.home-page, .data-page) .panel-card.problem-toolbar-card {
   position: relative;
-  z-index: 20;
+  z-index: 120;
 }
 
 :is(.home-page, .data-page) .panel-card.problem-board {
@@ -422,7 +422,7 @@
 
 :is(.home-page, .data-page) .problem-table-head {
   position: relative;
-  z-index: 30;
+  z-index: 80;
   padding-top: 0.12rem;
   padding-bottom: 0.58rem;
   border-bottom: 1px solid rgba(219, 230, 242, 0.82);
@@ -442,7 +442,7 @@
 
 :is(.home-page, .data-page) .problem-table-head-cell-filter {
   position: relative;
-  z-index: 31;
+  z-index: 81;
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
@@ -486,7 +486,7 @@
   position: absolute;
   top: calc(100% + 0.34rem);
   left: 0;
-  z-index: 80;
+  z-index: 140;
   display: grid;
   gap: 0.28rem;
   min-width: max-content;
@@ -1542,6 +1542,7 @@ body.handle-setup-locked {
   }
 
   :is(.home-page, .data-page) .home-problem-search-row {
+    z-index: 130;
     grid-template-columns: minmax(0, 1fr) 2.26rem;
     gap: 0.42rem;
     align-items: stretch;
@@ -1586,14 +1587,16 @@ body.handle-setup-locked {
   }
 
   :is(.home-page, .data-page) .problem-mobile-filter-menu {
-    position: static;
-    grid-column: 1 / -1;
-    z-index: 110;
+    position: absolute;
+    top: calc(100% + 0.42rem);
+    right: 0;
+    left: 0;
+    z-index: 150;
     display: grid;
     gap: 0.52rem;
     width: 100%;
     max-height: min(64dvh, 24rem);
-    margin-top: 0.42rem;
+    margin-top: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 0.78rem;
