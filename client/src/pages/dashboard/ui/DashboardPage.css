@@ -129,6 +129,18 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   touch-action: pan-y;
 }
 
+.dashboard-carousel-slide {
+  will-change: transform;
+}
+
+.dashboard-carousel-slide.is-slide-next {
+  animation: dashboard-carousel-slide-next 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dashboard-carousel-slide.is-slide-previous {
+  animation: dashboard-carousel-slide-previous 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .dashboard-community-window {
   min-height: 13.9rem;
 }
@@ -198,6 +210,15 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   border: 0;
   background: transparent;
   cursor: pointer;
+}
+
+.dashboard-post-card > :not(.dashboard-card-hitbox),
+.dashboard-problem-card > :not(.dashboard-card-hitbox) {
+  pointer-events: none;
+}
+
+.dashboard-post-card .dashboard-inline-link {
+  pointer-events: auto;
 }
 
 .dashboard-post-card {
@@ -615,6 +636,30 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   min-height: 10rem;
 }
 
+@keyframes dashboard-carousel-slide-next {
+  from {
+    opacity: 0.76;
+    transform: translateX(1.55rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes dashboard-carousel-slide-previous {
+  from {
+    opacity: 0.76;
+    transform: translateX(-1.55rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   .dashboard-post-card,
   .dashboard-problem-card {
@@ -674,7 +719,18 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   }
 
   .dashboard-section-header {
-    align-items: flex-start;
+    grid-template-columns: max-content auto max-content;
+    align-items: center;
+    gap: 0.54rem;
+  }
+
+  .dashboard-community-section .dashboard-section-title {
+    white-space: nowrap;
+  }
+
+  .dashboard-community-section .dashboard-section-title h2 {
+    font-size: 0.94rem;
+    white-space: nowrap;
   }
 
   .dashboard-carousel-window {
@@ -731,5 +787,12 @@ html.is-dashboard-route.is-dashboard-loading .main-content {
   .dashboard-empty-text {
     min-height: inherit;
     align-self: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-carousel-slide.is-slide-next,
+  .dashboard-carousel-slide.is-slide-previous {
+    animation: none;
   }
 }

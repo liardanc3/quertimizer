@@ -30,6 +30,15 @@ const PROBLEM_MOBILE_PAGE_SIZE = 3;
 const MAX_PROBLEM_RECOMMENDATION_COUNT = 9;
 const DASHBOARD_MOBILE_MEDIA_QUERY = '(max-width: 780px)';
 const DASHBOARD_SWIPE_THRESHOLD_PX = 44;
+const DASHBOARD_DRAG_MAX_OFFSET_PX = 56;
+
+type DashboardCarouselDirection = 'previous' | 'next';
+type DashboardCarouselTarget = 'community' | 'problem';
+
+interface DashboardSwipeStart {
+  x: number;
+  y: number;
+}
 
 function createEmptyDashboard(): DashboardData {
   return {
@@ -183,6 +192,20 @@ function createProblemPages(problems: DashboardProblemRecommendation[], mobile: 
   });
 }
 
+function resolveNextCarouselPage(currentPageIndex: number, direction: DashboardCarouselDirection, pageCount: number) {
+  const nextPageIndex = direction === 'previous' ? currentPageIndex - 1 : currentPageIndex + 1;
+
+  return Math.min(pageCount - 1, Math.max(0, nextPageIndex));
+}
+
+function getCarouselSlideClass(direction: DashboardCarouselDirection | null) {
+  return direction == null ? '' : `is-slide-${direction}`;
+}
+
+function clampCarouselDragOffset(deltaX: number) {
+  return Math.max(-DASHBOARD_DRAG_MAX_OFFSET_PX, Math.min(DASHBOARD_DRAG_MAX_OFFSET_PX, deltaX));
+}
+
 function CommunityMetric({
   type,
   value,
@@ -290,8 +313,8 @@ function CommunityPostCard({
 
 export default function DashboardPage() {
   const { text } = useUiText();
-  const communitySwipeStartRef = useRef<{ x: number; y: number } | null>(null);
-  const problemSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const communitySwipeStartRef = useRef<DashboardSwipeStart | null>(null);
+  const problemSwipeStartRef = useRef<DashboardSwipeStart | null>(null);
   const suppressCommunityOpenRef = useRef(false);
   const suppressProblemOpenRef = useRef(false);
   const [dashboard, setDashboard] = useState<DashboardData>(createEmptyDashboard);
@@ -301,6 +324,10 @@ export default function DashboardPage() {
   const [loadFailedStatus, setLoadFailedStatus] = useState<number | null>(null);
   const [communityPageIndex, setCommunityPageIndex] = useState(0);
   const [problemPageIndex, setProblemPageIndex] = useState(0);
+  const [communitySlideDirection, setCommunitySlideDirection] = useState<DashboardCarouselDirection | null>(null);
+  const [problemSlideDirection, setProblemSlideDirection] = useState<DashboardCarouselDirection | null>(null);
+  const [communityDragOffsetPx, setCommunityDragOffsetPx] = useState(0);
+  const [problemDragOffsetPx, setProblemDragOffsetPx] = useState(0);
   const [isMobileDashboard, setIsMobileDashboard] = useState(false);
   const communityPages = useMemo(
     () => createCommunityPages(dashboard.communityPosts, isMobileDashboard),
@@ -374,6 +401,10 @@ export default function DashboardPage() {
   useEffect(() => {
     setCommunityPageIndex(0);
     setProblemPageIndex(0);
+    setCommunitySlideDirection(null);
+    setProblemSlideDirection(null);
+    setCommunityDragOffsetPx(0);
+    setProblemDragOffsetPx(0);
   }, [dashboard.communityPosts, dashboard.problems, isMobileDashboard]);
 
   useEffect(() => {
@@ -388,18 +419,36 @@ export default function DashboardPage() {
     };
   }, []);
 
-  function moveCommunityPage(direction: 'previous' | 'next') {
-    setCommunityPageIndex((currentPageIndex) => {
-      const nextPageIndex = direction === 'previous' ? currentPageIndex - 1 : currentPageIndex + 1;
-      return Math.min(communityPageCount - 1, Math.max(0, nextPageIndex));
-    });
+  function moveCommunityPage(direction: DashboardCarouselDirection) {
+    // 커뮤니티 캐러셀 이동 방향 저장 후 페이지 전환
+    const nextPageIndex = resolveNextCarouselPage(communityPageIndex, direction, communityPageCount);
+    if (nextPageIndex === communityPageIndex) {
+      return;
+    }
+
+    setCommunitySlideDirection(direction);
+    setCommunityPageIndex(nextPageIndex);
   }
 
-  function moveProblemPage(direction: 'previous' | 'next') {
-    setProblemPageIndex((currentPageIndex) => {
-      const nextPageIndex = direction === 'previous' ? currentPageIndex - 1 : currentPageIndex + 1;
-      return Math.min(problemPageCount - 1, Math.max(0, nextPageIndex));
-    });
+  function moveProblemPage(direction: DashboardCarouselDirection) {
+    // 추천 문제 캐러셀 이동 방향 저장 후 페이지 전환
+    const nextPageIndex = resolveNextCarouselPage(problemPageIndex, direction, problemPageCount);
+    if (nextPageIndex === problemPageIndex) {
+      return;
+    }
+
+    setProblemSlideDirection(direction);
+    setProblemPageIndex(nextPageIndex);
+  }
+
+  function setCarouselDragOffset(target: DashboardCarouselTarget, offsetPx: number) {
+    // 캐러셀별 드래그 오프셋 저장
+    if (target === 'community') {
+      setCommunityDragOffsetPx(offsetPx);
+      return;
+    }
+
+    setProblemDragOffsetPx(offsetPx);
   }
 
   function markSwipeOpenSuppressed(target: 'community' | 'problem') {
@@ -413,7 +462,8 @@ export default function DashboardPage() {
 
   function handleCarouselPointerDown(
     event: PointerEvent<HTMLDivElement>,
-    swipeStartRef: MutableRefObject<{ x: number; y: number } | null>,
+    swipeStartRef: MutableRefObject<DashboardSwipeStart | null>,
+    target: DashboardCarouselTarget,
   ) {
     // 모바일 터치 시작점 저장
     if (!isMobileDashboard || loadFailed || event.pointerType === 'mouse') {
@@ -421,22 +471,44 @@ export default function DashboardPage() {
     }
 
     swipeStartRef.current = { x: event.clientX, y: event.clientY };
+    setCarouselDragOffset(target, 0);
+  }
+
+  function handleCarouselPointerMove(
+    event: PointerEvent<HTMLDivElement>,
+    swipeStartRef: MutableRefObject<DashboardSwipeStart | null>,
+    target: DashboardCarouselTarget,
+  ) {
+    // 모바일 수평 드래그 거리만 카드 오프셋으로 반영
+    if (!isMobileDashboard || event.pointerType === 'mouse' || swipeStartRef.current == null) {
+      return;
+    }
+
+    const deltaX = event.clientX - swipeStartRef.current.x;
+    const deltaY = event.clientY - swipeStartRef.current.y;
+    if (Math.abs(deltaX) < Math.abs(deltaY)) {
+      return;
+    }
+
+    setCarouselDragOffset(target, clampCarouselDragOffset(deltaX));
   }
 
   function handleCarouselPointerUp(
     event: PointerEvent<HTMLDivElement>,
-    swipeStartRef: MutableRefObject<{ x: number; y: number } | null>,
-    movePage: (direction: 'previous' | 'next') => void,
-    target: 'community' | 'problem',
+    swipeStartRef: MutableRefObject<DashboardSwipeStart | null>,
+    movePage: (direction: DashboardCarouselDirection) => void,
+    target: DashboardCarouselTarget,
   ) {
     // 수평 스와이프를 페이지 이동으로 변환
     if (!isMobileDashboard || event.pointerType === 'mouse') {
       swipeStartRef.current = null;
+      setCarouselDragOffset(target, 0);
       return;
     }
 
     const swipeStart = swipeStartRef.current;
     swipeStartRef.current = null;
+    setCarouselDragOffset(target, 0);
     if (swipeStart == null) {
       return;
     }
@@ -451,12 +523,16 @@ export default function DashboardPage() {
     movePage(deltaX < 0 ? 'next' : 'previous');
   }
 
-  function handleCarouselPointerCancel(swipeStartRef: MutableRefObject<{ x: number; y: number } | null>) {
+  function handleCarouselPointerCancel(
+    swipeStartRef: MutableRefObject<DashboardSwipeStart | null>,
+    target: DashboardCarouselTarget,
+  ) {
     // 취소된 터치 시작점 제거
     swipeStartRef.current = null;
+    setCarouselDragOffset(target, 0);
   }
 
-  function handleCarouselClickCapture(event: MouseEvent<HTMLDivElement>, target: 'community' | 'problem') {
+  function handleCarouselClickCapture(event: MouseEvent<HTMLDivElement>, target: DashboardCarouselTarget) {
     // 스와이프 직후 발생한 내부 button click 차단
     const suppressRef = target === 'community' ? suppressCommunityOpenRef : suppressProblemOpenRef;
     if (!suppressRef.current) {
@@ -511,9 +587,10 @@ export default function DashboardPage() {
 
         <div
           className="dashboard-carousel-window dashboard-community-window"
-          onPointerDown={(event) => handleCarouselPointerDown(event, communitySwipeStartRef)}
+          onPointerDown={(event) => handleCarouselPointerDown(event, communitySwipeStartRef, 'community')}
+          onPointerMove={(event) => handleCarouselPointerMove(event, communitySwipeStartRef, 'community')}
           onPointerUp={(event) => handleCarouselPointerUp(event, communitySwipeStartRef, moveCommunityPage, 'community')}
-          onPointerCancel={() => handleCarouselPointerCancel(communitySwipeStartRef)}
+          onPointerCancel={() => handleCarouselPointerCancel(communitySwipeStartRef, 'community')}
           onClickCapture={(event) => handleCarouselClickCapture(event, 'community')}
         >
           <button
@@ -526,7 +603,12 @@ export default function DashboardPage() {
             <CarouselArrowIcon direction="previous" />
           </button>
 
-          <div className={`dashboard-community-grid ${isFeaturedCommunityLayout ? 'is-featured-layout' : 'is-grid-layout'}`.trim()}>
+          <div
+            key={`community-${communityPageIndex}`}
+            className={`dashboard-community-grid dashboard-carousel-slide ${isFeaturedCommunityLayout ? 'is-featured-layout' : 'is-grid-layout'} ${getCarouselSlideClass(communitySlideDirection)}`.trim()}
+            style={communityDragOffsetPx !== 0 ? { transform: `translateX(${communityDragOffsetPx}px)` } : undefined}
+            onAnimationEnd={() => setCommunitySlideDirection(null)}
+          >
             {loadFailed ? (
               loadFailedStatus != null
                 ? <HttpErrorState status={loadFailedStatus} className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
@@ -576,9 +658,10 @@ export default function DashboardPage() {
 
         <div
           className="dashboard-carousel-window dashboard-problem-window"
-          onPointerDown={(event) => handleCarouselPointerDown(event, problemSwipeStartRef)}
+          onPointerDown={(event) => handleCarouselPointerDown(event, problemSwipeStartRef, 'problem')}
+          onPointerMove={(event) => handleCarouselPointerMove(event, problemSwipeStartRef, 'problem')}
           onPointerUp={(event) => handleCarouselPointerUp(event, problemSwipeStartRef, moveProblemPage, 'problem')}
-          onPointerCancel={() => handleCarouselPointerCancel(problemSwipeStartRef)}
+          onPointerCancel={() => handleCarouselPointerCancel(problemSwipeStartRef, 'problem')}
           onClickCapture={(event) => handleCarouselClickCapture(event, 'problem')}
         >
           <button
@@ -591,7 +674,12 @@ export default function DashboardPage() {
             <CarouselArrowIcon direction="previous" />
           </button>
 
-          <div className="dashboard-problem-list">
+          <div
+            key={`problem-${problemPageIndex}`}
+            className={`dashboard-problem-list dashboard-carousel-slide ${getCarouselSlideClass(problemSlideDirection)}`.trim()}
+            style={problemDragOffsetPx !== 0 ? { transform: `translateX(${problemDragOffsetPx}px)` } : undefined}
+            onAnimationEnd={() => setProblemSlideDirection(null)}
+          >
             {loadFailed ? (
               loadFailedStatus != null
                 ? <HttpErrorState status={loadFailedStatus} className="dashboard-empty-text dashboard-section-error" message={loadFailedMessage} />
