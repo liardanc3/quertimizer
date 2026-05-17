@@ -26,7 +26,7 @@ public class SpringSecurityAuthenticationAdapter implements AuthenticationPort {
             );
             return authentication.getName();
         } catch (AuthenticationException exception) {
-            throw new BusinessException(INVALID_EMAIL_OR_PASSWORD.getMessage(), HttpStatus.BAD_REQUEST);
+            throw new BusinessException(INVALID_EMAIL_OR_PASSWORD.getMessage(), HttpStatus.UNAUTHORIZED);
         }
     }
 }

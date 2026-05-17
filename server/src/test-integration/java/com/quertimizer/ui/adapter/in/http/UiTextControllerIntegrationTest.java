@@ -2,6 +2,7 @@ package com.quertimizer.ui.adapter.in.http;
 
 import com.quertimizer.user.domain.model.UserRole;
 import com.quertimizer.ui.application.port.out.UiTextRepositoryPort;
+import com.quertimizer.ui.domain.entity.UiText;
 import com.quertimizer.ui.domain.entity.ids.UiTextId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -66,6 +67,8 @@ class UiTextControllerIntegrationTest {
             // given
             String key = "COMMON_CONFIRM_BUTTON";
             String language = "kr";
+            uiTextRepository.findByIdKeyAndIdLanguage(key, language)
+                    .orElseGet(() -> uiTextRepository.save(UiText.create(key, "확인", language, "공통 확인 버튼")));
 
             // when
             var result = mockMvc.perform(get("/ui-texts/{key}", key)

@@ -56,6 +56,7 @@ public class JdbcDatasetTemplateLoader implements DatasetLoaderPort {
             connection.setAutoCommit(false);
             try {
                 createEnvironment(connection, dialect, environmentName);
+                connection.commit();
                 executeStatements(connection, dataset.getDdl());
                 executeStatements(connection, dataset.getDataSql());
                 for (String baseIndexDdl : dataset.getBaseIndexDdls()) {
@@ -103,6 +104,7 @@ public class JdbcDatasetTemplateLoader implements DatasetLoaderPort {
         for (String statementSql : statementParser.splitStatements(sql)) {
             try (Statement statement = connection.createStatement()) {
                 statement.execute(statementSql);
+                connection.commit();
             }
         }
     }

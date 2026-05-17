@@ -1,7 +1,6 @@
 package com.quertimizer.judge.adapter.out.jdbc.dialect;
 
 import com.quertimizer.judge.application.port.out.SqlDialect;
-import com.quertimizer.judge.application.model.Constants;
 import com.quertimizer.judge.domain.model.ExecutionMode;
 import org.springframework.stereotype.Component;
 
@@ -54,26 +53,12 @@ public class MySqlDialect implements SqlDialect {
 
     @Override
     public List<String> persistentStatisticsSqls(List<String> tableNames) {
-        if (tableNames == null || tableNames.isEmpty()) {
-            return List.of();
-        }
-
-        return tableNames.stream()
-                .map(tableName -> "ALTER TABLE " + quoteIdentifier(tableName)
-                        + " STATS_PERSISTENT=1, STATS_AUTO_RECALC=0, STATS_SAMPLE_PAGES="
-                        + Constants.MYSQL_INNODB_STATS_PERSISTENT_SAMPLE_PAGES)
-                .toList();
+        return List.of();
     }
 
     @Override
     public String analyzeTablesSql(List<String> tableNames) {
-        if (tableNames == null || tableNames.isEmpty()) {
-            return "";
-        }
-
-        return "ANALYZE TABLE " + tableNames.stream()
-                .map(this::quoteIdentifier)
-                .collect(java.util.stream.Collectors.joining(", "));
+        return "";
     }
 
     @Override

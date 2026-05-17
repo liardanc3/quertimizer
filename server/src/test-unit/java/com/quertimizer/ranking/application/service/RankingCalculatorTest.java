@@ -61,6 +61,46 @@ class RankingCalculatorTest {
     }
 
     @Test
+    @DisplayName("성공(동일 Cost 동일 백분위)")
+    void calculateSnapshotKeepsSamePercentileForSameCost() {
+        // given
+        LocalDateTime calculatedAt = LocalDateTime.of(2026, 5, 16, 12, 0);
+        List<RankingSolveRecord> solveRecords = List.of(
+                new RankingSolveRecord("P00001-00001", "alpha", DbmsType.POSTGRESQL, 100, 10.0, calculatedAt),
+                new RankingSolveRecord("P00001-00001", "beta", DbmsType.POSTGRESQL, 300, 10.0, calculatedAt),
+                new RankingSolveRecord("P00001-00001", "gamma", DbmsType.POSTGRESQL, 50, 30.0, calculatedAt)
+        );
+        List<RankingSubmitRecord> submitRecords = List.of(
+                new RankingSubmitRecord("alpha", DbmsType.POSTGRESQL, true),
+                new RankingSubmitRecord("beta", DbmsType.POSTGRESQL, true),
+                new RankingSubmitRecord("gamma", DbmsType.POSTGRESQL, true)
+        );
+
+        // when
+        List<RankingSnapshot> snapshots = rankingCalculator.calculateSnapshot(
+                solveRecords, submitRecords, DbmsType.POSTGRESQL,
+                "snapshot-1", calculatedAt
+        );
+
+        // then
+        assertThat(snapshots)
+                .filteredOn(snapshot -> snapshot.getHandle().equals("alpha"))
+                .first()
+                .extracting(RankingSnapshot::getAvgExecutionPercentile)
+                .isEqualTo(0.0);
+        assertThat(snapshots)
+                .filteredOn(snapshot -> snapshot.getHandle().equals("beta"))
+                .first()
+                .extracting(RankingSnapshot::getAvgExecutionPercentile)
+                .isEqualTo(0.0);
+        assertThat(snapshots)
+                .filteredOn(snapshot -> snapshot.getHandle().equals("gamma"))
+                .first()
+                .extracting(RankingSnapshot::getAvgExecutionPercentile)
+                .isEqualTo(100.0);
+    }
+
+    @Test
     @DisplayName("성공(검색 후 고정 rank 유지)")
     void createPageKeepsSnapshotRankWhenFiltered() {
         // given

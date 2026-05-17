@@ -329,7 +329,7 @@ class ProblemControllerIntegrationTest {
                             1L, problemSetId,
                             "CREATE TABLE customers (customer_id BIGINT PRIMARY KEY, email VARCHAR(120) NOT NULL);",
                             "INSERT INTO customers (customer_id, email) VALUES (1, 'alpha@quertimizer.com');",
-                            "dataset-test", DbmsType.POSTGRESQL.name());
+                            1001L, DbmsType.POSTGRESQL.name());
                     return problemSetRepository.findByProblemSetId(problemSetId).orElseThrow();
                 });
     }
