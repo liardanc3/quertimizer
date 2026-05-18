@@ -12,6 +12,7 @@ import com.quertimizer.problem.application.port.in.GetSubmitHistoriesUseCase;
 import com.quertimizer.problem.application.port.out.ProblemSubmitHistoryRepositoryPort;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import com.quertimizer.problem.domain.model.SubmitHistoryPageConstant;
+import com.quertimizer.problem.domain.policy.SubmittedSqlFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -276,7 +277,7 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
                 history.getSubmittedAt() != null ? history.getSubmittedAt().toString() : "",
                 history.isSuccess(),
                 history.getMessage() != null ? history.getMessage() : "",
-                history.getSubmittedSql() != null ? history.getSubmittedSql() : "",
+                SubmittedSqlFormatter.format(history.getSubmittedSql()),
                 cost,
                 ExecutionPlanElementIndexes.normalize(dbmsType, executionPlanElement)
         );

@@ -7,7 +7,7 @@ import static com.quertimizer.judge.domain.model.SqlPolicyFailReason.POSITIVE_VA
 @Data
 public class ExecutionOptions {
 
-    public static final int DEFAULT_TIMEOUT_SECONDS = 180;
+    public static final int DEFAULT_TIMEOUT_SECONDS = 600;
 
     private final int timeoutSeconds;
     private final int page;
@@ -15,6 +15,7 @@ public class ExecutionOptions {
     private final boolean includeCost;
     private final boolean includePlan;
     private final boolean validateSql;
+    private final boolean countRows;
 
     public ExecutionOptions(int timeoutSeconds, int page, int pageSize, boolean includeCost, boolean includePlan) {
         this(timeoutSeconds, page, pageSize, includeCost, includePlan, true);
@@ -23,6 +24,12 @@ public class ExecutionOptions {
     public ExecutionOptions(int timeoutSeconds, int page, int pageSize,
                             boolean includeCost, boolean includePlan,
                             boolean validateSql) {
+        this(timeoutSeconds, page, pageSize, includeCost, includePlan, validateSql, true);
+    }
+
+    public ExecutionOptions(int timeoutSeconds, int page, int pageSize,
+                            boolean includeCost, boolean includePlan,
+                            boolean validateSql, boolean countRows) {
         if (timeoutSeconds <= 0) {
             throw new IllegalArgumentException(POSITIVE_VALUE_REQUIRED.getMessage());
         }
@@ -41,6 +48,7 @@ public class ExecutionOptions {
         this.includeCost = includeCost;
         this.includePlan = includePlan;
         this.validateSql = validateSql;
+        this.countRows = countRows;
     }
 
     public static ExecutionOptions interactive() {
@@ -57,5 +65,9 @@ public class ExecutionOptions {
 
     public static ExecutionOptions internalMetadata(int pageSize) {
         return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, pageSize, false, false, false);
+    }
+
+    public static ExecutionOptions preview(int page, int pageSize) {
+        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, page, pageSize, false, false, true, false);
     }
 }

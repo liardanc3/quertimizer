@@ -647,9 +647,7 @@ export default function SubmitHistoryPage() {
             className="submit-history-modal-overlay"
             role="presentation"
             onMouseDown={(event) => {
-              if (event.target === event.currentTarget) {
-                setModalState(null);
-              }
+              event.stopPropagation();
             }}
           >
             {modalState.type === 'sql' ? (

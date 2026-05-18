@@ -16,6 +16,7 @@ import com.quertimizer.problem.domain.model.ProblemPlanMeasurement;
 import com.quertimizer.problem.domain.entity.ProblemAnswerCase;
 import com.quertimizer.problem.domain.policy.ProblemExecutionPlanPolicy;
 import com.quertimizer.problem.domain.policy.ProblemOfficialCostPolicy;
+import com.quertimizer.problem.domain.policy.SubmittedSqlFormatter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -86,7 +87,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
         long startedAt = System.nanoTime();
         LocalDateTime submittedAt = LocalDateTime.now();
         String problemId = normalizeProblemId(input.getProblemId());
-        String storedSubmittedSql = preserveSubmittedSql(mergeIndexSqls(input.getIndexSqls(), input.getSql()));
+        String storedSubmittedSql = SubmittedSqlFormatter.merge(input.getIndexSqls(), input.getSql());
         log.info(
                 "[SQL 제출] 시작 problem={} dbms={} sqlLength={} indexDdlCount={}",
                 problemId, input.getDbmsType(), storedSubmittedSql.length(), resolveSize(input.getIndexSqls())
@@ -813,21 +814,6 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
     private String normalizeSubmittedSql(String sql) {
         // 파서 전달용 제출 SQL 문자열 정리
         return sql != null ? sql.trim().replaceFirst(";\\s*$", "") : "";
-    }
-
-    private String preserveSubmittedSql(String sql) {
-        // 제출 SQL 원문 줄바꿈 보존
-        return sql != null ? sql.replace("\r\n", "\n") : "";
-    }
-
-    private String mergeIndexSqls(List<String> indexSqls, String submittedSql) {
-        // 별도 전달된 index DDL과 제출 SQL 병합
-        List<String> sqls = new ArrayList<>(indexSqls != null ? indexSqls : List.of());
-        sqls.add(submittedSql != null ? submittedSql.trim() : "");
-        return sqls.stream()
-                .filter(sql -> sql != null && !sql.isBlank())
-                .distinct()
-                .collect(java.util.stream.Collectors.joining(";\n"));
     }
 
     private String createSubmittedStatementKey(int statementIndex) {

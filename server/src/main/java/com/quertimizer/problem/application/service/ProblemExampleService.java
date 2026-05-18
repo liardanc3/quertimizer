@@ -78,7 +78,7 @@ public class ProblemExampleService {
 
     private ProblemExampleTableOutput createTableExample(String environmentId, String tableName, DbmsType dbmsType) {
         // 테이블 전체 조회 SQL을 페이지 실행하여 표시 대상 행 확보
-        ProblemJudgeExecutionResult result = problemJudgePort.executeInteractiveSql(
+        ProblemJudgeExecutionResult result = problemJudgePort.executePreviewSql(
                 "data-example-" + UUID.randomUUID(),
                 environmentId,
                 "SELECT * FROM " + quoteIdentifier(tableName, dbmsType),
@@ -95,7 +95,7 @@ public class ProblemExampleService {
 
     private ProblemOutputExampleOutput createOutputExampleOutput(String environmentId, String answerSql) {
         // 정답 SQL을 페이지 실행하여 표시 대상 출력 행 확보
-        ProblemJudgeExecutionResult result = problemJudgePort.executeInteractiveSql(
+        ProblemJudgeExecutionResult result = problemJudgePort.executePreviewSql(
                 "output-example-" + UUID.randomUUID(),
                 environmentId,
                 answerSql,

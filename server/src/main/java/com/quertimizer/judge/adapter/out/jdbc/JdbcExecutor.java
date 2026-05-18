@@ -83,7 +83,8 @@ public class JdbcExecutor implements SqlExecutionPort {
             case SELECT -> executeSelectPage(
                     command.getExecutionId(), connection, dialect, sql,
                     command.getOptions().getPage(), command.getOptions().getPageSize(),
-                    command.getOptions().isIncludeCost(), command.getOptions().isIncludePlan()
+                    command.getOptions().isIncludeCost(), command.getOptions().isIncludePlan(),
+                    command.getOptions().isCountRows()
             );
             case EXPLAIN, EXPLAIN_ANALYZE -> executePlan(command.getExecutionId(), connection, dialect, sql, mode);
             case ANALYZE -> throw new IllegalArgumentException(ANALYZE_API_REQUIRED.getMessage());
@@ -187,17 +188,19 @@ public class JdbcExecutor implements SqlExecutionPort {
                                                  SqlDialect dialect, String sql,
                                                  int page, int pageSize,
                                                  boolean includeCost,
-                                                 boolean includePlan) throws Exception {
-        // 실행 계획과 비용, 전체 행 수, 현재 페이지 결과 조회
+                                                 boolean includePlan,
+                                                 boolean countRows) throws Exception {
+        // 실행 계획, 비용, 선택적 전체 행 수, 현재 페이지 결과 조회
         long startTime = System.nanoTime();
         List<String> planLines = includeCost || includePlan
                 ? executePlanLines(executionId, connection, dialect.explainSql(sql))
                 : List.of();
         BigDecimal cost = includeCost ? SqlPlanCostParser.extractEstimatedCost(planLines) : null;
-        long rowCount = fetchSelectRowCount(executionId, connection, dialect, sql);
-        int totalPages = Math.max(1, (int) Math.ceil((double) rowCount / pageSize));
-        int currentPage = Math.min(page, totalPages);
+        long rowCount = countRows ? fetchSelectRowCount(executionId, connection, dialect, sql) : 0L;
+        int totalPages = countRows ? Math.max(1, (int) Math.ceil((double) rowCount / pageSize)) : page;
+        int currentPage = countRows ? Math.min(page, totalPages) : page;
         SqlTableResult pageResult = fetchSelectPage(executionId, connection, dialect, sql, currentPage, pageSize);
+        rowCount = countRows ? rowCount : pageResult.rows.size();
 
         return new SqlExecutionResult(
                 ExecutionMode.SELECT, pageResult.columns, pageResult.rows,

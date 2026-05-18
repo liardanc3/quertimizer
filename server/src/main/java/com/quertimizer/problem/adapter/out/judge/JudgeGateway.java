@@ -125,6 +125,16 @@ public class JudgeGateway implements ProblemJudgePort {
     }
 
     @Override
+    public ProblemJudgeExecutionResult executePreviewSql(String executionId, String environmentId,
+                                                         String sql, int page, int pageSize) {
+        // 예시 생성 옵션으로 SQL 실행
+        return toProblemResult(judgeApplicationPort.executeSql(new ExecuteSqlInput(
+                new JudgeExecutionId(executionId), new JudgeEnvironmentId(environmentId),
+                sql, ExecutionOptions.preview(page, pageSize)
+        )));
+    }
+
+    @Override
     public ProblemJudgeExecutionResult executeInternalMetadataSql(String executionId, String environmentId,
                                                                   String sql, int pageSize) {
         // 내부 metadata 조회 옵션으로 SQL 실행

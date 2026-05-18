@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DataTable } from '@/shared/ui';
 import { LoadingOverlay } from '@/shared/ui';
 import { SortIcon } from '@/shared/ui/icons';
@@ -27,6 +28,12 @@ type ProblemListProps = {
 };
 
 const problemLoadingRows = Array.from({ length: 8 }, (_, index) => index);
+const FILTER_MENU_VIEWPORT_PADDING = 8;
+
+type FilterMenuPosition = {
+  top: number;
+  left: number;
+};
 
 export default function ProblemList({
   problems,
@@ -46,7 +53,9 @@ export default function ProblemList({
   const { text } = useUiText();
   const [isSolveFilterOpen, setIsSolveFilterOpen] = useState(false);
   const solveFilterRef = useRef<HTMLDivElement | null>(null);
-  const filterLayerRefs = useMemo(() => [solveFilterRef], []);
+  const solveFilterMenuRef = useRef<HTMLDivElement | null>(null);
+  const filterLayerRefs = useMemo(() => [solveFilterRef, solveFilterMenuRef], []);
+  const [filterMenuPosition, setFilterMenuPosition] = useState<FilterMenuPosition | null>(null);
   const handleSelectProblem = useCallback((id: string) => navigate(`/problems/${id}`), []);
 
   useDismissableLayer({
@@ -54,7 +63,28 @@ export default function ProblemList({
     refs: filterLayerRefs,
     onDismiss: () => setIsSolveFilterOpen(false),
     dismissOnResize: true,
+    dismissOnScroll: true,
   });
+
+  useLayoutEffect(() => {
+    if (!isSolveFilterOpen) {
+      setFilterMenuPosition(null);
+      return;
+    }
+
+    // 헤더 셀 위치 기준으로 body 포털 메뉴 위치 계산
+    const triggerRect = solveFilterRef.current?.getBoundingClientRect();
+    if (!triggerRect) {
+      return;
+    }
+
+    const menuWidth = solveFilterMenuRef.current?.offsetWidth ?? 160;
+    const maxLeft = window.innerWidth - menuWidth - FILTER_MENU_VIEWPORT_PADDING;
+    setFilterMenuPosition({
+      top: triggerRect.bottom + 5,
+      left: Math.max(FILTER_MENU_VIEWPORT_PADDING, Math.min(triggerRect.left, maxLeft)),
+    });
+  }, [isSolveFilterOpen]);
 
   function renderSortIcon(field: ProblemSortField) {
     if (countSortField !== field) {
@@ -62,6 +92,48 @@ export default function ProblemList({
     }
 
     return <SortIcon direction={countSortDirection} />;
+  }
+
+  function renderSolveFilterMenu() {
+    const menuStyle = filterMenuPosition
+      ? { top: filterMenuPosition.top, left: filterMenuPosition.left }
+      : { top: 0, left: 0, visibility: 'hidden' as const };
+
+    return (
+      <div
+        ref={solveFilterMenuRef}
+        className="problem-table-header-menu problem-table-header-menu-floating"
+        style={menuStyle}
+        role="menu"
+        aria-label={text('PROBLEM_TABLE_SOLVE_FILTER_OPTIONS_LABEL', '해결 여부 필터 옵션')}
+      >
+        <div className="problem-status-checks">
+          <label className="problem-status-check">
+            <input
+              type="checkbox"
+              checked={showSolved}
+              onChange={onToggleSolved}
+              className="problem-status-check-input"
+              aria-label={text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}
+            />
+            <span className="problem-status-check-text">{text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}</span>
+            <span className="problem-status-check-ui" aria-hidden="true" />
+          </label>
+
+          <label className="problem-status-check">
+            <input
+              type="checkbox"
+              checked={showUnsolved}
+              onChange={onToggleUnsolved}
+              className="problem-status-check-input"
+              aria-label={text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}
+            />
+            <span className="problem-status-check-text">{text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}</span>
+            <span className="problem-status-check-ui" aria-hidden="true" />
+          </label>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -88,35 +160,14 @@ export default function ProblemList({
                     ▾
                   </button>
 
-                  {isSolveFilterOpen ? (
-                    <div className="problem-table-header-menu" role="menu" aria-label={text('PROBLEM_TABLE_SOLVE_FILTER_OPTIONS_LABEL', '해결 여부 필터 옵션')}>
-                      <div className="problem-status-checks">
-                        <label className="problem-status-check">
-                          <input
-                            type="checkbox"
-                            checked={showSolved}
-                            onChange={onToggleSolved}
-                            className="problem-status-check-input"
-                            aria-label={text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}
-                          />
-                          <span className="problem-status-check-text">{text('PROBLEM_TABLE_SOLVED_LABEL', '해결')}</span>
-                          <span className="problem-status-check-ui" aria-hidden="true" />
-                        </label>
-
-                        <label className="problem-status-check">
-                          <input
-                            type="checkbox"
-                            checked={showUnsolved}
-                            onChange={onToggleUnsolved}
-                            className="problem-status-check-input"
-                            aria-label={text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}
-                          />
-                          <span className="problem-status-check-text">{text('PROBLEM_TABLE_UNSOLVED_LABEL', '미해결')}</span>
-                          <span className="problem-status-check-ui" aria-hidden="true" />
-                        </label>
-                      </div>
-                    </div>
-                  ) : null}
+                  {isSolveFilterOpen && typeof document !== 'undefined'
+                    ? createPortal(
+                        <div className="home-page data-page problem-filter-portal-root">
+                          {renderSolveFilterMenu()}
+                        </div>,
+                        document.body,
+                      )
+                    : null}
                 </>
               ) : null}
             </div>

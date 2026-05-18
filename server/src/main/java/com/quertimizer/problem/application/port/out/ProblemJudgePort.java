@@ -38,6 +38,9 @@ public interface ProblemJudgePort {
     ProblemJudgeExecutionResult executeInteractiveSql(String executionId, String environmentId,
                                                       String sql, int page, int pageSize);
 
+    ProblemJudgeExecutionResult executePreviewSql(String executionId, String environmentId,
+                                                  String sql, int page, int pageSize);
+
     ProblemJudgeExecutionResult executeInternalMetadataSql(String executionId, String environmentId,
                                                            String sql, int pageSize);
 
