@@ -2,6 +2,7 @@ package com.quertimizer.global.websocket.sender;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quertimizer.global.log.LogFormatter;
+import com.quertimizer.global.log.LogMdcContext;
 import com.quertimizer.global.websocket.WebSocketDestination;
 import com.quertimizer.global.websocket.registry.WebSocketSessionRegistry;
 import lombok.RequiredArgsConstructor;
@@ -104,11 +105,12 @@ public class WebSocketSender {
 
     private void logWebSocketPayload(String actor, Object payload) throws Exception {
         // WebSocket 응답 payload 로그 기록
-        String prefix = logFormatter.prefix(actor);
-        String serializedPayload = objectMapper.writeValueAsString(payload);
+        try (LogMdcContext.LogActorScope ignored = LogMdcContext.openActorScope(actor)) {
+            String serializedPayload = objectMapper.writeValueAsString(payload);
 
-        log.debug("{}", logFormatter.formatWebSocketLine(actor, "WebSocket server-send", null));
-        logLines(logFormatter.formatResponseBodyLines(prefix, serializedPayload));
+            log.debug("WebSocket server-send");
+            logLines(logFormatter.formatResponseBodyLines("", serializedPayload));
+        }
     }
 
     private void logLines(List<String> logLines) {

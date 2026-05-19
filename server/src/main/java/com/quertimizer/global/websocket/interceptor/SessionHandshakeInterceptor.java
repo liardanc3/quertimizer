@@ -4,6 +4,7 @@ import com.quertimizer.auth.application.port.in.ResolveAuthenticatedHandleUseCas
 import com.quertimizer.auth.application.port.in.ValidateAuthenticatedUserAccessUseCase;
 import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.log.LogFormatter;
+import com.quertimizer.global.log.LogMdcContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -36,10 +37,11 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
                                    WebSocketHandler wsHandler,
                                    Map<String, Object> attributes) {
         String actor = resolveActor(request);
-        String prefix = logFormatter.prefix(actor);
 
-        log.info("{}", logFormatter.formatWebSocketLine(actor, "WebSocket handshake request", null));
-        logLines(logFormatter.formatQueryStringLines(prefix, request.getURI().getQuery()));
+        try (LogMdcContext.LogActorScope ignored = LogMdcContext.openActorScope(actor)) {
+            log.info("WebSocket handshake request");
+            logLines(logFormatter.formatQueryStringLines("", request.getURI().getQuery()));
+        }
 
         if (!(request instanceof ServletServerHttpRequest servletRequest)) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
@@ -77,7 +79,9 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
                                WebSocketHandler wsHandler,
                                Exception exception) {
         if (exception == null) {
-            log.info("{}", logFormatter.formatWebSocketLine(resolveActor(request), "WebSocket handshake success", null));
+            try (LogMdcContext.LogActorScope ignored = LogMdcContext.openActorScope(resolveActor(request))) {
+                log.info("WebSocket handshake success");
+            }
         }
     }
 

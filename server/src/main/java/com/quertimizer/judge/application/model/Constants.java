@@ -4,6 +4,7 @@ public final class Constants {
 
     public static final int MAX_ENVIRONMENT_NAME_LENGTH = 63;
     public static final int POSTGRES_CTL_TIMEOUT_SECONDS = 30;
+    public static final int POSTGRES_DEFAULT_STATISTICS_TARGET = 1000;
     public static final int MYSQL_INNODB_STATS_PERSISTENT_SAMPLE_PAGES = 1024;
     public static final String POSTGRES_USER = "postgres";
     public static final String MYSQL_USER = "mysql";

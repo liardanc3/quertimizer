@@ -10,6 +10,8 @@ public final class SqlPlanCostParser {
     }
 
     public static BigDecimal extractEstimatedCost(List<String> planLines) {
+        BigDecimal mySqlTotalCost = null;
+
         for (String planLine : planLines) {
             if (planLine == null || planLine.isBlank()) {
                 continue;
@@ -21,12 +23,15 @@ public final class SqlPlanCostParser {
             }
 
             Matcher mySqlMatcher = SqlPlanCostPatterns.MYSQL_QUERY_COST.matcher(planLine);
-            if (mySqlMatcher.find()) {
-                return parseBigDecimal(mySqlMatcher.group(1));
+            while (mySqlMatcher.find()) {
+                BigDecimal queryCost = parseBigDecimal(mySqlMatcher.group(1));
+                if (queryCost != null) {
+                    mySqlTotalCost = mySqlTotalCost == null ? queryCost : mySqlTotalCost.add(queryCost);
+                }
             }
         }
 
-        return null;
+        return mySqlTotalCost;
     }
 
     private static BigDecimal parseBigDecimal(String value) {

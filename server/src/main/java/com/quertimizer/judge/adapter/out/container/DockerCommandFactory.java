@@ -91,6 +91,15 @@ public class DockerCommandFactory {
                         + " -o " + shellQuote(
                                 "-p " + port + " -c listen_addresses=0.0.0.0 "
                                         + "-c shared_preload_libraries=pg_hint_plan"
+                                        + " -c autovacuum=off"
+                                        + " -c default_statistics_target="
+                                        + Constants.POSTGRES_DEFAULT_STATISTICS_TARGET
+                                        + " -c jit=off"
+                                        + " -c seq_page_cost=1.0"
+                                        + " -c random_page_cost=4.0"
+                                        + " -c cpu_tuple_cost=0.01"
+                                        + " -c cpu_index_tuple_cost=0.005"
+                                        + " -c cpu_operator_cost=0.0025"
                         )
                         + " -l " + shellQuote(logPath) + " start"
         );

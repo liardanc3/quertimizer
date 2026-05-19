@@ -17,7 +17,6 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class LogFormatter {
 
-    private static final int ACTOR_WIDTH = 15;
     private static final int REQUEST_FIELD_MAX_LENGTH = 200;
     private static final int RESPONSE_FIELD_MAX_LENGTH = 100;
     private static final String REQUEST_TRUNCATED_SUFFIX = "...";
@@ -29,11 +28,6 @@ public class LogFormatter {
     );
 
     private final ObjectMapper objectMapper;
-
-    public String formatWebSocketLine(String actor, String label, String message) {
-        // WebSocket 로그 라인 포맷
-        return formatLine(actor, label, message);
-    }
 
     public List<String> formatRequestBodyLines(String prefix, String body) {
         // 요청 본문 로그 라인 포맷
@@ -57,11 +51,6 @@ public class LogFormatter {
                 .toList();
     }
 
-    public String prefix(String actor) {
-        // 로그 prefix 생성
-        return "[" + String.format("%" + ACTOR_WIDTH + "s", normalizeActor(actor)) + "] ";
-    }
-
     private List<String> formatPayload(String prefix, String body, int maxFieldLength, String truncatedSuffix) {
         // 로그 페이로드 포맷
         if (body == null || body.isBlank()) {
@@ -77,15 +66,6 @@ public class LogFormatter {
         }
 
         return prefixEachLine(prefix, formattedBody);
-    }
-
-    private String formatLine(String actor, String label, String message) {
-        // 로그 라인 포맷
-        if (message == null || message.isBlank()) {
-            return prefix(actor) + label;
-        }
-
-        return prefix(actor) + label + " : " + sanitizeControlCharacters(message);
     }
 
     private String tryFormatJson(String body, int maxFieldLength, String truncatedSuffix) {
@@ -171,26 +151,6 @@ public class LogFormatter {
         String parameterName = sanitizeControlCharacters(queryParameter.substring(0, separatorIndex));
         String parameterValue = queryParameter.substring(separatorIndex + 1);
         return parameterName + "=" + truncateText(parameterName, parameterValue, REQUEST_FIELD_MAX_LENGTH, REQUEST_TRUNCATED_SUFFIX);
-    }
-
-    private String normalizeActor(String actor) {
-        // 주체 정규화
-        if (actor == null || actor.isBlank()) {
-            return "unknown";
-        }
-
-        String normalizedActor = sanitizeControlCharacters(actor).split("%", 2)[0];
-
-        // localhost loopback 주소 통일
-        if ("::1".equals(normalizedActor) || "0:0:0:0:0:0:0:1".equals(normalizedActor)) {
-            normalizedActor = "127.0.0.1";
-        }
-
-        if (normalizedActor.length() <= ACTOR_WIDTH) {
-            return normalizedActor;
-        }
-
-        return normalizedActor.substring(0, ACTOR_WIDTH);
     }
 
     private List<String> prefixEachLine(String prefix, String value) {
