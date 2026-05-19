@@ -12,6 +12,7 @@ import useDismissableLayer from '@/shared/lib/hooks/use-dismissable-layer';
 import useRequestState from '@/shared/lib/hooks/use-request-state';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '@/features/favorite-tab';
 import { getProfilePath, RANKING_PATH, navigate } from '@/shared/config/navigation';
+import { useSession } from '@/shared/auth/session';
 import { fetchRanks, type RankPage } from '@/shared/api/rank-api';
 import { formatPercent } from '@/shared/lib/formatters';
 import { useUiText } from '@/shared/config/ui-text';
@@ -23,13 +24,13 @@ const rankingLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 
 const dbmsOptions: DbmsType[] = ['postgresql', 'mysql'];
 
-function readRankingDbmsFromSearch(search: string) {
+function readRankingDbmsFromSearch(search: string): DbmsType | null {
   const dbms = new URLSearchParams(search).get('dbms');
-  return dbms === 'mysql' ? 'mysql' : 'postgresql';
+  return dbms === 'mysql' || dbms === 'postgresql' ? dbms : null;
 }
 
-function buildRankingPath(dbms: DbmsType) {
-  if (dbms === 'postgresql') {
+function buildRankingPath(dbms: DbmsType, defaultDbms: DbmsType | null = 'postgresql') {
+  if (dbms === (defaultDbms ?? 'postgresql')) {
     return RANKING_PATH;
   }
 
@@ -64,9 +65,12 @@ function createEmptyRankPage(): RankPage {
 
 export default function RankingPage() {
   const { text } = useUiText();
+  const { defaultDbms } = useSession();
   const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<RankingPageFavoriteSnapshot>('ranking'), []);
-  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readRankingDbmsFromSearch(window.location.search));
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
+    () => favoriteRestoreSnapshot?.selectedDbms ?? readRankingDbmsFromSearch(window.location.search) ?? defaultDbms ?? 'postgresql',
+  );
   const [sortKey, setSortKey] = useState<RankingMetricKey>(() => favoriteRestoreSnapshot?.sortKey ?? 'solvedCount');
   const [draftQuery, setDraftQuery] = useState(() => favoriteRestoreSnapshot?.draftQuery ?? '');
   const [submittedQuery, setSubmittedQuery] = useState(() => favoriteRestoreSnapshot?.submittedQuery ?? '');
@@ -90,15 +94,15 @@ export default function RankingPage() {
   }, []);
 
   useEffect(() => {
-    const nextDbms = readRankingDbmsFromSearch(locationSearch);
+    const nextDbms = readRankingDbmsFromSearch(locationSearch) ?? defaultDbms ?? 'postgresql';
 
     setSelectedDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
-  }, [locationSearch]);
+  }, [defaultDbms, locationSearch]);
 
   useEffect(() => {
-    const nextPath = buildRankingPath(selectedDbms);
+    const nextPath = buildRankingPath(selectedDbms, defaultDbms);
     replaceQueryState(nextPath);
-  }, [selectedDbms]);
+  }, [defaultDbms, selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +238,7 @@ export default function RankingPage() {
                 { dbms: selectedDbms === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
                 '랭킹 / {dbms}',
               )}
-              path={buildRankingPath(selectedDbms)}
+              path={buildRankingPath(selectedDbms, defaultDbms)}
               snapshot={{
                 kind: 'ranking',
                 payload: {

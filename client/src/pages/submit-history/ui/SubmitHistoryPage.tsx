@@ -27,6 +27,7 @@ import useRequestState from '@/shared/lib/hooks/use-request-state';
 import { clearFavoriteRestoreSnapshot, readFavoriteRestoreSnapshot } from '@/features/favorite-tab';
 import { fetchSubmitHistories } from '@/shared/api/submit-history-api';
 import { getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from '@/shared/config/navigation';
+import { useSession } from '@/shared/auth/session';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import { formatCost, formatSubmittedAt } from '@/shared/lib/formatters';
 import { renderStaticHighlightedSql } from '@/shared/lib/sql-highlighter';
@@ -77,13 +78,13 @@ interface SubmitHistoryFavoriteSnapshot {
 
 const submitHistoryLoadingRows = Array.from({ length: 10 }, (_, index) => index);
 
-function readSubmitHistoryDbmsFromSearch(search: string) {
+function readSubmitHistoryDbmsFromSearch(search: string): DbmsType | null {
   const dbms = new URLSearchParams(search).get('dbms');
-  return dbms === 'mysql' ? 'mysql' : 'postgresql';
+  return dbms === 'mysql' || dbms === 'postgresql' ? dbms : null;
 }
 
-function buildSubmitHistoryPath(dbms: DbmsType) {
-  if (dbms === 'postgresql') {
+function buildSubmitHistoryPath(dbms: DbmsType, defaultDbms: DbmsType | null = 'postgresql') {
+  if (dbms === (defaultDbms ?? 'postgresql')) {
     return SUBMIT_HISTORY_PATH;
   }
 
@@ -277,9 +278,13 @@ function hasExecutionPlanDetails(history: SubmitHistoryEntry) {
 
 export default function SubmitHistoryPage() {
   const { text } = useUiText();
+  const { defaultDbms } = useSession();
   const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<SubmitHistoryFavoriteSnapshot>('submitHistory'), []);
-  const initialDbms = favoriteRestoreSnapshot?.draftFilters.dbmsSelections[0] ?? readSubmitHistoryDbmsFromSearch(window.location.search);
+  const initialDbms = favoriteRestoreSnapshot?.draftFilters.dbmsSelections[0]
+    ?? readSubmitHistoryDbmsFromSearch(window.location.search)
+    ?? defaultDbms
+    ?? 'postgresql';
   const [draftFilters, setDraftFilters] = useState<SubmitHistoryFilters>(() => favoriteRestoreSnapshot?.draftFilters ?? createDefaultFilters(initialDbms));
   const [submittedFilters, setSubmittedFilters] = useState<SubmitHistoryFilters>(() => favoriteRestoreSnapshot?.submittedFilters ?? createDefaultFilters(initialDbms));
   const [requestedPage, setRequestedPage] = useState(() => favoriteRestoreSnapshot?.requestedPage ?? 1);
@@ -294,7 +299,7 @@ export default function SubmitHistoryPage() {
   } = useRequestState<SubmitHistoryPageData>(createEmptySubmitHistoryPage);
   const [headerFilterMenuState, setHeaderFilterMenuState] = useState<HeaderFilterMenuState>(null);
   const [selectedPlanSections, setSelectedPlanSections] = useState<PlanSectionKey[]>(() => favoriteRestoreSnapshot?.selectedPlanSections ?? DEFAULT_PLAN_SECTION_KEYS);
-  const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.activePlanDetailDbms ?? 'postgresql');
+  const [activePlanDetailDbms, setActivePlanDetailDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.activePlanDetailDbms ?? initialDbms);
   const [modalState, setModalState] = useState<SubmitHistoryModalState>(null);
   const headerFilterMenuRef = useRef<HTMLDivElement | null>(null);
   const headerFilterMenuLayerRefs = useMemo(() => [headerFilterMenuRef], []);
@@ -370,7 +375,7 @@ export default function SubmitHistoryPage() {
   );
 
   useEffect(() => {
-    const nextDbms = readSubmitHistoryDbmsFromSearch(locationSearch);
+    const nextDbms = readSubmitHistoryDbmsFromSearch(locationSearch) ?? defaultDbms ?? 'postgresql';
 
     setActivePlanDetailDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
     setDraftFilters((currentFilters) => {
@@ -393,12 +398,12 @@ export default function SubmitHistoryPage() {
         dbmsSelections: [nextDbms],
       };
     });
-  }, [locationSearch]);
+  }, [defaultDbms, locationSearch]);
 
   useEffect(() => {
-    const nextPath = buildSubmitHistoryPath(selectedDbms);
+    const nextPath = buildSubmitHistoryPath(selectedDbms, defaultDbms);
     replaceQueryState(nextPath);
-  }, [selectedDbms]);
+  }, [defaultDbms, selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1003,7 +1008,7 @@ export default function SubmitHistoryPage() {
             <FavoriteTabButton
               className="favorite-tab-toggle-end"
               label={text('SUBMIT_HISTORY_FAVORITE_LABEL', { dbms: selectedDbmsLabel }, `제출 목록 / ${selectedDbmsLabel}`)}
-              path={buildSubmitHistoryPath(selectedDbms)}
+              path={buildSubmitHistoryPath(selectedDbms, defaultDbms)}
               snapshot={{
                 kind: 'submitHistory',
                 payload: {

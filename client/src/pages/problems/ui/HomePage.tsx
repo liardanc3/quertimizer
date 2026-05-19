@@ -39,13 +39,13 @@ function ProblemFilterIcon() {
   );
 }
 
-function readProblemsDbmsFromSearch(search: string) {
+function readProblemsDbmsFromSearch(search: string): DbmsType | null {
   const dbms = new URLSearchParams(search).get('dbms');
-  return dbms === 'mysql' ? 'mysql' : 'postgresql';
+  return dbms === 'mysql' || dbms === 'postgresql' ? dbms : null;
 }
 
-function buildProblemsPath(dbms: DbmsType) {
-  if (dbms === 'postgresql') {
+function buildProblemsPath(dbms: DbmsType, defaultDbms: DbmsType | null = 'postgresql') {
+  if (dbms === (defaultDbms ?? 'postgresql')) {
     return PROBLEMS_PATH;
   }
 
@@ -88,10 +88,12 @@ function toggleRequiredPairSelection(currentChecked: boolean, otherChecked: bool
 
 export default function HomePage() {
   const { text } = useUiText();
-  const { isAuthenticated, isReady, handle } = useSession();
+  const { isAuthenticated, isReady, handle, defaultDbms } = useSession();
   const locationSearch = useLocationSearch();
   const favoriteRestoreSnapshot = useMemo(() => readFavoriteRestoreSnapshot<HomePageFavoriteSnapshot>('home'), []);
-  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(() => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search));
+  const [selectedDbms, setSelectedDbms] = useState<DbmsType>(
+    () => favoriteRestoreSnapshot?.selectedDbms ?? readProblemsDbmsFromSearch(window.location.search) ?? defaultDbms ?? 'postgresql',
+  );
   const [showSolved, setShowSolved] = useState(() => favoriteRestoreSnapshot?.showSolved ?? true);
   const [showUnsolved, setShowUnsolved] = useState(() => favoriteRestoreSnapshot?.showUnsolved ?? true);
   const [countSortField, setCountSortField] = useState<ProblemSortField>(() => favoriteRestoreSnapshot?.countSortField ?? 'solvedCount');
@@ -130,15 +132,15 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    const nextDbms = readProblemsDbmsFromSearch(locationSearch);
+    const nextDbms = readProblemsDbmsFromSearch(locationSearch) ?? defaultDbms ?? 'postgresql';
 
     setSelectedDbms((currentDbms) => (currentDbms === nextDbms ? currentDbms : nextDbms));
-  }, [locationSearch]);
+  }, [defaultDbms, locationSearch]);
 
   useEffect(() => {
-    const nextPath = buildProblemsPath(selectedDbms);
+    const nextPath = buildProblemsPath(selectedDbms, defaultDbms);
     replaceQueryState(nextPath);
-  }, [selectedDbms]);
+  }, [defaultDbms, selectedDbms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,7 +303,7 @@ export default function HomePage() {
                   { dbms: selectedDbms === 'mysql' ? text('COMMON_MYSQL_LABEL', 'MySQL') : text('COMMON_POSTGRESQL_LABEL', 'PostgreSQL') },
                   '문제 / {dbms}',
                 )}
-                path={buildProblemsPath(selectedDbms)}
+                path={buildProblemsPath(selectedDbms, defaultDbms)}
                 snapshot={{
                   kind: 'home',
                   payload: {
