@@ -519,7 +519,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
 
     private OfficialPlanMeasurement measureOfficialPlan(ProblemSubmissionInput input, String problemId,
                                                         String environmentId, String sql) {
-        // Quertimizer 공식 제출 정책 기준 통계 갱신과 실행 계획 반복 측정 후 비용 중앙값 선택
+        // Quertimizer 공식 제출 정책 기준 통계 갱신과 실행 계획 반복 측정
         List<PlanMeasurement> measurements = new ArrayList<>();
         int attemptCount = officialCostPolicy.getMeasurementAttemptCount();
         for (int attempt = 1; attempt <= attemptCount; attempt++) {
@@ -549,6 +549,7 @@ public class SubmitProblemSql implements SubmitProblemSqlUseCase {
             ));
         }
 
+        // 공식 비용 정책 기준 중앙값 선택
         ProblemPlanMeasurement selectedMeasurement = officialCostPolicy.selectMedianCostMeasurement(
                 measurements.stream()
                         .map(PlanMeasurement::getMeasurement)

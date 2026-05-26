@@ -16,6 +16,21 @@ class ProblemOfficialCostPolicyTest {
     private final ProblemOfficialCostPolicy problemOfficialCostPolicy = new ProblemOfficialCostPolicy();
 
     @Nested
+    @DisplayName("getMeasurementAttemptCount")
+    class GetMeasurementAttemptCount {
+
+        @Test
+        @DisplayName("성공 (공식 측정 10회)")
+        void success() {
+            // when
+            int attemptCount = problemOfficialCostPolicy.getMeasurementAttemptCount();
+
+            // then
+            assertThat(attemptCount).isEqualTo(10);
+        }
+    }
+
+    @Nested
     @DisplayName("selectMedianCostMeasurement")
     class SelectMedianCostMeasurement {
 

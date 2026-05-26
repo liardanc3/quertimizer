@@ -17,8 +17,8 @@ class SqlPlanCostParserTest {
     class ExtractEstimatedCost {
 
         @Test
-        @DisplayName("성공 (MySQL query_cost 누적)")
-        void successWhenMySqlQueryCostsAreSummed() {
+        @DisplayName("성공 (MySQL 최상위 query_cost 추출)")
+        void successWhenMySqlRootQueryCostExists() {
             // given
             List<String> planLines = List.of("""
                     {
@@ -52,12 +52,12 @@ class SqlPlanCostParserTest {
             BigDecimal cost = SqlPlanCostParser.extractEstimatedCost(planLines);
 
             // then
-            assertThat(cost).isEqualByComparingTo("8097.50");
+            assertThat(cost).isEqualByComparingTo("3.15");
         }
 
         @Test
-        @DisplayName("성공 (MySQL 여러 라인 query_cost 누적)")
-        void successWhenMySqlQueryCostsAreSpreadAcrossLines() {
+        @DisplayName("성공 (MySQL JSON 파싱 실패 시 첫 query_cost 사용)")
+        void successWhenMySqlPlanIsNotJson() {
             // given
             List<String> planLines = List.of(
                     "\"query_cost\": \"1.20\"",
@@ -68,7 +68,7 @@ class SqlPlanCostParserTest {
             BigDecimal cost = SqlPlanCostParser.extractEstimatedCost(planLines);
 
             // then
-            assertThat(cost).isEqualByComparingTo("3.50");
+            assertThat(cost).isEqualByComparingTo("1.20");
         }
 
         @Test

@@ -202,7 +202,7 @@ MySQL : InnoDB 통계와 session optimizer 조건이 실행마다 흔들리지 �
 
 - **innodb-stats-persistent=ON** : InnoDB 통계를 영구 통계 정보로 유지합니다.
 - **innodb-stats-auto-recalc=OFF** : 통계 자동 재계산으로 실행 계획이 바뀌는 상황을 막습니다.
-- **innodb-stats-persistent-sample-pages=1024** : 통계 생성 sample page 수를 늘려 행 수 추정값의 품질을 높입니다.
+- **innodb-stats-persistent-sample-pages=8192** : 통계 생성 sample page 수를 늘려 행 수 추정값의 품질을 높입니다.
 - **eq-range-index-dive-limit=0** : index dive 제한값으로 행 수 추정값이 흔들리는 것을 줄입니다.
 - **eq_range_index_dive_limit=0** : session 단위에서도 같은 optimizer 조건을 유지합니다.
 

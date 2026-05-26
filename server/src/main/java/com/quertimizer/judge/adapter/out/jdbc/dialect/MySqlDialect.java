@@ -1,11 +1,13 @@
 package com.quertimizer.judge.adapter.out.jdbc.dialect;
 
+import com.quertimizer.judge.application.model.Constants;
 import com.quertimizer.judge.application.port.out.SqlDialect;
 import com.quertimizer.judge.domain.model.ExecutionMode;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 @Component
 public class MySqlDialect implements SqlDialect {
@@ -53,12 +55,21 @@ public class MySqlDialect implements SqlDialect {
 
     @Override
     public List<String> persistentStatisticsSqls(List<String> tableNames) {
-        return List.of();
+        return tableNames.stream()
+                .map(tableName -> "ALTER TABLE %s STATS_PERSISTENT = 1, STATS_AUTO_RECALC = 0, STATS_SAMPLE_PAGES = %d"
+                        .formatted(quoteIdentifier(tableName), Constants.MYSQL_INNODB_STATS_PERSISTENT_SAMPLE_PAGES))
+                .toList();
     }
 
     @Override
     public String analyzeTablesSql(List<String> tableNames) {
-        return "";
+        if (tableNames.isEmpty()) {
+            return "";
+        }
+
+        return "ANALYZE TABLE " + tableNames.stream()
+                .map(this::quoteIdentifier)
+                .collect(Collectors.joining(", "));
     }
 
     @Override

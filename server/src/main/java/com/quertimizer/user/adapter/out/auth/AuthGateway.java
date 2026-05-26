@@ -1,7 +1,10 @@
 package com.quertimizer.user.adapter.out.auth;
 
-import com.quertimizer.auth.application.port.out.BlockedIpRepositoryPort;
-import com.quertimizer.auth.domain.entity.BlockedIp;
+import com.quertimizer.auth.application.input.AuthIpBlockInput;
+import com.quertimizer.auth.application.port.in.BlockAuthIpUseCase;
+import com.quertimizer.auth.application.port.in.GetAuthBlockedIpsUseCase;
+import com.quertimizer.auth.application.port.in.UnblockAuthIpByHandleUseCase;
+import com.quertimizer.auth.application.port.in.UnblockAuthIpUseCase;
 import com.quertimizer.user.application.port.out.UserAccountRestrictionPort;
 import com.quertimizer.user.domain.model.UserBlockedIp;
 import lombok.RequiredArgsConstructor;
@@ -13,48 +16,33 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AuthGateway implements UserAccountRestrictionPort {
 
-    private final BlockedIpRepositoryPort blockedIpRepository;
+    private final BlockAuthIpUseCase blockAuthIp;
+    private final UnblockAuthIpByHandleUseCase unblockAuthIpByHandle;
+    private final UnblockAuthIpUseCase unblockAuthIp;
+    private final GetAuthBlockedIpsUseCase getAuthBlockedIps;
 
     @Override
     public void blockIp(String ipAddress, String handle) {
-        // IP 값 없으면 차단 IP 저장 생략
-        if (ipAddress == null || ipAddress.isBlank()) {
-            return;
-        }
-
-        // 기존 차단 IP는 대상 handle과 차단 시각 갱신
-        String normalizedIpAddress = ipAddress.trim();
-        blockedIpRepository.findById(normalizedIpAddress)
-                .ifPresentOrElse(
-                        blockedIp -> {
-                            blockedIp.refresh(handle);
-                            blockedIpRepository.save(blockedIp);
-                        },
-                        () -> blockedIpRepository.save(BlockedIp.create(normalizedIpAddress, handle))
-                );
+        // auth 공개 use case 기준 IP 차단
+        blockAuthIp.execute(new AuthIpBlockInput(ipAddress, handle));
     }
 
     @Override
     public void unblockHandle(String handle) {
-        // handle 기준 연결된 차단 IP 제거
-        blockedIpRepository.deleteByBlockedHandle(handle);
+        // auth 공개 use case 기준 handle 연결 IP 차단 해제
+        unblockAuthIpByHandle.execute(handle);
     }
 
     @Override
     public void unblockIp(String ipAddress) {
-        // IP 값 없으면 차단 해제 생략
-        if (ipAddress == null || ipAddress.isBlank()) {
-            return;
-        }
-
-        // 정규화된 IP 기준 차단 제거
-        blockedIpRepository.deleteById(ipAddress.trim());
+        // auth 공개 use case 기준 IP 차단 해제
+        unblockAuthIp.execute(ipAddress);
     }
 
     @Override
     public Page<UserBlockedIp> findBlockedIps(Pageable pageable) {
-        // auth 차단 IP 저장소 결과를 user 조회 모델로 변환
-        return blockedIpRepository.findAllByOrderByBlockedAtDescIpAddressAsc(pageable)
+        // auth 공개 use case 기준 차단 IP 조회 결과를 user 조회 모델로 변환
+        return getAuthBlockedIps.execute(pageable)
                 .map(blockedIp -> new UserBlockedIp(blockedIp.getIpAddress(), blockedIp.getBlockedAt()));
     }
 }

@@ -29,7 +29,7 @@ import { fetchSubmitHistories } from '@/shared/api/submit-history-api';
 import { getProfilePath, PROBLEMS_PATH, SUBMIT_HISTORY_PATH, navigate } from '@/shared/config/navigation';
 import { useSession } from '@/shared/auth/session';
 import { getUiTextValue, useUiText } from '@/shared/config/ui-text';
-import { formatCost, formatSubmittedAt } from '@/shared/lib/formatters';
+import { formatFixedCostParts, formatSubmittedAt } from '@/shared/lib/formatters';
 import { renderStaticHighlightedSql } from '@/shared/lib/sql-highlighter';
 import type {
   DbmsType,
@@ -250,6 +250,17 @@ function clearAllPlanSectionFiltersByDbms(planFiltersByDbms: SubmitHistoryPlanFi
 
 function SelectionCheckbox({ checked }: { checked: boolean }) {
   return <span className={`runtime-check-indicator ${checked ? 'is-checked' : ''}`} aria-hidden="true" />;
+}
+
+function SubmitHistoryCostValue({ value }: { value: number }) {
+  const { integerPart, fractionPart } = formatFixedCostParts(value);
+
+  return (
+    <span className="submit-history-cost-value">
+      <span className="submit-history-cost-integer">{integerPart}</span>
+      <span className="submit-history-cost-decimal">.{fractionPart}</span>
+    </span>
+  );
 }
 
 function buildSubmitHistoryPlanSections(history: SubmitHistoryEntry) {
@@ -1134,7 +1145,7 @@ export default function SubmitHistoryPage() {
                     ▾
                   </button>
                 </div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter submit-history-cost-head-cell">
                   <span>Cost</span>
                   <button
                     type="button"
@@ -1151,8 +1162,8 @@ export default function SubmitHistoryPage() {
                     <SortIcon direction={draftFilters.costSort === 'asc' ? 'asc' : draftFilters.costSort === 'desc' ? 'desc' : 'none'} />
                   </button>
                 </div>
-                <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
-                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter">
+                <div role="columnheader" className="submit-history-head-cell submit-history-submitted-at-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
+                <div role="columnheader" className="submit-history-head-cell submit-history-head-cell-filter submit-history-plan-head-cell">
                   <span>{text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}</span>
                   <button
                     type="button"
@@ -1215,10 +1226,10 @@ export default function SubmitHistoryPage() {
                           : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                       </button>
                     </span>
-                    <span className="submit-history-cell" role="cell" data-label="Cost">
-                      {history.success ? formatCost(history.cost) : '-'}
+                    <span className="submit-history-cell submit-history-cost-cell" role="cell" data-label="Cost">
+                      {history.success ? <SubmitHistoryCostValue value={history.cost} /> : '-'}
                     </span>
-                    <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
+                    <span className="submit-history-cell submit-history-submitted-at-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
                       {formatSubmittedAt(history.submittedAt)}
                     </span>
                     <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label={text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}>

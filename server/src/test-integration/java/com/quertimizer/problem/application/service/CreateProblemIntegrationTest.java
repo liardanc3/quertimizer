@@ -84,7 +84,7 @@ class CreateProblemIntegrationTest {
             when(problemJudgePort.createAnswerHash(eq(2002L), eq(input.getAnswerSql()))).thenReturn("hash-hidden-2");
             when(problemJudgePort.createSubmissionEnvironment(1001L)).thenReturn("env-1001");
             when(problemJudgePort.executeInternalMetadataSql(anyString(), eq("env-1001"), anyString(), anyInt())).thenReturn(emptyResult());
-            when(problemJudgePort.executeInteractiveSql(anyString(), eq("env-1001"), anyString(), anyInt(), anyInt()))
+            when(problemJudgePort.executePreviewSql(anyString(), eq("env-1001"), anyString(), anyInt(), anyInt()))
                     .thenReturn(selectResult());
 
             // when

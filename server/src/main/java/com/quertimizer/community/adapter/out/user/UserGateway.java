@@ -1,9 +1,8 @@
 package com.quertimizer.community.adapter.out.user;
 
 import com.quertimizer.community.application.port.out.CommunityUserPort;
+import com.quertimizer.user.application.port.in.GetCommunityUserRoleUseCase;
 import com.quertimizer.user.domain.model.UserRole;
-import com.quertimizer.user.application.port.out.UserRepositoryPort;
-import com.quertimizer.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -11,14 +10,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class UserGateway implements CommunityUserPort {
 
-    private final UserRepositoryPort userRepository;
+    private final GetCommunityUserRoleUseCase getCommunityUserRole;
 
     @Override
     public UserRole findRole(String handle) {
-        // user 저장소 기준 handle 역할 조회
-        return userRepository.findByHandle(handle)
-                .map(User::getResolvedRole)
-                .orElse(UserRole.USER);
+        // user 공개 use case 기준 handle 역할 조회
+        return getCommunityUserRole.execute(handle);
     }
-
 }

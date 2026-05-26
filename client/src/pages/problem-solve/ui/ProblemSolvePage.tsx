@@ -55,7 +55,7 @@ import {
   SOCIAL_LOGIN_SUCCESS_MESSAGE,
   isTrustedSocialLoginCallbackOrigin,
 } from '@/shared/auth/social-login-callback';
-import { formatBoardDate, formatCost, formatInteger, formatSubmittedAt } from '@/shared/lib/formatters';
+import { formatBoardDate, formatFixedCostParts, formatInteger, formatSubmittedAt } from '@/shared/lib/formatters';
 import { renderHighlightedSql, renderStaticHighlightedSql, type SqlHighlightRange } from '@/shared/lib/sql-highlighter';
 import { getUiText, getUiTextValue, useUiText } from '@/shared/config/ui-text';
 import type { CommunityPostSummary, DbmsType, ProblemDetail, SubmitHistoryEntry, SubmitHistoryPageData, SubmitHistoryPlanFilters } from '@/shared/api/domain';
@@ -189,6 +189,17 @@ function buildSolveRelatedPlanSections(history: SubmitHistoryEntry) {
 
 function hasSolveRelatedExecutionPlanDetails(history: SubmitHistoryEntry) {
   return buildSolveRelatedPlanSections(history).some((section) => section.labels.length > 0);
+}
+
+function SolveRelatedCostValue({ value }: { value: number }) {
+  const { integerPart, fractionPart } = formatFixedCostParts(value);
+
+  return (
+    <span className="submit-history-cost-value">
+      <span className="submit-history-cost-integer">{integerPart}</span>
+      <span className="submit-history-cost-decimal">.{fractionPart}</span>
+    </span>
+  );
 }
 
 type SolveAuthOverlayMode = 'login' | 'signup' | 'reset-password';
@@ -2195,7 +2206,8 @@ function createPlanProgressView(detailLines: string[]) {
       attempt: Number(match[1]),
       cost: match[2],
       selected: selectedAttempt != null && Number(match[1]) === selectedAttempt,
-    }));
+    }))
+    .sort((left, right) => left.attempt - right.attempt);
   const selectedCost = measurements.find((measurement) => measurement.selected)?.cost ?? null;
   const detailGroupsBySection = new Map<string, string[]>();
   detailLines
@@ -7069,9 +7081,9 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
             <div className="submit-history-row submit-history-head solve-related-table-head" role="row">
               <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMIT_ID_COLUMN_LABEL', '제출번호')}</div>
               <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_RESULT_TITLE', '제출 결과')}</div>
-              <div role="columnheader" className="submit-history-head-cell">{text('COMMON_COST_LABEL', 'Cost')}</div>
-              <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
-              <div role="columnheader" className="submit-history-head-cell">{text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}</div>
+              <div role="columnheader" className="submit-history-head-cell submit-history-cost-head-cell">{text('COMMON_COST_LABEL', 'Cost')}</div>
+              <div role="columnheader" className="submit-history-head-cell submit-history-submitted-at-head-cell">{text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}</div>
+              <div role="columnheader" className="submit-history-head-cell submit-history-plan-head-cell">{text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}</div>
             </div>
 
             {isMySubmitLoading && mySubmitHistoryPage.histories.length === 0 ? (
@@ -7101,10 +7113,10 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
                       {history.success ? text('SUBMIT_HISTORY_RESULT_CORRECT_LABEL', '정답') : text('SUBMIT_HISTORY_RESULT_WRONG_LABEL', '오답')}
                     </button>
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label={text('COMMON_COST_LABEL', 'Cost')}>
-                    {history.success ? formatCost(history.cost) : '-'}
+                  <span className="submit-history-cell submit-history-cost-cell" role="cell" data-label={text('COMMON_COST_LABEL', 'Cost')}>
+                    {history.success ? <SolveRelatedCostValue value={history.cost} /> : '-'}
                   </span>
-                  <span className="submit-history-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
+                  <span className="submit-history-cell submit-history-submitted-at-cell" role="cell" data-label={text('SUBMIT_HISTORY_SUBMITTED_AT_COLUMN_LABEL', '제출 시각')}>
                     {formatSubmittedAt(history.submittedAt)}
                   </span>
                   <span className="submit-history-cell submit-history-cell-plan" role="cell" data-label={text('SUBMIT_HISTORY_PLAN_COLUMN_LABEL', '실행계획요소')}>

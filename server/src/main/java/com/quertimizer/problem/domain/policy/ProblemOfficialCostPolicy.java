@@ -9,7 +9,7 @@ import java.util.List;
 @Component
 public class ProblemOfficialCostPolicy {
 
-    private static final int MEASUREMENT_ATTEMPT_COUNT = 5;
+    private static final int MEASUREMENT_ATTEMPT_COUNT = 10;
 
     public int getMeasurementAttemptCount() {
         return MEASUREMENT_ATTEMPT_COUNT;

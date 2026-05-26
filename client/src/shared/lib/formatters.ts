@@ -3,6 +3,7 @@ const enIntegerFormatter = new Intl.NumberFormat('en-US');
 const compactIntegerFormatter = new Intl.NumberFormat('ko-KR', { notation: 'compact', maximumFractionDigits: 1 });
 const costFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 const preciseCostFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
+const fixedCostFormatter = new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const roundedPercentFormatter = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
 
 function padDatePart(value: number) {
@@ -80,6 +81,14 @@ export function formatCost(value: number) {
 
 export function formatPreciseCost(value: number) {
   return preciseCostFormatter.format(Math.round(value * 100) / 100);
+}
+
+export function formatFixedCostParts(value: number) {
+  const [integerPart, fractionPart = '00'] = fixedCostFormatter.format(Math.round(value * 100) / 100).split('.');
+  return {
+    integerPart,
+    fractionPart: fractionPart.padEnd(2, '0'),
+  };
 }
 
 export function formatAlarmTime(value: string) {

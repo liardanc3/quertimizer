@@ -1,22 +1,24 @@
 package com.quertimizer.problem.application.service;
 
 import com.quertimizer.global.log.Log;
-import com.quertimizer.problem.domain.model.ExecutionPlanElementIndexes;
-import com.quertimizer.problem.domain.model.MySqlExecutionPlanElementIndex;
-import com.quertimizer.problem.domain.model.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.judge.domain.model.DbmsType;
 import com.quertimizer.problem.application.input.SubmitHistorySearchInput;
 import com.quertimizer.problem.application.output.SubmitHistoryListItemOutput;
 import com.quertimizer.problem.application.output.SubmitHistoryPageOutput;
 import com.quertimizer.problem.application.port.in.GetSubmitHistoriesUseCase;
 import com.quertimizer.problem.application.port.out.ProblemSubmitHistoryRepositoryPort;
+import com.quertimizer.problem.application.port.out.SubmitHistorySearchCondition;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
+import com.quertimizer.problem.domain.model.ExecutionPlanElementIndexes;
+import com.quertimizer.problem.domain.model.MySqlExecutionPlanElementIndex;
+import com.quertimizer.problem.domain.model.PostgreSqlExecutionPlanElementIndex;
 import com.quertimizer.problem.domain.model.SubmitHistoryPageConstant;
 import com.quertimizer.problem.domain.policy.SubmittedSqlFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.experimental.Accessors;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +42,7 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
      *
      * <ol>
      *   <li>DBMS, 채점 결과, 실행 계획 필터 확정
-     *   <li>제출 이력 필터링과 정렬
+     *   <li>제출 이력 DB 검색과 정렬
      *   <li>문제 번호 목록과 페이징 응답 생성
      * </ol>
      *
@@ -73,60 +75,116 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
                 input.getMysqlHintFilters()
         );
 
-        List<ProblemSubmitHistory> histories = problemSubmitHistoryRepository.findAll(
-                Sort.by(Sort.Direction.DESC, "submittedAt")
-                        .and(Sort.by(Sort.Direction.DESC, "submitId"))
+        SubmitHistorySearchCondition searchCondition = createSearchCondition(
+                input, dbmsType, judgeFilter, planFilterSelections
         );
-        List<String> problemIds = histories.stream()
-                .map(ProblemSubmitHistory::getProblemId)
-                .distinct()
+        List<String> problemIds = problemSubmitHistoryRepository.findDistinctProblemIds().stream()
                 .sorted(createProblemIdComparator())
                 .toList();
 
-        List<SubmitHistoryListItemOutput> filteredHistories = histories.stream()
-                .filter(history -> matchesSubmitId(history, input.getSubmitId()))
-                .filter(history -> matchesHandle(history, input.getQuery()))
-                .filter(history -> matchesDbms(history, dbmsType))
-                .filter(history -> matchesProblemId(history, input.getProblemId()))
-                .filter(history -> matchesJudge(history, judgeFilter))
-                .filter(history -> matchesPlanFilter(history, planFilterSelections))
-                .sorted(createSubmitHistoryComparator(input.getCostSort()))
+        Page<ProblemSubmitHistory> histories = searchHistories(searchCondition, input.getCostSort(), input.getRequestedPage());
+        int totalCount = (int) histories.getTotalElements();
+        int totalPages = Math.max(1, histories.getTotalPages());
+        int currentPage = Math.min(Math.max(input.getRequestedPage(), 1), totalPages);
+        if (currentPage != histories.getNumber() + 1) {
+            histories = searchHistories(searchCondition, input.getCostSort(), currentPage);
+        }
+
+        List<SubmitHistoryListItemOutput> historyOutputs = histories.getContent().stream()
                 .map(this::toSubmitHistoryListItemOutput)
                 .toList();
 
-        int totalCount = filteredHistories.size();
-        int totalPages = Math.max(1, (int) Math.ceil(totalCount / (double) SubmitHistoryPageConstant.PAGE_SIZE));
-        int currentPage = Math.min(Math.max(input.getRequestedPage(), 1), totalPages);
-        int fromIndex = Math.min((currentPage - 1) * SubmitHistoryPageConstant.PAGE_SIZE, totalCount);
-        int toIndex = Math.min(fromIndex + SubmitHistoryPageConstant.PAGE_SIZE, totalCount);
-
         return new SubmitHistoryPageOutput(
                 currentPage, SubmitHistoryPageConstant.PAGE_SIZE, totalCount, totalPages, problemIds,
-                filteredHistories.subList(fromIndex, toIndex)
+                historyOutputs
         );
     }
 
-    private Comparator<ProblemSubmitHistory> createSubmitHistoryComparator(String costSort) {
-        // 제출 기록 비교 기준 생성
-        Comparator<ProblemSubmitHistory> defaultComparator = Comparator
-                .comparing(ProblemSubmitHistory::getSubmittedAt, Comparator.reverseOrder())
-                .thenComparing(ProblemSubmitHistory::getSubmitId, Comparator.reverseOrder());
-        Comparator<ProblemSubmitHistory> successFirstComparator =
-                Comparator.comparing(ProblemSubmitHistory::isSuccess, Comparator.reverseOrder());
+    private Page<ProblemSubmitHistory> searchHistories(SubmitHistorySearchCondition condition, String costSort, int requestedPage) {
+        // 요청 페이지를 DB 페이징 조건으로 변환
+        int currentPage = Math.max(requestedPage, 1);
+        return problemSubmitHistoryRepository.search(
+                condition,
+                PageRequest.of(currentPage - 1, SubmitHistoryPageConstant.PAGE_SIZE),
+                costSort
+        );
+    }
 
-        if ("asc".equalsIgnoreCase(costSort)) {
-            return successFirstComparator
-                    .thenComparingDouble(ProblemSubmitHistory::getCost)
-                    .thenComparing(defaultComparator);
+    private SubmitHistorySearchCondition createSearchCondition(SubmitHistorySearchInput input, DbmsType dbmsType,
+                                                               JudgeFilter judgeFilter,
+                                                               PlanFilterSelectionsByDbms planFilterSelections) {
+        // 제출 이력 검색 조건 생성
+        return new SubmitHistorySearchCondition(
+                input.getSubmitId(), input.getQuery(), dbmsType, resolveProblemId(input.getProblemId()), resolveSuccess(judgeFilter),
+                createPlanElementSearchCondition(planFilterSelections.postgresql()),
+                createPlanElementSearchCondition(planFilterSelections.mysql())
+        );
+    }
+
+    private String resolveProblemId(String problemId) {
+        // 문제 번호 필터 결정
+        if (problemId == null || problemId.isBlank() || problemId.equalsIgnoreCase("all")) {
+            return null;
         }
 
-        if ("desc".equalsIgnoreCase(costSort)) {
-            return successFirstComparator
-                    .thenComparing(Comparator.comparingDouble(ProblemSubmitHistory::getCost).reversed())
-                    .thenComparing(defaultComparator);
+        return problemId;
+    }
+
+    private Boolean resolveSuccess(JudgeFilter judgeFilter) {
+        // 채점 결과 필터를 DB 검색 값으로 변환
+        return switch (judgeFilter) {
+            case ALL -> null;
+            case SUCCESS -> true;
+            case FAIL -> false;
+        };
+    }
+
+    private SubmitHistorySearchCondition.PlanElementSearchCondition createPlanElementSearchCondition(PlanFilterSelection selection) {
+        // 실행 계획 선택값을 비트 마스크 조건으로 변환
+        List<SubmitHistorySearchCondition.PlanElementCondition> conditions = new ArrayList<>();
+        DbmsType dbmsType = selection.dbmsType();
+        selection.scanBuckets().forEach(value -> conditions.add(createBucketPlanCondition(dbmsType, "scanBucket", value)));
+        selection.joinBuckets().forEach(value -> conditions.add(createBucketPlanCondition(dbmsType, "joinBucket", value)));
+        selection.filterBuckets().forEach(value -> conditions.add(createBucketPlanCondition(dbmsType, "filterBucket", value)));
+        selection.sortBuckets().forEach(value -> conditions.add(createBucketPlanCondition(dbmsType, "sortBucket", value)));
+        selection.aggregateBuckets().forEach(value -> conditions.add(createBucketPlanCondition(dbmsType, "aggregateBucket", value)));
+        selection.hintFilters().forEach(value -> conditions.add(createHintPlanCondition(value)));
+
+        return conditions.isEmpty()
+                ? SubmitHistorySearchCondition.PlanElementSearchCondition.empty()
+                : new SubmitHistorySearchCondition.PlanElementSearchCondition(selection.matchMode() == PlanMatchMode.AND, conditions);
+    }
+
+    private SubmitHistorySearchCondition.PlanElementCondition createBucketPlanCondition(DbmsType dbmsType,
+                                                                                       String sectionKey,
+                                                                                       String value) {
+        // 버킷 필터를 실행 계획 비트 마스크 조건으로 변환
+        boolean matched = !"NONE".equals(value);
+        int[] indexes = matched
+                ? getBucketPlanIndexes(dbmsType, sectionKey, value)
+                : getSectionKnownIndexes(dbmsType, sectionKey);
+        return new SubmitHistorySearchCondition.PlanElementCondition(createPlanMask(indexes), matched);
+    }
+
+    private SubmitHistorySearchCondition.PlanElementCondition createHintPlanCondition(String value) {
+        // Hint 필터를 실행 계획 비트 마스크 조건으로 변환
+        if (!"USED".equals(value) && !"UNUSED".equals(value)) {
+            return new SubmitHistorySearchCondition.PlanElementCondition(0L, true);
         }
 
-        return defaultComparator;
+        boolean matched = "USED".equals(value);
+        long hintMask = createPlanMask(new int[]{ExecutionPlanElementIndexes.HINT_INDEX});
+        return new SubmitHistorySearchCondition.PlanElementCondition(hintMask, matched);
+    }
+
+    private long createPlanMask(int[] indexes) {
+        // 실행 계획 index 목록을 비트 마스크로 변환
+        long mask = 0L;
+        for (int index : indexes) {
+            mask |= 1L << index;
+        }
+
+        return mask;
     }
 
     private DbmsType resolveDbmsType(String dbms) {
@@ -177,33 +235,38 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
                                                                    String mysqlFilterBuckets, String mysqlSortBuckets,
                                                                    String mysqlAggregateBuckets, String mysqlHintFilters) {
         PlanMatchMode matchMode = resolvePlanMatchMode(planMatchMode);
-        PlanFilterSelection legacySelection = createPlanFilterSelection(
-                matchMode, scanBuckets, joinBuckets,
+        PlanFilterSelection legacyPostgresqlSelection = createPlanFilterSelection(
+                DbmsType.POSTGRESQL, matchMode, scanBuckets, joinBuckets,
+                filterBuckets, sortBuckets,
+                aggregateBuckets, hintFilters
+        );
+        PlanFilterSelection legacyMysqlSelection = createPlanFilterSelection(
+                DbmsType.MYSQL, matchMode, scanBuckets, joinBuckets,
                 filterBuckets, sortBuckets,
                 aggregateBuckets, hintFilters
         );
         PlanFilterSelection postgresqlSelection = createPlanFilterSelection(
-                matchMode, postgresqlScanBuckets, postgresqlJoinBuckets,
+                DbmsType.POSTGRESQL, matchMode, postgresqlScanBuckets, postgresqlJoinBuckets,
                 postgresqlFilterBuckets, postgresqlSortBuckets,
                 postgresqlAggregateBuckets, postgresqlHintFilters
         );
         PlanFilterSelection mysqlSelection = createPlanFilterSelection(
-                matchMode, mysqlScanBuckets, mysqlJoinBuckets,
+                DbmsType.MYSQL, matchMode, mysqlScanBuckets, mysqlJoinBuckets,
                 mysqlFilterBuckets, mysqlSortBuckets,
                 mysqlAggregateBuckets, mysqlHintFilters
         );
 
         return postgresqlSelection.hasFilters() || mysqlSelection.hasFilters()
                 ? new PlanFilterSelectionsByDbms(postgresqlSelection, mysqlSelection)
-                : new PlanFilterSelectionsByDbms(legacySelection, legacySelection);
+                : new PlanFilterSelectionsByDbms(legacyPostgresqlSelection, legacyMysqlSelection);
     }
 
-    private PlanFilterSelection createPlanFilterSelection(PlanMatchMode matchMode,
+    private PlanFilterSelection createPlanFilterSelection(DbmsType dbmsType, PlanMatchMode matchMode,
                                                           String scanBuckets, String joinBuckets,
                                                           String filterBuckets, String sortBuckets,
                                                           String aggregateBuckets, String hintFilters) {
         return new PlanFilterSelection(
-                matchMode, parseFilterValues(scanBuckets), parseFilterValues(joinBuckets),
+                dbmsType, matchMode, parseFilterValues(scanBuckets), parseFilterValues(joinBuckets),
                 parseFilterValues(filterBuckets), parseFilterValues(sortBuckets),
                 parseFilterValues(aggregateBuckets), parseFilterValues(hintFilters)
         );
@@ -224,41 +287,10 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
         }
     }
 
-    private boolean matchesSubmitId(ProblemSubmitHistory history, String submitId) {
-        // 제출 번호 일치 여부 확인
-        if (submitId == null || submitId.isBlank()) {
-            return true;
-        }
-
-        String normalizedSubmitId = submitId.trim();
-        String formattedSubmitId = formatSubmitId(history.getSubmitId());
-        String rawSubmitId = String.valueOf(history.getSubmitId() != null ? history.getSubmitId() : 0L);
-
-        return formattedSubmitId.contains(normalizedSubmitId) || rawSubmitId.contains(normalizedSubmitId);
-    }
-
     private String formatSubmitId(Long submitId) {
         // 제출 번호 포맷
         long resolvedSubmitId = submitId != null ? submitId : 0L;
         return String.format("%0" + SubmitHistoryPageConstant.SUBMIT_ID_LENGTH + "d", resolvedSubmitId);
-    }
-
-    private boolean matchesHandle(ProblemSubmitHistory history, String query) {
-        // Handle 일치 여부 확인
-        if (query == null || query.isBlank()) {
-            return true;
-        }
-
-        return history.getHandle().toLowerCase(Locale.ROOT).contains(query.trim().toLowerCase(Locale.ROOT));
-    }
-
-    private boolean matchesDbms(ProblemSubmitHistory history, DbmsType dbmsType) {
-        // DBMS 일치 여부 확인
-        if (dbmsType == null) {
-            return true;
-        }
-
-        return history.getDbmsType() == dbmsType;
     }
 
     private SubmitHistoryListItemOutput toSubmitHistoryListItemOutput(ProblemSubmitHistory history) {
@@ -281,73 +313,6 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
                 cost,
                 ExecutionPlanElementIndexes.normalize(dbmsType, executionPlanElement)
         );
-    }
-
-    private boolean matchesProblemId(ProblemSubmitHistory history, String problemId) {
-        // 문제 번호 일치 여부 확인
-        if (problemId == null || problemId.isBlank() || problemId.equalsIgnoreCase("all")) {
-            return true;
-        }
-
-        return history.getProblemId() != null && history.getProblemId().contains(problemId.trim());
-    }
-
-    private boolean matchesJudge(ProblemSubmitHistory history, JudgeFilter judgeFilter) {
-        // 채점 일치 여부 확인
-        return switch (judgeFilter) {
-            case ALL -> true;
-            case SUCCESS -> history.isSuccess();
-            case FAIL -> !history.isSuccess();
-        };
-    }
-
-    private boolean matchesPlanFilter(ProblemSubmitHistory history, PlanFilterSelectionsByDbms selectionsByDbms) {
-        // 실행 계획 필터 일치 여부 확인
-        List<Boolean> matches = new ArrayList<>();
-        DbmsType dbmsType = history.getDbmsType() != null ? history.getDbmsType() : DbmsType.POSTGRESQL;
-        PlanFilterSelection selection = selectionsByDbms.get(dbmsType);
-        long executionPlanElement = ExecutionPlanElementIndexes.normalize(
-                dbmsType,
-                history.getExecutionPlanElement() != null ? history.getExecutionPlanElement() : 0L
-        );
-
-        selection.scanBuckets().forEach(value -> matches.add(matchesBucketFilter(dbmsType, executionPlanElement, "scanBucket", value)));
-        selection.joinBuckets().forEach(value -> matches.add(matchesBucketFilter(dbmsType, executionPlanElement, "joinBucket", value)));
-        selection.filterBuckets().forEach(value -> matches.add(matchesBucketFilter(dbmsType, executionPlanElement, "filterBucket", value)));
-        selection.sortBuckets().forEach(value -> matches.add(matchesBucketFilter(dbmsType, executionPlanElement, "sortBucket", value)));
-        selection.aggregateBuckets().forEach(value -> matches.add(matchesBucketFilter(dbmsType, executionPlanElement, "aggregateBucket", value)));
-        selection.hintFilters().forEach(value -> matches.add(matchesHintFilter(executionPlanElement, value)));
-
-        if (matches.isEmpty()) {
-            return true;
-        }
-
-        return selection.matchMode() == PlanMatchMode.AND
-                ? matches.stream().allMatch(Boolean::booleanValue)
-                : matches.stream().anyMatch(Boolean::booleanValue);
-    }
-
-    private boolean matchesHintFilter(long executionPlanElement, String value) {
-        // Hint 필터 일치 여부 확인
-        if ("USED".equals(value)) {
-            return hasPlanElement(executionPlanElement, ExecutionPlanElementIndexes.HINT_INDEX);
-        }
-
-        if ("UNUSED".equals(value)) {
-            return !hasPlanElement(executionPlanElement, ExecutionPlanElementIndexes.HINT_INDEX);
-        }
-
-        return false;
-    }
-
-    private boolean matchesBucketFilter(DbmsType dbmsType, long executionPlanElement, String sectionKey, String value) {
-        // 버킷 필터 일치 여부 확인
-        if ("NONE".equals(value)) {
-            return !hasAnyPlanElement(executionPlanElement, getSectionKnownIndexes(dbmsType, sectionKey));
-        }
-
-        int[] indexes = getBucketPlanIndexes(dbmsType, sectionKey, value);
-        return indexes.length > 0 && hasAnyPlanElement(executionPlanElement, indexes);
     }
 
     private int[] getSectionKnownIndexes(DbmsType dbmsType, String sectionKey) {
@@ -483,22 +448,6 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
         };
     }
 
-    private boolean hasAnyPlanElement(long executionPlanElement, int[] indexes) {
-        // Any 실행 계획 Element 여부 확인
-        for (int index : indexes) {
-            if (hasPlanElement(executionPlanElement, index)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private boolean hasPlanElement(long executionPlanElement, int index) {
-        // 실행 계획 Element 여부 확인
-        return (executionPlanElement & (1L << index)) != 0;
-    }
-
     private enum JudgeFilter {
         ALL,
         SUCCESS,
@@ -513,6 +462,7 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
     @Value
     @Accessors(fluent = true)
     private static class PlanFilterSelection {
+        DbmsType dbmsType;
         PlanMatchMode matchMode;
         List<String> scanBuckets;
         List<String> joinBuckets;
@@ -538,10 +488,6 @@ public class GetSubmitHistories implements GetSubmitHistoriesUseCase {
         PlanFilterSelection postgresql;
         PlanFilterSelection mysql;
 
-        private PlanFilterSelection get(DbmsType dbmsType) {
-            // get 조회
-            return dbmsType == DbmsType.MYSQL ? mysql : postgresql;
-        }
     }
 
 }

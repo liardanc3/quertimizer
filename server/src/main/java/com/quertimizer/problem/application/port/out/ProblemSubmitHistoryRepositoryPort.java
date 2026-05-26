@@ -3,7 +3,6 @@ package com.quertimizer.problem.application.port.out;
 import com.quertimizer.problem.domain.entity.ProblemSubmitHistory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,9 +11,11 @@ public interface ProblemSubmitHistoryRepositoryPort {
 
     List<ProblemSubmitHistory> findAll();
 
-    List<ProblemSubmitHistory> findAll(Sort sort);
-
     List<ProblemSubmitHistory> findAllByHandleOrderBySubmittedAtDesc(String handle);
+
+    List<String> findDistinctProblemIds();
+
+    Page<ProblemSubmitHistory> search(SubmitHistorySearchCondition condition, Pageable pageable, String costSort);
 
     ProblemSubmitHistory save(ProblemSubmitHistory problemSubmitHistory);
 
