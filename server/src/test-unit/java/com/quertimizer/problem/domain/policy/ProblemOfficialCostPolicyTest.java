@@ -20,13 +20,13 @@ class ProblemOfficialCostPolicyTest {
     class GetMeasurementAttemptCount {
 
         @Test
-        @DisplayName("성공 (공식 측정 10회)")
+        @DisplayName("성공 (공식 측정 5회)")
         void success() {
             // when
             int attemptCount = problemOfficialCostPolicy.getMeasurementAttemptCount();
 
             // then
-            assertThat(attemptCount).isEqualTo(10);
+            assertThat(attemptCount).isEqualTo(5);
         }
     }
 

@@ -28,9 +28,9 @@ public final class SqlPlanCostParser {
                 return parseBigDecimal(postgreSqlMatcher.group(1));
             }
 
-            BigDecimal mySqlRootCost = extractMySqlRootQueryCost(planLine);
-            if (mySqlRootCost != null) {
-                return mySqlRootCost;
+            BigDecimal mySqlQueryBlockCost = extractMySqlQueryBlockCost(planLine);
+            if (mySqlQueryBlockCost != null) {
+                return mySqlQueryBlockCost;
             }
 
             Matcher mySqlMatcher = SqlPlanCostPatterns.MYSQL_QUERY_COST.matcher(planLine);
@@ -42,16 +42,34 @@ public final class SqlPlanCostParser {
         return mySqlFallbackCost;
     }
 
-    private static BigDecimal extractMySqlRootQueryCost(String planLine) {
+    private static BigDecimal extractMySqlQueryBlockCost(String planLine) {
         try {
-            JsonNode costNode = OBJECT_MAPPER.readTree(planLine)
-                    .path("query_block")
-                    .path("cost_info")
-                    .path("query_cost");
-            return costNode.isMissingNode() ? null : parseBigDecimal(costNode.asText());
+            BigDecimal queryBlockCost = sumQueryBlockCost(OBJECT_MAPPER.readTree(planLine));
+            return BigDecimal.ZERO.compareTo(queryBlockCost) == 0 ? null : queryBlockCost;
         } catch (JsonProcessingException exception) {
             return null;
         }
+    }
+
+    private static BigDecimal sumQueryBlockCost(JsonNode node) {
+        BigDecimal totalCost = BigDecimal.ZERO;
+
+        if (node.has("query_block")) {
+            JsonNode queryBlock = node.get("query_block");
+            JsonNode costNode = queryBlock.path("cost_info").path("query_cost");
+            BigDecimal queryCost = costNode.isMissingNode() ? null : parseBigDecimal(costNode.asText());
+            totalCost = queryCost != null ? totalCost.add(queryCost) : totalCost;
+            totalCost = totalCost.add(sumQueryBlockCost(queryBlock));
+            return totalCost;
+        }
+
+        if (node.isObject() || node.isArray()) {
+            for (JsonNode childNode : node) {
+                totalCost = totalCost.add(sumQueryBlockCost(childNode));
+            }
+        }
+
+        return totalCost;
     }
 
     private static BigDecimal parseBigDecimal(String value) {

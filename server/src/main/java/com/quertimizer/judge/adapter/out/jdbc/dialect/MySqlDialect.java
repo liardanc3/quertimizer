@@ -2,11 +2,9 @@ package com.quertimizer.judge.adapter.out.jdbc.dialect;
 
 import com.quertimizer.judge.application.model.Constants;
 import com.quertimizer.judge.application.port.out.SqlDialect;
-import com.quertimizer.judge.domain.model.ExecutionMode;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Component
@@ -75,29 +73,6 @@ public class MySqlDialect implements SqlDialect {
     @Override
     public String explainSql(String sql) {
         return "EXPLAIN FORMAT=JSON " + sql;
-    }
-
-    @Override
-    public String planSql(String sql, ExecutionMode mode) {
-        // EXPLAIN ANALYZE 등 직접 실행할 실행계획 SQL 유지
-        if (mode != ExecutionMode.EXPLAIN) {
-            return sql;
-        }
-
-        // MySQL 실행계획 비용 추출용 JSON EXPLAIN 여부 확인
-        String normalizedSql = sql.trim();
-        String upperSql = normalizedSql.toUpperCase(Locale.ROOT);
-        if (upperSql.startsWith("EXPLAIN FORMAT=JSON ")) {
-            return normalizedSql;
-        }
-
-        // 일반 EXPLAIN 문장을 JSON EXPLAIN 문장으로 변환
-        if (upperSql.startsWith("EXPLAIN ")) {
-            return "EXPLAIN FORMAT=JSON " + normalizedSql.substring("EXPLAIN ".length()).trim();
-        }
-
-        // SELECT 문장 기준 JSON EXPLAIN 문장 생성
-        return explainSql(normalizedSql);
     }
 
     @Override
