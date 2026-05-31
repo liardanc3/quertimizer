@@ -1896,10 +1896,14 @@
   outline-offset: 2px;
 }
 
+body.solve-auth-locked {
+  overflow: hidden;
+}
+
 .solve-auth-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 90;
   display: grid;
   place-items: center;
   padding: 1.5rem;
@@ -2281,7 +2285,7 @@ body.handle-setup-locked {
 }
 
 .solve-auth-landing-access-group-support {
-  padding-top: 0.12rem;
+  padding-top: 0;
 }
 
 .solve-auth-social-button {
@@ -2339,7 +2343,7 @@ body.handle-setup-locked {
 }
 
 .solve-auth-social-button.is-email .solve-auth-social-icon {
-  color: #2563eb;
+  color: #374151;
 }
 
 .solve-auth-modal .solve-auth-modal-login-form {
@@ -2880,9 +2884,9 @@ body.handle-setup-locked {
   }
 
   .solve-auth-modal {
-    border-color: rgba(96, 165, 250, 0.38);
-    background: rgba(15, 23, 42, 0.92);
-    box-shadow: 0 24px 64px rgba(2, 6, 23, 0.38);
+    border-color: var(--line-soft);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-elevated);
   }
 
   .solve-auth-modal-title {
@@ -2994,7 +2998,7 @@ body.handle-setup-locked {
   }
 
   .solve-auth-social-button.is-email .solve-auth-social-icon {
-    color: #93c5fd;
+    color: currentColor;
   }
 
   .solve-auth-landing-divider-line {

@@ -2848,7 +2848,11 @@ function SolvePageAuthOverlay({
   };
 
   useEffect(() => {
+    document.body.classList.add('solve-auth-locked');
+
     return () => {
+      document.body.classList.remove('solve-auth-locked');
+
       if (socialLoginPopupPollIdRef.current != null) {
         window.clearInterval(socialLoginPopupPollIdRef.current);
       }
