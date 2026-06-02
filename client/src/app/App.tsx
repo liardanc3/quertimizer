@@ -6,12 +6,19 @@ import { useAuthenticationSocket } from '@/shared/auth/auth-session';
 import { useSessionAlert } from '@/shared/auth/session';
 import { preloadUiTexts, useUiText } from '@/shared/config/ui-text';
 import { shouldSuppressClickForTextSelection } from '@/shared/lib/text-selection';
+import { useRateLimitNotice } from '@/shared/lib/rate-limit-notice';
 import AppRouter from '@/app/router';
 
 export default function App() {
   useAuthenticationSocket();
   const { text } = useUiText();
   const { sessionAlert, dismissSessionAlert } = useSessionAlert();
+  const { rateLimitNotice, dismissRateLimitNotice } = useRateLimitNotice();
+  const activeToast = rateLimitNotice != null
+    ? { message: rateLimitNotice.message, tone: 'error' as const }
+    : sessionAlert?.display === 'toast'
+      ? { message: sessionAlert.message, tone: sessionAlert.tone }
+      : null;
 
   useEffect(() => {
     void preloadUiTexts();
@@ -46,6 +53,20 @@ export default function App() {
     };
   }, [dismissSessionAlert, sessionAlert]);
 
+  useEffect(() => {
+    if (rateLimitNotice == null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      dismissRateLimitNotice();
+    }, rateLimitNotice.autoDismissMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [dismissRateLimitNotice, rateLimitNotice]);
+
   function handleSessionAlertConfirm() {
     dismissSessionAlert();
   }
@@ -56,7 +77,7 @@ export default function App() {
         <AppRouter />
       </MainLayout>
 
-      <SessionToast open={sessionAlert?.display === 'toast'} message={sessionAlert?.message ?? ''} tone={sessionAlert?.tone} />
+      <SessionToast open={activeToast != null} message={activeToast?.message ?? ''} tone={activeToast?.tone} />
 
       <StatusPopup
         open={sessionAlert != null && sessionAlert.display !== 'toast'}

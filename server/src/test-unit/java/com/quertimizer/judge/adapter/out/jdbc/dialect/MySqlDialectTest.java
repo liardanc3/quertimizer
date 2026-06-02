@@ -1,6 +1,7 @@
 package com.quertimizer.judge.adapter.out.jdbc.dialect;
 
 import com.quertimizer.judge.application.model.Constants;
+import com.quertimizer.judge.domain.model.ExecutionMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,37 @@ class MySqlDialectTest {
 
             // then
             assertThat(sql).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("planSql")
+    class PlanSql {
+
+        @Test
+        @DisplayName("성공 (일반 EXPLAIN을 JSON 실행계획으로 변환)")
+        void successWhenExplainSqlNeedsJsonFormat() {
+            // given
+            String sql = "EXPLAIN SELECT email FROM customers";
+
+            // when
+            String planSql = dialect.planSql(sql, ExecutionMode.EXPLAIN);
+
+            // then
+            assertThat(planSql).isEqualTo("EXPLAIN FORMAT=JSON SELECT email FROM customers");
+        }
+
+        @Test
+        @DisplayName("성공 (이미 FORMAT 옵션을 사용하면 유지)")
+        void successWhenExplainSqlAlreadyUsesFormatOption() {
+            // given
+            String sql = "EXPLAIN FORMAT=TREE SELECT email FROM customers";
+
+            // when
+            String planSql = dialect.planSql(sql, ExecutionMode.EXPLAIN);
+
+            // then
+            assertThat(planSql).isEqualTo(sql);
         }
     }
 }

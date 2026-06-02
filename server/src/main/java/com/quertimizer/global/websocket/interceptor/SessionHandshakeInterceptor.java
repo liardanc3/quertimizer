@@ -5,6 +5,7 @@ import com.quertimizer.auth.application.port.in.ValidateAuthenticatedUserAccessU
 import com.quertimizer.global.exception.DomainRuleViolationException;
 import com.quertimizer.global.log.LogFormatter;
 import com.quertimizer.global.log.LogMdcContext;
+import com.quertimizer.global.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
     private final LogFormatter logFormatter;
     private final ResolveAuthenticatedHandleUseCase resolveAuthenticatedHandle;
     private final ValidateAuthenticatedUserAccessUseCase validateAuthenticatedUserAccess;
+    private final ClientIpResolver clientIpResolver;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request,
@@ -70,6 +72,8 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
 
         attributes.put("handle", userIdentifier);
         attributes.put("sessionId", session.getId());
+        attributes.put("clientIp", clientIpResolver.resolve(httpServletRequest));
+        attributes.put("admin", isAdmin(authentication));
         return true;
     }
 
@@ -152,6 +156,12 @@ public class SessionHandshakeInterceptor implements HandshakeInterceptor {
         } catch (DomainRuleViolationException exception) {
             return true;
         }
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        // 관리자 권한 여부 확인
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     private String resolveHandshakeUserIdentifier(Authentication authentication) {

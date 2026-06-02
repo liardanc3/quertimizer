@@ -1,3 +1,5 @@
+import { showRateLimitNotice } from '@/shared/lib/rate-limit-notice';
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -104,5 +106,10 @@ export function getApiErrorStatus(error: unknown) {
 }
 
 export function toApiError(status: number, message: string) {
+  if (status === 429) {
+    showRateLimitNotice(message);
+    return new ApiError(status, message);
+  }
+
   return isCommonHttpErrorStatus(status) ? new ApiError(status, message) : new Error(message);
 }

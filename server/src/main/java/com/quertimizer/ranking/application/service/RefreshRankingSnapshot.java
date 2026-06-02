@@ -37,7 +37,6 @@ public class RefreshRankingSnapshot implements RefreshRankingSnapshotUseCase {
      * </ol>
      */
     @Override
-    @Log("랭킹 스냅샷 갱신")
     @Transactional
     public void execute() {
         // 랭킹 계산 원천 기록과 새 snapshot 식별자 확정
@@ -57,6 +56,5 @@ public class RefreshRankingSnapshot implements RefreshRankingSnapshotUseCase {
 
         // 새 snapshot 활성화와 이전 snapshot 정리
         rankingSnapshotRepository.replaceActiveSnapshot(snapshotId, snapshots, calculatedAt);
-        log.info("랭킹 스냅샷 갱신 완료 snapshot={}, count={}", snapshotId, snapshots.size());
     }
 }

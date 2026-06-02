@@ -2569,12 +2569,25 @@ body.handle-setup-locked {
     gap: 1rem;
   }
 
+  .solve-auth-modal .landing-auth-layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
   .solve-auth-landing-login-panel,
   .solve-auth-landing-access-panel {
     width: 100%;
     max-width: none;
     justify-self: stretch;
     padding-inline: 0;
+  }
+
+  .solve-auth-modal .landing-login-panel,
+  .solve-auth-modal .landing-access-panel {
+    width: 100%;
+    justify-self: stretch;
+    padding-right: 0;
+    padding-left: 0;
   }
 
   .solve-auth-modal .landing-access-group {
@@ -2588,6 +2601,17 @@ body.handle-setup-locked {
   }
 
   .solve-auth-landing-divider-line {
+    width: 100%;
+    height: 1px;
+  }
+
+  .solve-auth-modal .landing-auth-divider {
+    grid-template-columns: minmax(2.5rem, 1fr) auto minmax(2.5rem, 1fr);
+    grid-template-rows: auto;
+    width: 100%;
+  }
+
+  .solve-auth-modal .landing-auth-divider-line {
     width: 100%;
     height: 1px;
   }

@@ -41,6 +41,7 @@ import {
 } from '@/shared/auth/session-socket';
 import { syncSession, useSession } from '@/shared/auth/session';
 import { getCommunityPostPath, getLocationSearchSnapshot, getProfilePath, navigate, subscribeLocation } from '@/shared/config/navigation';
+import { isRateLimitNoticeMessage, resolveRateLimitNoticeMessage } from '@/shared/lib/rate-limit-notice';
 import { ExecutionPlanDetailBoard, buildAvailableBucketFilters, getExecutionPlanDetailGroups, getPlanElementButtonLabel } from '@/entities/execution-plan';
 import {
   EMAIL_PATTERN,
@@ -806,6 +807,17 @@ function resolveSocketFailureMessage(message: ProblemSocketMessage, fallbackMess
     : [];
 
   return reasons[0] ?? message.message ?? fallbackMessage;
+}
+
+function isRateLimitSocketMessage(message: ProblemSocketMessage) {
+  return isRateLimitNoticeMessage(message.message, message.reasons);
+}
+
+function createRateLimitExecutionError(message: ProblemSocketMessage) {
+  return createProblemExecutionError(
+    resolveRateLimitNoticeMessage(message.message, message.reasons),
+    Array.isArray(message.reasons) ? message.reasons : [],
+  );
 }
 
 function saveSolvePageAuthReturn(problemId: string, sql: string, selectedDbms: DbmsType) {
@@ -5040,6 +5052,13 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
           submitMessage,
           text('PROBLEM_SOLVE_SUBMIT_RECORD_FAIL_MESSAGE', '제출을 기록하지 못했습니다.'),
         );
+        if (isRateLimitSocketMessage(submitMessage)) {
+          releaseSubmitLock();
+          setSubmitMessage(null);
+          setSubmitProgressSteps([]);
+          return;
+        }
+
         if (isAuthenticationRequiredMessage(nextSubmitMessage)) {
           releaseSubmitLock();
           setSubmitProgressSteps([]);
@@ -5096,6 +5115,19 @@ export default function ProblemSolvePage({ problemId }: ProblemSolvePageProps) {
 
       if (message.type === 'problem.execute.result' || message.type === 'error') {
         const executionMessage = message as ProblemSocketMessage;
+        if (isRateLimitSocketMessage(executionMessage)) {
+          releaseSubmitLock();
+          setSubmitMessage(null);
+          setSubmitProgressSteps([]);
+          setIsExecuting(false);
+          if (executionResponseResolverRef.current) {
+            const resolveExecution = executionResponseResolverRef.current;
+            executionResponseResolverRef.current = null;
+            resolveExecution(createRateLimitExecutionError(executionMessage));
+          }
+          return;
+        }
+
         const nextExecutionResult =
           message.type === 'error'
             ? createProblemExecutionError(

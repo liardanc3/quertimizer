@@ -7,6 +7,7 @@ import com.quertimizer.global.log.ApiLoggingFilter;
 import com.quertimizer.global.security.filter.AccountRestrictionFilter;
 import com.quertimizer.global.security.filter.CsrfCookieFilter;
 import com.quertimizer.global.security.filter.CsrfCookieNormalizationFilter;
+import com.quertimizer.global.security.filter.GlobalRateLimitFilter;
 import com.quertimizer.global.security.properties.AppSecurityProperties;
 import com.quertimizer.user.application.port.out.UserRepositoryPort;
 import com.quertimizer.user.domain.model.UserRole;
@@ -54,6 +55,7 @@ public class SecurityConfig {
 
     private final UserRepositoryPort userRepository;
     private final AccountRestrictionFilter accountRestrictionFilter;
+    private final GlobalRateLimitFilter globalRateLimitFilter;
     private final ApiLoggingFilter apiLoggingFilter;
     private final CsrfCookieFilter csrfCookieFilter;
     private final CsrfCookieNormalizationFilter csrfCookieNormalizationFilter;
@@ -100,7 +102,8 @@ public class SecurityConfig {
                    .addFilterBefore(csrfCookieNormalizationFilter, CsrfFilter.class)
                    .addFilterAfter(csrfCookieFilter, CsrfFilter.class)
                    .addFilterAfter(accountRestrictionFilter, SecurityContextHolderFilter.class)
-                   .addFilterAfter(apiLoggingFilter, AccountRestrictionFilter.class)
+                   .addFilterAfter(globalRateLimitFilter, AccountRestrictionFilter.class)
+                   .addFilterAfter(apiLoggingFilter, GlobalRateLimitFilter.class)
                    .authorizeHttpRequests(auth -> auth
                            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                            .requestMatchers(HttpMethod.GET,

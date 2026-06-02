@@ -2,6 +2,7 @@ package com.quertimizer.global.config;
 
 import com.quertimizer.global.log.WebSocketLogInterceptor;
 import com.quertimizer.global.websocket.interceptor.SessionHandshakeInterceptor;
+import com.quertimizer.global.websocket.interceptor.WebSocketRateLimitInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final SessionHandshakeInterceptor sessionHandshakeInterceptor;
+    private final WebSocketRateLimitInterceptor webSocketRateLimitInterceptor;
     private final WebSocketLogInterceptor webSocketLogInterceptor;
 
     @Override
@@ -43,8 +45,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // WebSocket handler 실행 구간에 로그 주체 MDC 반영
-        registration.interceptors(webSocketLogInterceptor);
+        // WebSocket inbound 요청 제한과 handler 실행 구간 로그 주체 MDC 반영
+        registration.interceptors(webSocketRateLimitInterceptor, webSocketLogInterceptor);
     }
 
     private DefaultHandshakeHandler sessionPrincipalHandshakeHandler() {

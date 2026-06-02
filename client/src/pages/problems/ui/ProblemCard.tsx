@@ -112,16 +112,18 @@ function ProblemCard({
           </div>
         </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric is-solved-count" data-label={text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수')}>
-          <span className="problem-table-metric-value">{formatCount(problem.solvedCount)}</span>
-        </div>
+        <div className="problem-table-metric-row" role="presentation">
+          <div role="cell" className="problem-table-cell problem-table-cell-metric is-solved-count" data-label={text('PROBLEM_TABLE_SOLVED_COUNT_COLUMN_LABEL', '푼 사람 수')}>
+            <span className="problem-table-metric-value">{formatCount(problem.solvedCount)}</span>
+          </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric is-total-submit" data-label={text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출')}>
-          <span className="problem-table-metric-value">{formatCount(problem.totalSubmitCount)}</span>
-        </div>
+          <div role="cell" className="problem-table-cell problem-table-cell-metric is-total-submit" data-label={text('PROBLEM_TABLE_TOTAL_SUBMIT_COLUMN_LABEL', '전체 제출')}>
+            <span className="problem-table-metric-value">{formatCount(problem.totalSubmitCount)}</span>
+          </div>
 
-        <div role="cell" className="problem-table-cell problem-table-cell-metric is-success-submit" data-label={text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}>
-          <span className="problem-table-metric-value">{formatCount(problem.successSubmitCount)}</span>
+          <div role="cell" className="problem-table-cell problem-table-cell-metric is-success-submit" data-label={text('PROBLEM_TABLE_SUCCESS_SUBMIT_COLUMN_LABEL', '정답 제출')}>
+            <span className="problem-table-metric-value">{formatCount(problem.successSubmitCount)}</span>
+          </div>
         </div>
 
         <div role="cell" className="problem-table-cell problem-table-cell-stats" data-label={text('PROBLEM_TABLE_STATS_COLUMN_LABEL', '통계')}>

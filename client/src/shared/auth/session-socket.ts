@@ -1,5 +1,6 @@
 import { Client, type IMessage } from '@stomp/stompjs';
 import { getApiBaseUrl } from '@/shared/api/auth-api';
+import { isRateLimitNoticeMessage, resolveRateLimitNoticeMessage, showRateLimitNotice } from '@/shared/lib/rate-limit-notice';
 
 const SESSION_SOCKET_PATH = '/ws/session';
 const SESSION_REPLY_DESTINATION = '/user/queue/session';
@@ -184,6 +185,9 @@ export function isSessionSocketOpen() {
 function handleSessionMessage(message: IMessage) {
   try {
     const sessionMessage = JSON.parse(message.body) as SessionSocketMessage;
+    if (isRateLimitNoticeMessage(resolveString(sessionMessage.message), sessionMessage.reasons)) {
+      showRateLimitNotice(resolveRateLimitNoticeMessage(resolveString(sessionMessage.message), sessionMessage.reasons));
+    }
     notifyMessageListeners(sessionMessage);
     if (sessionMessage.type === 'session.closed') {
       notifyConnectionListeners(false);
@@ -191,6 +195,10 @@ function handleSessionMessage(message: IMessage) {
     }
   } catch {
   }
+}
+
+function resolveString(value: unknown) {
+  return typeof value === 'string' ? value : null;
 }
 
 function notifyMessageListeners(message: SessionSocketMessage) {
