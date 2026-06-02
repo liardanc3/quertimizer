@@ -116,6 +116,9 @@ app:
       include-bodies: false
 
 server:
+  servlet:
+    session:
+      timeout: 90d
   forward-headers-strategy: framework
 
 judge:

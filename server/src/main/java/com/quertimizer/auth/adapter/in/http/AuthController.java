@@ -154,7 +154,7 @@ public class AuthController {
      *
      * <ol>
      *   <li>Spring Security가 전달한 OAuth2 인증 정보를 서비스 인증 결과로 변환
-     *   <li>서비스 인증 결과를 SecurityContextRepository에 저장
+     *   <li>서비스 인증 결과를 SecurityContextRepository와 remember-me 쿠키에 저장
      *   <li>provider 정보를 포함한 소셜 로그인 성공 URL로 리다이렉트
      * </ol>
      *
@@ -175,6 +175,7 @@ public class AuthController {
         AuthenticatedUserOutput authenticatedUser = socialLogin.execute(socialLoginInput);
 
         authSupport.saveAuthenticationToRepository(authenticatedUser, httpRequest, httpResponse);
+        authSupport.saveRememberMeCookie(authenticatedUser, httpRequest, httpResponse);
 
         String provider = oauth2Authentication.getAuthorizedClientRegistrationId();
         String url = authSupport.buildSocialLoginSuccessUrl(provider);

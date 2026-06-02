@@ -72,7 +72,7 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
             );
             session = createFreshEnvironment(input, dataset);
             applyIndexSqls(executionSql.indexSqls, session, executionId);
-            analyzeExecutionEnvironment(session, executionId);
+            analyzeExecutionEnvironmentIfIndexApplied(executionSql, session, executionId);
             long selectStartedAt = System.nanoTime();
             log.info(
                     "[SQL 실행] SELECT 실행 시작 problem={} execution={} environment={} page={} pageSize={}",
@@ -173,6 +173,22 @@ public class ExecuteProblemSql implements ExecuteProblemSqlUseCase {
                 "[SQL 실행] 인덱스 DDL 반영 완료 execution={} environment={} elapsedMs={}",
                 executionId, session.getEnvironmentId(), elapsedMillis(startedAt)
         );
+    }
+
+    private void analyzeExecutionEnvironmentIfIndexApplied(ResolvedExecutionSql executionSql,
+                                                           ProblemExecutionSessionStore.ProblemExecutionSession session,
+                                                           String executionId) {
+        // 인덱스 DDL이 없으면 템플릿 생성 시점 통계를 그대로 사용
+        if (executionSql.indexSqls.isEmpty()) {
+            log.info(
+                    "[SQL 실행] 통계 갱신 생략 execution={} environment={} reason=인덱스 DDL 없음",
+                    executionId, session.getEnvironmentId()
+            );
+            return;
+        }
+
+        // 인덱스 DDL 반영 후 변경된 실행 계획을 위해 통계 갱신
+        analyzeExecutionEnvironment(session, executionId);
     }
 
     private void analyzeExecutionEnvironment(ProblemExecutionSessionStore.ProblemExecutionSession session,

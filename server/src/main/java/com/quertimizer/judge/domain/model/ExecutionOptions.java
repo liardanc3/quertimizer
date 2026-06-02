@@ -60,7 +60,7 @@ public class ExecutionOptions {
     }
 
     public static ExecutionOptions submissionAnswer() {
-        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, 10_000, true, false);
+        return new ExecutionOptions(DEFAULT_TIMEOUT_SECONDS, 1, 10_000, false, false);
     }
 
     public static ExecutionOptions internalMetadata(int pageSize) {
