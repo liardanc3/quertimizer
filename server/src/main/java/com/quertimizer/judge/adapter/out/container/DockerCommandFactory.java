@@ -1,8 +1,9 @@
 package com.quertimizer.judge.adapter.out.container;
 
 import com.quertimizer.judge.application.model.Constants;
-import com.quertimizer.judge.application.model.Options;
 import com.quertimizer.judge.application.model.Names;
+import com.quertimizer.judge.application.model.Options;
+import com.quertimizer.judge.config.JudgeStatisticsProperties;
 import com.quertimizer.judge.domain.model.DbmsType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.util.List;
 public class DockerCommandFactory {
 
     private final Options options;
+    private final JudgeStatisticsProperties statisticsProperties;
 
     public List<String> startEvalProcessCommand(DbmsType dbmsType, String containerName,
                                                 String environmentId, int port) {
@@ -93,7 +95,7 @@ public class DockerCommandFactory {
                                         + "-c shared_preload_libraries=pg_hint_plan"
                                         + " -c autovacuum=off"
                                         + " -c default_statistics_target="
-                                        + Constants.POSTGRES_DEFAULT_STATISTICS_TARGET
+                                        + statisticsProperties.getPostgresql().getDefaultStatisticsTarget()
                                         + " -c jit=off"
                                         + " -c seq_page_cost=1.0"
                                         + " -c random_page_cost=4.0"
@@ -131,7 +133,7 @@ public class DockerCommandFactory {
                         + " --innodb-stats-persistent=ON"
                         + " --innodb-stats-auto-recalc=OFF"
                         + " --innodb-stats-persistent-sample-pages="
-                        + Constants.MYSQL_INNODB_STATS_PERSISTENT_SAMPLE_PAGES
+                        + statisticsProperties.getMysql().getInnodbStatsPersistentSamplePages()
                         + " --eq-range-index-dive-limit=0"
         );
     }

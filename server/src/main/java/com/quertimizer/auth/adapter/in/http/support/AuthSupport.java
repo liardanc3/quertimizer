@@ -4,6 +4,7 @@ import com.quertimizer.auth.application.output.AuthenticatedUserOutput;
 import com.quertimizer.global.websocket.sender.WebSocketSender;
 import com.quertimizer.global.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,13 +34,13 @@ public class AuthSupport {
     public void saveRememberMeCookie(Authentication authentication,
                                      HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         // 로그인 성공 인증 결과로 remember-me 쿠키 저장
-        rememberMeServices.loginSuccess(httpRequest, httpResponse, authentication);
+        rememberMeServices.loginSuccess(rememberMeRequestedRequest(httpRequest), httpResponse, authentication);
     }
 
     public void saveRememberMeCookie(AuthenticatedUserOutput authenticatedUser,
                                      HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         // 인증 사용자 정보로 remember-me 쿠키 저장
-        rememberMeServices.loginSuccess(httpRequest, httpResponse, createAuthentication(authenticatedUser));
+        rememberMeServices.loginSuccess(rememberMeRequestedRequest(httpRequest), httpResponse, createAuthentication(authenticatedUser));
     }
 
     public void deleteRememberMeCookie(Authentication authentication,
@@ -104,5 +105,20 @@ public class AuthSupport {
     public String resolveClientIp(HttpServletRequest httpRequest) {
         // 프록시 헤더와 remote address 기준 클라이언트 IP 결정
         return clientIpResolver.resolve(httpRequest);
+    }
+
+    private HttpServletRequest rememberMeRequestedRequest(HttpServletRequest httpRequest) {
+        // JSON/OAuth 로그인에서 remember-me 요청 파라미터 보강
+        return new HttpServletRequestWrapper(httpRequest) {
+
+            @Override
+            public String getParameter(String name) {
+                if (rememberMeServices.getParameter().equals(name)) {
+                    return "true";
+                }
+
+                return super.getParameter(name);
+            }
+        };
     }
 }

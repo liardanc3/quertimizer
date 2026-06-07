@@ -1,15 +1,19 @@
 package com.quertimizer.judge.adapter.out.jdbc.dialect;
 
-import com.quertimizer.judge.application.model.Constants;
 import com.quertimizer.judge.application.port.out.SqlDialect;
+import com.quertimizer.judge.config.JudgeStatisticsProperties;
 import com.quertimizer.judge.domain.model.ExecutionMode;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 public class MySqlDialect implements SqlDialect {
+
+    private final JudgeStatisticsProperties statisticsProperties;
 
     @Override
     public String quoteIdentifier(String identifier) {
@@ -56,7 +60,7 @@ public class MySqlDialect implements SqlDialect {
     public List<String> persistentStatisticsSqls(List<String> tableNames) {
         return tableNames.stream()
                 .map(tableName -> "ALTER TABLE %s STATS_PERSISTENT = 1, STATS_AUTO_RECALC = 0, STATS_SAMPLE_PAGES = %d"
-                        .formatted(quoteIdentifier(tableName), Constants.MYSQL_INNODB_STATS_PERSISTENT_SAMPLE_PAGES))
+                        .formatted(quoteIdentifier(tableName), statisticsProperties.getMysql().getInnodbStatsPersistentSamplePages()))
                 .toList();
     }
 

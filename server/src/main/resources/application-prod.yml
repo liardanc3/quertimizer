@@ -122,6 +122,11 @@ server:
   forward-headers-strategy: framework
 
 judge:
+  statistics:
+    postgresql:
+      default-statistics-target: ${JUDGE_POSTGRESQL_DEFAULT_STATISTICS_TARGET:100}
+    mysql:
+      innodb-stats-persistent-sample-pages: ${JUDGE_MYSQL_INNODB_STATS_PERSISTENT_SAMPLE_PAGES:8192}
   secrets:
     JUDGE_POSTGRESQL_NODE_1_URL: ${JUDGE_POSTGRESQL_NODE_1_URL:}
     JUDGE_POSTGRESQL_NODE_1_USERNAME: ${JUDGE_POSTGRESQL_NODE_1_USERNAME:}

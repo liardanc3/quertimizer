@@ -187,7 +187,7 @@ public class SecurityConfig {
         rememberMeServices.setCookieName("quertimizer-remember-me");
         rememberMeServices.setTokenValiditySeconds((int) appSecurityProperties.getRememberMe().getValidity().toSeconds());
         rememberMeServices.setUseSecureCookie(appSecurityProperties.getRememberMe().isSecure());
-        rememberMeServices.setAlwaysRemember(true);
+        rememberMeServices.setAlwaysRemember(false);
         return rememberMeServices;
     }
 
