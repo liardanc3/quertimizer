@@ -105,7 +105,7 @@ app:
   security:
     remember-me:
       key: ${QUERTIMIZER_REMEMBER_ME_KEY}
-      validity: 90d
+      validity: 180d
       secure: true
       same-site: Lax
     client-ip:
@@ -118,7 +118,7 @@ app:
 server:
   servlet:
     session:
-      timeout: 90d
+      timeout: 180d
   forward-headers-strategy: framework
 
 judge:
